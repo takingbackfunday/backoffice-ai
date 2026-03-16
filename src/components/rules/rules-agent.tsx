@@ -60,6 +60,7 @@ function SuggestionCard({
   projects,
   onAccepted,
   onDecline,
+  onApplyComplete,
 }: {
   suggestion: AgentSuggestion
   index: number
@@ -69,6 +70,7 @@ function SuggestionCard({
   projects: Project[]
   onAccepted: (rule: UserRule) => void
   onDecline: () => void
+  onApplyComplete?: (result: { updated: number; total: number } | null) => void
 }) {
   return (
     <div className="rounded-lg border bg-white overflow-hidden">
@@ -282,6 +284,7 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
                 projects={projects}
                 onAccepted={accept}
                 onDecline={() => decline(i)}
+                onApplyComplete={onApplyComplete}
               />
             )
           )}
