@@ -8,7 +8,7 @@ export async function openrouterChat(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
     },
-    body: JSON.stringify({ model, messages }),
+    body: JSON.stringify({ model, messages, max_tokens: 4096 }),
   })
 
   if (!res.ok) {
