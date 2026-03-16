@@ -67,6 +67,7 @@ export async function GET() {
             include: { categoryRef: { include: { group: true } } },
           }),
           prisma.category.findMany({
+            where: { userId },
             include: { group: { select: { id: true, name: true } } },
           }),
           prisma.payee.findMany({
