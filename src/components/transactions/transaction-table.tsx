@@ -193,7 +193,13 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const [total, setTotal] = useState(initialTotal ?? 0)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [loading, setLoading] = useState(!initialRows)
+
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 400)
+    return () => clearTimeout(t)
+  }, [search])
   const [error, setError] = useState<string | null>(null)
 
   const [sortBy, setSortBy] = useState<SortField>('date')
@@ -242,7 +248,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   // Fetch transactions
   const fetchTransactions = useCallback(() => {
     // Skip the initial fetch if we have server-provided data and nothing has changed
-    if (isFirstRender.current && initialRows && page === 1 && search === '' && sortBy === 'date' && sortDir === 'desc') {
+    if (isFirstRender.current && initialRows && page === 1 && debouncedSearch === '' && sortBy === 'date' && sortDir === 'desc') {
       isFirstRender.current = false
       return () => {}
     }
@@ -257,7 +263,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       pageSize: String(pageSize),
       sortBy,
       sortDir,
-      ...(search ? { search } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
     })
 
     fetch(`/api/transactions?${params}`, { signal: controller.signal })
@@ -272,7 +278,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [page, pageSize, search, sortBy, sortDir])
+  }, [page, pageSize, debouncedSearch, sortBy, sortDir])
 
   useEffect(() => {
     return fetchTransactions()
@@ -637,15 +643,25 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
             )}
           </div>
         )}
-        <input
-          type="search"
-          placeholder="Search transactions…"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-          className="rounded-md border px-3 py-1.5 text-xs w-56"
-          aria-label="Search transactions by description or merchant"
-          data-testid="transaction-search"
-        />
+        <div className="relative">
+          <input
+            type="search"
+            placeholder="Search transactions…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="rounded-md border px-3 py-1.5 text-xs w-56 pr-7"
+            aria-label="Search transactions"
+            data-testid="transaction-search"
+          />
+          {loading && search && (
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg className="w-3.5 h-3.5 animate-spin text-muted-foreground" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            </span>
+          )}
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
