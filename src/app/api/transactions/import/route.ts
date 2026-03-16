@@ -4,13 +4,14 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 
 const nullableString = z.union([z.string(), z.null()]).transform((v) => v ?? '')
-const optionalMerchant = z.union([z.string(), z.null()]).transform((v) => (v && v.trim()) ? v.trim() : null).optional()
+const optionalNullableString = z.union([z.string(), z.null()]).transform((v) => (v && v.trim()) ? v.trim() : null).optional()
 
 const ImportRowSchema = z.object({
   date: z.string(),
   amount: z.number(),
   description: nullableString,
-  merchantName: optionalMerchant,
+  payeeName: optionalNullableString,
+  notes: optionalNullableString,
   category: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   payeeId: z.string().nullable().optional(),
@@ -53,12 +54,12 @@ export async function POST(request: Request) {
       return ok({ imported: 0, skipped: rows.length, batchId: null })
     }
 
-    // Upsert any payees that don't have an ID yet (new merchant names not seen before)
-    const payeeByName = new Map<string, string>()  // merchantName → payeeId
+    // Upsert any payees that don't have an ID yet (new payee names not seen before)
+    const payeeByName = new Map<string, string>()  // payeeName → payeeId
     const payeeByHash = new Map<string, string>()  // duplicateHash → payeeId
-    const rowsNeedingPayee = newRows.filter((r) => !r.payeeId && r.merchantName && r.merchantName.trim())
+    const rowsNeedingPayee = newRows.filter((r) => !r.payeeId && r.payeeName && r.payeeName.trim())
     for (const row of rowsNeedingPayee) {
-      const name = row.merchantName!.trim()
+      const name = row.payeeName!.trim()
       if (!payeeByName.has(name)) {
         const payee = await prisma.payee.upsert({
           where: { userId_name: { userId, name } },
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
           date: new Date(row.date),
           amount: row.amount,
           description: row.description,
-          merchantName: row.merchantName,
+          notes: row.notes ?? null,
           category: row.category ?? null,
           categoryId: row.categoryId ?? null,
           payeeId: row.payeeId ?? payeeByHash.get(row.duplicateHash) ?? null,

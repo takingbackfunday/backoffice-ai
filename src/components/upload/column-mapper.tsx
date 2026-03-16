@@ -7,7 +7,7 @@ import type { CsvMapping } from '@/lib/csv-processor'
 import type { PreviewRow } from '@/types'
 
 type FieldValidation = { col: string | null; confidence: number; reason: string }
-type MappingValidation = Record<'dateCol' | 'amountCol' | 'descCol' | 'merchantCol', FieldValidation>
+type MappingValidation = Record<'dateCol' | 'amountCol' | 'descCol' | 'payeeCol' | 'notesCol', FieldValidation>
 
 function ConfidenceBadge({ value }: { value: FieldValidation }) {
   const color = value.confidence >= 80 ? 'text-green-600' : value.confidence >= 50 ? 'text-amber-600' : 'text-red-600'
@@ -45,9 +45,14 @@ function guessMapping(headers: string[]): Partial<CsvMapping> {
     /desc/, /narr/, /detail/, /memo/,
   ])
 
-  const merchantCol = find([
-    /^merchant$/, /^merchantname/, /^vendor$/, /^payee$/, /^counterparty$/,
-    /^originator$/, /merchant/, /vendor/, /payee/,
+  const payeeCol = find([
+    /^payee$/, /^merchant$/, /^merchantname/, /^vendor$/, /^counterparty$/,
+    /^originator$/, /payee/, /merchant/, /vendor/,
+  ])
+
+  const notesCol = find([
+    /^notes$/, /^note$/, /^memo$/, /^remarks$/, /^comment/, /^reference$/,
+    /notes/, /memo/,
   ])
 
   // Detect date format from header name heuristics
@@ -62,7 +67,8 @@ function guessMapping(headers: string[]): Partial<CsvMapping> {
     ...(dateCol ? { dateCol } : {}),
     ...(amountCol ? { amountCol } : {}),
     ...(descCol ? { descCol } : {}),
-    ...(merchantCol ? { merchantCol } : {}),
+    ...(payeeCol ? { payeeCol } : {}),
+    ...(notesCol ? { notesCol } : {}),
     dateFormat,
     amountSign: 'normal',
   }
@@ -122,7 +128,7 @@ export function ColumnMapper() {
 
   const isValid = !!(mapping.dateCol && mapping.amountCol && mapping.descCol)
 
-  const applyLLMSuggestion = (field: 'dateCol' | 'amountCol' | 'descCol' | 'merchantCol') => {
+  const applyLLMSuggestion = (field: 'dateCol' | 'amountCol' | 'descCol' | 'payeeCol' | 'notesCol') => {
     const col = validation?.[field]?.col
     if (col) setMapping((m) => ({ ...m, [field]: col }))
   }
@@ -152,7 +158,6 @@ export function ColumnMapper() {
           setPreviewRows([])
           return
         }
-        console.log('[preview] first row:', json.data?.[0])
         setPreviewRows(json.data ?? [])
         setTotalRows(json.meta?.totalRows ?? 0)
         setSkippedCount(json.meta?.skippedCount ?? 0)
@@ -210,13 +215,14 @@ export function ColumnMapper() {
 
         {validating && <p className="text-xs text-muted-foreground">Checking mapping with AI…</p>}
 
-        {(['dateCol', 'amountCol', 'descCol', 'merchantCol'] as const).map((field) => (
+        {(['dateCol', 'amountCol', 'descCol', 'payeeCol', 'notesCol'] as const).map((field) => (
           <div key={field}>
             <label htmlFor={`select-${field}`} className="block text-xs font-medium mb-1">
               {field === 'dateCol' && 'Date column *'}
               {field === 'amountCol' && 'Amount column *'}
               {field === 'descCol' && 'Description column *'}
-              {field === 'merchantCol' && 'Merchant (optional)'}
+              {field === 'payeeCol' && 'Payee (optional)'}
+              {field === 'notesCol' && 'Notes (optional)'}
             </label>
             <select
               id={`select-${field}`}
@@ -342,6 +348,7 @@ export function ColumnMapper() {
                 <th className="px-3 py-2 text-left font-medium">Date</th>
                 <th className="px-3 py-2 text-left font-medium">Description</th>
                 <th className="px-3 py-2 text-left font-medium">Payee</th>
+                <th className="px-3 py-2 text-left font-medium">Notes</th>
                 <th className="px-3 py-2 text-right font-medium">Amount</th>
                 <th className="px-3 py-2 text-left font-medium">Category</th>
                 <th className="px-3 py-2 text-left font-medium">Status</th>
@@ -350,7 +357,7 @@ export function ColumnMapper() {
             <tbody>
               {previewRows.length === 0 && !previewLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground text-sm">
+                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground text-sm">
                     {isValid ? 'No rows found.' : 'Preview will appear here.'}
                   </td>
                 </tr>
@@ -364,8 +371,11 @@ export function ColumnMapper() {
                     <td className="px-3 py-2 whitespace-nowrap">{new Date(row.date).toLocaleDateString()}</td>
                     <td className="px-3 py-2 max-w-[180px]"><span className="block truncate">{row.description}</span></td>
                     <td className="px-3 py-2 text-muted-foreground text-xs">
-                      {row.merchantName ?? '—'}
+                      {row.payeeName ?? '—'}
                       {row.payeeId && <span className="ml-1 text-green-600">✓</span>}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground text-xs max-w-[120px]">
+                      <span className="block truncate">{row.notes ?? '—'}</span>
                     </td>
                     <td className={`px-3 py-2 text-right font-mono ${row.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {row.amount >= 0 ? '+' : ''}{row.amount.toFixed(2)}

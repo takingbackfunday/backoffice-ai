@@ -9,7 +9,8 @@ const BodySchema = z.object({
     dateCol: z.string().optional(),
     amountCol: z.string().optional(),
     descCol: z.string().optional(),
-    merchantCol: z.string().optional(),
+    payeeCol: z.string().optional(),
+    notesCol: z.string().optional(),
     dateFormat: z.string().optional(),
     amountSign: z.string().optional(),
   }),
@@ -35,19 +36,21 @@ Proposed mapping:
   date column: ${mapping.dateCol ? JSON.stringify(mapping.dateCol) : 'null'}
   amount column: ${mapping.amountCol ? JSON.stringify(mapping.amountCol) : 'null'}
   description column: ${mapping.descCol ? JSON.stringify(mapping.descCol) : 'null'}
-  merchant column: ${mapping.merchantCol ? JSON.stringify(mapping.merchantCol) : 'null'}
+  payee column: ${mapping.payeeCol ? JSON.stringify(mapping.payeeCol) : 'null'}
+  notes column: ${mapping.notesCol ? JSON.stringify(mapping.notesCol) : 'null'}
 
 Respond with ONLY a JSON object — no markdown, no explanation:
 {
-  "dateCol":     { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
-  "amountCol":   { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
-  "descCol":     { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
-  "merchantCol": { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" }
+  "dateCol":   { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "amountCol": { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "descCol":   { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "payeeCol":  { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "notesCol":  { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" }
 }
 
 If a mapping looks correct, echo the same column with high confidence (80-100).
 If you think a different column is better, set col to your suggestion with lower confidence.
-If a field is not present in the CSV (e.g. no merchant column), set col to null.`
+If a field is not present in the CSV (e.g. no payee or notes column), set col to null.`
 
     const raw = await openrouterChat([{ role: 'user', content: prompt }])
 

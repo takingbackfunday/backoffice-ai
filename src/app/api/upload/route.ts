@@ -16,7 +16,8 @@ const UploadBodySchema = z.object({
     descCol: z.string(),
     dateFormat: z.string(),
     amountSign: z.enum(['normal', 'inverted']),
-    merchantCol: z.string().optional(),
+    payeeCol: z.string().optional(),
+    notesCol: z.string().optional(),
   }),
 })
 
@@ -55,11 +56,11 @@ export async function POST(request: Request) {
     // Run categorization rules (user rules only — system rules removed)
     const userRules = await loadUserRules(userId)
     const baseRows = result.rows.map((row) => {
-      const merchantName = row.merchantName ?? null
+      const payeeName = row.payeeName ?? null
       return {
         description: row.description,
-        merchantName,
-        payeeName: merchantName ? (existingPayees.find((p) => p.name === merchantName)?.name ?? null) : null,
+        payeeName: payeeName ? (existingPayees.find((p) => p.name === payeeName)?.name ?? payeeName) : null,
+        notes: row.notes ?? null,
         amount: row.amount,
         currency: account.currency,
         date: row.date.toISOString(),
@@ -76,23 +77,25 @@ export async function POST(request: Request) {
     )
 
     const preview = categorized.map((row) => {
-      const resolvedMerchant = row.suggestedMerchant ?? row.merchantName ?? null
+      const resolvedPayeeName = row.suggestedMerchant ?? row.payeeName ?? null
       const resolvedCategoryId =
         row.suggestedCategoryId ??
         (row.suggestedCategory ? (categoryNameMap.get(row.suggestedCategory.toLowerCase()) ?? null) : null)
-      // payeeId from rule suggestion takes priority, then look up by merchant name
+      // payeeId from rule suggestion takes priority, then look up by payee name
       const resolvedPayeeId =
         row.suggestedPayeeId ??
-        (resolvedMerchant ? (payeeMap.get(resolvedMerchant) ?? null) : null)
+        (resolvedPayeeName ? (payeeMap.get(resolvedPayeeName) ?? null) : null)
+      const originalRow = result.rows.find((r) => r.duplicateHash === row.duplicateHash)
 
       return {
         date: row.date,
         amount: row.amount,
         description: row.description,
-        merchantName: resolvedMerchant,
+        payeeName: resolvedPayeeName,
+        notes: originalRow?.notes ?? null,
         duplicateHash: row.duplicateHash,
         isDuplicate: existingHashes.has(row.duplicateHash),
-        rawData: result.rows.find((r) => r.duplicateHash === row.duplicateHash)?.rawData ?? {},
+        rawData: originalRow?.rawData ?? {},
         suggestedCategory: row.suggestedCategory,
         suggestedCategoryId: resolvedCategoryId,
         payeeId: resolvedPayeeId,

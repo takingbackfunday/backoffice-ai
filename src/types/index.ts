@@ -13,7 +13,8 @@ export interface CsvMapping {
   descCol: string
   dateFormat: string
   amountSign: 'normal' | 'inverted'
-  merchantCol?: string
+  payeeCol?: string
+  notesCol?: string
 }
 
 // Preview row shown before committing an import
@@ -21,7 +22,8 @@ export interface PreviewRow {
   date: string
   amount: number
   description: string
-  merchantName?: string | null
+  payeeName?: string | null
+  notes?: string | null
   duplicateHash: string
   isDuplicate: boolean
   rawData: Record<string, string>
