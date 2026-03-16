@@ -36,11 +36,10 @@ export async function POST(request: Request) {
 
     const testCondition = buildCondition(group)
 
-    // Fetch last 500 transactions for this user to test against
+    // Fetch all transactions for this user to test against
     const transactions = await prisma.transaction.findMany({
       where: { account: { userId } },
       orderBy: { date: 'desc' },
-      take: 500,
       include: { account: true, payee: true, project: true },
     })
 

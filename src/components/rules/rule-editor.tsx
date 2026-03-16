@@ -173,7 +173,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: { co
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
       <p className="text-xs font-medium text-muted-foreground">
-        {loading ? 'Checking…' : `Live preview — ${results.length} matching transaction${results.length !== 1 ? 's' : ''} (from last 500)`}
+        {loading ? 'Checking…' : `Live preview — ${results.length} matching transaction${results.length !== 1 ? 's' : ''}`}
       </p>
       {results.length > 0 && (
         <div className="overflow-auto max-h-52 rounded border bg-white">
