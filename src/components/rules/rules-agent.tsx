@@ -77,46 +77,37 @@ function SuggestionCard({
   onDecline: () => void
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
 }) {
-  return (
-    <div className="rounded-lg border bg-white overflow-hidden">
-      {/* Card header */}
-      <div className="flex items-center justify-between gap-2 px-4 py-2 bg-muted/30 border-b">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground font-medium">
-            Suggestion {index + 1}/{total}
-          </span>
-          <span
-            className={`text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${
-              suggestion.confidence === 'high'
-                ? 'bg-green-100 text-green-700'
-                : 'bg-yellow-100 text-yellow-700'
-            }`}
-          >
-            {suggestion.confidence}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            ~{suggestion.matchCount} transaction{suggestion.matchCount !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <p className="text-xs text-muted-foreground italic truncate max-w-xs">{suggestion.reasoning}</p>
+  const header = (
+    <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-black/[0.07]">
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-[13px] font-medium text-[#666]">Suggestion {index + 1}/{total}</span>
+        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+          suggestion.confidence === 'high'
+            ? 'bg-[#E1F5EE] text-[#0F6E56]'
+            : 'bg-yellow-100 text-yellow-700'
+        }`}>
+          {suggestion.confidence.toUpperCase()}
+        </span>
+        <span className="text-[12px] text-[#999]">~{suggestion.matchCount} txns</span>
       </div>
-
-      {/* Full rule editor, pre-populated */}
-      <div className="p-1">
-        <RuleEditor
-          projects={projects}
-          payees={payees}
-          categoryGroups={categoryGroups}
-          editingRule={suggestionToRule(suggestion, categoryGroups)}
-          onSave={(rule) => onAccepted(rule, index)}
-          onCancel={onDecline}
-          saveLabel="Accept"
-          cancelLabel="Decline"
-          showSaveAndApply
-          onApplyComplete={onApplyComplete}
-        />
-      </div>
+      <p className="text-[12px] text-[#666] text-right leading-snug">{suggestion.reasoning}</p>
     </div>
+  )
+
+  return (
+    <RuleEditor
+      projects={projects}
+      payees={payees}
+      categoryGroups={categoryGroups}
+      editingRule={suggestionToRule(suggestion, categoryGroups)}
+      onSave={(rule) => onAccepted(rule, index)}
+      onCancel={onDecline}
+      saveLabel="Accept"
+      cancelLabel="Decline"
+      showSaveAndApply
+      onApplyComplete={onApplyComplete}
+      cardHeader={header}
+    />
   )
 }
 
