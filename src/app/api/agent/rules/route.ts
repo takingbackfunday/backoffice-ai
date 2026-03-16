@@ -207,13 +207,23 @@ Rules:
 
         console.log('[rules-agent] USER PROMPT:\n', userPrompt)
 
-        const rawResponse = await openrouterChat(
-          [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          'anthropic/claude-sonnet-4-5'
-        )
+        // Keep-alive ping every 5s so the CDN doesn't drop the SSE connection
+        const keepAlive = setInterval(() => {
+          controller.enqueue(new TextEncoder().encode(': ping\n\n'))
+        }, 5000)
+
+        let rawResponse: string
+        try {
+          rawResponse = await openrouterChat(
+            [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            'anthropic/claude-sonnet-4-5'
+          )
+        } finally {
+          clearInterval(keepAlive)
+        }
 
         console.log('[rules-agent] RAW RESPONSE:\n', rawResponse)
 

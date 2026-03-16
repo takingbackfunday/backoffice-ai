@@ -120,13 +120,22 @@ ${projectBreakdown.map(([p, amt]) => `  ${p}: ${amt.toFixed(2)}`).join('\n') || 
 
 Write 3–5 tight bullet observations + a 1-line action recommendation. No fluff. Use plain text only — no asterisks, no markdown.`
 
-        const report = await openrouterChat(
-          [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          'anthropic/claude-sonnet-4-5'
-        )
+        const keepAlive = setInterval(() => {
+          controller.enqueue(new TextEncoder().encode(': ping\n\n'))
+        }, 5000)
+
+        let report: string
+        try {
+          report = await openrouterChat(
+            [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            'anthropic/claude-sonnet-4-5'
+          )
+        } finally {
+          clearInterval(keepAlive)
+        }
 
         send({ type: 'report', report: report.trim() })
         send({ type: 'done' })
