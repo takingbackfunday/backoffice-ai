@@ -77,7 +77,8 @@ export async function GET() {
 
         // Step 2 – compute analytics
         const uncategorisedCount = transactions.filter((t) => !t.categoryId).length
-        send({ type: 'status', message: `Analysing ${uncategorisedCount} uncategorised transactions…` })
+        const noPayeeCount = transactions.filter((t) => !t.payeeId).length
+        send({ type: 'status', message: `Analysing ${uncategorisedCount} uncategorised and ${noPayeeCount} unmatched-payee transactions…` })
 
         const uncategorised = transactions.filter((t) => !t.categoryId)
 
@@ -173,6 +174,32 @@ export async function GET() {
           .slice(0, 10)
           .map(([cluster, v]) => ({ cluster, count: v.count, totalAmount: v.total }))
 
+        // No-payee groups — transactions that have a category but no payee assigned
+        // Group by description prefix, suggest a payeeName only (no category change needed)
+        const noPayeeWithCategory = transactions.filter((t) => t.categoryId && !t.payeeId)
+        const noPayeeGroups = new Map<string, { count: number; samples: string[]; categoryId: string }>()
+        for (const tx of noPayeeWithCategory) {
+          let key: string
+          if (tx.merchantName?.trim()) {
+            key = tx.merchantName.trim()
+          } else {
+            const words = tx.description.trim().split(/\s+/)
+            const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
+            const twoWords = words.slice(0, 2).join(' ')
+            key = twoWords.length >= 6 ? twoWords : firstMeaningful
+          }
+          if (!key || key.length < 3) continue
+          const e = noPayeeGroups.get(key) ?? { count: 0, samples: [], categoryId: tx.categoryId! }
+          e.count++
+          if (e.samples.length < 3) e.samples.push(tx.description.slice(0, 60))
+          noPayeeGroups.set(key, e)
+        }
+        const noPayeePatterns = [...noPayeeGroups.entries()]
+          .filter(([, v]) => v.count >= 2)
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, 15)
+          .map(([name, v]) => ({ name, count: v.count, samples: v.samples }))
+
         // Recurring amounts — only uncategorised, only where all matching txns share a description prefix
         // This avoids amount-only rules that would match unrelated transactions
         const uncatAmounts = uncategorised.map((t) => Number(t.amount)).sort((a, b) => a - b)
@@ -242,6 +269,9 @@ ${recurringAmounts.slice(0, 10).map((r) => `- ${r.amount.toFixed(2)} | ${r.count
 Individual uncategorised transactions (one-offs — use world knowledge to suggest a category, use "equals" or "contains" on description):
 ${singletons.length > 0 ? singletons.map((t) => `- description: "${t.description}" | amount: ${t.amount.toFixed(2)}`).join('\n') : '(none)'}
 
+Transactions with no payee assigned (already have a category — suggest a payeeName only, keep categoryName matching their existing category or omit by setting categoryName to the same value):
+${noPayeePatterns.length > 0 ? noPayeePatterns.map((p) => `- name:"${p.name}" | ${p.count} txns | samples: ${p.samples.join('; ')}`).join('\n') : '(none)'}
+
 Return a JSON array of rule suggestions. Each item must have this exact shape:
 {
   "conditions": { "all": [{ "field": "payeeName"|"description", "operator": "contains"|"equals"|"starts_with"|"oneOf", "value": string|string[] }] },
@@ -252,11 +282,12 @@ Return a JSON array of rule suggestions. Each item must have this exact shape:
 }
 
 Rules:
-- Suggest at most 15 rules
+- Suggest at most 20 rules total
 - NEVER suggest a rule that uses only an amount condition — amount rules are too broad and will match unrelated transactions. Always use description or payeeName as the primary condition
 - For each group in "Uncategorised groups", use the exact "matchField" value shown — if matchField is "description" use field:"description", if "payeeName" use field:"payeeName"
 - When matchField is "payeeName", also set "payeeName" to the group name so a payee gets assigned
 - When matchField is "description", look at the sample descriptions and infer a clean, human-readable payee name if you can confidently identify the real-world merchant (e.g. samples "AMAZON MKTPLACE PMTS", "AMAZON.COM*X12" → payeeName "Amazon"). If you cannot confidently identify a single merchant, set "payeeName" to null
+- For "Transactions with no payee assigned": infer the real-world merchant name from the description samples and set "payeeName" to that name. Set categoryName to a matching category from the list above
 - Do not suggest a rule if a similar pattern is already covered by existing rules (same merchant/description → same category)
 - Each suggestion must cover a distinct set of transactions — do not suggest two rules that would match the same transactions
 - Only suggest rules where you see 2+ matching transactions, EXCEPT for "Individual uncategorised transactions" where 1 transaction is acceptable if you are confident in the category based on world knowledge
