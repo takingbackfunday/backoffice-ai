@@ -244,33 +244,21 @@ Rules:
           send({ type: 'status', message: 'No new rule suggestions found.' })
         }
 
-        for (const suggestion of suggestions) {
-          // Resolve categoryId
-          const resolvedCategoryId = categoryMap.get(suggestion.categoryName.toLowerCase()) ?? null
-
-          // Resolve payeeId
-          const resolvedPayeeId = suggestion.payeeName
-            ? (payeeMap.get(suggestion.payeeName.toLowerCase()) ?? null)
-            : null
-
-          // Compute matchCount from ALL transactions (rule applies retroactively)
-          let matchCount = 0
-          const defs = suggestion.conditions.all ?? suggestion.conditions.any ?? []
+        // Helper: get matched tx IDs for a set of condition defs
+        function getMatchedIds(defs: { field: string; operator: string; value: string | number | string[] }[]): Set<string> {
+          const ids = new Set<string>()
           for (const tx of transactions) {
             const matches = defs.every((def) => {
-              const field = def.field as string
-              // For payeeName field, check both payee.name and merchantName
               let txVal: string
-              if (field === 'payeeName') {
+              if (def.field === 'payeeName') {
                 txVal = tx.payee?.name ?? tx.merchantName?.trim() ?? ''
-              } else if (field === 'description') {
+              } else if (def.field === 'description') {
                 txVal = tx.description
-              } else if (field === 'amount') {
+              } else if (def.field === 'amount') {
                 txVal = String(Number(tx.amount))
               } else {
                 txVal = ''
               }
-
               const v = String(def.value).toLowerCase()
               const t = txVal.toLowerCase()
               if (def.operator === 'contains') return t.includes(v)
@@ -281,8 +269,49 @@ Rules:
               if (def.operator === 'oneOf') return (def.value as string[]).some((ov) => t === ov.toLowerCase())
               return false
             })
-            if (matches) matchCount++
+            if (matches) ids.add(tx.id)
           }
+          return ids
+        }
+
+        // Pre-compute transaction IDs already covered by existing rules
+        const coveredByExisting = new Set<string>()
+        for (const rule of existingRules) {
+          const defs = (rule.conditions as { all?: unknown[]; any?: unknown[] }).all ??
+            (rule.conditions as { any?: unknown[] }).any ?? []
+          const matched = getMatchedIds(defs as { field: string; operator: string; value: string | number | string[] }[])
+          matched.forEach((id) => coveredByExisting.add(id))
+        }
+
+        // Track IDs claimed by suggestions within this run to avoid intra-run dupes
+        const coveredThisRun = new Set<string>()
+
+        for (const suggestion of suggestions) {
+          // Resolve categoryId
+          const resolvedCategoryId = categoryMap.get(suggestion.categoryName.toLowerCase()) ?? null
+
+          // Resolve payeeId
+          const resolvedPayeeId = suggestion.payeeName
+            ? (payeeMap.get(suggestion.payeeName.toLowerCase()) ?? null)
+            : null
+
+          const defs = suggestion.conditions.all ?? suggestion.conditions.any ?? []
+          const matchedIds = getMatchedIds(defs as { field: string; operator: string; value: string | number | string[] }[])
+
+          // Count only transactions not already covered by existing rules or earlier suggestions
+          const newIds = [...matchedIds].filter((id) => !coveredByExisting.has(id) && !coveredThisRun.has(id))
+          const matchCount = newIds.length
+
+          // Skip if this suggestion doesn't add meaningful new coverage (>50% overlap)
+          const overlapWithExisting = [...matchedIds].filter((id) => coveredByExisting.has(id)).length
+          const overlapWithRun = [...matchedIds].filter((id) => coveredThisRun.has(id)).length
+          const totalMatched = matchedIds.size
+          if (totalMatched > 0 && (overlapWithExisting + overlapWithRun) / totalMatched > 0.5) continue
+
+          // Mark these transactions as claimed for the rest of this run
+          newIds.forEach((id) => coveredThisRun.add(id))
+
+          if (matchCount === 0) continue
 
           send({
             type: 'suggestion',
