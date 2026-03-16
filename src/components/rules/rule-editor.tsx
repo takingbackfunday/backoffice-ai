@@ -369,7 +369,6 @@ export function RuleEditor({
     const validDefs = conditions.filter((c) => c.value.trim() !== '')
     const categoryOutput = outputs.find((o) => o.type === 'category')?.value.trim() ?? ''
     if (validDefs.length === 0) { setError('Add at least one condition.'); return }
-    if (!categoryOutput) { setError('A category output is required.'); return }
 
     setSaving(true)
     setError(null)
@@ -399,11 +398,17 @@ export function RuleEditor({
       const url = isEdit ? `/api/rules/${editingRule!.id}` : '/api/rules'
       const method = isEdit ? 'PATCH' : 'POST'
 
+      const ruleName = categoryName
+        ? `${label} → ${categoryName}`
+        : payeeName
+          ? `${label} → ${payeeName}`
+          : label
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `${label} → ${categoryName}`,
+          name: ruleName,
           priority,
           conditions: conditionsGroup,
           categoryName,
@@ -447,7 +452,7 @@ export function RuleEditor({
           <OutputRow key={action.type} action={action} projects={projects} payees={payees}
             categoryGroups={categoryGroups} onChange={(a) => updateOutput(i, a)}
             onRemove={() => setOutputs((prev) => prev.filter((_, idx) => idx !== i))}
-            canRemove={outputs.length > 1 || action.type !== 'category'} />
+            canRemove={outputs.length > 1} />
         ))}
         {availableToAdd.length > 0 && (
           <div className="relative inline-block">

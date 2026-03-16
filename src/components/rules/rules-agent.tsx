@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { Project } from '@prisma/client'
 import { RuleEditor, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
 
@@ -113,12 +113,39 @@ function SuggestionCard({
 
 // ── Main RulesAgent ────────────────────────────────────────────────────────────
 
+const THINKING_MESSAGES = [
+  'Scanning transaction history…',
+  'Grouping by payee and description…',
+  'Looking for recurring patterns…',
+  'Cross-referencing merchant names…',
+  'Checking for uncategorised clusters…',
+  'Consulting category library…',
+  'Applying world knowledge to merchants…',
+  'Filtering out existing rule coverage…',
+  'Ranking suggestions by confidence…',
+  'Almost there…',
+]
+
 export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, onClose }: RulesAgentProps) {
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [statusMessages, setStatusMessages] = useState<string[]>([])
+  const [thinkingIdx, setThinkingIdx] = useState(0)
   const [suggestions, setSuggestions] = useState<AgentSuggestion[]>([])
   const [dismissed, setDismissed] = useState<Set<number>>(new Set())
   const esRef = useRef<EventSource | null>(null)
+  const thinkingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (status === 'running') {
+      setThinkingIdx(0)
+      thinkingRef.current = setInterval(() => {
+        setThinkingIdx((i) => (i + 1) % THINKING_MESSAGES.length)
+      }, 2200)
+    } else {
+      if (thinkingRef.current) clearInterval(thinkingRef.current)
+    }
+    return () => { if (thinkingRef.current) clearInterval(thinkingRef.current) }
+  }, [status])
 
   function engage() {
     if (esRef.current) esRef.current.close()
@@ -210,7 +237,8 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
           ))}
           {status === 'running' && (
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <span className="animate-pulse">●</span> Working…
+              <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+              <span className="transition-all">{THINKING_MESSAGES[thinkingIdx]}</span>
             </p>
           )}
         </div>
