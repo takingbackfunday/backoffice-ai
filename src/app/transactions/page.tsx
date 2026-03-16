@@ -5,11 +5,15 @@ import { Header } from '@/components/layout/header'
 import { TransactionTable } from '@/components/transactions/transaction-table'
 import { prisma } from '@/lib/prisma'
 
+const PAGE_SIZE = 200
+
 export default async function TransactionsPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const [projects, categoryGroups, payees] = await Promise.all([
+  const where = { account: { userId } }
+
+  const [projects, categoryGroups, payees, total, transactions] = await Promise.all([
     prisma.project.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -24,6 +28,18 @@ export default async function TransactionsPage() {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
+    prisma.transaction.count({ where }),
+    prisma.transaction.findMany({
+      where,
+      include: {
+        account: { include: { institution: true } },
+        project: true,
+        categoryRef: { include: { group: true } },
+        payee: true,
+      },
+      orderBy: { date: 'desc' },
+      take: PAGE_SIZE,
+    }),
   ])
 
   return (
@@ -34,6 +50,8 @@ export default async function TransactionsPage() {
         <main className="flex-1 p-6" role="main">
           <TransactionTable
             userId={userId}
+            initialRows={transactions as never}
+            initialTotal={total}
             initialProjects={projects}
             initialCategoryGroups={categoryGroups.map((g) => ({
               id: g.id,

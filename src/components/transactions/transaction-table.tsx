@@ -6,6 +6,8 @@ import type { TransactionWithRelations } from '@/types'
 
 interface Props {
   userId: string
+  initialRows?: TransactionWithRelations[]
+  initialTotal?: number
   initialProjects?: Project[]
   initialCategoryGroups?: CategoryGroup[]
   initialPayees?: Payee[]
@@ -197,12 +199,12 @@ function SortHeader({
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function TransactionTable({ userId: _userId, initialProjects, initialCategoryGroups, initialPayees }: Props) {
-  const [localRows, setLocalRows] = useState<TransactionWithRelations[]>([])
-  const [total, setTotal] = useState(0)
+export function TransactionTable({ userId: _userId, initialRows, initialTotal, initialProjects, initialCategoryGroups, initialPayees }: Props) {
+  const [localRows, setLocalRows] = useState<TransactionWithRelations[]>(initialRows ?? [])
+  const [total, setTotal] = useState(initialTotal ?? 0)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initialRows)
   const [error, setError] = useState<string | null>(null)
 
   const [sortBy, setSortBy] = useState<SortField>('date')
@@ -245,8 +247,18 @@ export function TransactionTable({ userId: _userId, initialProjects, initialCate
     if (!initialPayees) fetch('/api/payees').then((r) => r.json()).then((j) => { if (!j.error) setPayees(j.data ?? []) }).catch(() => {})
   }, [initialProjects, initialCategoryGroups, initialPayees])
 
+  // Track whether this is the very first render with server data
+  const isFirstRender = useRef(true)
+
   // Fetch transactions
   const fetchTransactions = useCallback(() => {
+    // Skip the initial fetch if we have server-provided data and nothing has changed
+    if (isFirstRender.current && initialRows && page === 1 && search === '' && sortBy === 'date' && sortDir === 'desc') {
+      isFirstRender.current = false
+      return () => {}
+    }
+    isFirstRender.current = false
+
     const controller = new AbortController()
     setLoading(true)
     setError(null)
@@ -636,7 +648,9 @@ export function TransactionTable({ userId: _userId, initialProjects, initialCate
     <div className="space-y-3" data-testid="transaction-table">
       {/* Search bar */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{total} transactions</p>
+        <p className="text-sm text-muted-foreground">
+          {loading && total === 0 ? 'Loading transactions…' : `${total} transaction${total !== 1 ? 's' : ''}`}
+        </p>
         <input
           type="search"
           placeholder="Search transactions…"
@@ -758,13 +772,16 @@ export function TransactionTable({ userId: _userId, initialProjects, initialCate
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && localRows.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground" aria-live="polite">
-                  Loading…
+                  <span className="inline-flex items-center gap-2">
+                    <span className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                    Loading from database…
+                  </span>
                 </td>
               </tr>
-            ) : localRows.length === 0 ? (
+            ) : !loading && localRows.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                   No transactions found.
