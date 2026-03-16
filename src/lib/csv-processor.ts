@@ -7,7 +7,6 @@ export interface CsvMapping {
   descCol: string
   dateFormat: string   // e.g. "MM/DD/YYYY", "YYYY-MM-DD", "DD/MM/YYYY"
   amountSign: 'normal' | 'inverted'
-  payeeCol?: string
   notesCol?: string
 }
 
@@ -15,7 +14,6 @@ export interface NormalizedRow {
   date: Date
   amount: number
   description: string
-  payeeName?: string
   notes?: string
   rawData: Record<string, string>
   duplicateHash: string
@@ -146,7 +144,6 @@ export function processCSV(
       date,
       amount,
       description,
-      payeeName: mapping.payeeCol ? row[mapping.payeeCol]?.trim() || undefined : undefined,
       notes: mapping.notesCol ? row[mapping.notesCol]?.trim() || undefined : undefined,
       rawData: row,
       duplicateHash,

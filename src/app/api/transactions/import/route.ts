@@ -10,7 +10,6 @@ const ImportRowSchema = z.object({
   date: z.string(),
   amount: z.number(),
   description: nullableString,
-  payeeName: optionalNullableString,
   notes: optionalNullableString,
   category: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
@@ -54,23 +53,6 @@ export async function POST(request: Request) {
       return ok({ imported: 0, skipped: rows.length, batchId: null })
     }
 
-    // Upsert any payees that don't have an ID yet (new payee names not seen before)
-    const payeeByName = new Map<string, string>()  // payeeName → payeeId
-    const payeeByHash = new Map<string, string>()  // duplicateHash → payeeId
-    const rowsNeedingPayee = newRows.filter((r) => !r.payeeId && r.payeeName && r.payeeName.trim())
-    for (const row of rowsNeedingPayee) {
-      const name = row.payeeName!.trim()
-      if (!payeeByName.has(name)) {
-        const payee = await prisma.payee.upsert({
-          where: { userId_name: { userId, name } },
-          update: {},
-          create: { userId, name },
-        })
-        payeeByName.set(name, payee.id)
-      }
-      payeeByHash.set(row.duplicateHash, payeeByName.get(name)!)
-    }
-
     const batch = await prisma.$transaction(async (tx) => {
       const importBatch = await tx.importBatch.create({
         data: {
@@ -91,7 +73,7 @@ export async function POST(request: Request) {
           notes: row.notes ?? null,
           category: row.category ?? null,
           categoryId: row.categoryId ?? null,
-          payeeId: row.payeeId ?? payeeByHash.get(row.duplicateHash) ?? null,
+          payeeId: row.payeeId ?? null,
           duplicateHash: row.duplicateHash,
           rawData: row.rawData,
           tags: [],

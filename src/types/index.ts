@@ -13,7 +13,6 @@ export interface CsvMapping {
   descCol: string
   dateFormat: string
   amountSign: 'normal' | 'inverted'
-  payeeCol?: string
   notesCol?: string
 }
 
@@ -22,7 +21,6 @@ export interface PreviewRow {
   date: string
   amount: number
   description: string
-  payeeName?: string | null
   notes?: string | null
   duplicateHash: string
   isDuplicate: boolean

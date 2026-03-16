@@ -7,7 +7,7 @@ import type { CsvMapping } from '@/lib/csv-processor'
 import type { PreviewRow } from '@/types'
 
 type FieldValidation = { col: string | null; confidence: number; reason: string }
-type MappingValidation = Record<'dateCol' | 'amountCol' | 'descCol' | 'payeeCol' | 'notesCol', FieldValidation>
+type MappingValidation = Record<'dateCol' | 'amountCol' | 'descCol' | 'notesCol', FieldValidation>
 
 function ConfidenceBadge({ value }: { value: FieldValidation }) {
   const color = value.confidence >= 80 ? 'text-green-600' : value.confidence >= 50 ? 'text-amber-600' : 'text-red-600'
@@ -22,8 +22,6 @@ function ConfidenceBadge({ value }: { value: FieldValidation }) {
 const DATE_FORMATS = ['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD']
 
 // ── Deterministic header auto-mapper ─────────────────────────────────────────
-// Tries to guess column assignments from header names alone.
-// An LLM-based fallback will replace/augment this in a future iteration.
 function guessMapping(headers: string[]): Partial<CsvMapping> {
   const norm = (s: string) => s.toLowerCase().replace(/[\s_\-().]/g, '')
   const find = (patterns: RegExp[]) =>
@@ -40,14 +38,9 @@ function guessMapping(headers: string[]): Partial<CsvMapping> {
   ])
 
   const descCol = find([
-    /^description$/, /^memo$/, /^narrative$/, /^details$/, /^particulars$/,
-    /^reference$/, /^paymentdetails/, /^transactiondetails/, /^txndescription/,
-    /desc/, /narr/, /detail/, /memo/,
-  ])
-
-  const payeeCol = find([
-    /^payee$/, /^merchant$/, /^merchantname/, /^vendor$/, /^counterparty$/,
-    /^originator$/, /payee/, /merchant/, /vendor/,
+    /^description$/, /^narrative$/, /^details$/, /^particulars$/,
+    /^paymentdetails/, /^transactiondetails/, /^txndescription/,
+    /desc/, /narr/, /detail/,
   ])
 
   const notesCol = find([
@@ -55,41 +48,83 @@ function guessMapping(headers: string[]): Partial<CsvMapping> {
     /notes/, /memo/,
   ])
 
-  // Detect date format from header name heuristics
-  // (actual format detection from data would be more accurate, but headers are all we have here)
   const dateFormat = (() => {
     const h = (dateCol ?? '').toLowerCase()
     if (h.includes('iso') || h.includes('yyyy')) return 'YYYY-MM-DD'
-    return 'MM/DD/YYYY' // safe US default
+    return 'MM/DD/YYYY'
   })()
 
   return {
     ...(dateCol ? { dateCol } : {}),
     ...(amountCol ? { amountCol } : {}),
     ...(descCol ? { descCol } : {}),
-    ...(payeeCol ? { payeeCol } : {}),
     ...(notesCol ? { notesCol } : {}),
     dateFormat,
     amountSign: 'normal',
   }
 }
 
+// ── Column select field ────────────────────────────────────────────────────────
+function ColSelect({
+  id,
+  label,
+  value,
+  headers,
+  onChange,
+  validation,
+  onApplySuggestion,
+}: {
+  id: string
+  label: string
+  value: string | undefined
+  headers: string[]
+  onChange: (v: string | undefined) => void
+  validation?: FieldValidation
+  onApplySuggestion?: () => void
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-medium mb-1">{label}</label>
+      <select
+        id={id}
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        className="w-full rounded-md border px-3 py-1.5 text-sm"
+        data-testid={id}
+      >
+        <option value="">— select —</option>
+        {headers.map((h) => (
+          <option key={h} value={h}>{h}</option>
+        ))}
+      </select>
+      {validation && (
+        <>
+          <ConfidenceBadge value={validation} />
+          {validation.col !== null && validation.col !== value && (
+            <p className="text-xs text-amber-700 mt-0.5">
+              AI suggests:{' '}
+              <button className="underline" onClick={onApplySuggestion}>
+                {validation.col}
+              </button>
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export function ColumnMapper() {
   const { csvHeaders, accountId, filename, csvText, setStep } = useUploadStore()
   const reset = useUploadStore((s) => s.reset)
 
-  const [mapping, setMapping] = useState<Partial<CsvMapping>>(() =>
-    guessMapping([])
-  )
-
+  const [mapping, setMapping] = useState<Partial<CsvMapping>>(() => guessMapping([]))
   const [validation, setValidation] = useState<MappingValidation | null>(null)
   const [validating, setValidating] = useState(false)
 
   // Apply auto-mapping once headers are available
   useEffect(() => {
-    if (csvHeaders.length > 0) {
-      setMapping(guessMapping(csvHeaders))
-    }
+    if (csvHeaders.length > 0) setMapping(guessMapping(csvHeaders))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [csvHeaders.join(',')])
 
@@ -128,10 +163,14 @@ export function ColumnMapper() {
 
   const isValid = !!(mapping.dateCol && mapping.amountCol && mapping.descCol)
 
-  const applyLLMSuggestion = (field: 'dateCol' | 'amountCol' | 'descCol' | 'payeeCol' | 'notesCol') => {
+  const set = (field: keyof CsvMapping) => (v: string | undefined) =>
+    setMapping((m) => ({ ...m, [field]: v }))
+
+  const applyAI = (field: keyof MappingValidation) => {
     const col = validation?.[field]?.col
     if (col) setMapping((m) => ({ ...m, [field]: col }))
   }
+
   const newRows = previewRows.filter((r) => !r.isDuplicate)
 
   // Auto-preview whenever mapping is complete, debounced 400ms
@@ -206,57 +245,31 @@ export function ColumnMapper() {
   }
 
   return (
-    <div className="flex gap-8 h-full" data-testid="column-mapper-form">
-      {/* Left: mapping controls */}
-      <div className="w-72 flex-shrink-0 space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Map columns from <strong>{filename}</strong>
-        </p>
+    <div className="flex gap-6 h-full min-h-0" data-testid="column-mapper-form">
+      {/* Left: mapping controls — fixed width, scrollable */}
+      <div className="w-64 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
+        <div>
+          <p className="text-xs font-semibold text-foreground">Map columns</p>
+          <p className="text-xs text-muted-foreground mt-0.5 break-all">{filename}</p>
+        </div>
 
-        {validating && <p className="text-xs text-muted-foreground">Checking mapping with AI…</p>}
+        {validating && <p className="text-xs text-muted-foreground">Checking with AI…</p>}
 
-        {(['dateCol', 'amountCol', 'descCol', 'payeeCol', 'notesCol'] as const).map((field) => (
-          <div key={field}>
-            <label htmlFor={`select-${field}`} className="block text-xs font-medium mb-1">
-              {field === 'dateCol' && 'Date column *'}
-              {field === 'amountCol' && 'Amount column *'}
-              {field === 'descCol' && 'Description column *'}
-              {field === 'payeeCol' && 'Payee (optional)'}
-              {field === 'notesCol' && 'Notes (optional)'}
-            </label>
-            <select
-              id={`select-${field}`}
-              value={(mapping[field] as string) ?? ''}
-              onChange={(e) => setMapping((m) => ({ ...m, [field]: e.target.value || undefined }))}
-              className="w-full rounded-md border px-3 py-1.5 text-sm"
-              data-testid={`select-${field}`}
-            >
-              <option value="">— select —</option>
-              {csvHeaders.map((h) => (
-                <option key={h} value={h}>{h}</option>
-              ))}
-            </select>
-            {validation?.[field] && (
-              <>
-                <ConfidenceBadge value={validation[field]} />
-                {validation[field].col !== null && validation[field].col !== mapping[field] && (
-                  <p className="text-xs text-amber-700 mt-0.5">
-                    AI suggests:{' '}
-                    <button className="underline" onClick={() => applyLLMSuggestion(field)}>
-                      {validation[field].col}
-                    </button>
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        ))}
-
+        {/* Date column + Date format together */}
+        <ColSelect
+          id="select-dateCol"
+          label="Date column *"
+          value={mapping.dateCol}
+          headers={csvHeaders}
+          onChange={set('dateCol')}
+          validation={validation?.dateCol}
+          onApplySuggestion={() => applyAI('dateCol')}
+        />
         <div>
           <label htmlFor="select-dateFormat" className="block text-xs font-medium mb-1">Date format *</label>
           <select
             id="select-dateFormat"
-            value={mapping.dateFormat}
+            value={mapping.dateFormat ?? 'MM/DD/YYYY'}
             onChange={(e) => setMapping((m) => ({ ...m, dateFormat: e.target.value }))}
             className="w-full rounded-md border px-3 py-1.5 text-sm"
             data-testid="select-dateFormat"
@@ -265,11 +278,21 @@ export function ColumnMapper() {
           </select>
         </div>
 
+        {/* Amount column + Amount sign together */}
+        <ColSelect
+          id="select-amountCol"
+          label="Amount column *"
+          value={mapping.amountCol}
+          headers={csvHeaders}
+          onChange={set('amountCol')}
+          validation={validation?.amountCol}
+          onApplySuggestion={() => applyAI('amountCol')}
+        />
         <div>
           <label htmlFor="select-amountSign" className="block text-xs font-medium mb-1">Amount sign *</label>
           <select
             id="select-amountSign"
-            value={mapping.amountSign}
+            value={mapping.amountSign ?? 'normal'}
             onChange={(e) => setMapping((m) => ({ ...m, amountSign: e.target.value as 'normal' | 'inverted' }))}
             className="w-full rounded-md border px-3 py-1.5 text-sm"
             data-testid="select-amountSign"
@@ -278,6 +301,26 @@ export function ColumnMapper() {
             <option value="inverted">Expenses are positive</option>
           </select>
         </div>
+
+        <ColSelect
+          id="select-descCol"
+          label="Description column *"
+          value={mapping.descCol}
+          headers={csvHeaders}
+          onChange={set('descCol')}
+          validation={validation?.descCol}
+          onApplySuggestion={() => applyAI('descCol')}
+        />
+
+        <ColSelect
+          id="select-notesCol"
+          label="Notes (optional)"
+          value={mapping.notesCol}
+          headers={csvHeaders}
+          onChange={set('notesCol')}
+          validation={validation?.notesCol}
+          onApplySuggestion={() => applyAI('notesCol')}
+        />
 
         {/* Import button */}
         <div className="pt-2 space-y-2">
@@ -304,9 +347,9 @@ export function ColumnMapper() {
       </div>
 
       {/* Right: live preview */}
-      <div className="flex-1 min-w-0 space-y-3">
+      <div className="flex-1 min-w-0 flex flex-col gap-3">
         <div className="space-y-2">
-          <div className="flex items-center gap-4 text-sm min-h-5">
+          <div className="flex items-center gap-4 text-xs min-h-5">
             {previewLoading && <span className="text-muted-foreground">Updating preview…</span>}
             {!previewLoading && isValid && (
               <>
@@ -323,10 +366,9 @@ export function ColumnMapper() {
             {!previewLoading && !isValid && (
               <span className="text-muted-foreground">Select date, amount, and description columns to preview.</span>
             )}
-            {previewError && <span className="text-red-600 text-sm">{previewError}</span>}
+            {previewError && <span className="text-red-600">{previewError}</span>}
           </div>
 
-          {/* Parse errors — shown when columns are mapped wrong */}
           {parseErrors.length > 0 && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 space-y-1" role="alert">
               {parseErrors.map((err, i) => (
@@ -341,15 +383,15 @@ export function ColumnMapper() {
           )}
         </div>
 
-        <div className="overflow-auto rounded-lg border max-h-[calc(100vh-280px)]">
-          <table className="w-full text-sm" aria-label="Transaction preview" data-testid="preview-table">
-            <thead className="bg-muted sticky top-0">
+        <div className="overflow-auto rounded-lg border flex-1">
+          <table className="w-full text-xs" aria-label="Transaction preview" data-testid="preview-table">
+            <thead className="bg-muted sticky top-0 text-xs uppercase tracking-wide">
               <tr>
-                <th className="px-3 py-2 text-left font-medium">Date</th>
+                <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Date</th>
                 <th className="px-3 py-2 text-left font-medium">Description</th>
-                <th className="px-3 py-2 text-left font-medium">Payee</th>
                 <th className="px-3 py-2 text-left font-medium">Notes</th>
-                <th className="px-3 py-2 text-right font-medium">Amount</th>
+                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Amount</th>
+                <th className="px-3 py-2 text-left font-medium">Payee</th>
                 <th className="px-3 py-2 text-left font-medium">Category</th>
                 <th className="px-3 py-2 text-left font-medium">Status</th>
               </tr>
@@ -357,7 +399,7 @@ export function ColumnMapper() {
             <tbody>
               {previewRows.length === 0 && !previewLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground text-sm">
+                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                     {isValid ? 'No rows found.' : 'Preview will appear here.'}
                   </td>
                 </tr>
@@ -368,38 +410,43 @@ export function ColumnMapper() {
                     className={`border-t ${row.isDuplicate ? 'opacity-40' : ''}`}
                     data-testid={`preview-row-${row.isDuplicate ? 'duplicate' : 'new'}`}
                   >
-                    <td className="px-3 py-2 whitespace-nowrap">{new Date(row.date).toLocaleDateString()}</td>
-                    <td className="px-3 py-2 max-w-[180px]"><span className="block truncate">{row.description}</span></td>
-                    <td className="px-3 py-2 text-muted-foreground text-xs">
-                      {row.payeeName ?? '—'}
-                      {row.payeeId && <span className="ml-1 text-green-600">✓</span>}
+                    <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">
+                      {new Date(row.date).toLocaleDateString()}
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground text-xs max-w-[120px]">
+                    <td className="px-3 py-1.5 max-w-[180px]">
+                      <span className="block truncate">{row.description}</span>
+                    </td>
+                    <td className="px-3 py-1.5 max-w-[120px] text-muted-foreground">
                       <span className="block truncate">{row.notes ?? '—'}</span>
                     </td>
-                    <td className={`px-3 py-2 text-right font-mono ${row.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <td className={`px-3 py-1.5 text-right font-mono ${row.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {row.amount >= 0 ? '+' : ''}{row.amount.toFixed(2)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-1.5 text-muted-foreground">
+                      {row.payeeId
+                        ? <span className="text-green-700">✓ matched</span>
+                        : <span>—</span>}
+                    </td>
+                    <td className="px-3 py-1.5">
                       {row.suggestedCategory ? (
                         <span
-                          className={`text-xs rounded-full px-2 py-0.5 ${
+                          className={`rounded-full px-2 py-0.5 ${
                             row.suggestionConfidence === 'high'
                               ? 'bg-blue-100 text-blue-700'
                               : 'bg-amber-100 text-amber-700'
                           }`}
-                          title={row.suggestionConfidence === 'medium' ? 'Review suggested — could be personal' : undefined}
+                          title={row.suggestionConfidence === 'medium' ? 'Review suggested' : undefined}
                         >
                           {row.suggestedCategory}
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-1.5">
                       {row.isDuplicate
-                        ? <span className="text-xs text-muted-foreground">duplicate</span>
-                        : <span className="text-xs text-green-600">new</span>}
+                        ? <span className="text-muted-foreground">duplicate</span>
+                        : <span className="text-green-600">new</span>}
                     </td>
                   </tr>
                 ))

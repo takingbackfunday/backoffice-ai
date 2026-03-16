@@ -16,7 +16,6 @@ const UploadBodySchema = z.object({
     descCol: z.string(),
     dateFormat: z.string(),
     amountSign: z.enum(['normal', 'inverted']),
-    payeeCol: z.string().optional(),
     notesCol: z.string().optional(),
   }),
 })
@@ -48,25 +47,16 @@ export async function POST(request: Request) {
     })
     const existingHashes = new Set(existing.map((e) => e.duplicateHash))
 
-    // Look up existing payees (read-only — do NOT upsert during preview).
-    // Payees are created at commit time inside /api/transactions/import.
-    const existingPayees = await prisma.payee.findMany({ where: { userId } })
-    const payeeMap = new Map<string, string>(existingPayees.map((p) => [p.name, p.id]))
-
     // Run categorization rules (user rules only — system rules removed)
     const userRules = await loadUserRules(userId)
-    const baseRows = result.rows.map((row) => {
-      const payeeName = row.payeeName ?? null
-      return {
-        description: row.description,
-        payeeName: payeeName ? (existingPayees.find((p) => p.name === payeeName)?.name ?? payeeName) : null,
-        notes: row.notes ?? null,
-        amount: row.amount,
-        currency: account.currency,
-        date: row.date.toISOString(),
-        duplicateHash: row.duplicateHash,
-      }
-    })
+    const baseRows = result.rows.map((row) => ({
+      description: row.description,
+      notes: row.notes ?? null,
+      amount: row.amount,
+      currency: account.currency,
+      date: row.date.toISOString(),
+      duplicateHash: row.duplicateHash,
+    }))
     const categorized = categorizeRows(baseRows, userRules)
 
     // Resolve category string names → category IDs (for rows where categoryId is not set by a user rule).
@@ -77,21 +67,16 @@ export async function POST(request: Request) {
     )
 
     const preview = categorized.map((row) => {
-      const resolvedPayeeName = row.suggestedMerchant ?? row.payeeName ?? null
       const resolvedCategoryId =
         row.suggestedCategoryId ??
         (row.suggestedCategory ? (categoryNameMap.get(row.suggestedCategory.toLowerCase()) ?? null) : null)
-      // payeeId from rule suggestion takes priority, then look up by payee name
-      const resolvedPayeeId =
-        row.suggestedPayeeId ??
-        (resolvedPayeeName ? (payeeMap.get(resolvedPayeeName) ?? null) : null)
+      const resolvedPayeeId = row.suggestedPayeeId ?? null
       const originalRow = result.rows.find((r) => r.duplicateHash === row.duplicateHash)
 
       return {
         date: row.date,
         amount: row.amount,
         description: row.description,
-        payeeName: resolvedPayeeName,
         notes: originalRow?.notes ?? null,
         duplicateHash: row.duplicateHash,
         isDuplicate: existingHashes.has(row.duplicateHash),
