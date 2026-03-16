@@ -76,7 +76,8 @@ export async function GET() {
         ])
 
         // Step 2 – compute analytics
-        send({ type: 'status', message: `Analysing ${transactions.filter((t) => !t.categoryId).length} uncategorised transactions…` })
+        const uncategorisedCount = transactions.filter((t) => !t.categoryId).length
+        send({ type: 'status', message: `Analysing ${uncategorisedCount} uncategorised transactions…` })
 
         const uncategorised = transactions.filter((t) => !t.categoryId)
 
@@ -116,6 +117,39 @@ export async function GET() {
           .sort((a, b) => b[1].count - a[1].count)
           .slice(0, 20)
           .map(([name, v]) => ({ name, count: v.count, totalAmount: v.total, sampleDescriptions: v.samples, matchField: v.matchField }))
+
+        // Singletons — uncategorised txns that didn't land in any group (count === 1)
+        // Collect the actual transaction objects for these
+        const groupedKeys = new Set(
+          [...byPayee.entries()].filter(([, v]) => v.count >= 2).map(([k]) => k)
+        )
+        const singletonTxns: { id: string; description: string; amount: number }[] = []
+        for (const tx of uncategorised) {
+          let key: string
+          if (tx.payee?.name) {
+            key = tx.payee.name
+          } else if (tx.merchantName?.trim()) {
+            key = tx.merchantName.trim()
+          } else {
+            const words = tx.description.trim().split(/\s+/)
+            const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
+            const twoWords = words.slice(0, 2).join(' ')
+            key = twoWords.length >= 6 ? twoWords : firstMeaningful
+          }
+          if (!groupedKeys.has(key)) {
+            singletonTxns.push({ id: tx.id, description: tx.description, amount: Number(tx.amount) })
+          }
+        }
+        // Deduplicate by description (same description = same merchant, only show once)
+        const seenSingletonDescs = new Set<string>()
+        const singletons = singletonTxns
+          .filter((t) => {
+            const key = t.description.toLowerCase()
+            if (seenSingletonDescs.has(key)) return false
+            seenSingletonDescs.add(key)
+            return true
+          })
+          .slice(0, 20)
 
         // Description clusters — only for txns with no payee AND no merchantName
         // Only include clusters where the key appears in all samples (avoids false grouping)
@@ -205,6 +239,9 @@ ${descriptionClusters.map((d) => `- "${d.cluster}" | ${d.count} txns | total: ${
 Recurring amounts (only shown where all matching transactions share a description prefix — use description condition, not amount):
 ${recurringAmounts.slice(0, 10).map((r) => `- ${r.amount.toFixed(2)} | ${r.count} times | description prefix: "${r.sharedPrefix}" | sample: "${r.sampleDescription}"`).join('\n') || '(none)'}
 
+Individual uncategorised transactions (one-offs — use world knowledge to suggest a category, use "equals" or "contains" on description):
+${singletons.length > 0 ? singletons.map((t) => `- description: "${t.description}" | amount: ${t.amount.toFixed(2)}`).join('\n') : '(none)'}
+
 Return a JSON array of rule suggestions. Each item must have this exact shape:
 {
   "conditions": { "all": [{ "field": "payeeName"|"description", "operator": "contains"|"equals"|"starts_with"|"oneOf", "value": string|string[] }] },
@@ -222,7 +259,8 @@ Rules:
 - When matchField is "description", look at the sample descriptions and infer a clean, human-readable payee name if you can confidently identify the real-world merchant (e.g. samples "AMAZON MKTPLACE PMTS", "AMAZON.COM*X12" → payeeName "Amazon"). If you cannot confidently identify a single merchant, set "payeeName" to null
 - Do not suggest a rule if a similar pattern is already covered by existing rules (same merchant/description → same category)
 - Each suggestion must cover a distinct set of transactions — do not suggest two rules that would match the same transactions
-- Only suggest rules where you see 2+ matching transactions
+- Only suggest rules where you see 2+ matching transactions, EXCEPT for "Individual uncategorised transactions" where 1 transaction is acceptable if you are confident in the category based on world knowledge
+- For individual transactions, set confidence to "medium" since there is only one data point
 - categoryName must exactly match one of the available category names listed above
 - reasoning should be 1 sentence`
 
@@ -347,7 +385,9 @@ Rules:
           // Mark these transactions as claimed for the rest of this run
           newIds.forEach((id) => coveredThisRun.add(id))
 
-          if (matchCount === 0) continue
+          // Allow medium-confidence suggestions (singletons) even if matchCount is 0
+          // They may not match due to exact string differences but are still useful suggestions
+          if (matchCount === 0 && suggestion.confidence !== 'medium') continue
 
           send({
             type: 'suggestion',
