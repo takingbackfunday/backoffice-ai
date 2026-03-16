@@ -1,0 +1,115 @@
+import { auth } from '@clerk/nextjs/server'
+import { z } from 'zod'
+import { prisma } from '@/lib/prisma'
+import { processCSV } from '@/lib/csv-processor'
+import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import type { CsvMapping } from '@/lib/csv-processor'
+import { categorizeRows } from '@/lib/rules/categorize-batch'
+import { loadUserRules } from '@/lib/rules/user-rules'
+
+const UploadBodySchema = z.object({
+  accountId: z.string().min(1),
+  csvText: z.string().min(1),
+  mapping: z.object({
+    dateCol: z.string(),
+    amountCol: z.string(),
+    descCol: z.string(),
+    dateFormat: z.string(),
+    amountSign: z.enum(['normal', 'inverted']),
+    merchantCol: z.string().optional(),
+  }),
+})
+
+export async function POST(request: Request) {
+  try {
+    const { userId } = await auth()
+    if (!userId) return unauthorized()
+
+    const body = await request.json()
+    const parsed = UploadBodySchema.safeParse(body)
+    if (!parsed.success) {
+      return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
+    }
+
+    const { accountId, csvText, mapping } = parsed.data
+
+    // Verify account belongs to user
+    const account = await prisma.account.findFirst({ where: { id: accountId, userId } })
+    if (!account) return notFound('Account not found or does not belong to you')
+
+    const result = processCSV(csvText, mapping as CsvMapping, accountId)
+
+    // Check which hashes already exist (duplicates)
+    const hashes = result.rows.map((r) => r.duplicateHash)
+    const existing = await prisma.transaction.findMany({
+      where: { duplicateHash: { in: hashes } },
+      select: { duplicateHash: true },
+    })
+    const existingHashes = new Set(existing.map((e) => e.duplicateHash))
+
+    // Look up existing payees (read-only — do NOT upsert during preview).
+    // Payees are created at commit time inside /api/transactions/import.
+    const existingPayees = await prisma.payee.findMany({ where: { userId } })
+    const payeeMap = new Map<string, string>(existingPayees.map((p) => [p.name, p.id]))
+
+    // Run categorization rules (user rules only — system rules removed)
+    const userRules = await loadUserRules(userId)
+    const baseRows = result.rows.map((row) => {
+      const merchantName = row.merchantName ?? null
+      return {
+        description: row.description,
+        merchantName,
+        payeeName: merchantName ? (existingPayees.find((p) => p.name === merchantName)?.name ?? null) : null,
+        amount: row.amount,
+        currency: account.currency,
+        date: row.date.toISOString(),
+        duplicateHash: row.duplicateHash,
+      }
+    })
+    const categorized = categorizeRows(baseRows, userRules)
+
+    // Resolve category string names → category IDs (for rows where categoryId is not set by a user rule).
+    // Only look up existing categories — do NOT seed here (seeding is triggered lazily by GET /api/category-groups).
+    const allCategories = await prisma.category.findMany({ where: { userId } })
+    const categoryNameMap = new Map<string, string>(
+      allCategories.map((c) => [c.name.toLowerCase(), c.id])
+    )
+
+    const preview = categorized.map((row) => {
+      const resolvedMerchant = row.suggestedMerchant ?? row.merchantName ?? null
+      const resolvedCategoryId =
+        row.suggestedCategoryId ??
+        (row.suggestedCategory ? (categoryNameMap.get(row.suggestedCategory.toLowerCase()) ?? null) : null)
+      // payeeId from rule suggestion takes priority, then look up by merchant name
+      const resolvedPayeeId =
+        row.suggestedPayeeId ??
+        (resolvedMerchant ? (payeeMap.get(resolvedMerchant) ?? null) : null)
+
+      return {
+        date: row.date,
+        amount: row.amount,
+        description: row.description,
+        merchantName: resolvedMerchant,
+        duplicateHash: row.duplicateHash,
+        isDuplicate: existingHashes.has(row.duplicateHash),
+        rawData: result.rows.find((r) => r.duplicateHash === row.duplicateHash)?.rawData ?? {},
+        suggestedCategory: row.suggestedCategory,
+        suggestedCategoryId: resolvedCategoryId,
+        payeeId: resolvedPayeeId,
+        suggestionConfidence: row.suggestionConfidence,
+        matchedRuleId: row.matchedRuleId,
+      }
+    })
+
+    return ok(preview, {
+      totalRows: result.totalParsed,
+      parsedRows: result.rows.length,
+      duplicateCount: preview.filter((r) => r.isDuplicate).length,
+      skippedCount: result.skippedCount,
+      errors: result.errors,
+    })
+  } catch (err) {
+    console.error('[/api/upload]', err)
+    return serverError('Failed to process CSV file')
+  }
+}

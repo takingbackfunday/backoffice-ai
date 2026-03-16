@@ -1,0 +1,64 @@
+import { auth } from '@clerk/nextjs/server'
+import { prisma } from '@/lib/prisma'
+import { ok, unauthorized, serverError } from '@/lib/api-response'
+import { loadUserRules } from '@/lib/rules/user-rules'
+import { evaluateRules } from '@/lib/rules/engine'
+import type { TransactionFact } from '@/lib/rules/categorization'
+
+export async function POST() {
+  try {
+    const { userId } = await auth()
+    if (!userId) return unauthorized()
+
+    const userRules = await loadUserRules(userId)
+    if (userRules.length === 0) return ok({ updated: 0, total: 0 })
+
+    // Fetch all transactions for this user with their payee
+    const transactions = await prisma.transaction.findMany({
+      where: { account: { userId } },
+      include: { account: { select: { currency: true } }, payee: { select: { name: true } } },
+    })
+
+    let updated = 0
+
+    for (const tx of transactions) {
+      const fact: TransactionFact = {
+        description: tx.description,
+        merchantName: tx.merchantName ?? null,
+        payeeName: tx.payee?.name ?? null,
+        amount: Number(tx.amount),
+        currency: tx.account.currency,
+        date: tx.date,
+        rawDescription: tx.description,
+      }
+
+      const matches = evaluateRules(fact, userRules, 'first')
+      const match = matches[0] ?? null
+      if (!match) continue
+
+      const patch: Record<string, unknown> = {}
+      if (match.categoryId && match.categoryId !== tx.categoryId) {
+        patch.categoryId = match.categoryId
+        patch.category = match.categoryName
+      } else if (!match.categoryId && match.categoryName && match.categoryName !== tx.category) {
+        patch.category = match.categoryName
+      }
+      if (match.payeeId && match.payeeId !== tx.payeeId) {
+        patch.payeeId = match.payeeId
+      }
+      if (match.projectId && match.projectId !== tx.projectId) {
+        patch.projectId = match.projectId
+      }
+
+      if (Object.keys(patch).length === 0) continue
+
+      await prisma.transaction.update({ where: { id: tx.id }, data: patch })
+      updated++
+    }
+
+    return ok({ updated, total: transactions.length })
+  } catch (err) {
+    console.error('[/api/rules/apply]', err)
+    return serverError('Failed to apply rules')
+  }
+}

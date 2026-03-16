@@ -1,19 +1,25 @@
 {
-  "name": "backoffice_ai_temp2",
+  "name": "backoffice-ai",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.3.4",
     "@base-ui/react": "^1.3.0",
     "@clerk/nextjs": "^7.0.4",
     "@hookform/resolvers": "^5.2.2",
-    "@prisma/client": "^7.5.0",
+    "@prisma/client": "^5.22.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "decimal.js": "^10.6.0",
@@ -21,7 +27,7 @@
     "next": "16.1.6",
     "openapi3-ts": "^4.5.0",
     "papaparse": "^5.5.3",
-    "prisma": "^7.5.0",
+    "prisma": "^5.22.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.71.2",
@@ -40,6 +46,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

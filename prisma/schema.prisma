@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Global shared library of institution CSV schemas (US banks, UK banks, etc.)
+model InstitutionSchema {
+  id              String    @id @default(cuid())
+  name            String
+  country         String    // "US" | "UK" | "DE"
+  isGlobal        Boolean   @default(true)
+  createdByUserId String?   // null = system seed, set = user-created
+  csvMapping      Json      // { dateCol, amountCol, descCol, dateFormat, amountSign }
+  accounts        Account[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// A bank account or card belonging to a user
+model Account {
+  id                  String            @id @default(cuid())
+  userId              String            // Clerk user ID
+  institutionSchemaId String
+  institution         InstitutionSchema @relation(fields: [institutionSchemaId], references: [id])
+  name                String            // e.g. "Chase Business Checking"
+  type                AccountType
+  currency            String            @default("USD")
+  lastImportAt        DateTime?
+  transactions        Transaction[]
+  importBatches       ImportBatch[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([userId])
+}
+
+// A project = client, property, job — the entity money flows to/from
+model Project {
+  id           String        @id @default(cuid())
+  userId       String        // Clerk user ID
+  name         String
+  type         ProjectType
+  description  String?
+  isActive              Boolean               @default(true)
+  transactions          Transaction[]
+  categorizationRules   CategorizationRule[]
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@index([userId])
+}
+
+model CategoryGroup {
+  id         String     @id @default(cuid())
+  userId     String
+  name       String
+  sortOrder  Int        @default(0)
+  categories Category[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([userId])
+}
+
+model Category {
+  id              String               @id @default(cuid())
+  userId          String
+  name            String
+  groupId         String
+  group           CategoryGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sortOrder       Int                  @default(0)
+  payees          Payee[]
+  transactions    Transaction[]
+  rules           CategorizationRule[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([userId])
+}
+
+model Payee {
+  id                String        @id @default(cuid())
+  userId            String
+  name              String
+  defaultCategoryId String?
+  defaultCategory   Category?     @relation(fields: [defaultCategoryId], references: [id])
+  transactions      Transaction[]
+  rules             CategorizationRule[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([userId])
+  @@unique([userId, name])
+}
+
+model Transaction {
+  id            String       @id @default(cuid())
+  accountId     String
+  account       Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  projectId     String?      // optional link to a project
+  project       Project?     @relation(fields: [projectId], references: [id])
+  importBatchId String?
+  importBatch   ImportBatch? @relation(fields: [importBatchId], references: [id])
+  categoryId    String?
+  categoryRef   Category?    @relation(fields: [categoryId], references: [id])
+  payeeId       String?
+  payee         Payee?       @relation(fields: [payeeId], references: [id])
+  date          DateTime
+  amount        Decimal      @db.Decimal(12, 2) // negative = expense, positive = income
+  description   String
+  merchantName  String?
+  category      String?      // tax/business category (legacy free-text)
+  tags          String[]     // ["billable", "reimbursable", "tax-deductible"]
+  notes         String?
+  rawData       Json         // original CSV row preserved
+  duplicateHash String       @unique
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([accountId, date])
+}
+
+model ImportBatch {
+  id           String        @id @default(cuid())
+  accountId    String
+  account      Account       @relation(fields: [accountId], references: [id])
+  filename     String
+  rowCount     Int
+  skippedCount Int           @default(0) // duplicates skipped
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+}
+
+enum AccountType {
+  CREDIT_CARD
+  DEBIT_CARD
+  CHECKING
+  SAVINGS
+  BUSINESS_CHECKING
+  TRUST_ACCOUNT
+}
+
+enum ProjectType {
+  CLIENT    // freelance client
+  PROPERTY  // rental property or unit
+  JOB       // one-off project/job
+  OTHER
+}
+
+// A user-defined rule for auto-categorizing imported transactions
+model CategorizationRule {
+  id           String    @id @default(cuid())
+  userId       String    // Clerk userId — rules are per-user
+  name         String    // e.g. "WeWork → Rent & Utilities"
+  priority     Int       @default(50) // 1-99; evaluated before system rules (100+)
+  conditions   Json      // { all?: ConditionDef[], any?: ConditionDef[] }
+  categoryName String    // free-text category to apply (legacy)
+  categoryId   String?   // FK to Category
+  categoryRef  Category? @relation(fields: [categoryId], references: [id])
+  merchantName String?   // optional: override merchant name on matched transactions (legacy)
+  payeeId      String?   // optional: assign a specific payee
+  payee        Payee?    @relation(fields: [payeeId], references: [id])
+  projectId    String?   // optional: also tag to a project
+  project      Project?  @relation(fields: [projectId], references: [id])
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId])
+}
