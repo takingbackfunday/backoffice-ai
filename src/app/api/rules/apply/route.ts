@@ -19,7 +19,8 @@ export async function POST() {
       include: { account: { select: { currency: true } }, payee: { select: { name: true } } },
     })
 
-    let updated = 0
+    // Build list of patches to apply
+    const patches: { id: string; data: Record<string, unknown> }[] = []
 
     for (const tx of transactions) {
       const fact: TransactionFact = {
@@ -51,12 +52,14 @@ export async function POST() {
       }
 
       if (Object.keys(patch).length === 0) continue
-
-      await prisma.transaction.update({ where: { id: tx.id }, data: patch })
-      updated++
+      patches.push({ id: tx.id, data: patch })
     }
 
-    return ok({ updated, total: transactions.length })
+    if (patches.length > 0) {
+      await Promise.all(patches.map(({ id, data }) => prisma.transaction.update({ where: { id }, data })))
+    }
+
+    return ok({ updated: patches.length, total: transactions.length })
   } catch (err) {
     console.error('[/api/rules/apply]', err)
     return serverError('Failed to apply rules')

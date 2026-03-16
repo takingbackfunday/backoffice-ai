@@ -440,16 +440,17 @@ export function RuleEditor({
       })
       const json = await res.json()
       if (!res.ok || json.error) { setError(json.error ?? 'Failed to save rule'); return }
-      if (applyAfterSaveRef.current) {
-        // Fire-and-forget — don't block the UI
+      const shouldApply = applyAfterSaveRef.current
+      onSave(json.data)
+      if (shouldApply) {
+        // Fire-and-forget — editor already closed, apply runs in background
         fetch('/api/rules/apply', { method: 'POST' })
-          .then((r) => r.json())
-          .then((applyJson) => {
-            if (onApplyComplete) onApplyComplete(applyJson.data ?? null)
+          .then((r) => r.json().then((applyJson) => ({ ok: r.ok, applyJson })))
+          .then(({ ok: applyOk, applyJson }) => {
+            if (onApplyComplete) onApplyComplete(applyOk ? (applyJson.data ?? null) : null)
           })
           .catch(() => { if (onApplyComplete) onApplyComplete(null) })
       }
-      onSave(json.data)
     } catch {
       setError('Network error')
     } finally {
@@ -508,13 +509,13 @@ export function RuleEditor({
         <button type="submit" disabled={saving}
           onClick={() => { applyAfterSaveRef.current = false }}
           className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50">
-          {saving && !applyAfterSaveRef.current ? 'Saving…' : (saveLabel ?? (editingRule ? 'Update rule' : 'Save rule'))}
+          {saving ? 'Saving…' : (saveLabel ?? (editingRule ? 'Update rule' : 'Save rule'))}
         </button>
         {(!editingRule || showSaveAndApply) && (
           <button type="submit" disabled={saving}
             onClick={() => { applyAfterSaveRef.current = true }}
             className="rounded-md bg-primary/90 px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50">
-            {saving && applyAfterSaveRef.current ? 'Saving & applying…' : (saveLabel ? `${saveLabel} & apply` : 'Save & apply')}
+            {saving ? 'Saving…' : (saveLabel ? `${saveLabel} & apply` : 'Save & apply')}
           </button>
         )}
         <button type="button" onClick={onCancel} className="rounded-md border px-4 py-1.5 text-sm hover:bg-muted">
