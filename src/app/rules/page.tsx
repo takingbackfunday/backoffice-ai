@@ -3,12 +3,53 @@ import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { RulesManager } from '@/components/rules/rules-manager'
+import { prisma } from '@/lib/prisma'
+import { seedDefaultCategories } from '@/lib/seed-categories'
 
 export const metadata = { title: 'Rules — Backoffice AI' }
 
 export default async function RulesPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
+
+  // Fetch all data server-side in parallel — no client-side waterfall
+  const [rules, projects, payees, categoryGroupsRaw] = await Promise.all([
+    prisma.categorizationRule.findMany({
+      where: { userId },
+      include: {
+        project: { select: { id: true, name: true } },
+        categoryRef: { include: { group: true } },
+        payee: true,
+      },
+      orderBy: { priority: 'asc' },
+    }),
+    prisma.project.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.payee.findMany({
+      where: { userId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.categoryGroup.findMany({
+      where: { userId },
+      include: { categories: { orderBy: { sortOrder: 'asc' } } },
+      orderBy: { sortOrder: 'asc' },
+    }),
+  ])
+
+  // Seed categories if first visit
+  let categoryGroups = categoryGroupsRaw
+  if (categoryGroups.length === 0) {
+    await seedDefaultCategories(userId, prisma)
+    categoryGroups = await prisma.categoryGroup.findMany({
+      where: { userId },
+      include: { categories: { orderBy: { sortOrder: 'asc' } } },
+      orderBy: { sortOrder: 'asc' },
+    })
+  }
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -21,7 +62,16 @@ export default async function RulesPage() {
               Rules run on every CSV import and pre-fill the category field. Your rules run first; system rules are the fallback.
             </p>
           </div>
-          <RulesManager />
+          <RulesManager
+            initialRules={rules as Parameters<typeof RulesManager>[0]['initialRules']}
+            initialProjects={projects}
+            initialPayees={payees}
+            initialCategoryGroups={categoryGroups.map((g) => ({
+              id: g.id,
+              name: g.name,
+              categories: g.categories.map((c) => ({ id: c.id, name: c.name })),
+            }))}
+          />
         </main>
       </div>
     </div>

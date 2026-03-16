@@ -96,12 +96,22 @@ function RuleCard({
 
 // ── Main RulesManager ─────────────────────────────────────────────────────────
 
-export function RulesManager() {
-  const [rules, setRules] = useState<UserRule[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [payees, setPayees] = useState<Payee[]>([])
-  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
-  const [loading, setLoading] = useState(true)
+export function RulesManager({
+  initialRules,
+  initialProjects,
+  initialPayees,
+  initialCategoryGroups,
+}: {
+  initialRules?: UserRule[]
+  initialProjects?: Project[]
+  initialPayees?: Payee[]
+  initialCategoryGroups?: CategoryGroup[]
+} = {}) {
+  const [rules, setRules] = useState<UserRule[]>(initialRules ?? [])
+  const [projects, setProjects] = useState<Project[]>(initialProjects ?? [])
+  const [payees, setPayees] = useState<Payee[]>(initialPayees ?? [])
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>(initialCategoryGroups ?? [])
+  const [loading, setLoading] = useState(!initialRules)
   const [error, setError] = useState<string | null>(null)
   const [showEditor, setShowEditor] = useState(false)
   const [editingRule, setEditingRule] = useState<UserRule | undefined>(undefined)
@@ -115,6 +125,8 @@ export function RulesManager() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    // Skip fetch if data was passed from the server
+    if (initialRules) return
     Promise.all([
       fetch('/api/rules').then((r) => r.json()),
       fetch('/api/projects').then((r) => r.json()),
@@ -127,7 +139,7 @@ export function RulesManager() {
       if (!payeesJson.error) setPayees(payeesJson.data ?? [])
     }).catch(() => setError('Failed to load'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [initialRules])
 
   async function toggleActive(rule: UserRule) {
     setTogglingId(rule.id)
