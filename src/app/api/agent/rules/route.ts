@@ -80,7 +80,8 @@ export async function GET() {
 
         const uncategorised = transactions.filter((t) => !t.categoryId)
 
-        // Group uncategorised txns by their best identifier, tracking which field to match on
+        // Group uncategorised txns by their best identifier
+        // Only use first-word grouping if it's ≥5 chars (avoids junk keys like "THE", "WM")
         type PayeeGroup = { count: number; total: number; samples: string[]; matchField: 'payeeName' | 'description'; matchValue: string }
         const byPayee = new Map<string, PayeeGroup>()
         for (const tx of uncategorised) {
@@ -93,10 +94,15 @@ export async function GET() {
             matchField = 'payeeName'
             key = tx.merchantName.trim()
           } else {
+            // Use first meaningful token (≥5 chars) or first two words, whichever is more specific
+            const words = tx.description.trim().split(/\s+/)
+            const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
+            // Use up to 2 words as key to avoid over-grouping on short prefixes
+            const twoWords = words.slice(0, 2).join(' ')
+            key = twoWords.length >= 6 ? twoWords : firstMeaningful
             matchField = 'description'
-            key = tx.description.split(' ')[0]
           }
-          if (!key) continue
+          if (!key || key.length < 2) continue
           const entry = byPayee.get(key) ?? { count: 0, total: 0, samples: [], matchField, matchValue: key }
           entry.count++
           entry.total += Number(tx.amount)
@@ -104,39 +110,52 @@ export async function GET() {
           byPayee.set(key, entry)
         }
 
-        // Top 20 by count
+        // Top 20 by count, minimum 2 transactions to be worth suggesting
         const uncategorisedByPayee = [...byPayee.entries()]
+          .filter(([, v]) => v.count >= 2)
           .sort((a, b) => b[1].count - a[1].count)
           .slice(0, 20)
           .map(([name, v]) => ({ name, count: v.count, totalAmount: v.total, sampleDescriptions: v.samples, matchField: v.matchField }))
 
-        // Description clusters for txns with no payee
+        // Description clusters — only for txns with no payee AND no merchantName
+        // Only include clusters where the key appears in all samples (avoids false grouping)
         const noPayeeTxns = uncategorised.filter((t) => !t.payee && !t.merchantName?.trim())
-        const descClusters = new Map<string, { count: number; total: number }>()
+        const descClusters = new Map<string, { count: number; total: number; samples: string[] }>()
         for (const tx of noPayeeTxns) {
           const words = tx.description.trim().split(/\s+/)
           const key = words.slice(0, 2).join(' ')
-          if (!key) continue
-          const e = descClusters.get(key) ?? { count: 0, total: 0 }
+          if (!key || key.length < 4) continue
+          const e = descClusters.get(key) ?? { count: 0, total: 0, samples: [] }
           e.count++
           e.total += Number(tx.amount)
+          if (e.samples.length < 3) e.samples.push(tx.description.slice(0, 60))
           descClusters.set(key, e)
         }
+        // Only include clusters already represented in uncategorisedByPayee if they add new info
+        const uncategorisedKeys = new Set(uncategorisedByPayee.map((u) => u.name.toLowerCase()))
         const descriptionClusters = [...descClusters.entries()]
+          .filter(([key, v]) => v.count >= 2 && !uncategorisedKeys.has(key.toLowerCase()))
           .sort((a, b) => b[1].count - a[1].count)
-          .slice(0, 15)
+          .slice(0, 10)
           .map(([cluster, v]) => ({ cluster, count: v.count, totalAmount: v.total }))
 
-        // Recurring amounts (3+ times within ±2%)
-        const allAmounts = transactions.map((t) => Number(t.amount)).sort((a, b) => a - b)
-        const recurringAmounts: { amount: number; count: number; sampleDescription: string }[] = []
+        // Recurring amounts — only uncategorised, only where all matching txns share a description prefix
+        // This avoids amount-only rules that would match unrelated transactions
+        const uncatAmounts = uncategorised.map((t) => Number(t.amount)).sort((a, b) => a - b)
+        const recurringAmounts: { amount: number; count: number; sampleDescription: string; sharedPrefix: string }[] = []
         const seenAmounts = new Set<number>()
-        for (const amt of allAmounts) {
+        for (const amt of uncatAmounts) {
           if (seenAmounts.has(amt)) continue
-          const similar = allAmounts.filter((a) => Math.abs(a - amt) / (Math.abs(amt) || 1) <= 0.02)
+          const similar = uncatAmounts.filter((a) => Math.abs(a - amt) / (Math.abs(amt) || 1) <= 0.02)
           if (similar.length >= 3) {
-            const sampleTx = transactions.find((t) => Math.abs(Number(t.amount) - amt) / (Math.abs(amt) || 1) <= 0.02)
-            recurringAmounts.push({ amount: amt, count: similar.length, sampleDescription: sampleTx?.description ?? '' })
+            const matchingTxns = uncategorised.filter((t) => Math.abs(Number(t.amount) - amt) / (Math.abs(amt) || 1) <= 0.02)
+            // Only include if matching txns share a common description prefix (makes rule more specific)
+            const firstWords = matchingTxns.map((t) => t.description.trim().split(/\s+/).slice(0, 2).join(' ').toLowerCase())
+            const commonPrefix = firstWords[0]
+            const allSharePrefix = firstWords.every((w) => w === commonPrefix)
+            if (allSharePrefix) {
+              recurringAmounts.push({ amount: amt, count: similar.length, sampleDescription: matchingTxns[0]?.description ?? '', sharedPrefix: commonPrefix })
+            }
             similar.forEach((a) => seenAmounts.add(a))
           }
         }
@@ -183,12 +202,12 @@ ${uncategorisedByPayee.map((p) => `- name:"${p.name}" | matchField:${p.matchFiel
 Description clusters (no payee):
 ${descriptionClusters.map((d) => `- "${d.cluster}" | ${d.count} txns | total: ${d.totalAmount.toFixed(2)}`).join('\n') || '(none)'}
 
-Recurring amounts:
-${recurringAmounts.slice(0, 10).map((r) => `- ${r.amount.toFixed(2)} | ${r.count} times | sample: "${r.sampleDescription}"`).join('\n') || '(none)'}
+Recurring amounts (only shown where all matching transactions share a description prefix — use description condition, not amount):
+${recurringAmounts.slice(0, 10).map((r) => `- ${r.amount.toFixed(2)} | ${r.count} times | description prefix: "${r.sharedPrefix}" | sample: "${r.sampleDescription}"`).join('\n') || '(none)'}
 
 Return a JSON array of rule suggestions. Each item must have this exact shape:
 {
-  "conditions": { "all": [{ "field": "payeeName"|"description"|"amount", "operator": "contains"|"equals"|"starts_with"|"oneOf"|"gt"|"lt", "value": string|number|string[] }] },
+  "conditions": { "all": [{ "field": "payeeName"|"description", "operator": "contains"|"equals"|"starts_with"|"oneOf", "value": string|string[] }] },
   "categoryName": string,
   "payeeName": string|null,
   "confidence": "high"|"medium",
@@ -197,11 +216,13 @@ Return a JSON array of rule suggestions. Each item must have this exact shape:
 
 Rules:
 - Suggest at most 15 rules
+- NEVER suggest a rule that uses only an amount condition — amount rules are too broad and will match unrelated transactions. Always use description or payeeName as the primary condition
 - For each group in "Uncategorised groups", use the exact "matchField" value shown — if matchField is "description" use field:"description", if "payeeName" use field:"payeeName"
 - When matchField is "payeeName", also set "payeeName" to the group name so a payee gets assigned
 - When matchField is "description", look at the sample descriptions and infer a clean, human-readable payee name if you can confidently identify the real-world merchant (e.g. samples "AMAZON MKTPLACE PMTS", "AMAZON.COM*X12" → payeeName "Amazon"). If you cannot confidently identify a single merchant, set "payeeName" to null
-- Do not suggest rules that duplicate existing ones
-- Only suggest rules where you see 3+ matching transactions
+- Do not suggest a rule if a similar pattern is already covered by existing rules (same merchant/description → same category)
+- Each suggestion must cover a distinct set of transactions — do not suggest two rules that would match the same transactions
+- Only suggest rules where you see 2+ matching transactions
 - categoryName must exactly match one of the available category names listed above
 - reasoning should be 1 sentence`
 
@@ -232,10 +253,25 @@ Rules:
 
         let suggestions: RuleSuggestionRaw[] = []
         try {
-          // Strip markdown code fences if present
           const cleaned = rawResponse.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
-          suggestions = JSON.parse(cleaned)
-          if (!Array.isArray(suggestions)) suggestions = []
+          const parsed = JSON.parse(cleaned)
+          if (!Array.isArray(parsed)) {
+            suggestions = []
+          } else {
+            // Validate each suggestion has required shape before using it
+            suggestions = parsed.filter((s): s is RuleSuggestionRaw => {
+              if (typeof s !== 'object' || s === null) return false
+              if (typeof s.categoryName !== 'string' || !s.categoryName.trim()) return false
+              if (!['high', 'medium'].includes(s.confidence)) return false
+              if (typeof s.reasoning !== 'string') return false
+              const defs = s.conditions?.all ?? s.conditions?.any
+              if (!Array.isArray(defs) || defs.length === 0) return false
+              // Reject amount-only rules
+              const hasNonAmountCondition = defs.some((d: { field?: string }) => d.field !== 'amount')
+              if (!hasNonAmountCondition) return false
+              return true
+            })
+          }
         } catch {
           suggestions = []
         }

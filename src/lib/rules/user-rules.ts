@@ -45,7 +45,9 @@ function evalOperator(
     case 'contains':    return strVal.includes(strTarget)
     case 'equals':      return strVal === strTarget
     case 'starts_with': return strVal.startsWith(strTarget)
-    case 'regex':       return new RegExp(String(target), 'i').test(String(fieldValue))
+    case 'regex': {
+      try { return new RegExp(String(target), 'i').test(String(fieldValue)) } catch { return false }
+    }
     case 'gt':          return Number(fieldValue) > Number(target)
     case 'lt':          return Number(fieldValue) < Number(target)
     case 'gte':         return Number(fieldValue) >= Number(target)
