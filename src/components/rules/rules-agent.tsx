@@ -31,13 +31,18 @@ interface RulesAgentProps {
 
 // ── Suggestion → UserRule shape ───────────────────────────────────────────────
 
-function suggestionToRule(s: AgentSuggestion): UserRule {
+function suggestionToRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): UserRule {
+  // Resolve categoryId from groups if the agent didn't supply one
+  const allCats = categoryGroups.flatMap((g) => g.categories)
+  const resolvedCat = s.categoryId
+    ? allCats.find((c) => c.id === s.categoryId)
+    : allCats.find((c) => c.name.toLowerCase() === s.categoryName.toLowerCase())
   return {
-    id: '',                     // empty = new rule (RuleEditor posts to /api/rules)
+    id: '',
     name: '',
     priority: 50,
-    categoryName: s.categoryName,
-    categoryId: s.categoryId,
+    categoryName: resolvedCat?.name ?? s.categoryName,
+    categoryId: resolvedCat?.id ?? null,
     categoryRef: null,
     merchantName: null,
     payeeId: s.payeeId,
@@ -102,7 +107,7 @@ function SuggestionCard({
           projects={projects}
           payees={payees}
           categoryGroups={categoryGroups}
-          editingRule={suggestionToRule(suggestion)}
+          editingRule={suggestionToRule(suggestion, categoryGroups)}
           onSave={onAccepted}
           onCancel={onDecline}
           saveLabel="Accept"
