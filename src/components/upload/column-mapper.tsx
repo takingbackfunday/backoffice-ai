@@ -147,13 +147,17 @@ export function ColumnMapper() {
       .then((j) => {
         if (!j.error) {
           setValidation(j.data)
-          // Auto-apply high-confidence dateFormat and amountSign suggestions
-          if (j.data?.dateFormat?.confidence >= 80 && j.data.dateFormat.value) {
-            setMapping((m) => ({ ...m, dateFormat: j.data.dateFormat.value }))
-          }
-          if (j.data?.amountSign?.confidence >= 80 && j.data.amountSign.value) {
-            setMapping((m) => ({ ...m, amountSign: j.data.amountSign.value }))
-          }
+          // Auto-apply all high-confidence suggestions
+          setMapping((m) => {
+            const next = { ...m }
+            for (const field of ['dateCol', 'amountCol', 'descCol', 'notesCol'] as const) {
+              const v = j.data?.[field]
+              if (v?.confidence >= 80 && v.col) next[field] = v.col
+            }
+            if (j.data?.dateFormat?.confidence >= 80 && j.data.dateFormat.value) next.dateFormat = j.data.dateFormat.value
+            if (j.data?.amountSign?.confidence >= 80 && j.data.amountSign.value) next.amountSign = j.data.amountSign.value
+            return next
+          })
         }
       })
       .catch(() => {})
