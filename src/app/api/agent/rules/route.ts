@@ -264,7 +264,6 @@ Rules:
 - categoryName must exactly match one of the available category names listed above
 - reasoning should be 1 sentence`
 
-        console.log('[rules-agent] USER PROMPT:\n', userPrompt)
 
         // Keep-alive ping every 5s so the CDN doesn't drop the SSE connection
         const keepAlive = setInterval(() => {
@@ -284,7 +283,6 @@ Rules:
           clearInterval(keepAlive)
         }
 
-        console.log('[rules-agent] RAW RESPONSE:\n', rawResponse)
 
         // Step 4 – parse and stream suggestions
         send({ type: 'status', message: 'Parsing suggestions…' })

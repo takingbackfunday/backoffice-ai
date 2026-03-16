@@ -49,7 +49,6 @@ export default async function TransactionsPage() {
         <Header title="Transactions" />
         <main className="flex-1 p-6" role="main">
           <TransactionTable
-            userId={userId}
             initialRows={transactions as never}
             initialTotal={total}
             initialProjects={projects}

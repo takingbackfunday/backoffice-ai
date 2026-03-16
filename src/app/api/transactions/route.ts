@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
 
-const SORT_FIELDS = ['date', 'amount', 'description', 'merchantName', 'category'] as const
+const SORT_FIELDS = ['date', 'amount', 'description', 'category'] as const
 type SortField = typeof SORT_FIELDS[number]
 
 export async function GET(request: Request) {

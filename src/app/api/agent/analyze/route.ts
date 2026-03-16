@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { openrouterChat } from '@/lib/llm/openrouter'
+import { unauthorized } from '@/lib/api-response'
 
 interface SseEvent {
   type: 'status' | 'report' | 'done' | 'error'
@@ -15,7 +16,7 @@ function encode(event: SseEvent): Uint8Array {
 
 export async function GET() {
   const { userId } = await auth()
-  if (!userId) return new Response('Unauthorized', { status: 401 })
+  if (!userId) return unauthorized()
 
   const stream = new ReadableStream({
     async start(controller) {

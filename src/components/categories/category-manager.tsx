@@ -10,15 +10,15 @@ interface Category {
   _count: { transactions: number }
 }
 
-interface CategoryGroup {
+interface CategoryGroupWithCounts {
   id: string
   name: string
   sortOrder: number
   categories: Category[]
 }
 
-export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGroup[] } = {}) {
-  const [groups, setGroups] = useState<CategoryGroup[]>(initialGroups ?? [])
+export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGroupWithCounts[] } = {}) {
+  const [groups, setGroups] = useState<CategoryGroupWithCounts[]>(initialGroups ?? [])
   const [loading, setLoading] = useState(!initialGroups)
   const [error, setError] = useState<string | null>(null)
 

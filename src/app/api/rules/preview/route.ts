@@ -62,7 +62,6 @@ export async function POST(request: Request) {
         id: tx.id,
         date: tx.date,
         description: tx.description,
-        merchantName: tx.merchantName,
         amount: Number(tx.amount),
         currency: tx.account.currency,
         category: tx.category,

@@ -49,7 +49,6 @@ interface PreviewTx {
   id: string
   date: string
   description: string
-  merchantName: string | null  // kept as fallback for payee display
   amount: number
   currency: string
   category: string | null
@@ -200,7 +199,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: { co
                   </td>
                   <td className="px-2 py-1 text-muted-foreground">{tx.currency}</td>
                   <DeltaCell current={tx.category} next={newCategory} />
-                  <DeltaCell current={tx.payeeName ?? tx.merchantName} next={newPayee} />
+                  <DeltaCell current={tx.payeeName} next={newPayee} />
                   <DeltaCell current={tx.projectName} next={newProjectName} />
                 </tr>
               ))}

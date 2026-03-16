@@ -1,8 +1,5 @@
 import { Sidebar } from '@/components/layout/sidebar'
-
-function Shimmer({ className }: { className: string }) {
-  return <div className={`animate-pulse rounded bg-muted ${className}`} />
-}
+import { Shimmer } from '@/components/ui/shimmer'
 
 export default function Loading() {
   return (

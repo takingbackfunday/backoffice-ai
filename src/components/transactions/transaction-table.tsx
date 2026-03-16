@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Project } from '@prisma/client'
 import type { TransactionWithRelations } from '@/types'
+import type { CategoryGroup, Payee } from '@/components/rules/rule-editor'
 
 interface Props {
-  userId: string
   initialRows?: TransactionWithRelations[]
   initialTotal?: number
   initialProjects?: Project[]
@@ -13,20 +13,9 @@ interface Props {
   initialPayees?: Payee[]
 }
 
-type SortField = 'date' | 'amount' | 'description' | 'merchantName' | 'category'
+type SortField = 'date' | 'amount' | 'description' | 'category'
 type SortDir = 'asc' | 'desc'
 type EditableField = 'description' | 'merchantName' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount'
-
-interface CategoryGroup {
-  id: string
-  name: string
-  categories: { id: string; name: string }[]
-}
-
-interface Payee {
-  id: string
-  name: string
-}
 
 interface EditingCell {
   id: string
@@ -199,7 +188,7 @@ function SortHeader({
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function TransactionTable({ userId: _userId, initialRows, initialTotal, initialProjects, initialCategoryGroups, initialPayees }: Props) {
+export function TransactionTable({ initialRows, initialTotal, initialProjects, initialCategoryGroups, initialPayees }: Props) {
   const [localRows, setLocalRows] = useState<TransactionWithRelations[]>(initialRows ?? [])
   const [total, setTotal] = useState(initialTotal ?? 0)
   const [page, setPage] = useState(1)

@@ -1,14 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { CategoryGroup } from '@/components/rules/rule-editor'
 
-interface CategoryGroup {
-  id: string
-  name: string
-  categories: { id: string; name: string }[]
-}
-
-interface Payee {
+interface PayeeWithDetails {
   id: string
   name: string
   defaultCategoryId: string | null
@@ -24,10 +19,10 @@ export function PayeeManager({
   initialPayees,
   initialGroups,
 }: {
-  initialPayees?: Payee[]
+  initialPayees?: PayeeWithDetails[]
   initialGroups?: CategoryGroup[]
 } = {}) {
-  const [payees, setPayees] = useState<Payee[]>(initialPayees ?? [])
+  const [payees, setPayees] = useState<PayeeWithDetails[]>(initialPayees ?? [])
   const [groups, setGroups] = useState<CategoryGroup[]>(initialGroups ?? [])
   const [loading, setLoading] = useState(!initialPayees)
   const [error, setError] = useState<string | null>(null)
