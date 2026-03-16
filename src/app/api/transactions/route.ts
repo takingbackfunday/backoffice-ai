@@ -32,6 +32,11 @@ export async function GET(request: Request) {
             OR: [
               { description: { contains: search, mode: 'insensitive' as const } },
               { merchantName: { contains: search, mode: 'insensitive' as const } },
+              { notes: { contains: search, mode: 'insensitive' as const } },
+              { category: { contains: search, mode: 'insensitive' as const } },
+              { payee: { is: { name: { contains: search, mode: 'insensitive' as const } } } },
+              { account: { name: { contains: search, mode: 'insensitive' as const } } },
+              { categoryRef: { is: { name: { contains: search, mode: 'insensitive' as const } } } },
             ],
           }
         : {}),
