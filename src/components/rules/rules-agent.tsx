@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { Project } from '@prisma/client'
 import { RuleEditor, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
 
@@ -54,26 +54,6 @@ function suggestionToRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): 
   }
 }
 
-// ── Condition summary (mirrors rules-manager conditionSummary) ─────────────────
-
-const FIELD_LABELS: Record<string, string> = {
-  description: 'Description', payeeName: 'Payee', merchantName: 'Merchant',
-  rawDescription: 'Raw description', amount: 'Amount', currency: 'Currency',
-}
-const OPERATOR_LABELS: Record<string, string> = {
-  contains: 'contains', equals: 'equals', starts_with: 'starts with',
-  oneOf: 'is one of', gt: '>', lt: '<', gte: '≥', lte: '≤',
-}
-
-function conditionSummary(conditions: AgentSuggestion['conditions']): string {
-  const defs = conditions.all ?? conditions.any ?? []
-  const join = conditions.any ? ' OR ' : ' AND '
-  return defs.map((c) => {
-    const val = Array.isArray(c.value) ? (c.value as string[]).join(', ') : `"${c.value}"`
-    return `${FIELD_LABELS[c.field] ?? c.field} ${OPERATOR_LABELS[c.operator] ?? c.operator} ${val}`
-  }).join(join) || '(no conditions)'
-}
-
 // ── SuggestionCard ─────────────────────────────────────────────────────────────
 
 function SuggestionCard({
@@ -97,152 +77,45 @@ function SuggestionCard({
   onDecline: () => void
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
 }) {
-  const isHighConfidence = suggestion.confidence === 'high'
-  const [expanded, setExpanded] = useState(!isHighConfidence)
-  const [accepting, setAccepting] = useState(false)
-
-  const rule = useMemo(() => suggestionToRule(suggestion, categoryGroups), [suggestion, categoryGroups])
-
-  function handleQuickAccept() {
-    setAccepting(true)
-    fetch(rule.id ? `/api/rules/${rule.id}` : '/api/rules', {
-      method: rule.id ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: [conditionSummary(suggestion.conditions), rule.categoryName].filter(Boolean).join(' → '),
-        priority: rule.priority,
-        conditions: rule.conditions,
-        categoryName: rule.categoryName,
-        categoryId: rule.categoryId,
-        payeeName: rule.payee?.name ?? null,
-        projectId: rule.projectId ?? null,
-      }),
-    })
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.error) { setAccepting(false); return }
-        onAccepted(json.data, index)
-      })
-      .catch(() => setAccepting(false))
-  }
-
-  function handleQuickAcceptAndApply() {
-    setAccepting(true)
-    fetch('/api/rules', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: [conditionSummary(suggestion.conditions), rule.categoryName].filter(Boolean).join(' → '),
-        priority: rule.priority,
-        conditions: rule.conditions,
-        categoryName: rule.categoryName,
-        categoryId: rule.categoryId,
-        payeeName: rule.payee?.name ?? null,
-        projectId: rule.projectId ?? null,
-      }),
-    })
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.error) { setAccepting(false); return }
-        onAccepted(json.data, index)
-        // Fire-and-forget apply
-        fetch('/api/rules/apply', { method: 'POST' })
-          .then((r) => r.json().then((applyJson) => ({ ok: r.ok, applyJson })))
-          .then(({ ok: applyOk, applyJson }) => {
-            if (onApplyComplete) onApplyComplete(applyOk ? (applyJson.data ?? null) : null)
-          })
-          .catch(() => { if (onApplyComplete) onApplyComplete(null) })
-      })
-      .catch(() => setAccepting(false))
-  }
-
   return (
-    <div className={`rounded-lg border bg-white overflow-hidden ${expanded ? '' : 'hover:border-primary/30 transition-colors'}`}>
-      {/* Collapsed row — mirrors RuleCard layout */}
-      <div className="flex items-center gap-3 px-3 py-2">
-        <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-medium text-foreground truncate">{conditionSummary(suggestion.conditions)}</p>
-          {rule.categoryName && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs px-2 py-0.5 shrink-0">
-              <span className="text-blue-400">cat</span>
-              {rule.categoryName}
-            </span>
-          )}
-          {rule.payee && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-xs px-2 py-0.5 shrink-0">
-              <span className="text-violet-400">payee</span>
-              {rule.payee.name}
-            </span>
-          )}
-          <span className="text-xs text-muted-foreground shrink-0">~{suggestion.matchCount} txns</span>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          {isHighConfidence && !expanded && (
-            <>
-              <button
-                onClick={handleQuickAccept}
-                disabled={accepting}
-                className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50 hover:opacity-90"
-              >
-                {accepting ? '…' : 'Accept'}
-              </button>
-              <button
-                onClick={handleQuickAcceptAndApply}
-                disabled={accepting}
-                className="rounded-md bg-primary/80 px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50 hover:opacity-90"
-              >
-                {accepting ? '…' : '& apply'}
-              </button>
-              <button
-                onClick={onDecline}
-                className="rounded-md border px-3 py-1 text-xs hover:bg-muted"
-              >
-                Decline
-              </button>
-            </>
-          )}
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            aria-label={expanded ? 'Collapse' : 'Edit'}
-            title={expanded ? 'Collapse' : 'Edit / expand'}
+    <div className="rounded-lg border bg-white overflow-hidden">
+      {/* Card header */}
+      <div className="flex items-center justify-between gap-2 px-4 py-2 bg-muted/30 border-b">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground font-medium">
+            Suggestion {index + 1}/{total}
+          </span>
+          <span
+            className={`text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+              suggestion.confidence === 'high'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-yellow-100 text-yellow-700'
+            }`}
           >
-            {expanded ? (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
-            ) : (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            )}
-          </button>
+            {suggestion.confidence}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            ~{suggestion.matchCount} transaction{suggestion.matchCount !== 1 ? 's' : ''}
+          </span>
         </div>
+        <p className="text-xs text-muted-foreground italic truncate max-w-xs">{suggestion.reasoning}</p>
       </div>
 
-      {/* Reasoning line — always visible */}
-      {suggestion.reasoning && (
-        <p className="text-xs text-muted-foreground italic px-3 pb-1.5 -mt-1">{suggestion.reasoning}</p>
-      )}
-
-      {/* Expanded full editor */}
-      {expanded && (
-        <div className="border-t p-1">
-          <RuleEditor
-            projects={projects}
-            payees={payees}
-            categoryGroups={categoryGroups}
-            editingRule={rule}
-            onSave={(saved) => onAccepted(saved, index)}
-            onCancel={onDecline}
-            saveLabel="Accept"
-            cancelLabel="Decline"
-            showSaveAndApply
-            onApplyComplete={onApplyComplete}
-          />
-        </div>
-      )}
+      {/* Full rule editor, pre-populated */}
+      <div className="p-1">
+        <RuleEditor
+          projects={projects}
+          payees={payees}
+          categoryGroups={categoryGroups}
+          editingRule={suggestionToRule(suggestion, categoryGroups)}
+          onSave={(rule) => onAccepted(rule, index)}
+          onCancel={onDecline}
+          saveLabel="Accept"
+          cancelLabel="Decline"
+          showSaveAndApply
+          onApplyComplete={onApplyComplete}
+        />
+      </div>
     </div>
   )
 }
