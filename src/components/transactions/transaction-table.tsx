@@ -204,8 +204,6 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const [errorIds, setErrorIds] = useState<Set<string>>(new Set())
 
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
@@ -450,36 +448,6 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     }
   }
 
-  // ── Per-row delete ────────────────────────────────────────────────
-  function handleDeleteClick(id: string) {
-    if (pendingDeleteId === id) {
-      // Confirmed
-      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
-      setPendingDeleteId(null)
-      confirmDelete(id)
-    } else {
-      // First click — start 3s timeout
-      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
-      setPendingDeleteId(id)
-      deleteTimerRef.current = setTimeout(() => setPendingDeleteId(null), 3000)
-    }
-  }
-
-  async function confirmDelete(id: string) {
-    setDeletingIds((s) => new Set(s).add(id))
-    try {
-      const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('delete failed')
-      setLocalRows((rows) => rows.filter((r) => r.id !== id))
-      setSelectedIds((s) => { const n = new Set(s); n.delete(id); return n })
-      setTotal((t) => t - 1)
-    } catch {
-      setError('Failed to delete transaction')
-    } finally {
-      setDeletingIds((s) => { const n = new Set(s); n.delete(id); return n })
-    }
-  }
-
   // ── Bulk delete ───────────────────────────────────────────────────
   async function confirmBulkDelete() {
     setBulkDeleteConfirm(false)
@@ -635,69 +603,36 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="space-y-3" data-testid="transaction-table">
-      {/* Search bar */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+      {/* Search bar + actions */}
+      <div className="flex items-center gap-2">
+        <p className="text-xs text-muted-foreground mr-auto">
           {loading && total === 0 ? 'Loading transactions…' : `${total} transaction${total !== 1 ? 's' : ''}`}
         </p>
+        {someChecked && (
+          <div className="flex items-center gap-2 text-xs" role="toolbar" aria-label="Bulk actions" data-testid="bulk-toolbar">
+            <span className="text-muted-foreground">{selectedIds.size} selected</span>
+            {bulkDeleteConfirm ? (
+              <>
+                <span className="text-red-600 font-medium">Delete {selectedIds.size} rows?</span>
+                <button onClick={confirmBulkDelete} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700" aria-label="Confirm bulk delete" data-testid="bulk-delete-confirm-btn">Confirm</button>
+                <button onClick={() => setBulkDeleteConfirm(false)} className="rounded border px-2 py-1 hover:bg-muted" aria-label="Cancel bulk delete">Cancel</button>
+              </>
+            ) : (
+              <button onClick={() => setBulkDeleteConfirm(true)} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700" aria-label="Delete selected" data-testid="bulk-delete-btn">Delete selected</button>
+            )}
+            <button onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }} className="text-muted-foreground hover:text-foreground px-1" aria-label="Clear selection">✕</button>
+          </div>
+        )}
         <input
           type="search"
           placeholder="Search transactions…"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-          className="rounded-md border px-3 py-1.5 text-sm w-64"
+          className="rounded-md border px-3 py-1.5 text-xs w-56"
           aria-label="Search transactions by description or merchant"
           data-testid="transaction-search"
         />
       </div>
-
-      {/* Bulk delete toolbar */}
-      {someChecked && (
-        <div
-          className="flex items-center gap-3 rounded-md border bg-muted/60 px-4 py-2 text-sm"
-          role="toolbar"
-          aria-label="Bulk actions"
-          data-testid="bulk-toolbar"
-        >
-          <span className="font-medium">{selectedIds.size} selected</span>
-          {bulkDeleteConfirm ? (
-            <>
-              <span className="text-red-600 font-medium">Delete {selectedIds.size} rows?</span>
-              <button
-                onClick={confirmBulkDelete}
-                className="rounded bg-red-600 px-3 py-1 text-white hover:bg-red-700"
-                aria-label="Confirm bulk delete"
-                data-testid="bulk-delete-confirm-btn"
-              >
-                Confirm
-              </button>
-              <button
-                onClick={() => setBulkDeleteConfirm(false)}
-                className="rounded border px-3 py-1 hover:bg-muted"
-                aria-label="Cancel bulk delete"
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setBulkDeleteConfirm(true)}
-              className="rounded bg-red-600 px-3 py-1 text-white hover:bg-red-700"
-              aria-label="Delete selected transactions"
-              data-testid="bulk-delete-btn"
-            >
-              Delete selected
-            </button>
-          )}
-          <button
-            onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }}
-            className="ml-auto text-muted-foreground hover:text-foreground"
-            aria-label="Clear selection"
-          >
-            Clear
-          </button>
-        </div>
-      )}
 
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
 
@@ -735,7 +670,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
       {/* Table */}
       <div className="overflow-auto rounded-lg border">
-        <table className="w-full text-sm" aria-label="Transactions">
+        <table className="w-full text-xs" aria-label="Transactions">
           <thead className="bg-muted text-xs uppercase tracking-wide">
             <tr>
               {/* Checkbox */}
@@ -752,12 +687,12 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
               </th>
               <SortHeader label="Date" field="date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <SortHeader label="Description" field="description" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+              <th className="px-3 py-1.5 text-left font-medium">Account</th>
               <th className="px-3 py-1.5 text-left font-medium">Payee</th>
+              <th className="px-3 py-1.5 text-left font-medium">Notes</th>
               <th className="px-3 py-1.5 text-left font-medium">Category</th>
               <th className="px-3 py-1.5 text-left font-medium">Project</th>
               <SortHeader label="Amount" field="amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="text-right" />
-              <th className="px-3 py-1.5 text-left font-medium">Notes</th>
-              <th className="px-3 py-1.5 text-left font-medium w-20">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -772,13 +707,10 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
               </tr>
             ) : !loading && localRows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
-                  No transactions found.
-                </td>
+                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No transactions found.</td>
               </tr>
             ) : (
               localRows.map((row) => {
-                const isPendingDelete = pendingDeleteId === row.id
                 const isDeleting = deletingIds.has(row.id)
                 const isSelected = selectedIds.has(row.id)
 
@@ -787,8 +719,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                     key={row.id}
                     className={[
                       'border-t transition-colors',
-                      isPendingDelete || isDeleting ? 'bg-red-50' : isSelected ? 'bg-blue-50' : 'hover:bg-muted/40',
-                      isDeleting ? 'opacity-50' : '',
+                      isDeleting ? 'opacity-50 bg-red-50' : isSelected ? 'bg-blue-50' : 'hover:bg-muted/40',
                     ].filter(Boolean).join(' ')}
                     data-testid="transaction-row"
                   >
@@ -808,37 +739,14 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                       {new Date(row.date).toLocaleDateString()}
                     </td>
 
-                    {/* Editable cells */}
+                    {/* Editable cells — Notes before Category */}
                     {renderEditableCell(row, 'description')}
+                    <td className="px-3 py-1 text-muted-foreground whitespace-nowrap">{row.account.name}</td>
                     {renderEditableCell(row, 'payeeId')}
+                    {renderEditableCell(row, 'notes')}
                     {renderEditableCell(row, 'categoryId')}
                     {renderEditableCell(row, 'projectId')}
                     {renderEditableCell(row, 'amount')}
-                    {renderEditableCell(row, 'notes')}
-
-                    {/* Actions */}
-                    <td className="px-3 py-1 w-20">
-                      {isPendingDelete ? (
-                        <button
-                          onClick={() => handleDeleteClick(row.id)}
-                          className="text-xs rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700"
-                          aria-label="Confirm delete transaction"
-                          data-testid="confirm-delete-btn"
-                        >
-                          Confirm?
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleDeleteClick(row.id)}
-                          disabled={isDeleting}
-                          className="rounded p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 disabled:opacity-40"
-                          aria-label="Delete transaction"
-                          data-testid="delete-btn"
-                        >
-                          🗑
-                        </button>
-                      )}
-                    </td>
                   </tr>
                 )
               })
