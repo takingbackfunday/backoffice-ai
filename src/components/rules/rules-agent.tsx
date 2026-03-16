@@ -73,7 +73,7 @@ function SuggestionCard({
   categoryGroups: CategoryGroup[]
   payees: Payee[]
   projects: Project[]
-  onAccepted: (rule: UserRule) => void
+  onAccepted: (rule: UserRule, index: number) => void
   onDecline: () => void
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
 }) {
@@ -108,7 +108,7 @@ function SuggestionCard({
           payees={payees}
           categoryGroups={categoryGroups}
           editingRule={suggestionToRule(suggestion, categoryGroups)}
-          onSave={onAccepted}
+          onSave={(rule) => onAccepted(rule, index)}
           onCancel={onDecline}
           saveLabel="Accept"
           cancelLabel="Decline"
@@ -202,17 +202,9 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
     }
   }
 
-  function accept(rule: UserRule) {
+  function accept(rule: UserRule, index: number) {
     onRuleAccepted(rule)
-    // Find and dismiss the matching suggestion by scanning for the one currently being accepted.
-    // Since RuleEditor calls onSave synchronously after the fetch resolves, we dismiss the first
-    // non-dismissed suggestion that has a matching category (simple heuristic — good enough given
-    // suggestions are accepted one at a time).
-    setSuggestions((prev) => {
-      const idx = prev.findIndex((s, i) => !dismissed.has(i) && s.categoryName === rule.categoryName)
-      if (idx !== -1) setDismissed((d) => new Set(d).add(idx))
-      return prev
-    })
+    setDismissed((d) => new Set(d).add(index))
   }
 
   function decline(i: number) {
