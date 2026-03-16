@@ -260,7 +260,7 @@ export function ConditionRow({
           {op}
         </button>
       )}
-      <div className="flex items-center gap-1.5 bg-[#E6F1FB] rounded-lg px-2.5 py-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5 bg-[#E6F1FB] rounded-lg px-2.5 py-1.5 flex-wrap flex-1 min-w-0">
         <select
           value={cond.field}
           onChange={(e) => handleFieldChange(e.target.value as ConditionField)}
@@ -282,7 +282,7 @@ export function ConditionRow({
           value={cond.value}
           onChange={(e) => onChange({ ...cond, value: e.target.value })}
           placeholder={cond.operator === 'oneOf' ? 'val1, val2…' : isAmount ? '0' : 'value…'}
-          className="bg-white/55 text-[13px] font-medium text-[#0C447C] rounded px-2 py-0.5 border-none outline-none min-w-[80px] w-auto"
+          className="bg-white/55 text-[13px] font-medium text-[#0C447C] rounded px-2 py-0.5 border-none outline-none min-w-[120px] w-full"
           aria-label="Condition value"
         />
       </div>
