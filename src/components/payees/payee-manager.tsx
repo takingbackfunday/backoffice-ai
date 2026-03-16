@@ -20,10 +20,16 @@ interface Payee {
   _count: { transactions: number }
 }
 
-export function PayeeManager() {
-  const [payees, setPayees] = useState<Payee[]>([])
-  const [groups, setGroups] = useState<CategoryGroup[]>([])
-  const [loading, setLoading] = useState(true)
+export function PayeeManager({
+  initialPayees,
+  initialGroups,
+}: {
+  initialPayees?: Payee[]
+  initialGroups?: CategoryGroup[]
+} = {}) {
+  const [payees, setPayees] = useState<Payee[]>(initialPayees ?? [])
+  const [groups, setGroups] = useState<CategoryGroup[]>(initialGroups ?? [])
+  const [loading, setLoading] = useState(!initialPayees)
   const [error, setError] = useState<string | null>(null)
 
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -32,6 +38,7 @@ export function PayeeManager() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
+    if (initialPayees) return
     Promise.all([
       fetch('/api/payees').then((r) => r.json()),
       fetch('/api/category-groups').then((r) => r.json()),
@@ -42,7 +49,7 @@ export function PayeeManager() {
       })
       .catch(() => setError('Failed to load'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [initialPayees])
 
   async function renamePayee(id: string) {
     const name = renameValue.trim()

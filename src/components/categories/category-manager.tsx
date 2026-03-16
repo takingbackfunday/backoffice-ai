@@ -17,9 +17,9 @@ interface CategoryGroup {
   categories: Category[]
 }
 
-export function CategoryManager() {
-  const [groups, setGroups] = useState<CategoryGroup[]>([])
-  const [loading, setLoading] = useState(true)
+export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGroup[] } = {}) {
+  const [groups, setGroups] = useState<CategoryGroup[]>(initialGroups ?? [])
+  const [loading, setLoading] = useState(!initialGroups)
   const [error, setError] = useState<string | null>(null)
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -42,12 +42,13 @@ export function CategoryManager() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
+    if (initialGroups) return
     fetch('/api/category-groups')
       .then((r) => r.json())
       .then((j) => { if (!j.error) setGroups(j.data ?? []) })
       .catch(() => setError('Failed to load categories'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [initialGroups])
 
   useEffect(() => {
     if (renamingId) renameRef.current?.focus()

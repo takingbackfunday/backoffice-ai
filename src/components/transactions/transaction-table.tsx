@@ -6,6 +6,9 @@ import type { TransactionWithRelations } from '@/types'
 
 interface Props {
   userId: string
+  initialProjects?: Project[]
+  initialCategoryGroups?: CategoryGroup[]
+  initialPayees?: Payee[]
 }
 
 type SortField = 'date' | 'amount' | 'description' | 'merchantName' | 'category'
@@ -194,7 +197,7 @@ function SortHeader({
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function TransactionTable({ userId: _userId }: Props) {
+export function TransactionTable({ userId: _userId, initialProjects, initialCategoryGroups, initialPayees }: Props) {
   const [localRows, setLocalRows] = useState<TransactionWithRelations[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -216,9 +219,9 @@ export function TransactionTable({ userId: _userId }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
 
-  const [projects, setProjects] = useState<Project[]>([])
-  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
-  const [payees, setPayees] = useState<Payee[]>([])
+  const [projects, setProjects] = useState<Project[]>(initialProjects ?? [])
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>(initialCategoryGroups ?? [])
+  const [payees, setPayees] = useState<Payee[]>(initialPayees ?? [])
 
   interface RuleSuggestion {
     categoryName: string
@@ -234,21 +237,13 @@ export function TransactionTable({ userId: _userId }: Props) {
 
   const pageSize = 200
 
-  // Load projects, categories, payees once
+  // Load projects, categories, payees once (skip if passed from server)
   useEffect(() => {
-    fetch('/api/projects')
-      .then((r) => r.json())
-      .then((j) => { if (!j.error) setProjects(j.data ?? []) })
-      .catch(() => {})
-    fetch('/api/category-groups')
-      .then((r) => r.json())
-      .then((j) => { if (!j.error) setCategoryGroups(j.data ?? []) })
-      .catch(() => {})
-    fetch('/api/payees')
-      .then((r) => r.json())
-      .then((j) => { if (!j.error) setPayees(j.data ?? []) })
-      .catch(() => {})
-  }, [])
+    if (initialProjects && initialCategoryGroups && initialPayees) return
+    if (!initialProjects) fetch('/api/projects').then((r) => r.json()).then((j) => { if (!j.error) setProjects(j.data ?? []) }).catch(() => {})
+    if (!initialCategoryGroups) fetch('/api/category-groups').then((r) => r.json()).then((j) => { if (!j.error) setCategoryGroups(j.data ?? []) }).catch(() => {})
+    if (!initialPayees) fetch('/api/payees').then((r) => r.json()).then((j) => { if (!j.error) setPayees(j.data ?? []) }).catch(() => {})
+  }, [initialProjects, initialCategoryGroups, initialPayees])
 
   // Fetch transactions
   const fetchTransactions = useCallback(() => {
