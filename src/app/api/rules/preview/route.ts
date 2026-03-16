@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       const fact: TransactionFact = {
         description: tx.description,
         merchantName: tx.merchantName ?? null,
-        payeeName: tx.payee?.name ?? null,
+        payeeName: tx.payee?.name ?? tx.merchantName ?? null,
         amount: Number(tx.amount),
         currency: tx.account.currency,
         date: tx.date,
