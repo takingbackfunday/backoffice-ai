@@ -354,7 +354,7 @@ export function RuleEditor({
   const applyAfterSaveRef = useRef(false)
 
   const usedTypes = new Set(outputs.map((o) => o.type))
-  const availableToAdd = (['payee', 'project'] as OutputActionType[]).filter((t) => !usedTypes.has(t))
+  const availableToAdd = (['category', 'payee', 'project'] as OutputActionType[]).filter((t) => !usedTypes.has(t))
 
   function updateCondition(i: number, c: ConditionDef) {
     setConditions((prev) => prev.map((x, idx) => (idx === i ? c : x)))
@@ -368,7 +368,8 @@ export function RuleEditor({
     e.preventDefault()
     const validDefs = conditions.filter((c) => c.value.trim() !== '')
     const categoryOutput = outputs.find((o) => o.type === 'category')?.value.trim() ?? ''
-    if (validDefs.length === 0 || !categoryOutput) return
+    if (validDefs.length === 0) { setError('Add at least one condition.'); return }
+    if (!categoryOutput) { setError('A category output is required.'); return }
 
     setSaving(true)
     setError(null)
