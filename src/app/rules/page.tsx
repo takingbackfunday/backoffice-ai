@@ -63,7 +63,7 @@ export default async function RulesPage() {
             </p>
           </div>
           <RulesManager
-            initialRules={rules as Parameters<typeof RulesManager>[0]['initialRules']}
+            initialRules={rules as never}
             initialProjects={projects}
             initialPayees={payees}
             initialCategoryGroups={categoryGroups.map((g) => ({

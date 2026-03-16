@@ -37,7 +37,7 @@ export default async function PayeesPage() {
             </p>
           </div>
           <PayeeManager
-            initialPayees={payees as Parameters<typeof PayeeManager>[0]['initialPayees']}
+            initialPayees={payees as never}
             initialGroups={groups.map((g) => ({
               id: g.id,
               name: g.name,
