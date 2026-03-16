@@ -207,6 +207,8 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeletedCount, setBulkDeletedCount] = useState(0)
 
   const [projects, setProjects] = useState<Project[]>(initialProjects ?? [])
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>(initialCategoryGroups ?? [])
@@ -451,26 +453,29 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   // ── Bulk delete ───────────────────────────────────────────────────
   async function confirmBulkDelete() {
     setBulkDeleteConfirm(false)
+    setBulkDeleting(true)
+    setBulkDeletedCount(0)
     const ids = Array.from(selectedIds)
     ids.forEach((id) => setDeletingIds((s) => new Set(s).add(id)))
 
-    const results = await Promise.allSettled(
+    let deleted = 0
+    await Promise.allSettled(
       ids.map((id) =>
         fetch(`/api/transactions/${id}`, { method: 'DELETE' }).then((r) => {
           if (!r.ok) throw new Error('failed')
-          return id
+          // Remove each row as soon as it's deleted
+          setLocalRows((rows) => rows.filter((r) => r.id !== id))
+          setDeletingIds((s) => { const n = new Set(s); n.delete(id); return n })
+          deleted++
+          setBulkDeletedCount(deleted)
         })
       )
     )
 
-    const deleted = results
-      .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-      .map((r) => r.value)
-
-    setLocalRows((rows) => rows.filter((r) => !deleted.includes(r.id)))
     setSelectedIds(new Set())
-    setTotal((t) => t - deleted.length)
-    ids.forEach((id) => setDeletingIds((s) => { const n = new Set(s); n.delete(id); return n }))
+    setTotal((t) => t - deleted)
+    setBulkDeleting(false)
+    setBulkDeletedCount(0)
   }
 
   // ── Checkbox helpers ──────────────────────────────────────────────
@@ -608,19 +613,28 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
         <p className="text-xs text-muted-foreground mr-auto">
           {loading && total === 0 ? 'Loading transactions…' : `${total} transaction${total !== 1 ? 's' : ''}`}
         </p>
-        {someChecked && (
+        {(someChecked || bulkDeleting) && (
           <div className="flex items-center gap-2 text-xs" role="toolbar" aria-label="Bulk actions" data-testid="bulk-toolbar">
-            <span className="text-muted-foreground">{selectedIds.size} selected</span>
-            {bulkDeleteConfirm ? (
+            {bulkDeleting ? (
               <>
-                <span className="text-red-600 font-medium">Delete {selectedIds.size} rows?</span>
-                <button onClick={confirmBulkDelete} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700" aria-label="Confirm bulk delete" data-testid="bulk-delete-confirm-btn">Confirm</button>
-                <button onClick={() => setBulkDeleteConfirm(false)} className="rounded border px-2 py-1 hover:bg-muted" aria-label="Cancel bulk delete">Cancel</button>
+                <span className="inline-block w-3 h-3 rounded-full border-2 border-red-500 border-t-transparent animate-spin" />
+                <span className="text-muted-foreground">Deleting {bulkDeletedCount} of {bulkDeletedCount + deletingIds.size}…</span>
               </>
             ) : (
-              <button onClick={() => setBulkDeleteConfirm(true)} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700" aria-label="Delete selected" data-testid="bulk-delete-btn">Delete selected</button>
+              <>
+                <span className="text-muted-foreground">{selectedIds.size} selected</span>
+                {bulkDeleteConfirm ? (
+                  <>
+                    <span className="text-red-600 font-medium">Delete {selectedIds.size} rows?</span>
+                    <button onClick={confirmBulkDelete} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700" aria-label="Confirm bulk delete" data-testid="bulk-delete-confirm-btn">Confirm</button>
+                    <button onClick={() => setBulkDeleteConfirm(false)} className="rounded border px-2 py-1 hover:bg-muted" aria-label="Cancel bulk delete">Cancel</button>
+                  </>
+                ) : (
+                  <button onClick={() => setBulkDeleteConfirm(true)} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700" aria-label="Delete selected" data-testid="bulk-delete-btn">Delete selected</button>
+                )}
+                <button onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }} className="text-muted-foreground hover:text-foreground px-1" aria-label="Clear selection">✕</button>
+              </>
             )}
-            <button onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }} className="text-muted-foreground hover:text-foreground px-1" aria-label="Clear selection">✕</button>
           </div>
         )}
         <input
