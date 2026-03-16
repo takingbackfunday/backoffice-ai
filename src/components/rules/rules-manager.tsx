@@ -32,7 +32,7 @@ function conditionSummary(rule: UserRule): string {
 // ── Rule card ─────────────────────────────────────────────────────────────────
 
 function RuleCard({
-  rule, onEdit, onDelete, onToggle, deleting, toggling,
+  rule, onEdit, onDelete, onToggle, deleting, toggling, selected, onSelect,
 }: {
   rule: UserRule
   onEdit: () => void
@@ -40,10 +40,19 @@ function RuleCard({
   onToggle: () => void
   deleting: boolean
   toggling: boolean
+  selected: boolean
+  onSelect: () => void
 }) {
   return (
-    <div className={`rounded-lg border bg-white px-3 py-2 transition-opacity ${!rule.isActive ? 'opacity-50' : ''}`}>
+    <div className={`rounded-lg border bg-white px-3 py-2 transition-opacity ${deleting ? 'opacity-30' : !rule.isActive ? 'opacity-50' : ''} ${selected ? 'border-primary/50 bg-blue-50/40' : ''}`}>
       <div className="flex items-center justify-between gap-3">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onSelect}
+          className="cursor-pointer shrink-0"
+          aria-label={`Select rule ${rule.name}`}
+        />
         <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
           <p className="text-sm font-medium text-foreground truncate">{conditionSummary(rule)}</p>
           <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs px-2 py-0.5">
@@ -117,6 +126,10 @@ export function RulesManager({
   const [editingRule, setEditingRule] = useState<UserRule | undefined>(undefined)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeletedCount, setBulkDeletedCount] = useState(0)
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<{ updated: number; total: number } | null>(null)
   const [showAgent, setShowAgent] = useState(false)
@@ -158,6 +171,7 @@ export function RulesManager({
     if (res.ok) setRules((prev) => prev.filter((r) => r.id !== id))
     setDeletingId(null)
   }
+
 
   async function applyAllRules() {
     setApplying(true)
@@ -224,6 +238,42 @@ export function RulesManager({
         return inputMatch || outputMatch
       })
     : rules
+
+  const allFilteredSelected = filteredRules.length > 0 && filteredRules.every((r) => selectedIds.has(r.id))
+  const someSelected = selectedIds.size > 0
+
+  function toggleAll() {
+    if (allFilteredSelected) {
+      setSelectedIds((s) => { const n = new Set(s); filteredRules.forEach((r) => n.delete(r.id)); return n })
+    } else {
+      setSelectedIds((s) => { const n = new Set(s); filteredRules.forEach((r) => n.add(r.id)); return n })
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  async function confirmBulkDelete() {
+    setBulkDeleteConfirm(false)
+    setBulkDeleting(true)
+    setBulkDeletedCount(0)
+    const ids = Array.from(selectedIds)
+    let deleted = 0
+    await Promise.allSettled(
+      ids.map((id) =>
+        fetch(`/api/rules/${id}`, { method: 'DELETE' }).then((r) => {
+          if (!r.ok) throw new Error('failed')
+          setRules((prev) => prev.filter((rule) => rule.id !== id))
+          deleted++
+          setBulkDeletedCount(deleted)
+        })
+      )
+    )
+    setSelectedIds(new Set())
+    setBulkDeleting(false)
+    setBulkDeletedCount(0)
+  }
 
   return (
     <div className="space-y-6">
@@ -315,6 +365,42 @@ export function RulesManager({
       {/* Rule cards */}
       {rules.length > 0 && (
         <div className="space-y-2">
+          {/* Select-all + bulk toolbar */}
+          <div className="flex items-center gap-3 px-1 text-xs">
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              ref={(el) => { if (el) el.indeterminate = someSelected && !allFilteredSelected }}
+              onChange={toggleAll}
+              className="cursor-pointer"
+              aria-label="Select all rules"
+            />
+            {(someSelected || bulkDeleting) ? (
+              bulkDeleting ? (
+                <>
+                  <span className="inline-block w-3 h-3 rounded-full border-2 border-red-500 border-t-transparent animate-spin" />
+                  <span className="text-muted-foreground">Deleting {bulkDeletedCount} of {selectedIds.size + bulkDeletedCount}…</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-muted-foreground">{selectedIds.size} selected</span>
+                  {bulkDeleteConfirm ? (
+                    <>
+                      <span className="text-red-600 font-medium">Delete {selectedIds.size} rules?</span>
+                      <button onClick={confirmBulkDelete} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700">Confirm</button>
+                      <button onClick={() => setBulkDeleteConfirm(false)} className="rounded border px-2 py-1 hover:bg-muted">Cancel</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setBulkDeleteConfirm(true)} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700">Delete selected</button>
+                  )}
+                  <button onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }} className="text-muted-foreground hover:text-foreground px-1">✕</button>
+                </>
+              )
+            ) : (
+              <span className="text-muted-foreground">{filteredRules.length} rule{filteredRules.length !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+
           {filteredRules.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">No rules match "{query}"</p>
           )}
@@ -327,6 +413,8 @@ export function RulesManager({
               onToggle={() => toggleActive(rule)}
               deleting={deletingId === rule.id}
               toggling={togglingId === rule.id}
+              selected={selectedIds.has(rule.id)}
+              onSelect={() => toggleSelect(rule.id)}
             />
           ))}
         </div>
