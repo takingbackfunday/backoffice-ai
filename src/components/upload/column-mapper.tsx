@@ -6,10 +6,14 @@ import { useUploadStore } from '@/stores/upload-store'
 import type { CsvMapping } from '@/lib/csv-processor'
 import type { PreviewRow } from '@/types'
 
-type FieldValidation = { col: string | null; confidence: number; reason: string }
-type MappingValidation = Record<'dateCol' | 'amountCol' | 'descCol' | 'notesCol', FieldValidation>
+type ColValidation = { col: string | null; confidence: number; reason: string }
+type ValValidation = { value: string; confidence: number; reason: string }
+type MappingValidation = Record<'dateCol' | 'amountCol' | 'descCol' | 'notesCol', ColValidation> & {
+  dateFormat?: ValValidation
+  amountSign?: ValValidation
+}
 
-function ConfidenceBadge({ value }: { value: FieldValidation }) {
+function ConfidenceBadge({ value }: { value: ColValidation | ValValidation }) {
   const color = value.confidence >= 80 ? 'text-green-600' : value.confidence >= 50 ? 'text-amber-600' : 'text-red-600'
   const icon  = value.confidence >= 80 ? '✓' : value.confidence >= 50 ? '~' : '✗'
   return (
@@ -79,7 +83,7 @@ function ColSelect({
   value: string | undefined
   headers: string[]
   onChange: (v: string | undefined) => void
-  validation?: FieldValidation
+  validation?: ColValidation
   onApplySuggestion?: () => void
 }) {
   return (
@@ -140,7 +144,18 @@ export function ColumnMapper() {
       body: JSON.stringify({ headers: csvHeaders, sampleRows: first20, mapping }),
     })
       .then((r) => r.json())
-      .then((j) => { if (!j.error) setValidation(j.data) })
+      .then((j) => {
+        if (!j.error) {
+          setValidation(j.data)
+          // Auto-apply high-confidence dateFormat and amountSign suggestions
+          if (j.data?.dateFormat?.confidence >= 80 && j.data.dateFormat.value) {
+            setMapping((m) => ({ ...m, dateFormat: j.data.dateFormat.value }))
+          }
+          if (j.data?.amountSign?.confidence >= 80 && j.data.amountSign.value) {
+            setMapping((m) => ({ ...m, amountSign: j.data.amountSign.value }))
+          }
+        }
+      })
       .catch(() => {})
       .finally(() => setValidating(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -166,8 +181,8 @@ export function ColumnMapper() {
   const set = (field: keyof CsvMapping) => (v: string | undefined) =>
     setMapping((m) => ({ ...m, [field]: v }))
 
-  const applyAI = (field: keyof MappingValidation) => {
-    const col = validation?.[field]?.col
+  const applyAI = (field: 'dateCol' | 'amountCol' | 'descCol' | 'notesCol') => {
+    const col = (validation?.[field] as ColValidation | undefined)?.col
     if (col) setMapping((m) => ({ ...m, [field]: col }))
   }
 
@@ -276,6 +291,19 @@ export function ColumnMapper() {
           >
             {DATE_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
+          {validation?.dateFormat && (
+            <>
+              <ConfidenceBadge value={validation.dateFormat} />
+              {validation.dateFormat.value && validation.dateFormat.value !== mapping.dateFormat && (
+                <p className="text-xs text-amber-700 mt-0.5">
+                  AI suggests:{' '}
+                  <button className="underline" onClick={() => setMapping((m) => ({ ...m, dateFormat: validation!.dateFormat!.value }))}>
+                    {validation.dateFormat.value}
+                  </button>
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         {/* Amount column + Amount sign together */}
@@ -300,6 +328,19 @@ export function ColumnMapper() {
             <option value="normal">Expenses are negative</option>
             <option value="inverted">Expenses are positive</option>
           </select>
+          {validation?.amountSign && (
+            <>
+              <ConfidenceBadge value={validation.amountSign} />
+              {validation.amountSign.value && validation.amountSign.value !== mapping.amountSign && (
+                <p className="text-xs text-amber-700 mt-0.5">
+                  AI suggests:{' '}
+                  <button className="underline" onClick={() => setMapping((m) => ({ ...m, amountSign: validation!.amountSign!.value as 'normal' | 'inverted' }))}>
+                    {validation.amountSign.value === 'normal' ? 'Expenses are negative' : 'Expenses are positive'}
+                  </button>
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         <ColSelect

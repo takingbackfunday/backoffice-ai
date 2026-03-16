@@ -26,7 +26,13 @@ export async function POST(request: Request) {
     const { headers, sampleRows, mapping } = parsed.data
     const first20 = sampleRows.slice(0, 20)
 
-    const prompt = `You are a bank CSV expert. Given column headers and sample rows from a bank CSV, validate whether the proposed column mapping is correct.
+    // Extract sample values from the detected date and amount columns for format inference
+    const dateColName = mapping.dateCol
+    const amountColName = mapping.amountCol
+    const sampleDates = dateColName ? first20.map((r) => r[dateColName]).filter(Boolean).slice(0, 5) : []
+    const sampleAmounts = amountColName ? first20.map((r) => r[amountColName]).filter(Boolean).slice(0, 5) : []
+
+    const prompt = `You are a bank CSV expert. Given column headers and sample rows from a bank CSV, validate the column mapping AND detect the date format and amount sign convention.
 
 Headers: ${JSON.stringify(headers)}
 Sample rows (${first20.length} rows shown as JSON array): ${JSON.stringify(first20)}
@@ -36,18 +42,26 @@ Proposed mapping:
   amount column: ${mapping.amountCol ? JSON.stringify(mapping.amountCol) : 'null'}
   description column: ${mapping.descCol ? JSON.stringify(mapping.descCol) : 'null'}
   notes column: ${mapping.notesCol ? JSON.stringify(mapping.notesCol) : 'null'}
+  date format: ${mapping.dateFormat ?? 'unknown'}
+  amount sign: ${mapping.amountSign ?? 'unknown'}
+
+Sample date values: ${JSON.stringify(sampleDates)}
+Sample amount values: ${JSON.stringify(sampleAmounts)}
 
 Respond with ONLY a JSON object — no markdown, no explanation:
 {
-  "dateCol":   { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
-  "amountCol": { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
-  "descCol":   { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
-  "notesCol":  { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" }
+  "dateCol":    { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "amountCol":  { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "descCol":    { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "notesCol":   { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "dateFormat": { "value": "<MM/DD/YYYY or DD/MM/YYYY or YYYY-MM-DD>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "amountSign": { "value": "<normal or inverted>", "confidence": <0-100>, "reason": "<one sentence>" }
 }
 
-If a mapping looks correct, echo the same column with high confidence (80-100).
-If you think a different column is better, set col to your suggestion with lower confidence.
-If a field is not present in the CSV (e.g. no notes column), set col to null.`
+Rules:
+- For column fields: if correct echo the same column with confidence 80-100; if wrong suggest a better one with lower confidence; if absent set col to null.
+- For dateFormat: inspect the sample date values. "normal" date formats: MM/DD/YYYY (e.g. 12/31/2024), DD/MM/YYYY (e.g. 31/12/2024), YYYY-MM-DD (e.g. 2024-12-31). Pick the best match.
+- For amountSign: "normal" means expenses are negative (e.g. -45.00), "inverted" means expenses are positive (e.g. 45.00 for a debit). Look at the sample amounts — if typical purchases/debits appear as positive numbers, use "inverted".`
 
     const raw = await openrouterChat([{ role: 'user', content: prompt }])
 
