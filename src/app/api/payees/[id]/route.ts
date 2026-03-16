@@ -49,9 +49,9 @@ export async function DELETE(
     const existing = await prisma.payee.findFirst({ where: { id, userId } })
     if (!existing) return notFound('Payee not found')
 
-    // Nullify payeeId on related transactions first
+    // Nullify payeeId on related transactions (scoped to this user's accounts)
     await prisma.transaction.updateMany({
-      where: { payeeId: id },
+      where: { payeeId: id, account: { userId } },
       data: { payeeId: null },
     })
 

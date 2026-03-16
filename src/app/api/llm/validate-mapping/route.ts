@@ -1,6 +1,7 @@
+import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { openrouterChat } from '@/lib/llm/openrouter'
-import { ok, serverError } from '@/lib/api-response'
+import { ok, unauthorized, serverError } from '@/lib/api-response'
 
 const BodySchema = z.object({
   headers: z.array(z.string()),
@@ -17,6 +18,9 @@ const BodySchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const { userId } = await auth()
+    if (!userId) return unauthorized()
+
     const body = await request.json()
     const parsed = BodySchema.safeParse(body)
     if (!parsed.success) {

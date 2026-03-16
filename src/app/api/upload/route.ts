@@ -39,10 +39,10 @@ export async function POST(request: Request) {
 
     const result = processCSV(csvText, mapping as CsvMapping, accountId)
 
-    // Check which hashes already exist (duplicates)
+    // Check which hashes already exist (duplicates — scoped to this user's accounts)
     const hashes = result.rows.map((r) => r.duplicateHash)
     const existing = await prisma.transaction.findMany({
-      where: { duplicateHash: { in: hashes } },
+      where: { duplicateHash: { in: hashes }, account: { userId } },
       select: { duplicateHash: true },
     })
     const existingHashes = new Set(existing.map((e) => e.duplicateHash))

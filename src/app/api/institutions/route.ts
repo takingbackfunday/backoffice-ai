@@ -19,7 +19,11 @@ const CreateInstitutionSchema = z.object({
 
 export async function GET() {
   try {
+    const { userId } = await auth()
+    if (!userId) return unauthorized()
+
     const institutions = await prisma.institutionSchema.findMany({
+      where: { OR: [{ isGlobal: true }, { createdByUserId: userId }] },
       orderBy: [{ country: 'asc' }, { name: 'asc' }],
     })
     return ok(institutions, { count: institutions.length })

@@ -40,10 +40,10 @@ export async function POST(request: Request) {
     const account = await prisma.account.findFirst({ where: { id: accountId, userId } })
     if (!account) return notFound('Account not found or does not belong to you')
 
-    // Filter out duplicates
+    // Filter out duplicates (scoped to this user's accounts)
     const hashes = rows.map((r) => r.duplicateHash)
     const existing = await prisma.transaction.findMany({
-      where: { duplicateHash: { in: hashes } },
+      where: { duplicateHash: { in: hashes }, account: { userId } },
       select: { duplicateHash: true },
     })
     const existingHashes = new Set(existing.map((e) => e.duplicateHash))
