@@ -87,6 +87,27 @@ export function defaultCondition(): ConditionDef {
   return { field: 'payeeName', operator: 'contains', value: '' }
 }
 
+// ── Toast ──────────────────────────────────────────────────────────────────────
+
+export function Toast({ message, type = 'success' }: { message: string; type?: 'success' | 'error' }) {
+  return (
+    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg shadow-lg px-4 py-2.5 text-sm font-medium animate-in slide-in-from-bottom-4 fade-in duration-200 ${
+      type === 'success' ? 'bg-zinc-900 text-white' : 'bg-red-600 text-white'
+    }`}>
+      {type === 'success' ? (
+        <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+        </svg>
+      ) : (
+        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      )}
+      {message}
+    </div>
+  )
+}
+
 // ── LivePreview ────────────────────────────────────────────────────────────────
 
 function DeltaCell({ current, next }: { current: string | null; next: string | null }) {
@@ -312,7 +333,7 @@ export function OutputRow({
 // ── RuleEditor ─────────────────────────────────────────────────────────────────
 
 export function RuleEditor({
-  projects, payees, categoryGroups, editingRule, onSave, onCancel, saveLabel, cancelLabel, showSaveAndApply,
+  projects, payees, categoryGroups, editingRule, onSave, onCancel, saveLabel, cancelLabel, showSaveAndApply, onApplyComplete,
 }: {
   projects: Project[]
   payees: Payee[]
@@ -323,6 +344,7 @@ export function RuleEditor({
   saveLabel?: string
   cancelLabel?: string
   showSaveAndApply?: boolean
+  onApplyComplete?: (result: { updated: number; total: number } | null) => void
 }) {
   const initialConditions = (): ConditionDef[] => {
     if (!editingRule) return [defaultCondition()]
@@ -420,7 +442,13 @@ export function RuleEditor({
       const json = await res.json()
       if (!res.ok || json.error) { setError(json.error ?? 'Failed to save rule'); return }
       if (applyAfterSaveRef.current) {
-        await fetch('/api/rules/apply', { method: 'POST' })
+        // Fire-and-forget — don't block the UI
+        fetch('/api/rules/apply', { method: 'POST' })
+          .then((r) => r.json())
+          .then((applyJson) => {
+            if (onApplyComplete) onApplyComplete(applyJson.data ?? null)
+          })
+          .catch(() => { if (onApplyComplete) onApplyComplete(null) })
       }
       onSave(json.data)
     } catch {

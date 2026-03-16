@@ -26,6 +26,7 @@ interface RulesAgentProps {
   projects: Project[]
   onRuleAccepted: (rule: unknown) => void
   onClose: () => void
+  onApplyComplete?: (result: { updated: number; total: number } | null) => void
 }
 
 // ── Suggestion → UserRule shape ───────────────────────────────────────────────
@@ -105,6 +106,7 @@ function SuggestionCard({
           saveLabel="Accept"
           cancelLabel="Decline"
           showSaveAndApply
+          onApplyComplete={onApplyComplete}
         />
       </div>
     </div>
@@ -126,7 +128,7 @@ const THINKING_MESSAGES = [
   'Almost there…',
 ]
 
-export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, onClose }: RulesAgentProps) {
+export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, onClose, onApplyComplete }: RulesAgentProps) {
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [statusMessages, setStatusMessages] = useState<string[]>([])
   const [thinkingIdx, setThinkingIdx] = useState(0)

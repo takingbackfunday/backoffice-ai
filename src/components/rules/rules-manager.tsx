@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Project } from '@prisma/client'
-import { RuleEditor, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
+import { RuleEditor, Toast, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
 import { RulesAgent } from './rules-agent'
 
 // ── Local helpers (only needed for RuleCard display) ──────────────────────────
@@ -111,6 +111,8 @@ export function RulesManager() {
   const [applyResult, setApplyResult] = useState<{ updated: number; total: number } | null>(null)
   const [showAgent, setShowAgent] = useState(false)
   const [query, setQuery] = useState('')
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -154,6 +156,20 @@ export function RulesManager() {
       if (res.ok && !json.error) setApplyResult(json.data)
     } finally {
       setApplying(false)
+    }
+  }
+
+  function showToast(message: string, type: 'success' | 'error' = 'success') {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    setToast({ message, type })
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500)
+  }
+
+  function handleApplyComplete(result: { updated: number; total: number } | null) {
+    if (result) {
+      showToast(`Applied — ${result.updated} transaction${result.updated !== 1 ? 's' : ''} updated`)
+    } else {
+      showToast('Apply failed', 'error')
     }
   }
 
@@ -258,6 +274,7 @@ export function RulesManager() {
           projects={projects}
           onRuleAccepted={(rule) => setRules((prev) => [rule as UserRule, ...prev])}
           onClose={() => setShowAgent(false)}
+          onApplyComplete={handleApplyComplete}
         />
       )}
 
@@ -270,6 +287,7 @@ export function RulesManager() {
           editingRule={editingRule}
           onSave={handleEditorSave}
           onCancel={closeEditor}
+          onApplyComplete={handleApplyComplete}
         />
       )}
 
@@ -301,6 +319,8 @@ export function RulesManager() {
           ))}
         </div>
       )}
+
+      {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
   )
 }
