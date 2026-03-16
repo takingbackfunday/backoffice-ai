@@ -18,7 +18,7 @@ const UpdateRuleSchema = z.object({
   name: z.string().min(1).optional(),
   priority: z.number().int().min(1).max(99).optional(),
   conditions: ConditionGroupSchema.optional(),
-  categoryName: z.string().min(1).optional(),
+  categoryName: z.string().optional(),
   categoryId: z.string().nullable().optional(),
   payeeName: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),

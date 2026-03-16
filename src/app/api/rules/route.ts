@@ -20,7 +20,7 @@ const CreateRuleSchema = z.object({
   name: z.string().min(1),
   priority: z.number().int().min(1).max(99).default(50),
   conditions: ConditionGroupSchema,
-  categoryName: z.string().min(1),
+  categoryName: z.string().default(''),
   categoryId: z.string().nullable().optional(),
   merchantName: z.string().nullable().optional(),
   payeeName: z.string().nullable().optional(),

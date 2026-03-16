@@ -390,6 +390,9 @@ export function RuleEditor({
     const validDefs = conditions.filter((c) => c.value.trim() !== '')
     const categoryOutput = outputs.find((o) => o.type === 'category')?.value.trim() ?? ''
     if (validDefs.length === 0) { setError('Add at least one condition.'); return }
+    if (!categoryOutput && !outputs.find((o) => o.type === 'payee')?.value.trim() && !outputs.find((o) => o.type === 'project')?.value.trim()) {
+      setError('Add at least one output action.'); return
+    }
 
     setSaving(true)
     setError(null)
