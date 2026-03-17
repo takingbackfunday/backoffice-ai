@@ -102,19 +102,19 @@ export function PayeeManager({
         </p>
       ) : (
         <div className="rounded-lg border overflow-hidden">
-          <table className="w-full text-sm" aria-label="Payees">
+          <table className="w-full text-xs" aria-label="Payees">
             <thead className="bg-muted text-xs uppercase tracking-wide">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Payee name</th>
-                <th className="px-4 py-2 text-left font-medium">Default category</th>
-                <th className="px-4 py-2 text-center font-medium w-28">Transactions</th>
-                <th className="px-4 py-2 w-16" />
+                <th className="px-3 py-1.5 text-left font-medium">Payee name</th>
+                <th className="px-3 py-1.5 text-left font-medium">Default category</th>
+                <th className="px-3 py-1.5 text-center font-medium w-28">Transactions</th>
+                <th className="px-3 py-1.5 w-16" />
               </tr>
             </thead>
             <tbody>
               {payees.map((payee) => (
                 <tr key={payee.id} className="border-t hover:bg-muted/40" data-testid="payee-row">
-                  <td className="px-4 py-2">
+                  <td className="px-3 py-1">
                     {renamingId === payee.id ? (
                       <input
                         autoFocus
@@ -125,7 +125,7 @@ export function PayeeManager({
                           if (e.key === 'Escape') setRenamingId(null)
                         }}
                         onBlur={() => renamePayee(payee.id)}
-                        className="rounded border border-blue-400 px-2 py-0.5 text-sm outline-none w-full"
+                        className="rounded border border-blue-400 px-2 py-0.5 text-xs outline-none w-full"
                         aria-label="Rename payee"
                       />
                     ) : (
@@ -139,11 +139,11 @@ export function PayeeManager({
                     )}
                   </td>
 
-                  <td className="px-4 py-2">
+                  <td className="px-3 py-1">
                     <select
                       value={payee.defaultCategoryId ?? ''}
                       onChange={(e) => setDefaultCategory(payee.id, e.target.value || null)}
-                      className="rounded border px-2 py-1 text-sm w-full max-w-xs"
+                      className="rounded border px-2 py-0.5 text-xs w-full max-w-xs"
                       aria-label="Default category"
                     >
                       <option value="">— None —</option>
@@ -157,24 +157,24 @@ export function PayeeManager({
                     </select>
                   </td>
 
-                  <td className="px-4 py-2 text-center text-muted-foreground">
+                  <td className="px-3 py-1 text-center text-muted-foreground">
                     {payee._count.transactions}
                   </td>
 
-                  <td className="px-4 py-2">
+                  <td className="px-3 py-1">
                     {confirmDeleteId === payee.id ? (
                       <div className="flex gap-1">
                         <button
                           onClick={() => deletePayee(payee.id)}
                           disabled={deletingId === payee.id}
-                          className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
+                          className="rounded bg-red-600 px-2 py-0.5 text-xs text-white hover:bg-red-700"
                           aria-label="Confirm delete"
                         >
                           Delete
                         </button>
                         <button
                           onClick={() => setConfirmDeleteId(null)}
-                          className="rounded border px-2 py-1 text-xs"
+                          className="rounded border px-2 py-0.5 text-xs"
                           aria-label="Cancel delete"
                         >
                           Cancel

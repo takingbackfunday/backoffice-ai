@@ -164,7 +164,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
       {groups.map((group) => (
         <div key={group.id} className="rounded-lg border overflow-hidden">
           {/* Group header */}
-          <div className="flex items-center gap-2 bg-muted/60 px-4 py-2">
+          <div className="flex items-center gap-2 bg-muted/60 px-3 py-1.5">
             <button
               onClick={() => toggleCollapse(group.id)}
               className="text-muted-foreground hover:text-foreground text-xs"
@@ -183,12 +183,12 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
                   if (e.key === 'Escape') setRenamingId(null)
                 }}
                 onBlur={() => renameGroup(group.id)}
-                className="flex-1 rounded border border-blue-400 px-2 py-0.5 text-sm font-semibold outline-none"
+                className="flex-1 rounded border border-blue-400 px-2 py-0.5 text-xs font-semibold outline-none"
                 aria-label="Rename group"
               />
             ) : (
               <span
-                className="flex-1 text-sm font-semibold cursor-pointer hover:text-primary"
+                className="flex-1 text-xs font-semibold cursor-pointer hover:text-primary"
                 onClick={() => { setRenamingId(group.id); setRenameType('group'); setRenameValue(group.name) }}
                 title="Click to rename"
               >
@@ -215,7 +215,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
           {!collapsed.has(group.id) && (
             <ul className="divide-y">
               {group.categories.map((cat) => (
-                <li key={cat.id} className="flex items-center gap-2 px-6 py-2 hover:bg-muted/20">
+                <li key={cat.id} className="flex items-center gap-2 px-6 py-1 hover:bg-muted/20">
                   {renamingId === cat.id && renameType === 'category' ? (
                     <input
                       ref={renameRef}
@@ -226,12 +226,12 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
                         if (e.key === 'Escape') setRenamingId(null)
                       }}
                       onBlur={() => renameCategory(cat.id)}
-                      className="flex-1 rounded border border-blue-400 px-2 py-0.5 text-sm outline-none"
+                      className="flex-1 rounded border border-blue-400 px-2 py-0.5 text-xs outline-none"
                       aria-label="Rename category"
                     />
                   ) : (
                     <span
-                      className="flex-1 text-sm cursor-pointer hover:text-primary"
+                      className="flex-1 text-xs cursor-pointer hover:text-primary"
                       onClick={() => { setRenamingId(cat.id); setRenameType('category'); setRenameValue(cat.name) }}
                       title="Click to rename"
                     >
@@ -257,7 +257,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
 
               {/* Add category inline */}
               {addingCatGroupId === group.id ? (
-                <li className="flex items-center gap-2 px-6 py-2">
+                <li className="flex items-center gap-2 px-6 py-1">
                   <input
                     autoFocus
                     value={newCatName}
@@ -267,24 +267,24 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
                       if (e.key === 'Escape') { setAddingCatGroupId(null); setNewCatName('') }
                     }}
                     placeholder="Category name…"
-                    className="flex-1 rounded border px-2 py-1 text-sm"
+                    className="flex-1 rounded border px-2 py-0.5 text-xs"
                     aria-label="New category name"
                   />
                   <button
                     onClick={() => addCategory(group.id)}
-                    className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground"
+                    className="rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground"
                   >
                     Add
                   </button>
                   <button
                     onClick={() => { setAddingCatGroupId(null); setNewCatName('') }}
-                    className="rounded border px-2 py-1 text-xs"
+                    className="rounded border px-2 py-0.5 text-xs"
                   >
                     Cancel
                   </button>
                 </li>
               ) : (
-                <li className="px-6 py-2">
+                <li className="px-6 py-1">
                   <button
                     onClick={() => { setAddingCatGroupId(group.id); setNewCatName('') }}
                     className="text-xs text-primary hover:underline"
@@ -305,13 +305,13 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
           onChange={(e) => setNewGroupName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') addGroup() }}
           placeholder="New group name…"
-          className="rounded-md border px-3 py-1.5 text-sm w-56"
+          className="rounded-md border px-3 py-1.5 text-xs w-56"
           aria-label="New group name"
         />
         <button
           onClick={addGroup}
           disabled={addingGroup || !newGroupName.trim()}
-          className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          className="rounded-md bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
         >
           {addingGroup ? 'Adding…' : 'Add group'}
         </button>
