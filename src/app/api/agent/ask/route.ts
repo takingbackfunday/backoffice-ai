@@ -306,7 +306,14 @@ Plain text only — no markdown, no code fences, ever.`
 
         send({ type: 'status', message: `Looking up transactions${filterDesc ? ` (${filterDesc})` : ''}…` })
 
-        const lookupResult = await runLookup(userId, lookup)
+        let lookupResult: string
+        try {
+          lookupResult = await runLookup(userId, lookup)
+          console.log('[ask] lookup result length:', lookupResult.length, 'preview:', lookupResult.slice(0, 100))
+        } catch (e) {
+          console.error('[ask] lookup error:', e)
+          throw e
+        }
 
         // ── Phase 3: final answer with transaction rows in context ───────────────
         send({ type: 'status', message: 'Composing answer…' })
@@ -321,6 +328,9 @@ Plain text only — no markdown, no code fences, ever.`
           'anthropic/claude-sonnet-4-5'
         )
 
+        console.log('[ask] phase2 raw:', JSON.stringify(phase2.slice(0, 300)))
+
+        // Strip ANSWER: prefix if present, otherwise use response as-is
         const answer = phase2.replace(/^ANSWER:\s*/i, '').trim()
         send({ type: 'answer', answer })
         send({ type: 'done' })
