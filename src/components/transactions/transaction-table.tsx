@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Project } from '@prisma/client'
 import type { TransactionWithRelations } from '@/types'
-import type { CategoryGroup, Payee } from '@/components/rules/rule-editor'
+import { RuleEditor, type CategoryGroup, type Payee, type UserRule } from '@/components/rules/rule-editor'
 
 interface Props {
   initialRows?: TransactionWithRelations[]
@@ -294,6 +294,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     matchCount: number
   }
   const [ruleSuggestion, setRuleSuggestion] = useState<RuleSuggestion | null>(null)
+  const [ruleSuggestionExpanded, setRuleSuggestionExpanded] = useState(false)
   const [savingRule, setSavingRule] = useState(false)
 
   const pageSize = 200
@@ -515,6 +516,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       })
       if (!res.ok) throw new Error('failed')
       setRuleSuggestion(null)
+      setRuleSuggestionExpanded(false)
     } catch {
       // Silently fail — rule suggestion is best-effort
     } finally {
@@ -814,32 +816,115 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       {/* Rule suggestion banner */}
       {ruleSuggestion && (
         <div
-          className="flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm"
+          className="rounded-lg border border-[#534AB7]/20 bg-[#EEEDFE]/60"
           role="status"
           aria-label="Rule suggestion"
           data-testid="rule-suggestion-banner"
         >
-          <span>
-            💡 <strong>{ruleSuggestion.matchCount} transactions</strong> match this pattern.
-            Save <strong>"{ruleSuggestion.categoryName}"</strong> as a rule?
-          </span>
-          <button
-            onClick={saveRuleSuggestion}
-            disabled={savingRule}
-            className="rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-700 disabled:opacity-50"
-            aria-label="Save as rule"
-            data-testid="save-rule-btn"
-          >
-            {savingRule ? 'Saving…' : 'Save rule'}
-          </button>
-          <button
-            onClick={() => setRuleSuggestion(null)}
-            className="ml-auto text-muted-foreground hover:text-foreground"
-            aria-label="Dismiss rule suggestion"
-            data-testid="dismiss-rule-btn"
-          >
-            Dismiss
-          </button>
+          {/* Collapsed header — always visible */}
+          <div className="flex items-center gap-2.5 px-4 py-2.5">
+            <span className="text-[13px]">💡</span>
+            <span className="text-xs text-[#3C3489]">
+              <strong>{ruleSuggestion.matchCount} transactions</strong> match this pattern —
+              save <strong>"{ruleSuggestion.categoryName}"</strong> as a rule?
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setRuleSuggestionExpanded((v) => !v)}
+                className="text-xs text-[#534AB7] hover:underline flex items-center gap-1"
+                aria-expanded={ruleSuggestionExpanded}
+              >
+                {ruleSuggestionExpanded ? 'Collapse' : 'Customise'}
+                <svg
+                  className={`w-3 h-3 transition-transform ${ruleSuggestionExpanded ? 'rotate-180' : ''}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {!ruleSuggestionExpanded && (
+                <button
+                  onClick={saveRuleSuggestion}
+                  disabled={savingRule}
+                  className="text-xs rounded-md bg-[#3C3489] text-[#EEEDFE] px-2.5 py-1 hover:bg-[#2d2770] disabled:opacity-50"
+                  aria-label="Save as rule"
+                  data-testid="save-rule-btn"
+                >
+                  {savingRule ? 'Saving…' : 'Save rule'}
+                </button>
+              )}
+              <button
+                onClick={() => { setRuleSuggestion(null); setRuleSuggestionExpanded(false) }}
+                className="text-muted-foreground hover:text-foreground text-xs px-1"
+                aria-label="Dismiss rule suggestion"
+                data-testid="dismiss-rule-btn"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {/* Expanded: full RuleEditor */}
+          {ruleSuggestionExpanded && (() => {
+            const payeeName = ruleSuggestion.payeeName?.trim()
+            const condDefs = [
+              { field: 'amount' as const, operator: ruleSuggestion.amount < 0 ? 'lt' : 'gt', value: 0 },
+              payeeName && payeeName.length > 2
+                ? { field: 'payeeName' as const, operator: 'contains', value: payeeName.toLowerCase() }
+                : {
+                    field: 'description' as const,
+                    operator: 'contains',
+                    value: ruleSuggestion.description.split(/\s+/).filter((w) => w.length > 3 && !/^\d+$/.test(w)).slice(0, 3).join(' ').toLowerCase(),
+                  },
+            ].filter((c) => c.value !== '')
+
+            const label = payeeName || ruleSuggestion.description.slice(0, 30)
+            const matchedCat = ruleSuggestion.categoryId
+              ? categoryGroups.flatMap((g) => g.categories).find((c) => c.id === ruleSuggestion.categoryId) ?? null
+              : categoryGroups.flatMap((g) => g.categories).find((c) => c.name === ruleSuggestion.categoryName) ?? null
+            const catGroup = matchedCat
+              ? categoryGroups.find((g) => g.categories.some((c) => c.id === matchedCat.id)) ?? null
+              : null
+
+            const suggestedRule: UserRule = {
+              id: '',
+              name: `${label} → ${ruleSuggestion.categoryName}`,
+              priority: 50,
+              isActive: true,
+              categoryName: ruleSuggestion.categoryName,
+              categoryId: matchedCat?.id ?? null,
+              categoryRef: matchedCat && catGroup ? { id: matchedCat.id, name: matchedCat.name, group: { id: catGroup.id, name: catGroup.name } } : null,
+              payeeId: ruleSuggestion.payeeId ?? null,
+              payee: ruleSuggestion.payeeId && ruleSuggestion.payeeName ? { id: ruleSuggestion.payeeId, name: ruleSuggestion.payeeName } : null,
+              projectId: null,
+              project: null,
+              conditions: { all: condDefs },
+            }
+
+            return (
+              <div className="border-t border-[#534AB7]/10 px-4 pb-4 pt-3">
+                <RuleEditor
+                  projects={projects}
+                  payees={payees}
+                  categoryGroups={categoryGroups}
+                  editingRule={suggestedRule}
+                  saveLabel="Save rule"
+                  cancelLabel="Cancel"
+                  onSave={() => {
+                    setRuleSuggestion(null)
+                    setRuleSuggestionExpanded(false)
+                  }}
+                  onCancel={() => setRuleSuggestionExpanded(false)}
+                  cardHeader={
+                    <div className="flex items-center gap-2 text-xs text-[#3C3489] mb-3">
+                      <span>💡</span>
+                      <span><strong>{ruleSuggestion.matchCount} transactions</strong> match this pattern</span>
+                    </div>
+                  }
+                />
+              </div>
+            )
+          })()}
         </div>
       )}
 
