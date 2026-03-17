@@ -229,12 +229,24 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
       {/* Status log */}
       {statusMessages.length > 0 && (
         <div className="space-y-1">
-          {statusMessages.map((msg, i) => (
-            <p key={i} className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <span className="text-green-500">✓</span>
-              {msg}
-            </p>
-          ))}
+          {(() => {
+            // Collapse consecutive duplicate messages into one with a count badge
+            const collapsed: { msg: string; count: number }[] = []
+            for (const msg of statusMessages) {
+              const last = collapsed[collapsed.length - 1]
+              if (last && last.msg === msg) last.count++
+              else collapsed.push({ msg, count: 1 })
+            }
+            return collapsed.map((entry, i) => (
+              <p key={i} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <span className="text-green-500">✓</span>
+                {entry.msg}
+                {entry.count > 1 && (
+                  <span className="text-[10px] bg-black/[0.07] text-muted-foreground rounded px-1 py-0.5 tabular-nums">×{entry.count}</span>
+                )}
+              </p>
+            ))
+          })()}
           {status === 'running' && (
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
