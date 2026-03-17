@@ -333,7 +333,7 @@ export function RulesManager({
             Rules run automatically on every import. Apply them retroactively to existing transactions below.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex flex-col items-end gap-2">
           {/* Agent finished banner */}
           {agentFinishedSummary && (
             <div className="flex items-center gap-2 text-[12px] bg-[#E1F5EE] text-[#085041] rounded-lg px-3 py-1.5">
@@ -344,39 +344,42 @@ export function RulesManager({
               <button onClick={() => setAgentFinishedSummary(null)} className="ml-1 hover:opacity-70 leading-none">✕</button>
             </div>
           )}
-          {applyResult && (
-            <span className="text-xs text-muted-foreground">
-              Updated {applyResult.updated} of {applyResult.total} transactions
-            </span>
-          )}
-          <button
-            onClick={applyAllRules}
-            disabled={applying || rules.filter((r) => r.isActive).length === 0}
-            className="rounded-md border border-black/20 px-3 py-1.5 text-sm text-[#666] hover:bg-muted disabled:opacity-50 transition-colors"
-          >
-            {applying ? 'Applying…' : 'Apply all rules'}
-          </button>
-          <button
-            onClick={() => setShowAgent((v) => !v)}
-            className="text-[13px] text-[#534AB7] hover:underline"
-          >
-            {showAgent ? 'Hide agent' : 'Run rules agent'}
-          </button>
-          {!showEditor && (
+          {/* Buttons row */}
+          <div className="flex items-center gap-2">
+            {applyResult && (
+              <span className="text-xs text-muted-foreground">
+                Updated {applyResult.updated} of {applyResult.total} transactions
+              </span>
+            )}
             <button
-              onClick={openNewEditor}
-              className="rounded-md bg-[#3C3489] px-4 py-1.5 text-sm font-medium text-[#EEEDFE] hover:bg-[#2d2770] transition-colors"
-              data-testid="new-rule-btn"
+              onClick={applyAllRules}
+              disabled={applying || rules.filter((r) => r.isActive).length === 0}
+              className="rounded-md border border-black/20 px-3 py-1.5 text-sm text-[#666] hover:bg-muted disabled:opacity-50 transition-colors"
             >
-              + New rule
+              {applying ? 'Applying…' : 'Apply all rules'}
             </button>
-          )}
+            <button
+              onClick={() => setShowAgent((v) => !v)}
+              className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${showAgent ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489] hover:bg-[#e5e3fd]' : 'border-[#534AB7]/40 text-[#534AB7] hover:bg-[#EEEDFE]'}`}
+            >
+              {showAgent ? 'Hide agent' : 'Run rules agent'}
+            </button>
+            {!showEditor && (
+              <button
+                onClick={openNewEditor}
+                className="rounded-md bg-[#3C3489] px-4 py-1.5 text-sm font-medium text-[#EEEDFE] hover:bg-[#2d2770] transition-colors"
+                data-testid="new-rule-btn"
+              >
+                + New rule
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Search */}
       {rules.length > 0 && (
-        <div className="relative">
+        <div className="relative max-w-xs">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
           </svg>
@@ -384,7 +387,7 @@ export function RulesManager({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search rules by condition, category, payee, project…"
+            placeholder="Search rules…"
             className="w-full pl-8 pr-3 py-2 text-[13px] border border-black/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
           />
         </div>
