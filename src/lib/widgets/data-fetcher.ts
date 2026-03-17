@@ -18,10 +18,27 @@ export async function fetchWidgetData(userId: string, config: WidgetConfig): Pro
   const categoryFilter = config.filters.find((f) => f.field === 'category')
   let categoryWhere: Record<string, unknown> | undefined
   if (categoryFilter && categoryFilter.values.length > 0) {
+    const includesUncategorized = categoryFilter.values.includes('Uncategorized')
+    const namedValues = categoryFilter.values.filter((v) => v !== 'Uncategorized')
+
     if (categoryFilter.operator === 'include') {
-      categoryWhere = { categoryRef: { name: { in: categoryFilter.values } } }
+      // Include named categories + optionally null (uncategorized)
+      if (includesUncategorized && namedValues.length > 0) {
+        categoryWhere = { OR: [{ categoryRef: { name: { in: namedValues } } }, { categoryId: null }] }
+      } else if (includesUncategorized) {
+        categoryWhere = { categoryId: null }
+      } else {
+        // Named only — exclude nulls
+        categoryWhere = { categoryRef: { name: { in: namedValues } } }
+      }
     } else {
-      categoryWhere = { categoryRef: { name: { notIn: categoryFilter.values } } }
+      // Exclude: named categories excluded, and optionally exclude nulls too
+      if (includesUncategorized) {
+        categoryWhere = { categoryRef: { name: { notIn: namedValues } }, NOT: { categoryId: null } }
+      } else {
+        // Exclude named but keep nulls (uncategorized stays visible)
+        categoryWhere = { OR: [{ categoryRef: { name: { notIn: namedValues } } }, { categoryId: null }] }
+      }
     }
   }
 

@@ -46,7 +46,8 @@ function CategoryFilterDropdown({
   }, [])
 
   const allCategories = groups.flatMap((g) => g.categories)
-  const allNames = allCategories.map((c) => c.name)
+  // Include "Uncategorized" as a selectable virtual category
+  const allNames = [...allCategories.map((c) => c.name), 'Uncategorized']
 
   function toggleAll() {
     onChange(selected.size === allNames.length ? new Set() : new Set(allNames))
@@ -123,6 +124,24 @@ function CategoryFilterDropdown({
                 ))}
               </div>
             ))}
+            {/* Uncategorized as a virtual selectable row */}
+            <div className="border-t border-black/5 mt-1 pt-1">
+              <button
+                onClick={() => toggle('Uncategorized')}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 text-left"
+              >
+                <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                  selected.has('Uncategorized') ? 'bg-[#3C3489] border-[#3C3489]' : 'border-black/20'
+                }`}>
+                  {selected.has('Uncategorized') && (
+                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </span>
+                <span className="text-muted-foreground italic">Uncategorized</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -188,7 +207,7 @@ export function ExpensesByCategoryWidget() {
 
   function handleCategoryChange(next: Set<string>) {
     setSelectedCategories(next)
-    const allCategories = categoryGroups.flatMap((g) => g.categories).map((c) => c.name)
+    const allCategories = [...categoryGroups.flatMap((g) => g.categories).map((c) => c.name), 'Uncategorized']
     const isAll = next.size === 0 || next.size === allCategories.length
     setConfig((c) => ({
       ...c,
