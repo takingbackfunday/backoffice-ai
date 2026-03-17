@@ -57,49 +57,56 @@ function RuleCard({
           aria-label={`Select rule ${rule.name}`}
         />
 
-        {/* Condition pills + arrow + action pills */}
-        <div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
-          {/* Conditions */}
-          {defs.map((c, i) => (
-            <span key={i} className="inline-flex items-center gap-0 flex-shrink-0">
-              {i > 0 && (
-                <span className="text-[11px] text-muted-foreground font-medium mx-1">{joinWord}</span>
-              )}
-              <span className="text-xs px-2 py-0.5 rounded bg-[#E6F1FB] text-[#0C447C]">
-                <span className="font-medium">{FIELD_LABELS[c.field] ?? c.field}</span>
-                {' '}{OPERATOR_LABELS[c.operator] ?? c.operator}{' '}
-                {Array.isArray(c.value) ? c.value.join(', ') : `"${c.value}"`}
+        {/* Condition pills → action pills */}
+        <div className="min-w-0 flex-1 flex items-center gap-2">
+          {/* Left: conditions */}
+          <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
+            {defs.map((c, i) => (
+              <span key={i} className="inline-flex items-center gap-0 flex-shrink-0">
+                {i > 0 && (
+                  <span className="text-[11px] text-muted-foreground font-medium mx-1">{joinWord}</span>
+                )}
+                <span className="text-xs px-2 py-0.5 rounded bg-[#E6F1FB] text-[#0C447C]">
+                  <span className="font-medium">{FIELD_LABELS[c.field] ?? c.field}</span>
+                  {' '}{OPERATOR_LABELS[c.operator] ?? c.operator}{' '}
+                  {Array.isArray(c.value) ? c.value.join(', ') : `"${c.value}"`}
+                </span>
               </span>
-            </span>
-          ))}
-          {defs.length === 0 && (
-            <span className="text-xs text-muted-foreground">(no conditions)</span>
-          )}
+            ))}
+            {defs.length === 0 && (
+              <span className="text-xs text-muted-foreground">(no conditions)</span>
+            )}
+          </div>
 
           {/* Arrow */}
-          <svg className="w-3.5 h-3.5 text-muted-foreground shrink-0 mx-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <svg className="w-3.5 h-3.5 text-muted-foreground shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
           </svg>
 
-          {/* Action pills */}
-          {(rule.categoryRef?.name ?? rule.categoryName) && (
-            <span className="text-xs px-2 py-0.5 rounded bg-[#EEEDFE]">
-              <span className="text-[#534AB7]/80">cat </span>
-              <span className="text-[#3C3489] font-medium">{rule.categoryRef?.name ?? rule.categoryName}</span>
-            </span>
-          )}
-          {rule.payee && (
-            <span className="text-xs px-2 py-0.5 rounded bg-[#E1F5EE]">
-              <span className="text-[#0F6E56]/80">payee </span>
-              <span className="text-[#085041] font-medium">{rule.payee.name}</span>
-            </span>
-          )}
-          {rule.project && (
-            <span className="text-xs px-2 py-0.5 rounded bg-[#FEF3E2]">
-              <span className="text-amber-600/80">proj </span>
-              <span className="text-amber-800 font-medium">{rule.project.name}</span>
-            </span>
-          )}
+          {/* Right: action pills */}
+          <div className="flex items-center gap-1 flex-wrap flex-shrink-0">
+            {(rule.categoryRef?.name ?? rule.categoryName) && (
+              <span className="text-xs px-2 py-0.5 rounded bg-[#EEEDFE]">
+                <span className="text-[#534AB7]/80">cat </span>
+                <span className="text-[#3C3489] font-medium">{rule.categoryRef?.name ?? rule.categoryName}</span>
+              </span>
+            )}
+            {rule.payee && (
+              <span className="text-xs px-2 py-0.5 rounded bg-[#E1F5EE]">
+                <span className="text-[#0F6E56]/80">payee </span>
+                <span className="text-[#085041] font-medium">{rule.payee.name}</span>
+              </span>
+            )}
+            {rule.project && (
+              <span className="text-xs px-2 py-0.5 rounded bg-[#FEF3E2]">
+                <span className="text-amber-600/80">proj </span>
+                <span className="text-amber-800 font-medium">{rule.project.name}</span>
+              </span>
+            )}
+            {!rule.categoryRef?.name && !rule.categoryName && !rule.payee && !rule.project && (
+              <span className="text-xs text-muted-foreground">(no actions)</span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
