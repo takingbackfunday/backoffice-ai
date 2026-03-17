@@ -424,6 +424,372 @@ export async function get_tags_summary(userId: string, args: {
   return `Tags summary:\n${lines.join('\n')}`
 }
 
+// ── NEW: search_transactions ─────────────────────────────────────────────────
+
+export async function search_transactions(userId: string, args: {
+  query: string
+  dateFrom?: string
+  dateTo?: string
+  limit?: number
+}): Promise<string> {
+  const limit = Math.min(args.limit ?? 100, 500)
+  const q = args.query.trim()
+
+  const rows = await prisma.transaction.findMany({
+    where: {
+      account: { userId },
+      ...dateWhere(args.dateFrom, args.dateTo),
+      OR: [
+        { description: { contains: q, mode: 'insensitive' } },
+        { notes: { contains: q, mode: 'insensitive' } },
+        { payee: { name: { contains: q, mode: 'insensitive' } } },
+        { categoryRef: { name: { contains: q, mode: 'insensitive' } } },
+      ],
+    },
+    select: {
+      date: true, amount: true, description: true, notes: true,
+      categoryRef: { select: { name: true } },
+      category: true,
+      payee: { select: { name: true } },
+      account: { select: { name: true } },
+      project: { select: { name: true } },
+    },
+    orderBy: { date: 'desc' },
+    take: limit,
+  })
+
+  if (!rows.length) return `No transactions found matching "${q}".`
+
+  const total = rows.reduce((s, r) => s + Number(r.amount), 0)
+  const lines = rows.map(r => {
+    const date = new Date(r.date).toISOString().slice(0, 10)
+    const cat = r.categoryRef?.name ?? r.category ?? '(uncategorised)'
+    const payee = r.payee?.name ?? '(no payee)'
+    const proj = r.project?.name ? ` [${r.project.name}]` : ''
+    const notes = r.notes ? ` // ${r.notes.slice(0, 50)}` : ''
+    return `${date} | ${fmtAmount(Number(r.amount))} | ${cat} | ${payee} | ${r.account.name} | ${r.description.slice(0, 70)}${proj}${notes}`
+  })
+
+  return `${rows.length} results for "${q}" | net: ${fmtAmount(total)}\ndate | amount | category | payee | account | description\n${lines.join('\n')}`
+}
+
+// ── NEW: compare_periods ──────────────────────────────────────────────────────
+
+export async function compare_periods(userId: string, args: {
+  periodA: { dateFrom: string; dateTo: string; label?: string }
+  periodB: { dateFrom: string; dateTo: string; label?: string }
+  metric?: 'expenses' | 'income' | 'net'
+  groupBy?: 'total' | 'category' | 'payee' | 'account'
+}): Promise<string> {
+  const metric = args.metric ?? 'net'
+  const groupBy = args.groupBy ?? 'total'
+  const labelA = args.periodA.label ?? `${args.periodA.dateFrom} → ${args.periodA.dateTo}`
+  const labelB = args.periodB.label ?? `${args.periodB.dateFrom} → ${args.periodB.dateTo}`
+
+  const amountFilter =
+    metric === 'expenses' ? { lt: 0 as number } :
+    metric === 'income'   ? { gt: 0 as number } : undefined
+
+  async function fetchBuckets(dateFrom: string, dateTo: string) {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        account: { userId },
+        ...dateWhere(dateFrom, dateTo),
+        ...(amountFilter ? { amount: amountFilter } : {}),
+      },
+      select: {
+        amount: true,
+        categoryRef: { select: { name: true } },
+        category: true,
+        payee: { select: { name: true } },
+        account: { select: { name: true } },
+      },
+    })
+
+    if (groupBy === 'total') {
+      const total = rows.reduce((s, r) => s + Number(r.amount), 0)
+      return new Map([['total', total]])
+    }
+
+    const buckets = new Map<string, number>()
+    for (const r of rows) {
+      const key =
+        groupBy === 'category' ? (r.categoryRef?.name ?? r.category ?? '(uncategorised)') :
+        groupBy === 'payee'    ? (r.payee?.name ?? '(no payee)') :
+        groupBy === 'account'  ? (r.account?.name ?? '(unknown)') : 'total'
+      buckets.set(key, (buckets.get(key) ?? 0) + Number(r.amount))
+    }
+    return buckets
+  }
+
+  const [bucketsA, bucketsB] = await Promise.all([
+    fetchBuckets(args.periodA.dateFrom, args.periodA.dateTo),
+    fetchBuckets(args.periodB.dateFrom, args.periodB.dateTo),
+  ])
+
+  const allKeys = [...new Set([...bucketsA.keys(), ...bucketsB.keys()])]
+    .sort((a, b) => Math.abs(bucketsB.get(b) ?? 0) - Math.abs(bucketsA.get(a) ?? 0))
+
+  const lines = allKeys.map(key => {
+    const a = bucketsA.get(key) ?? 0
+    const b = bucketsB.get(key) ?? 0
+    const diff = b - a
+    const pct = a !== 0 ? ((diff / Math.abs(a)) * 100).toFixed(1) : 'n/a'
+    const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '='
+    return `  ${key.padEnd(30)} ${labelA}: ${fmtAmount(a).padStart(12)}  ${labelB}: ${fmtAmount(b).padStart(12)}  ${arrow} ${fmtAmount(Math.abs(diff))} (${pct}%)`
+  })
+
+  return `Period comparison (${metric}, grouped by ${groupBy}):\n${''.padEnd(30)} ${labelA.padStart(12)}  ${labelB.padStart(12)}  change\n${lines.join('\n')}`
+}
+
+// ── NEW: detect_anomalies ─────────────────────────────────────────────────────
+
+export async function detect_anomalies(userId: string, args: {
+  dimension?: 'month' | 'payee' | 'category'
+  dateFrom?: string
+  dateTo?: string
+  metric?: 'expenses' | 'income' | 'net'
+  sigmaThreshold?: number
+}): Promise<string> {
+  const dimension = args.dimension ?? 'month'
+  const metric = args.metric ?? 'expenses'
+  const sigma = args.sigmaThreshold ?? 2
+
+  const amountFilter =
+    metric === 'expenses' ? { lt: 0 as number } :
+    metric === 'income'   ? { gt: 0 as number } : undefined
+
+  const rows = await prisma.transaction.findMany({
+    where: {
+      account: { userId },
+      ...dateWhere(args.dateFrom, args.dateTo),
+      ...(amountFilter ? { amount: amountFilter } : {}),
+    },
+    select: {
+      date: true, amount: true,
+      categoryRef: { select: { name: true } },
+      category: true,
+      payee: { select: { name: true } },
+    },
+  })
+
+  if (!rows.length) return 'No data to analyse.'
+
+  const buckets = new Map<string, number[]>()
+  for (const r of rows) {
+    const d = new Date(r.date)
+    const key =
+      dimension === 'month'    ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` :
+      dimension === 'category' ? (r.categoryRef?.name ?? r.category ?? '(uncategorised)') :
+      dimension === 'payee'    ? (r.payee?.name ?? '(no payee)') : 'bucket'
+    const list = buckets.get(key) ?? []
+    list.push(Math.abs(Number(r.amount)))
+    buckets.set(key, list)
+  }
+
+  // For month/payee grouping: compute total per bucket, then find outliers across buckets
+  const totals = [...buckets.entries()].map(([k, vals]) => ({
+    key: k,
+    total: vals.reduce((s, v) => s + v, 0),
+    count: vals.length,
+  }))
+
+  const values = totals.map(t => t.total)
+  const mean = values.reduce((s, v) => s + v, 0) / values.length
+  const stddev = Math.sqrt(values.map(v => (v - mean) ** 2).reduce((s, v) => s + v, 0) / values.length)
+
+  const outliers = totals
+    .filter(t => Math.abs(t.total - mean) > sigma * stddev)
+    .sort((a, b) => Math.abs(b.total - mean) - Math.abs(a.total - mean))
+
+  if (!outliers.length) {
+    return `No anomalies detected (σ threshold: ${sigma}). Mean ${dimension} ${metric}: ${fmtAmount(mean)}, stddev: ${fmtAmount(stddev)}.`
+  }
+
+  const lines = outliers.map(o => {
+    const zScore = ((o.total - mean) / stddev).toFixed(1)
+    const direction = o.total > mean ? 'HIGH' : 'LOW'
+    return `  ${o.key}: ${fmtAmount(o.total)} (${direction}, z=${zScore}, ${o.count} txns)`
+  })
+
+  return `Anomalies in ${dimension} ${metric} (mean: ${fmtAmount(mean)}, σ: ${fmtAmount(stddev)}, threshold: ${sigma}σ):\n${lines.join('\n')}`
+}
+
+// ── NEW: get_recurring_payees ─────────────────────────────────────────────────
+
+export async function get_recurring_payees(userId: string, args: {
+  minMonths?: number
+  dateFrom?: string
+  dateTo?: string
+  expensesOnly?: boolean
+  incomeOnly?: boolean
+}): Promise<string> {
+  const minMonths = args.minMonths ?? 3
+
+  const rows = await prisma.transaction.findMany({
+    where: {
+      account: { userId },
+      payeeId: { not: null },
+      ...dateWhere(args.dateFrom, args.dateTo),
+      ...(args.expensesOnly ? { amount: { lt: 0 } } : {}),
+      ...(args.incomeOnly ? { amount: { gt: 0 } } : {}),
+    },
+    select: {
+      date: true, amount: true,
+      payee: { select: { name: true } },
+    },
+  })
+
+  if (!rows.length) return 'No payee transactions found.'
+
+  // Group by payee → set of months
+  const payeeMonths = new Map<string, Set<string>>()
+  const payeeTotals = new Map<string, number>()
+  const payeeCounts = new Map<string, number>()
+
+  for (const r of rows) {
+    const name = r.payee!.name
+    const d = new Date(r.date)
+    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    if (!payeeMonths.has(name)) payeeMonths.set(name, new Set())
+    payeeMonths.get(name)!.add(month)
+    payeeTotals.set(name, (payeeTotals.get(name) ?? 0) + Math.abs(Number(r.amount)))
+    payeeCounts.set(name, (payeeCounts.get(name) ?? 0) + 1)
+  }
+
+  const recurring = [...payeeMonths.entries()]
+    .filter(([, months]) => months.size >= minMonths)
+    .sort((a, b) => (payeeTotals.get(b[0]) ?? 0) - (payeeTotals.get(a[0]) ?? 0))
+
+  if (!recurring.length) return `No payees found appearing in ${minMonths}+ distinct months.`
+
+  const lines = recurring.map(([name, months]) => {
+    const total = payeeTotals.get(name) ?? 0
+    const count = payeeCounts.get(name) ?? 0
+    const avg = total / months.size
+    return `  ${name}: ${fmtAmount(total)} total | ${months.size} months | ${count} txns | avg ${fmtAmount(avg)}/month`
+  })
+
+  return `${recurring.length} recurring payees (appearing in ${minMonths}+ months):\n${lines.join('\n')}`
+}
+
+// ── NEW: compute_runway ───────────────────────────────────────────────────────
+
+export async function compute_runway(userId: string, args: {
+  lookbackMonths?: number
+}): Promise<string> {
+  const lookbackMonths = args.lookbackMonths ?? 6
+
+  // Current net balance across all accounts
+  const balanceAgg = await prisma.transaction.aggregate({
+    where: { account: { userId } },
+    _sum: { amount: true },
+  })
+  const balance = Number(balanceAgg._sum.amount ?? 0)
+
+  // Average monthly burn over lookback period
+  const lookbackFrom = new Date()
+  lookbackFrom.setMonth(lookbackFrom.getMonth() - lookbackMonths)
+  const lookbackFromStr = lookbackFrom.toISOString().slice(0, 10)
+
+  const expenseRows = await prisma.transaction.findMany({
+    where: {
+      account: { userId },
+      amount: { lt: 0 },
+      date: { gte: lookbackFrom },
+    },
+    select: { date: true, amount: true },
+  })
+
+  if (!expenseRows.length) return 'Not enough expense data to compute runway.'
+
+  // Group by month
+  const byMonth = new Map<string, number>()
+  for (const r of expenseRows) {
+    const d = new Date(r.date)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    byMonth.set(key, (byMonth.get(key) ?? 0) + Math.abs(Number(r.amount)))
+  }
+
+  const monthlyBurns = [...byMonth.values()]
+  const avgMonthlyBurn = monthlyBurns.reduce((s, v) => s + v, 0) / monthlyBurns.length
+  const runwayMonths = avgMonthlyBurn > 0 ? balance / avgMonthlyBurn : Infinity
+
+  const monthlyLines = [...byMonth.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([m, v]) => `  ${m}: ${fmtAmount(v)}`)
+
+  return `Runway analysis (based on last ${lookbackMonths} months of expenses):
+  Current net balance: ${fmtAmount(balance)}
+  Average monthly burn: ${fmtAmount(avgMonthlyBurn)} (over ${monthlyBurns.length} months, from ${lookbackFromStr})
+  Estimated runway: ${runwayMonths === Infinity ? '∞' : runwayMonths.toFixed(1)} months
+
+Monthly burn breakdown:
+${monthlyLines.join('\n')}`
+}
+
+// ── NEW: get_tax_estimate ─────────────────────────────────────────────────────
+
+export async function get_tax_estimate(userId: string, args: {
+  dateFrom?: string
+  dateTo?: string
+  rate?: number
+  breakdown?: 'none' | 'month' | 'quarter'
+}): Promise<string> {
+  const rate = (args.rate ?? 30) / 100
+  const breakdown = args.breakdown ?? 'quarter'
+
+  const rows = await prisma.transaction.findMany({
+    where: {
+      account: { userId },
+      ...dateWhere(args.dateFrom, args.dateTo),
+    },
+    select: { date: true, amount: true },
+    orderBy: { date: 'asc' },
+  })
+
+  if (!rows.length) return 'No transactions found in this period.'
+
+  const totalIncome = rows.filter(r => Number(r.amount) > 0).reduce((s, r) => s + Number(r.amount), 0)
+  const totalExpenses = rows.filter(r => Number(r.amount) < 0).reduce((s, r) => s + Math.abs(Number(r.amount)), 0)
+  const netIncome = totalIncome - totalExpenses
+  const taxEstimate = Math.max(0, netIncome * rate)
+
+  let breakdownLines = ''
+  if (breakdown !== 'none') {
+    const buckets = new Map<string, { income: number; expenses: number }>()
+    for (const r of rows) {
+      const d = new Date(r.date)
+      let key: string
+      if (breakdown === 'month') {
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      } else {
+        const q = Math.floor(d.getMonth() / 3) + 1
+        key = `${d.getFullYear()} Q${q}`
+      }
+      const b = buckets.get(key) ?? { income: 0, expenses: 0 }
+      if (Number(r.amount) > 0) b.income += Number(r.amount)
+      else b.expenses += Math.abs(Number(r.amount))
+      buckets.set(key, b)
+    }
+
+    const blines = [...buckets.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([k, v]) => {
+        const net = v.income - v.expenses
+        const tax = Math.max(0, net * rate)
+        return `  ${k}: income ${fmtAmount(v.income)} | expenses ${fmtAmount(v.expenses)} | net ${fmtAmount(net)} | est. tax ${fmtAmount(tax)}`
+      })
+    breakdownLines = `\nBreakdown by ${breakdown}:\n${blines.join('\n')}`
+  }
+
+  return `Tax estimate at ${(rate * 100).toFixed(0)}% rate (${args.dateFrom ?? 'all time'} → ${args.dateTo ?? 'now'}):
+  Total income:   ${fmtAmount(totalIncome)}
+  Total expenses: ${fmtAmount(totalExpenses)}
+  Net income:     ${fmtAmount(netIncome)}
+  Estimated tax:  ${fmtAmount(taxEstimate)}${breakdownLines}`
+}
+
 // ── Tool schemas (OpenAI-compatible function format) ─────────────────────────
 
 export const FINANCE_TOOLS: ToolDefinition[] = [
@@ -565,6 +931,119 @@ export const FINANCE_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'search_transactions',
+      description: 'Full-text search across transaction description, notes, payee name, and category. Use when looking for a specific vendor, keyword, or phrase that may appear anywhere.',
+      parameters: {
+        type: 'object',
+        required: ['query'],
+        properties: {
+          query: { type: 'string', description: 'Search term — matched against description, notes, payee, and category' },
+          dateFrom: { type: 'string' },
+          dateTo: { type: 'string' },
+          limit: { type: 'number', description: 'Max results (default 100, max 500)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'compare_periods',
+      description: 'Side-by-side comparison of two date ranges. Returns totals and % change for income, expenses, or net — optionally broken down by category, payee, or account. Use for month-over-month, year-over-year, or any custom period comparison.',
+      parameters: {
+        type: 'object',
+        required: ['periodA', 'periodB'],
+        properties: {
+          periodA: {
+            type: 'object',
+            required: ['dateFrom', 'dateTo'],
+            properties: {
+              dateFrom: { type: 'string' },
+              dateTo: { type: 'string' },
+              label: { type: 'string', description: 'Human label e.g. "Last month"' },
+            },
+          },
+          periodB: {
+            type: 'object',
+            required: ['dateFrom', 'dateTo'],
+            properties: {
+              dateFrom: { type: 'string' },
+              dateTo: { type: 'string' },
+              label: { type: 'string' },
+            },
+          },
+          metric: { type: 'string', enum: ['expenses', 'income', 'net'], description: 'Default: net' },
+          groupBy: { type: 'string', enum: ['total', 'category', 'payee', 'account'], description: 'Default: total' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'detect_anomalies',
+      description: 'Find statistically unusual months, payees, or categories using z-score analysis. Use for questions like "which months were unusually expensive?" or "are there any abnormal payees?"',
+      parameters: {
+        type: 'object',
+        properties: {
+          dimension: { type: 'string', enum: ['month', 'payee', 'category'], description: 'What to look for anomalies in. Default: month' },
+          dateFrom: { type: 'string' },
+          dateTo: { type: 'string' },
+          metric: { type: 'string', enum: ['expenses', 'income', 'net'], description: 'Default: expenses' },
+          sigmaThreshold: { type: 'number', description: 'Z-score threshold for anomaly (default 2.0 = 2 standard deviations)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_recurring_payees',
+      description: 'Identify payees that appear in multiple months — i.e. recurring costs or regular income sources. Use for questions about fixed costs, subscriptions, or regular clients.',
+      parameters: {
+        type: 'object',
+        properties: {
+          minMonths: { type: 'number', description: 'Minimum number of distinct months a payee must appear in (default 3)' },
+          dateFrom: { type: 'string' },
+          dateTo: { type: 'string' },
+          expensesOnly: { type: 'boolean' },
+          incomeOnly: { type: 'boolean' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'compute_runway',
+      description: 'Calculate cash runway: current net balance divided by average monthly burn. Use for "how long can I sustain current spending?" questions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          lookbackMonths: { type: 'number', description: 'How many recent months to average burn over (default 6)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_tax_estimate',
+      description: 'Estimate tax liability based on net income at a given rate. Breaks down by month or quarter. Use for questions about estimated taxes, quarterly tax payments, or tax planning.',
+      parameters: {
+        type: 'object',
+        properties: {
+          dateFrom: { type: 'string' },
+          dateTo: { type: 'string' },
+          rate: { type: 'number', description: 'Tax rate as a percentage (default 30)' },
+          breakdown: { type: 'string', enum: ['none', 'month', 'quarter'], description: 'How to break down the estimate (default: quarter)' },
+        },
+      },
+    },
+  },
 ]
 
 // ── Dispatcher ────────────────────────────────────────────────────────────────
@@ -572,15 +1051,25 @@ export const FINANCE_TOOLS: ToolDefinition[] = [
 export async function dispatchTool(userId: string, name: string, args: unknown): Promise<string> {
   const a = args as Record<string, unknown>
   switch (name) {
+    // QUERY
     case 'query_transactions':     return query_transactions(userId, a as Parameters<typeof query_transactions>[1])
+    case 'search_transactions':    return search_transactions(userId, a as Parameters<typeof search_transactions>[1])
+    // AGGREGATE
     case 'aggregate_transactions': return aggregate_transactions(userId, a as Parameters<typeof aggregate_transactions>[1])
     case 'get_time_series':        return get_time_series(userId, a as Parameters<typeof get_time_series>[1])
+    case 'get_tags_summary':       return get_tags_summary(userId, a as Parameters<typeof get_tags_summary>[1])
+    // DISCOVERY
     case 'get_accounts':           return get_accounts(userId)
     case 'get_categories':         return get_categories(userId)
     case 'get_payees':             return get_payees(userId, a as Parameters<typeof get_payees>[1])
     case 'get_projects':           return get_projects(userId, a as Parameters<typeof get_projects>[1])
     case 'get_rules':              return get_rules(userId)
-    case 'get_tags_summary':       return get_tags_summary(userId, a as Parameters<typeof get_tags_summary>[1])
+    // ANALYSIS
+    case 'compare_periods':        return compare_periods(userId, a as Parameters<typeof compare_periods>[1])
+    case 'detect_anomalies':       return detect_anomalies(userId, a as Parameters<typeof detect_anomalies>[1])
+    case 'get_recurring_payees':   return get_recurring_payees(userId, a as Parameters<typeof get_recurring_payees>[1])
+    case 'compute_runway':         return compute_runway(userId, a as Parameters<typeof compute_runway>[1])
+    case 'get_tax_estimate':       return get_tax_estimate(userId, a as Parameters<typeof get_tax_estimate>[1])
     default: return `Unknown tool: ${name}`
   }
 }
