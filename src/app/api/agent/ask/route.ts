@@ -88,12 +88,26 @@ async function runLookup(userId: string, p: LookupParams): Promise<string> {
 
 // ── Parse a LOOKUP: {...} response from the LLM ───────────────────────────────
 function parseLookup(text: string): LookupParams | null {
-  // Strip markdown code fences if present
-  const stripped = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '')
-  const match = stripped.match(/LOOKUP:\s*(\{[\s\S]*?\})/i)
-  if (!match) return null
+  // Strip markdown code fences
+  const stripped = text.replace(/```(?:json)?/gi, '')
+  const idx = stripped.search(/LOOKUP\s*:/i)
+  if (idx === -1) return null
+  // Find the opening brace after LOOKUP:
+  const braceStart = stripped.indexOf('{', idx)
+  if (braceStart === -1) return null
+  // Walk forward counting braces to find the matching closing brace
+  let depth = 0
+  let braceEnd = -1
+  for (let i = braceStart; i < stripped.length; i++) {
+    if (stripped[i] === '{') depth++
+    else if (stripped[i] === '}') {
+      depth--
+      if (depth === 0) { braceEnd = i; break }
+    }
+  }
+  if (braceEnd === -1) return null
   try {
-    return JSON.parse(match[1]) as LookupParams
+    return JSON.parse(stripped.slice(braceStart, braceEnd + 1)) as LookupParams
   } catch {
     return null
   }
@@ -271,6 +285,8 @@ Plain text only — no markdown, no code fences, ever.`
 
         // ── Parse phase 1 response ──────────────────────────────────────────────
         const lookup = parseLookup(phase1)
+        console.log('[ask] phase1 raw:', JSON.stringify(phase1.slice(0, 300)))
+        console.log('[ask] parsed lookup:', lookup)
 
         if (!lookup) {
           // LLM answered directly from summaries
