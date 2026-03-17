@@ -178,6 +178,7 @@ export function ExpensesByCategoryWidget() {
     start: { anchor: 'today', operator: 'minus', value: 7, unit: 'day' },
     end:   { anchor: 'today', operator: 'minus', value: 1, unit: 'day' },
   })
+  const [appliedCustom, setAppliedCustom] = useState<{ start: string; end: string } | null>(null)
 
   const [locked, setLocked] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -205,6 +206,7 @@ export function ExpensesByCategoryWidget() {
           if (period === 'custom' && saved.relativeDateRange) {
             const start = toDateString(resolveExpr(saved.relativeDateRange.start))
             const end   = toDateString(resolveExpr(saved.relativeDateRange.end))
+            setAppliedCustom({ start, end })
             withPeriod = { ...c, dateRange: { type: 'static' as const, start, end } }
           } else {
             withPeriod = { ...c, dateRange: { type: 'live' as const, period: period as Exclude<Period, 'custom'> } }
@@ -357,13 +359,17 @@ export function ExpensesByCategoryWidget() {
         <RelativeDateRangePicker
           value={relativeDateRange}
           onChange={setRelativeDateRange}
-          onApply={(start, end) =>
+          onApply={(start, end) => {
+            setAppliedCustom({ start, end })
             setConfig((c) => ({ ...c, dateRange: { type: 'static', start, end } }))
-          }
+          }}
           onCancel={() => {
             setActivePeriod('last-6-months')
+            setAppliedCustom(null)
             setConfig((c) => ({ ...c, dateRange: { type: 'live', period: 'last-6-months' } }))
           }}
+          appliedStart={appliedCustom?.start}
+          appliedEnd={appliedCustom?.end}
         />
       )}
 

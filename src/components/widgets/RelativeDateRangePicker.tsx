@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   add, sub, format,
   startOfWeek, startOfMonth, startOfQuarter, startOfYear,
@@ -138,9 +139,14 @@ interface Props {
   onChange: (next: RelativeDateRange) => void
   onApply: (start: string, end: string) => void
   onCancel: () => void
+  /** Pass applied dates so the summary can show them on initial hydration */
+  appliedStart?: string
+  appliedEnd?: string
 }
 
-export function RelativeDateRangePicker({ value, onChange, onApply, onCancel }: Props) {
+export function RelativeDateRangePicker({ value, onChange, onApply, onCancel, appliedStart, appliedEnd }: Props) {
+  const [editing, setEditing] = useState(!appliedStart || !appliedEnd)
+
   const startDate = resolveExpr(value.start)
   const endDate   = resolveExpr(value.end)
   const invalid   = startDate > endDate
@@ -148,11 +154,38 @@ export function RelativeDateRangePicker({ value, onChange, onApply, onCancel }: 
   const fmtPreview = (d: Date) =>
     d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 
-  function handleApply() {
-    if (invalid) return
-    onApply(toDateString(startDate), toDateString(endDate))
+  const fmtSummary = (s: string) => {
+    const [y, m, d] = s.split('-').map(Number)
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
+  function handleApply() {
+    if (invalid) return
+    const s = toDateString(startDate)
+    const e = toDateString(endDate)
+    onApply(s, e)
+    setEditing(false)
+  }
+
+  // ── Collapsed summary ──
+  if (!editing && appliedStart && appliedEnd) {
+    return (
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs text-muted-foreground">Custom:</span>
+        <span className="text-xs font-medium text-foreground">
+          {fmtSummary(appliedStart)} – {fmtSummary(appliedEnd)}
+        </span>
+        <button
+          onClick={() => setEditing(true)}
+          className="text-xs px-2 py-1 rounded-md border border-black/15 text-muted-foreground hover:text-foreground hover:border-black/25 transition-colors"
+        >
+          Edit
+        </button>
+      </div>
+    )
+  }
+
+  // ── Editor ──
   return (
     <div className="mb-4 p-3 rounded-lg border border-black/10 bg-muted/20">
       <div className="grid grid-cols-2 gap-4">

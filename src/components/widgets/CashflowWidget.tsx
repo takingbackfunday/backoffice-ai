@@ -377,6 +377,8 @@ export function CashflowWidget() {
           onChange={setRelativeDateRange}
           onApply={(start, end) => setAppliedRange({ period: 'custom', start, end })}
           onCancel={() => handlePeriod('last-6-months')}
+          appliedStart={appliedRange.start}
+          appliedEnd={appliedRange.end}
         />
       )}
 
