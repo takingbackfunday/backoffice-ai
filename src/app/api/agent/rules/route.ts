@@ -25,8 +25,8 @@ Workflow:
 3. Call get_categories to confirm exact category names
 4. Call get_rules to avoid duplicating existing coverage
 5. Call get_no_payee_transactions for payee-assignment opportunities
-6. For each rule you are confident about, call emit_rule_suggestion
-7. When done, call finish_analysis
+6. Emit ALL your suggestions in a single batch by calling emit_rule_suggestion for each one
+7. Call finish_analysis immediately after your last emit_rule_suggestion — do not loop back
 
 Constraints on suggestions:
 - Never use amount as the only condition — always use description or payeeName
@@ -34,7 +34,8 @@ Constraints on suggestions:
 - Each suggestion covers distinct transactions (emit_rule_suggestion will reject duplicates)
 - 2+ matching transactions required for high confidence; 1 acceptable for medium
 - reasoning is 1 sentence
-- Aim for 5–20 high-quality suggestions, not quantity`
+- Aim for 5–20 high-quality suggestions, not quantity
+- Prioritise patterns from the last 18 months; include older patterns only if they recur frequently`
 
 const MAX_TOOL_ROUNDS = 20
 
@@ -60,13 +61,19 @@ export async function GET() {
         // ── Step 1: lightweight snapshot for initial prompt ────────────────
         send({ type: 'status', message: 'Loading your financial data…' })
 
-        const [txCount, uncatCount, noPayeeCount, activeRuleCount] = await Promise.all([
+        const recentCutoff = new Date()
+        recentCutoff.setMonth(recentCutoff.getMonth() - 18)
+
+        const [txCount, uncatCount, noPayeeCount, activeRuleCount, recentUncatCount] = await Promise.all([
           prisma.transaction.count({ where: { account: { userId } } }),
           prisma.transaction.count({ where: { account: { userId }, categoryId: null } }),
           prisma.transaction.count({
             where: { account: { userId }, categoryId: { not: null }, payeeId: null },
           }),
           prisma.categorizationRule.count({ where: { userId, isActive: true } }),
+          prisma.transaction.count({
+            where: { account: { userId }, categoryId: null, date: { gte: recentCutoff } },
+          }),
         ])
 
         const dateRange = await prisma.transaction.aggregate({
@@ -76,13 +83,14 @@ export async function GET() {
         })
 
         const snapshot = `Financial database snapshot:
-- Total transactions: ${txCount}
-- Uncategorised transactions: ${uncatCount}
+- Total transactions: ${txCount} (date range: ${dateRange._min.date?.toISOString().slice(0, 10) ?? 'n/a'} → ${dateRange._max.date?.toISOString().slice(0, 10) ?? 'n/a'})
+- Uncategorised transactions: ${uncatCount} total, ${recentUncatCount} in the last 18 months
 - Transactions with category but no payee: ${noPayeeCount}
 - Active categorisation rules: ${activeRuleCount}
-- Date range: ${dateRange._min.date?.toISOString().slice(0, 10) ?? 'n/a'} → ${dateRange._max.date?.toISOString().slice(0, 10) ?? 'n/a'}
 
-Start by calling get_uncategorised_transactions, then get_categories to confirm names.`
+Focus first on patterns from the last 18 months (since ${recentCutoff.toISOString().slice(0, 10)}). The full history is available via tools if a pattern spans a longer period.
+
+Start by calling get_uncategorised_transactions, then get_categories to confirm names. Emit all suggestions in one pass then call finish_analysis.`
 
         // ── Step 2: pre-load context for in-memory dispatch ───────────────
         send({ type: 'status', message: 'Pre-loading transaction index…' })
@@ -104,7 +112,7 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
         ]
 
         let finished = false
-        let allRejectedRounds = 0  // consecutive rounds where every emit was rejected
+        let emitRoundSeen = false  // true once we've seen a round containing emit_rule_suggestion
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4-5')
@@ -124,10 +132,9 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
             break
           }
 
-          // Execute tool calls
-          let roundHadEmit = false
-          let roundAllRejected = true
+          const roundHasEmit = response.tool_calls.some((tc) => tc.function.name === 'emit_rule_suggestion')
 
+          // Execute tool calls
           for (const tc of response.tool_calls) {
             const toolName = tc.function.name
             let args: unknown
@@ -146,13 +153,6 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
               result = `Error: ${e instanceof Error ? e.message : String(e)}`
             }
 
-            if (toolName === 'emit_rule_suggestion') {
-              roundHadEmit = true
-              if (!result.startsWith('Rejected:')) roundAllRejected = false
-            } else {
-              roundAllRejected = false
-            }
-
             messages.push({
               role: 'tool',
               tool_call_id: tc.id,
@@ -167,13 +167,16 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
 
           if (finished) break
 
-          // If the entire round was emit_rule_suggestion calls that all got rejected,
-          // the LLM is stuck in a loop — break gracefully
-          if (roundHadEmit && roundAllRejected) {
-            allRejectedRounds++
-            if (allRejectedRounds >= 2) break
-          } else {
-            allRejectedRounds = 0
+          // Once we've seen an emit round, stop after it completes.
+          // This prevents the LLM from looping back for a second pass.
+          if (roundHasEmit) {
+            if (emitRoundSeen) {
+              // Second emit round — done
+              break
+            }
+            emitRoundSeen = true
+            // If the very next round also has only emit calls it's a continuation
+            // of the same batch — that's fine, handled by the check above on round+1
           }
         }
 
