@@ -262,7 +262,7 @@ export async function emit_rule_suggestion(
   const totalMatched = matchedIds.size
 
   if (totalMatched > 0 && (overlapExisting + overlapRun) / totalMatched > 0.5) {
-    return `Rejected: >50% overlap with existing rules or prior suggestions this run (${overlapExisting + overlapRun}/${totalMatched} transactions already covered).`
+    return `Rejected: >50% overlap with existing rules or prior suggestions this run (${overlapExisting + overlapRun}/${totalMatched} transactions already covered). If you have no more new suggestions, call finish_analysis.`
   }
 
   // Medium-confidence suggestions with 0 matches are still allowed (singletons with description drift)

@@ -104,6 +104,7 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
         ]
 
         let finished = false
+        let allRejectedRounds = 0  // consecutive rounds where every emit was rejected
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4-5')
@@ -124,6 +125,9 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
           }
 
           // Execute tool calls
+          let roundHadEmit = false
+          let roundAllRejected = true
+
           for (const tc of response.tool_calls) {
             const toolName = tc.function.name
             let args: unknown
@@ -142,6 +146,13 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
               result = `Error: ${e instanceof Error ? e.message : String(e)}`
             }
 
+            if (toolName === 'emit_rule_suggestion') {
+              roundHadEmit = true
+              if (!result.startsWith('Rejected:')) roundAllRejected = false
+            } else {
+              roundAllRejected = false
+            }
+
             messages.push({
               role: 'tool',
               tool_call_id: tc.id,
@@ -155,6 +166,15 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
           }
 
           if (finished) break
+
+          // If the entire round was emit_rule_suggestion calls that all got rejected,
+          // the LLM is stuck in a loop — break gracefully
+          if (roundHadEmit && roundAllRejected) {
+            allRejectedRounds++
+            if (allRejectedRounds >= 2) break
+          } else {
+            allRejectedRounds = 0
+          }
         }
 
         // ── Step 4: done ──────────────────────────────────────────────────
