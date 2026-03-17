@@ -258,10 +258,11 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
 // ── ConditionPill ──────────────────────────────────────────────────────────────
 
 export function ConditionRow({
-  cond, index, op, isOnly, onChange, onRemove, onToggleOp,
+  cond, index, op, isOnly, onChange, onRemove, onToggleOp, accounts,
 }: {
   cond: ConditionDef; index: number; op: ConditionOp; isOnly: boolean
   onChange: (c: ConditionDef) => void; onRemove: () => void; onToggleOp?: () => void
+  accounts?: { id: string; name: string }[]
 }) {
   const isAmount  = AMOUNT_FIELDS.has(cond.field)
   const isDate    = DATE_FIELDS.has(cond.field)
@@ -328,14 +329,26 @@ export function ConditionRow({
         >
           {availableOps.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <input
-          type={isAmount ? 'number' : 'text'}
-          value={cond.value}
-          onChange={(e) => onChange({ ...cond, value: e.target.value })}
-          placeholder={inputPlaceholder}
-          className="bg-white/55 text-[13px] font-medium text-[#0C447C] rounded px-2 py-0.5 border-none outline-none min-w-[120px] w-full"
-          aria-label="Condition value"
-        />
+        {cond.field === 'accountName' && accounts && accounts.length > 0 ? (
+          <select
+            value={cond.value}
+            onChange={(e) => onChange({ ...cond, value: e.target.value })}
+            className="bg-white/55 text-[13px] font-medium text-[#0C447C] rounded px-2 py-0.5 border-none outline-none min-w-[120px] w-full cursor-pointer"
+            aria-label="Account name"
+          >
+            <option value="">— select account —</option>
+            {accounts.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
+          </select>
+        ) : (
+          <input
+            type={isAmount ? 'number' : 'text'}
+            value={cond.value}
+            onChange={(e) => onChange({ ...cond, value: e.target.value })}
+            placeholder={inputPlaceholder}
+            className="bg-white/55 text-[13px] font-medium text-[#0C447C] rounded px-2 py-0.5 border-none outline-none min-w-[120px] w-full"
+            aria-label="Condition value"
+          />
+        )}
       </div>
       {!isOnly && (
         <button type="button" onClick={onRemove}
@@ -426,11 +439,12 @@ export function OutputRow({
 // ── RuleEditor ─────────────────────────────────────────────────────────────────
 
 export function RuleEditor({
-  projects, payees, categoryGroups, editingRule, onSave, onCancel, saveLabel, cancelLabel, showSaveAndApply, onApplyComplete,
+  projects, payees, accounts, categoryGroups, editingRule, onSave, onCancel, saveLabel, cancelLabel, showSaveAndApply, onApplyComplete,
   cardHeader,
 }: {
   projects: Project[]
   payees: Payee[]
+  accounts?: { id: string; name: string }[]
   categoryGroups: CategoryGroup[]
   editingRule?: UserRule
   onSave: (rule: UserRule) => void
@@ -569,7 +583,8 @@ export function RuleEditor({
               <ConditionRow key={i} cond={cond} index={i} op={op} isOnly={conditions.length === 1}
                 onChange={(c) => updateCondition(i, c)}
                 onRemove={() => setConditions((prev) => prev.filter((_, idx) => idx !== i))}
-                onToggleOp={() => setOp((prev) => prev === 'and' ? 'or' : 'and')} />
+                onToggleOp={() => setOp((prev) => prev === 'and' ? 'or' : 'and')}
+                accounts={accounts} />
             ))}
           </div>
           <button type="button" onClick={() => setConditions((prev) => [...prev, defaultCondition()])}

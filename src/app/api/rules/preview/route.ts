@@ -6,8 +6,8 @@ import { loadUserRules, buildCondition } from '@/lib/rules/user-rules'
 import type { TransactionFact } from '@/lib/rules/categorization'
 
 const ConditionDefSchema = z.object({
-  field: z.enum(['description', 'payeeName', 'rawDescription', 'amount', 'currency']),
-  operator: z.enum(['contains', 'equals', 'starts_with', 'regex', 'gt', 'lt', 'gte', 'lte', 'in', 'oneOf', 'between']),
+  field: z.enum(['description', 'payeeName', 'rawDescription', 'amount', 'currency', 'accountName', 'notes', 'date', 'month', 'dayOfWeek']),
+  operator: z.enum(['contains', 'not_contains', 'equals', 'not_equals', 'starts_with', 'ends_with', 'regex', 'gt', 'lt', 'gte', 'lte', 'in', 'oneOf', 'between']),
   value: z.union([z.string(), z.number(), z.array(z.string()), z.tuple([z.number(), z.number()])]),
 })
 

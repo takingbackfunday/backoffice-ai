@@ -24,6 +24,7 @@ interface RulesAgentProps {
   categoryGroups: CategoryGroup[]
   payees: Payee[]
   projects: Project[]
+  accounts?: { id: string; name: string }[]
   onRuleAccepted: (rule: unknown) => void
   onClose: (summary?: { uncategorised: number; noPayee: number }) => void
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
@@ -62,6 +63,7 @@ function SuggestionCard({
   categoryGroups,
   payees,
   projects,
+  accounts,
   onAccepted,
   onDecline,
   onApplyComplete,
@@ -72,6 +74,7 @@ function SuggestionCard({
   categoryGroups: CategoryGroup[]
   payees: Payee[]
   projects: Project[]
+  accounts?: { id: string; name: string }[]
   onAccepted: (rule: UserRule, index: number) => void
   onDecline: () => void
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
@@ -97,6 +100,7 @@ function SuggestionCard({
     <RuleEditor
       projects={projects}
       payees={payees}
+      accounts={accounts}
       categoryGroups={categoryGroups}
       editingRule={suggestionToRule(suggestion, categoryGroups)}
       onSave={(rule) => onAccepted(rule, index)}
@@ -125,7 +129,7 @@ const THINKING_MESSAGES = [
   'Almost there…',
 ]
 
-export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, onClose, onApplyComplete }: RulesAgentProps) {
+export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleAccepted, onClose, onApplyComplete }: RulesAgentProps) {
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [statusMessages, setStatusMessages] = useState<string[]>([])
   const [thinkingIdx, setThinkingIdx] = useState(0)
@@ -290,6 +294,7 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
                 categoryGroups={categoryGroups}
                 payees={payees}
                 projects={projects}
+                accounts={accounts}
                 onAccepted={accept}
                 onDecline={() => decline(i)}
                 onApplyComplete={onApplyComplete}

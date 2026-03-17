@@ -143,16 +143,19 @@ export function RulesManager({
   initialRules,
   initialProjects,
   initialPayees,
+  initialAccounts,
   initialCategoryGroups,
 }: {
   initialRules?: UserRule[]
   initialProjects?: Project[]
   initialPayees?: Payee[]
+  initialAccounts?: { id: string; name: string }[]
   initialCategoryGroups?: CategoryGroup[]
 } = {}) {
   const [rules, setRules] = useState<UserRule[]>(initialRules ?? [])
   const [projects, setProjects] = useState<Project[]>(initialProjects ?? [])
   const [payees, setPayees] = useState<Payee[]>(initialPayees ?? [])
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>(initialAccounts ?? [])
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>(initialCategoryGroups ?? [])
   const [loading, setLoading] = useState(!initialRules)
   const [error, setError] = useState<string | null>(null)
@@ -181,11 +184,13 @@ export function RulesManager({
       fetch('/api/projects').then((r) => r.json()),
       fetch('/api/category-groups').then((r) => r.json()),
       fetch('/api/payees').then((r) => r.json()),
-    ]).then(([rulesJson, projectsJson, groupsJson, payeesJson]) => {
+      fetch('/api/accounts').then((r) => r.json()),
+    ]).then(([rulesJson, projectsJson, groupsJson, payeesJson, accountsJson]) => {
       if (!rulesJson.error) setRules(rulesJson.data ?? [])
       if (!projectsJson.error) setProjects(projectsJson.data ?? [])
       if (!groupsJson.error) setCategoryGroups(groupsJson.data ?? [])
       if (!payeesJson.error) setPayees(payeesJson.data ?? [])
+      if (!accountsJson.error) setAccounts(accountsJson.data ?? [])
     }).catch(() => setError('Failed to load'))
       .finally(() => setLoading(false))
   }, [initialRules])
@@ -400,6 +405,7 @@ export function RulesManager({
           categoryGroups={categoryGroups}
           payees={payees}
           projects={projects}
+          accounts={accounts}
           onRuleAccepted={(rule) => setRules((prev) => [rule as UserRule, ...prev])}
           onClose={handleAgentClose}
           onApplyComplete={handleApplyComplete}
@@ -411,6 +417,7 @@ export function RulesManager({
         <RuleEditor
           projects={projects}
           payees={payees}
+          accounts={accounts}
           categoryGroups={categoryGroups}
           editingRule={editingRule}
           onSave={handleEditorSave}
