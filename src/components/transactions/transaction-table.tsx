@@ -716,13 +716,13 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                 />
               </th>
               <SortHeader label="Date" field="date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortHeader label="Description" field="description" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <th className="px-3 py-1.5 text-left font-medium">Account</th>
+              <SortHeader label="Description" field="description" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+              <SortHeader label="Amount" field="amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="text-right" />
               <th className="px-3 py-1.5 text-left font-medium">Payee</th>
               <th className="px-3 py-1.5 text-left font-medium">Notes</th>
               <th className="px-3 py-1.5 text-left font-medium">Category</th>
               <th className="px-3 py-1.5 text-left font-medium">Project</th>
-              <SortHeader label="Amount" field="amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="text-right" />
             </tr>
           </thead>
           <tbody>
@@ -769,14 +769,13 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                       {new Date(row.date).toLocaleDateString()}
                     </td>
 
-                    {/* Editable cells — Notes before Category */}
-                    {renderEditableCell(row, 'description')}
                     <td className="px-3 py-1 text-muted-foreground whitespace-nowrap">{row.account.name}</td>
+                    {renderEditableCell(row, 'description')}
+                    {renderEditableCell(row, 'amount')}
                     {renderEditableCell(row, 'payeeId')}
                     {renderEditableCell(row, 'notes')}
                     {renderEditableCell(row, 'categoryId')}
                     {renderEditableCell(row, 'projectId')}
-                    {renderEditableCell(row, 'amount')}
                   </tr>
                 )
               })
