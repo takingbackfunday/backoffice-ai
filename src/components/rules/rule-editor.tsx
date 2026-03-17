@@ -8,7 +8,7 @@ import type { Project } from '@prisma/client'
 export type ConditionOp = 'and' | 'or'
 export type ConditionField =
   | 'payeeName' | 'description' | 'amount' | 'currency'
-  | 'accountName' | 'notes' | 'tag' | 'date' | 'month' | 'dayOfWeek'
+  | 'accountName' | 'notes' | 'date' | 'month' | 'dayOfWeek'
 export type ConditionOperator =
   | 'contains' | 'not_contains' | 'equals' | 'not_equals'
   | 'starts_with' | 'ends_with' | 'regex' | 'oneOf' | 'includes' | 'excludes'
@@ -20,7 +20,7 @@ export interface ConditionDef {
   value: string
 }
 
-export type OutputActionType = 'category' | 'payee' | 'project' | 'notes' | 'tag'
+export type OutputActionType = 'category' | 'payee' | 'project' | 'notes'
 export interface OutputAction { type: OutputActionType; value: string }
 
 export interface CategoryGroup {
@@ -64,8 +64,6 @@ interface PreviewTx {
 
 // Which fields are numeric (use numeric operators)
 const AMOUNT_FIELDS = new Set<ConditionField>(['amount'])
-// Which fields are array-typed (use includes/excludes)
-const ARRAY_FIELDS = new Set<ConditionField>(['tag'])
 // Which fields use date-style operators
 const DATE_FIELDS = new Set<ConditionField>(['date', 'month', 'dayOfWeek'])
 
@@ -75,7 +73,6 @@ export const FIELD_OPTIONS: { value: ConditionField; label: string; group: strin
   { value: 'amount',       label: 'Amount',         group: 'Transaction' },
   { value: 'currency',     label: 'Currency',       group: 'Transaction' },
   { value: 'notes',        label: 'Notes',          group: 'Transaction' },
-  { value: 'tag',          label: 'Tag',            group: 'Transaction' },
   // Linked records
   { value: 'payeeName',    label: 'Payee name',     group: 'Linked' },
   { value: 'accountName',  label: 'Account name',   group: 'Linked' },
@@ -100,17 +97,13 @@ export const OPERATOR_OPTIONS: { value: ConditionOperator; label: string; forAmo
   { value: 'lt',           label: '<',               forAmount: true },
   { value: 'gte',          label: '≥',               forAmount: true },
   { value: 'lte',          label: '≤',               forAmount: true },
-  // Array operators (tags)
-  { value: 'includes',     label: 'includes',        forArray: true },
-  { value: 'excludes',     label: 'excludes',        forArray: true },
 ]
 
 export const OUTPUT_TYPE_LABELS: Record<OutputActionType, string> = {
   category: 'Set category',
   payee:    'Assign payee',
-  project:  'Tag to project',
+  project:  'Assign project',
   notes:    'Set notes',
-  tag:      'Add tag',
 }
 
 export function defaultCondition(): ConditionDef {
@@ -271,25 +264,21 @@ export function ConditionRow({
   onChange: (c: ConditionDef) => void; onRemove: () => void; onToggleOp?: () => void
 }) {
   const isAmount  = AMOUNT_FIELDS.has(cond.field)
-  const isArray   = ARRAY_FIELDS.has(cond.field)
   const isDate    = DATE_FIELDS.has(cond.field)
 
   const availableOps = OPERATOR_OPTIONS.filter((o) => {
     if (isAmount) return o.forAmount || o.value === 'equals' || o.value === 'not_equals'
-    if (isArray)  return o.forArray  || o.value === 'equals' || o.value === 'not_equals'
-    if (isDate)   return !o.forAmount && !o.forArray
-    return !o.forAmount && !o.forArray
+    if (isDate)   return !o.forAmount
+    return !o.forAmount
   })
 
   function handleFieldChange(field: ConditionField) {
     const newIsAmount = AMOUNT_FIELDS.has(field)
-    const newIsArray  = ARRAY_FIELDS.has(field)
     const newIsDate   = DATE_FIELDS.has(field)
     const validOps = OPERATOR_OPTIONS.filter((o) => {
       if (newIsAmount) return o.forAmount || o.value === 'equals' || o.value === 'not_equals'
-      if (newIsArray)  return o.forArray  || o.value === 'equals' || o.value === 'not_equals'
-      if (newIsDate)   return !o.forAmount && !o.forArray
-      return !o.forAmount && !o.forArray
+      if (newIsDate)   return !o.forAmount
+      return !o.forAmount
     })
     const newOp = validOps.find((o) => o.value === cond.operator) ? cond.operator : validOps[0].value
     onChange({ ...cond, field, operator: newOp })
@@ -364,7 +353,6 @@ const OUTPUT_STYLES: Record<OutputActionType, { bg: string; label: string; text:
   payee:    { bg: 'bg-[#E1F5EE]', label: 'text-[#0F6E56]/80', text: 'text-[#085041]', value: 'font-medium' },
   project:  { bg: 'bg-[#FEF3E2]', label: 'text-[#92540A]/80', text: 'text-[#6B3A08]', value: 'font-medium' },
   notes:    { bg: 'bg-[#F0F0F0]', label: 'text-[#555]/80',    text: 'text-[#333]',    value: 'font-medium' },
-  tag:      { bg: 'bg-[#FDF4FF]', label: 'text-[#7E22CE]/80', text: 'text-[#581C87]', value: 'font-medium' },
 }
 
 const OUTPUT_LABELS: Record<OutputActionType, string> = {
@@ -372,7 +360,6 @@ const OUTPUT_LABELS: Record<OutputActionType, string> = {
   payee:    'Payee',
   project:  'Project',
   notes:    'Notes',
-  tag:      'Add tag',
 }
 
 export function OutputRow({
@@ -382,8 +369,6 @@ export function OutputRow({
   onChange: (a: OutputAction) => void; onRemove: () => void; canRemove: boolean
 }) {
   const s = OUTPUT_STYLES[action.type]
-
-  const PRESET_TAGS = ['billable', 'reimbursable', 'tax-deductible', 'personal', 'recurring']
 
   return (
     <div className={`flex items-center gap-2 ${s.bg} rounded-lg px-2.5 py-1.5`}>
@@ -412,17 +397,6 @@ export function OutputRow({
           placeholder="Note to set on matching transactions…"
           className={`bg-transparent text-[13px] ${s.text} ${s.value} border-none outline-none flex-1 min-w-0`}
           aria-label="Notes value" />
-      ) : action.type === 'tag' ? (
-        <>
-          <input type="text" list="tag-suggestions" value={action.value}
-            onChange={(e) => onChange({ ...action, value: e.target.value })}
-            placeholder="e.g. billable"
-            className={`bg-transparent text-[13px] ${s.text} ${s.value} border-none outline-none flex-1 min-w-0`}
-            aria-label="Tag to add" />
-          <datalist id="tag-suggestions">
-            {PRESET_TAGS.map((t) => <option key={t} value={t} />)}
-          </datalist>
-        </>
       ) : categoryGroups.length > 0 ? (
         <select value={action.value} onChange={(e) => onChange({ ...action, value: e.target.value })}
           className={`bg-transparent text-[13px] ${s.text} ${s.value} border-none outline-none cursor-pointer flex-1`}
@@ -487,9 +461,6 @@ export function RuleEditor({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const meta = editingRule as any
     if (meta?.setNotes) base.push({ type: 'notes', value: meta.setNotes })
-    if (meta?.addTags?.length) {
-      for (const t of meta.addTags) base.push({ type: 'tag', value: t })
-    }
     return base
   }
 
@@ -503,9 +474,8 @@ export function RuleEditor({
   const applyAfterSaveRef = useRef(false)
 
   const usedTypes = new Set(outputs.map((o) => o.type))
-  // 'tag' can be added multiple times (multiple tags); others are unique
-  const availableToAdd = (['category', 'payee', 'project', 'notes', 'tag'] as OutputActionType[])
-    .filter((t) => t === 'tag' || !usedTypes.has(t))
+  const availableToAdd = (['category', 'payee', 'project', 'notes'] as OutputActionType[])
+    .filter((t) => !usedTypes.has(t))
 
   function updateCondition(i: number, c: ConditionDef) {
     setConditions((prev) => prev.map((x, idx) => (idx === i ? c : x)))
@@ -530,7 +500,6 @@ export function RuleEditor({
     const payeeName = outputs.find((o) => o.type === 'payee')?.value.trim() || null
     const projectId = outputs.find((o) => o.type === 'project')?.value || null
     const setNotes  = outputs.find((o) => o.type === 'notes')?.value.trim() || null
-    const addTags   = outputs.filter((o) => o.type === 'tag').map((o) => o.value.trim()).filter(Boolean)
 
     const allCats = categoryGroups.flatMap((g) => g.categories)
     const matchedCat = allCats.find((c) => c.id === categoryOutput)
@@ -563,7 +532,7 @@ export function RuleEditor({
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: ruleName, priority, conditions: conditionsGroup, categoryName, categoryId, payeeName, projectId, setNotes, addTags }),
+        body: JSON.stringify({ name: ruleName, priority, conditions: conditionsGroup, categoryName, categoryId, payeeName, projectId, setNotes }),
       })
       const json = await res.json()
       if (!res.ok || json.error) { setError(json.error ?? 'Failed to save rule'); return }
