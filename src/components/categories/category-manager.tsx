@@ -158,7 +158,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
   if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>
 
   return (
-    <div className="space-y-4" data-testid="category-manager">
+    <div className="space-y-2" data-testid="category-manager">
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
 
       {groups.map((group) => (
