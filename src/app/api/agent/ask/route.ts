@@ -105,14 +105,20 @@ export async function POST(request: Request) {
         }
         const topPayees = [...byPayee.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)
 
-        // Monthly spend summary (last 12 months)
+        // Monthly spend + per-month category breakdown (all time)
         const byMonth = new Map<string, number>()
+        const byMonthCat = new Map<string, Map<string, number>>()
         for (const tx of expenses) {
           const d = new Date(tx.date)
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-          byMonth.set(key, (byMonth.get(key) ?? 0) + Math.abs(Number(tx.amount)))
+          const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          const amt = Math.abs(Number(tx.amount))
+          byMonth.set(month, (byMonth.get(month) ?? 0) + amt)
+          const cat = tx.categoryRef?.name ?? tx.category ?? '(uncategorised)'
+          if (!byMonthCat.has(month)) byMonthCat.set(month, new Map())
+          const catMap = byMonthCat.get(month)!
+          catMap.set(cat, (catMap.get(cat) ?? 0) + amt)
         }
-        const monthlySpend = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-12)
+        const monthlySpend = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))
 
         // Project totals
         const byProject = new Map<string, number>()
@@ -154,8 +160,12 @@ ${groupBreakdown.map(([g, a]) => `  ${g}: ${a.toFixed(2)}`).join('\n') || '  (no
 TOP PAYEES BY SPEND:
 ${topPayees.map(([p, a]) => `  ${p}: ${a.toFixed(2)}`).join('\n') || '  (none)'}
 
-MONTHLY SPEND (last 12 months):
-${monthlySpend.map(([m, a]) => `  ${m}: ${a.toFixed(2)}`).join('\n') || '  (none)'}
+MONTHLY SPEND WITH CATEGORY BREAKDOWN (all time):
+${monthlySpend.map(([m, a]) => {
+  const cats = [...(byMonthCat.get(m)?.entries() ?? [])].sort((x, y) => y[1] - x[1]).slice(0, 5)
+  const catLine = cats.map(([c, v]) => `${c} ${v.toFixed(2)}`).join(', ')
+  return `  ${m}: ${a.toFixed(2)} [${catLine}]`
+}).join('\n') || '  (none)'}
 
 PROJECT TOTALS:
 ${projectTotals.map(([p, a]) => `  ${p}: ${a.toFixed(2)}`).join('\n') || '  (none)'}
