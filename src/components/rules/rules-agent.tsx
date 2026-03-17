@@ -190,8 +190,13 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
     }
 
     es.onerror = () => {
-      setStatusMessages((prev) => [...prev, 'Connection error'])
-      setStatus('error')
+      // EventSource fires onerror on a clean server-close too — only treat it as
+      // an error if we never received a 'done' event.
+      setStatus((current) => {
+        if (current === 'done') return current
+        setStatusMessages((prev) => [...prev, 'Connection error'])
+        return 'error'
+      })
       es.close()
     }
   }

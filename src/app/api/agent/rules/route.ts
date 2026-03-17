@@ -36,7 +36,7 @@ Constraints on suggestions:
 - reasoning is 1 sentence
 - Aim for 5–20 high-quality suggestions, not quantity`
 
-const MAX_TOOL_ROUNDS = 12
+const MAX_TOOL_ROUNDS = 20
 
 // ── Route ──────────────────────────────────────────────────────────────────────
 
