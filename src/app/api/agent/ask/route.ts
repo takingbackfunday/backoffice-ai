@@ -88,7 +88,9 @@ async function runLookup(userId: string, p: LookupParams): Promise<string> {
 
 // ── Parse a LOOKUP: {...} response from the LLM ───────────────────────────────
 function parseLookup(text: string): LookupParams | null {
-  const match = text.match(/LOOKUP:\s*(\{[\s\S]*\})/i)
+  // Strip markdown code fences if present
+  const stripped = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '')
+  const match = stripped.match(/LOOKUP:\s*(\{[\s\S]*?\})/i)
   if (!match) return null
   try {
     return JSON.parse(match[1]) as LookupParams
@@ -257,7 +259,7 @@ LOOKUP: <JSON object with any of these optional filters>
 
 Only use LOOKUP when you genuinely need transaction-level detail. Be as specific as possible with filters to keep the result set small.
 After receiving lookup results you must give a final ANSWER.
-Plain text only in answers — no markdown.`
+Plain text only — no markdown, no code fences, ever.`
 
         const phase1 = await openrouterChat(
           [
