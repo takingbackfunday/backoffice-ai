@@ -6,6 +6,8 @@ import {
   Tooltip, Legend, ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 import type { CashflowPoint } from '@/app/api/widgets/cashflow/route'
+import { RelativeDateRangePicker, resolveExpr, toDateString } from './RelativeDateRangePicker'
+import type { RelativeDateRange } from './RelativeDateRangePicker'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -192,8 +194,7 @@ function CustomTooltip({ active, payload, label }: any) {
 
 interface LockedCashflowFilters {
   period: Period
-  customStart?: string
-  customEnd?: string
+  relativeDateRange?: RelativeDateRange
   selectedCategories: string[]
 }
 
@@ -203,8 +204,10 @@ const PREF_KEY = 'cashflowFilters'
 
 export function CashflowWidget() {
   const [period, setPeriod] = useState<Period>('last-6-months')
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
+  const [relativeDateRange, setRelativeDateRange] = useState<RelativeDateRange>({
+    start: { anchor: 'today', operator: 'minus', value: 7, unit: 'day' },
+    end:   { anchor: 'today', operator: 'minus', value: 1, unit: 'day' },
+  })
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
   const [data, setData] = useState<CashflowPoint[]>([])
@@ -229,14 +232,15 @@ export function CashflowWidget() {
         setLocked(true)
         const p = saved.period ?? 'last-6-months'
         setPeriod(p)
-        if (saved.customStart) setCustomStart(saved.customStart)
-        if (saved.customEnd) setCustomEnd(saved.customEnd)
+        if (saved.relativeDateRange) setRelativeDateRange(saved.relativeDateRange)
         setSelectedCategories(new Set(saved.selectedCategories ?? []))
-        setAppliedRange(
-          p === 'custom' && saved.customStart && saved.customEnd
-            ? { period: p, start: saved.customStart, end: saved.customEnd }
-            : { period: p }
-        )
+        if (p === 'custom' && saved.relativeDateRange) {
+          const start = toDateString(resolveExpr(saved.relativeDateRange.start))
+          const end   = toDateString(resolveExpr(saved.relativeDateRange.end))
+          setAppliedRange({ period: p, start, end })
+        } else {
+          setAppliedRange({ period: p })
+        }
       }
     })
   }, [])
@@ -270,11 +274,6 @@ export function CashflowWidget() {
     if (p !== 'custom') setAppliedRange({ period: p })
   }
 
-  function applyCustomRange() {
-    if (!customStart || !customEnd) return
-    setAppliedRange({ period: 'custom', start: customStart, end: customEnd })
-  }
-
   function handleCategoryChange(next: Set<string>) {
     setSelectedCategories(next)
   }
@@ -291,8 +290,7 @@ export function CashflowWidget() {
     } else {
       const payload: LockedCashflowFilters = {
         period,
-        customStart: customStart || undefined,
-        customEnd: customEnd || undefined,
+        relativeDateRange: period === 'custom' ? relativeDateRange : undefined,
         selectedCategories: [...selectedCategories],
       }
       await fetch('/api/preferences', {
@@ -372,30 +370,14 @@ export function CashflowWidget() {
         </div>
       </div>
 
-      {/* Custom date range inputs */}
+      {/* Custom relative date range picker */}
       {period === 'custom' && (
-        <div className="flex items-center gap-2 mb-4">
-          <input
-            type="date"
-            value={customStart}
-            onChange={(e) => setCustomStart(e.target.value)}
-            className="text-xs border border-black/15 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-          />
-          <span className="text-xs text-muted-foreground">to</span>
-          <input
-            type="date"
-            value={customEnd}
-            onChange={(e) => setCustomEnd(e.target.value)}
-            className="text-xs border border-black/15 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-          />
-          <button
-            onClick={applyCustomRange}
-            disabled={!customStart || !customEnd}
-            className="px-3 py-1.5 text-xs rounded-lg bg-[#3C3489] text-white font-medium disabled:opacity-40 hover:bg-[#2e2870] transition-colors"
-          >
-            Apply
-          </button>
-        </div>
+        <RelativeDateRangePicker
+          value={relativeDateRange}
+          onChange={setRelativeDateRange}
+          onApply={(start, end) => setAppliedRange({ period: 'custom', start, end })}
+          onCancel={() => handlePeriod('last-6-months')}
+        />
       )}
 
       {loading && (

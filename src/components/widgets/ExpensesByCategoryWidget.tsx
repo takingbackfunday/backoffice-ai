@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { ChartRouter } from './charts/ChartRouter'
 import { createDefaultWidgetConfig } from '@/lib/widgets/defaults'
 import type { ChartDataPoint, WidgetConfig } from '@/types/widgets'
+import { RelativeDateRangePicker, resolveExpr, toDateString } from './RelativeDateRangePicker'
+import type { RelativeDateRange } from './RelativeDateRangePicker'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -153,8 +155,7 @@ function CategoryFilterDropdown({
 
 interface LockedChartFilters {
   period: Period
-  customStart?: string
-  customEnd?: string
+  relativeDateRange?: RelativeDateRange
   selectedCategories: string[]
 }
 
@@ -173,8 +174,10 @@ export function ExpensesByCategoryWidget() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
 
   const [activePeriod, setActivePeriod] = useState<Period>('last-6-months')
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
+  const [relativeDateRange, setRelativeDateRange] = useState<RelativeDateRange>({
+    start: { anchor: 'today', operator: 'minus', value: 7, unit: 'day' },
+    end:   { anchor: 'today', operator: 'minus', value: 1, unit: 'day' },
+  })
 
   const [locked, setLocked] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -192,16 +195,20 @@ export function ExpensesByCategoryWidget() {
         setLocked(true)
         const period = saved.period ?? 'last-6-months'
         setActivePeriod(period)
-        if (saved.customStart) setCustomStart(saved.customStart)
-        if (saved.customEnd) setCustomEnd(saved.customEnd)
+        if (saved.relativeDateRange) setRelativeDateRange(saved.relativeDateRange)
         const cats = new Set<string>(saved.selectedCategories ?? [])
         setSelectedCategories(cats)
 
         // Apply to config immediately
         setConfig((c) => {
-          const withPeriod = period === 'custom' && saved.customStart && saved.customEnd
-            ? { ...c, dateRange: { type: 'static' as const, start: saved.customStart!, end: saved.customEnd! } }
-            : { ...c, dateRange: { type: 'live' as const, period: period as Exclude<Period, 'custom'> } }
+          let withPeriod: typeof c
+          if (period === 'custom' && saved.relativeDateRange) {
+            const start = toDateString(resolveExpr(saved.relativeDateRange.start))
+            const end   = toDateString(resolveExpr(saved.relativeDateRange.end))
+            withPeriod = { ...c, dateRange: { type: 'static' as const, start, end } }
+          } else {
+            withPeriod = { ...c, dateRange: { type: 'live' as const, period: period as Exclude<Period, 'custom'> } }
+          }
           const isAll = cats.size === 0
           return {
             ...withPeriod,
@@ -242,11 +249,6 @@ export function ExpensesByCategoryWidget() {
     setConfig((c) => ({ ...c, dateRange: { type: 'live', period: period as Exclude<Period, 'custom'> } }))
   }
 
-  function applyCustomRange() {
-    if (!customStart || !customEnd) return
-    setConfig((c) => ({ ...c, dateRange: { type: 'static', start: customStart, end: customEnd } }))
-  }
-
   function handleCategoryChange(next: Set<string>) {
     setSelectedCategories(next)
     const allCategories = [...categoryGroups.flatMap((g) => g.categories).map((c) => c.name), 'Uncategorized']
@@ -276,8 +278,7 @@ export function ExpensesByCategoryWidget() {
       // Lock — save current filters
       const payload: LockedChartFilters = {
         period: activePeriod,
-        customStart: customStart || undefined,
-        customEnd: customEnd || undefined,
+        relativeDateRange: activePeriod === 'custom' ? relativeDateRange : undefined,
         selectedCategories: [...selectedCategories],
       }
       await fetch('/api/preferences', {
@@ -351,30 +352,19 @@ export function ExpensesByCategoryWidget() {
         </div>
       </div>
 
-      {/* Custom date range inputs */}
+      {/* Custom relative date range picker */}
       {activePeriod === 'custom' && (
-        <div className="flex items-center gap-2 mb-4">
-          <input
-            type="date"
-            value={customStart}
-            onChange={(e) => setCustomStart(e.target.value)}
-            className="text-xs border border-black/15 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-          />
-          <span className="text-xs text-muted-foreground">to</span>
-          <input
-            type="date"
-            value={customEnd}
-            onChange={(e) => setCustomEnd(e.target.value)}
-            className="text-xs border border-black/15 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-          />
-          <button
-            onClick={applyCustomRange}
-            disabled={!customStart || !customEnd}
-            className="text-xs px-3 py-1.5 rounded-lg bg-[#3C3489] text-[#EEEDFE] hover:bg-[#2d2770] disabled:opacity-40 transition-colors"
-          >
-            Apply
-          </button>
-        </div>
+        <RelativeDateRangePicker
+          value={relativeDateRange}
+          onChange={setRelativeDateRange}
+          onApply={(start, end) =>
+            setConfig((c) => ({ ...c, dateRange: { type: 'static', start, end } }))
+          }
+          onCancel={() => {
+            setActivePeriod('last-6-months')
+            setConfig((c) => ({ ...c, dateRange: { type: 'live', period: 'last-6-months' } }))
+          }}
+        />
       )}
 
       {loading && (
