@@ -14,12 +14,24 @@ export interface RawDataRow {
 export async function fetchWidgetData(userId: string, config: WidgetConfig): Promise<RawDataRow[]> {
   const { start, end } = resolveDateRange(config.dateRange)
 
+  // Build category filter from DataFilter[]
+  const categoryFilter = config.filters.find((f) => f.field === 'category')
+  let categoryWhere: Record<string, unknown> | undefined
+  if (categoryFilter && categoryFilter.values.length > 0) {
+    if (categoryFilter.operator === 'include') {
+      categoryWhere = { categoryRef: { name: { in: categoryFilter.values } } }
+    } else {
+      categoryWhere = { categoryRef: { name: { notIn: categoryFilter.values } } }
+    }
+  }
+
   const rows = await prisma.transaction.findMany({
     where: {
       account: { userId },
       date: { gte: start, lte: end },
       // Only expenses (negative amounts) for spending charts
       amount: { lt: 0 },
+      ...categoryWhere,
     },
     select: {
       date: true,
