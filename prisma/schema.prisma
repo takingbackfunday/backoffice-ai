@@ -172,3 +172,11 @@ model CategorizationRule {
 
   @@index([userId])
 }
+
+
+// Per-user persisted preferences (chart filters, UI state, etc.)
+model UserPreference {
+  userId    String   @id  // Clerk userId — one row per user
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}

@@ -149,6 +149,17 @@ function CategoryFilterDropdown({
   )
 }
 
+// ── Saved filter shape stored in preferences ──────────────────────────────────
+
+interface LockedChartFilters {
+  period: Period
+  customStart?: string
+  customEnd?: string
+  selectedCategories: string[]
+}
+
+const PREF_KEY = 'chartFilters'
+
 // ── Main widget ────────────────────────────────────────────────────────────────
 
 export function ExpensesByCategoryWidget() {
@@ -161,18 +172,49 @@ export function ExpensesByCategoryWidget() {
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
 
-  // Custom date range state
   const [activePeriod, setActivePeriod] = useState<Period>('last-6-months')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
 
-  // Load categories once for the filter dropdown
+  const [locked, setLocked] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Load categories + persisted preferences on mount
   useEffect(() => {
-    fetch('/api/widgets/categories')
-      .then((r) => r.json())
-      .then((json) => {
-        if (!json.error) setCategoryGroups(json.data ?? [])
-      })
+    Promise.all([
+      fetch('/api/widgets/categories').then((r) => r.json()),
+      fetch('/api/preferences').then((r) => r.json()),
+    ]).then(([catJson, prefJson]) => {
+      if (!catJson.error) setCategoryGroups(catJson.data ?? [])
+
+      const saved = prefJson.data?.[PREF_KEY] as LockedChartFilters | undefined
+      if (saved) {
+        setLocked(true)
+        const period = saved.period ?? 'last-6-months'
+        setActivePeriod(period)
+        if (saved.customStart) setCustomStart(saved.customStart)
+        if (saved.customEnd) setCustomEnd(saved.customEnd)
+        const cats = new Set<string>(saved.selectedCategories ?? [])
+        setSelectedCategories(cats)
+
+        // Apply to config immediately
+        setConfig((c) => {
+          const withPeriod = period === 'custom' && saved.customStart && saved.customEnd
+            ? { ...c, dateRange: { type: 'static' as const, start: saved.customStart!, end: saved.customEnd! } }
+            : { ...c, dateRange: { type: 'live' as const, period: period as Exclude<Period, 'custom'> } }
+          const isAll = cats.size === 0
+          return {
+            ...withPeriod,
+            filters: isAll
+              ? withPeriod.filters.filter((f) => f.field !== 'category')
+              : [
+                  ...withPeriod.filters.filter((f) => f.field !== 'category'),
+                  { field: 'category' as const, operator: 'include' as const, values: [...cats] },
+                ],
+          }
+        })
+      }
+    })
   }, [])
 
   // Fetch chart data whenever config changes
@@ -196,7 +238,7 @@ export function ExpensesByCategoryWidget() {
 
   function setPeriod(period: Period) {
     setActivePeriod(period)
-    if (period === 'custom') return // wait for date inputs
+    if (period === 'custom') return
     setConfig((c) => ({ ...c, dateRange: { type: 'live', period: period as Exclude<Period, 'custom'> } }))
   }
 
@@ -218,6 +260,34 @@ export function ExpensesByCategoryWidget() {
             { field: 'category', operator: 'include', values: [...next] },
           ],
     }))
+  }
+
+  async function toggleLock() {
+    setSaving(true)
+    if (locked) {
+      // Unlock — clear saved filters
+      await fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [PREF_KEY]: null }),
+      })
+      setLocked(false)
+    } else {
+      // Lock — save current filters
+      const payload: LockedChartFilters = {
+        period: activePeriod,
+        customStart: customStart || undefined,
+        customEnd: customEnd || undefined,
+        selectedCategories: [...selectedCategories],
+      }
+      await fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [PREF_KEY]: payload }),
+      })
+      setLocked(true)
+    }
+    setSaving(false)
   }
 
   return (
@@ -255,6 +325,29 @@ export function ExpensesByCategoryWidget() {
               </button>
             ))}
           </div>
+
+          {/* Lock button */}
+          <button
+            onClick={toggleLock}
+            disabled={saving}
+            title={locked ? 'Filters locked — click to unlock' : 'Lock current filters'}
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
+              locked
+                ? 'border-[#085041]/30 bg-[#E1F5EE] text-[#085041] hover:bg-[#d0efe5]'
+                : 'border-black/10 text-muted-foreground hover:text-foreground hover:border-black/20'
+            }`}
+          >
+            {locked ? (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            ) : (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+              </svg>
+            )}
+            {locked ? 'Locked' : 'Lock'}
+          </button>
         </div>
       </div>
 
