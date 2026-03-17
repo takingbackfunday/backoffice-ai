@@ -33,7 +33,6 @@ export interface UserRule {
   categoryName: string
   categoryId: string | null
   categoryRef: { id: string; name: string; group: { id: string; name: string } } | null
-  merchantName: string | null
   payeeId: string | null
   payee: { id: string; name: string } | null
   projectId: string | null

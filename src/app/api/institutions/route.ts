@@ -12,7 +12,6 @@ const CreateInstitutionSchema = z.object({
     descCol: z.string(),
     dateFormat: z.string(),
     amountSign: z.enum(['normal', 'inverted']),
-    merchantCol: z.string().optional(),
   }),
   isGlobal: z.boolean().optional().default(false),
 })

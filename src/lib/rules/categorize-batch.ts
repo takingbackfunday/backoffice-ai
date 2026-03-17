@@ -27,7 +27,6 @@ export async function categorizeBatch(
 // the suggestion alongside the original row (keyed by duplicateHash)
 export interface CategorizableRow {
   description: string
-  merchantName?: string | null
   payeeName?: string | null
   amount: number
   currency?: string
@@ -38,13 +37,12 @@ export interface CategorizableRow {
 export function categorizeRows(
   rows: CategorizableRow[],
   userRules: Rule<TransactionFact, CategorizationResult>[] = []
-): Array<CategorizableRow & { suggestedCategory: string | null; suggestedCategoryId: string | null; suggestedMerchant: string | null; suggestedPayeeId: string | null; suggestionConfidence: 'high' | 'medium' | null; matchedRuleId: string | null }> {
+): Array<CategorizableRow & { suggestedCategory: string | null; suggestedCategoryId: string | null; suggestedPayeeId: string | null; suggestionConfidence: 'high' | 'medium' | null; matchedRuleId: string | null }> {
   const allRules = [...userRules]
 
   return rows.map((row) => {
     const fact: TransactionFact = {
       description: row.description,
-      merchantName: row.merchantName ?? null,
       payeeName: row.payeeName ?? null,
       amount: row.amount,
       currency: row.currency ?? 'USD',
@@ -59,7 +57,6 @@ export function categorizeRows(
       ...row,
       suggestedCategory: match?.categoryName ?? null,
       suggestedCategoryId: match?.categoryId ?? null,
-      suggestedMerchant: match?.merchantName ?? null,
       suggestedPayeeId: match?.payeeId ?? null,
       suggestionConfidence: match?.confidence ?? null,
       matchedRuleId: match?.ruleId ?? null,

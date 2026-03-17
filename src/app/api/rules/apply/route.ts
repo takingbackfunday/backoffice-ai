@@ -25,8 +25,7 @@ export async function POST() {
     for (const tx of transactions) {
       const fact: TransactionFact = {
         description: tx.description,
-        merchantName: tx.merchantName ?? null,
-        payeeName: tx.payee?.name ?? tx.merchantName ?? null,
+        payeeName: tx.payee?.name ?? null,
         amount: Number(tx.amount),
         currency: tx.account.currency,
         date: tx.date,

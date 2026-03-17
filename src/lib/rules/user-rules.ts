@@ -20,7 +20,6 @@ interface ConditionGroup {
 function getField(fact: TransactionFact, field: string): string | number | null {
   switch (field) {
     case 'description':    return fact.description
-    case 'merchantName':   return fact.merchantName
     case 'payeeName':      return fact.payeeName
     case 'rawDescription': return fact.rawDescription
     case 'amount':         return fact.amount
@@ -94,62 +93,10 @@ export async function loadUserRules(
     action: () => ({
       categoryName: row.categoryName,
       categoryId: row.categoryId ?? null,
-      merchantName: row.merchantName ?? null,
       payeeId: row.payeeId ?? null,
       projectId: row.projectId ?? null,
       confidence: 'high' as const,
       ruleId: row.id,
     }),
   }))
-}
-
-// ── Build a rule suggestion from a manual correction ─────────────────────────
-
-export interface UserCorrection {
-  transaction: {
-    description: string
-    merchantName?: string | null
-    amount: number
-  }
-  categoryName: string
-  projectId?: string | null
-}
-
-export function buildRuleFromCorrection(correction: UserCorrection): {
-  name: string
-  priority: number
-  conditions: ConditionGroup
-  categoryName: string
-  projectId: string | null
-} {
-  const { transaction: tx } = correction
-  const all: ConditionDef[] = []
-
-  // Match direction (expense vs income) first
-  all.push({ field: 'amount', operator: tx.amount < 0 ? 'lt' : 'gt', value: 0 })
-
-  // Prefer merchant (more reliable), fall back to keywords from description
-  if (tx.merchantName && tx.merchantName.trim().length > 2) {
-    all.push({ field: 'merchantName', operator: 'contains', value: tx.merchantName.trim().toLowerCase() })
-  } else {
-    const keywords = tx.description
-      .split(/\s+/)
-      .filter((w) => w.length > 3 && !/^\d+$/.test(w))
-      .slice(0, 3)
-      .join(' ')
-      .toLowerCase()
-    if (keywords) {
-      all.push({ field: 'description', operator: 'contains', value: keywords })
-    }
-  }
-
-  const label = tx.merchantName?.trim() || tx.description.slice(0, 30)
-
-  return {
-    name: `${label} → ${correction.categoryName}`,
-    priority: 50,
-    conditions: { all },
-    categoryName: correction.categoryName,
-    projectId: correction.projectId ?? null,
-  }
 }

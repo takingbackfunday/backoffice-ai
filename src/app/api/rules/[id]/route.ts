@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 
 const ConditionDefSchema = z.object({
-  field: z.enum(['description', 'merchantName', 'payeeName', 'rawDescription', 'amount', 'currency']),
+  field: z.enum(['description', 'payeeName', 'rawDescription', 'amount', 'currency']),
   operator: z.enum(['contains', 'equals', 'starts_with', 'regex', 'gt', 'lt', 'gte', 'lte', 'in', 'oneOf', 'between']),
   value: z.union([z.string(), z.number(), z.array(z.string()), z.tuple([z.number(), z.number()])]),
 })

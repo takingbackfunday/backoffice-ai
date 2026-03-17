@@ -55,7 +55,6 @@ export async function GET() {
               id: true,
               amount: true,
               description: true,
-              merchantName: true,
               date: true,
               categoryId: true,
               payeeId: true,
@@ -93,9 +92,6 @@ export async function GET() {
           if (tx.payee?.name) {
             matchField = 'payeeName'
             key = tx.payee.name
-          } else if (tx.merchantName?.trim()) {
-            matchField = 'payeeName'
-            key = tx.merchantName.trim()
           } else {
             // Use first meaningful token (≥5 chars) or first two words, whichever is more specific
             const words = tx.description.trim().split(/\s+/)
@@ -130,8 +126,6 @@ export async function GET() {
           let key: string
           if (tx.payee?.name) {
             key = tx.payee.name
-          } else if (tx.merchantName?.trim()) {
-            key = tx.merchantName.trim()
           } else {
             const words = tx.description.trim().split(/\s+/)
             const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
@@ -153,9 +147,9 @@ export async function GET() {
           })
           .slice(0, 20)
 
-        // Description clusters — only for txns with no payee AND no merchantName
+        // Description clusters — only for txns with no payee
         // Only include clusters where the key appears in all samples (avoids false grouping)
-        const noPayeeTxns = uncategorised.filter((t) => !t.payee && !t.merchantName?.trim())
+        const noPayeeTxns = uncategorised.filter((t) => !t.payee)
         const descClusters = new Map<string, { count: number; total: number; samples: string[] }>()
         for (const tx of noPayeeTxns) {
           const words = tx.description.trim().split(/\s+/)
@@ -180,15 +174,10 @@ export async function GET() {
         const noPayeeWithCategory = transactions.filter((t) => t.categoryId && !t.payeeId)
         const noPayeeGroups = new Map<string, { count: number; samples: string[]; categoryId: string }>()
         for (const tx of noPayeeWithCategory) {
-          let key: string
-          if (tx.merchantName?.trim()) {
-            key = tx.merchantName.trim()
-          } else {
-            const words = tx.description.trim().split(/\s+/)
-            const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
-            const twoWords = words.slice(0, 2).join(' ')
-            key = twoWords.length >= 6 ? twoWords : firstMeaningful
-          }
+          const words = tx.description.trim().split(/\s+/)
+          const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
+          const twoWords = words.slice(0, 2).join(' ')
+          const key = twoWords.length >= 6 ? twoWords : firstMeaningful
           if (!key || key.length < 3) continue
           const e = noPayeeGroups.get(key) ?? { count: 0, samples: [], categoryId: tx.categoryId! }
           e.count++
@@ -355,7 +344,7 @@ Rules:
             const matches = defs.every((def) => {
               let txVal: string
               if (def.field === 'payeeName') {
-                txVal = tx.payee?.name ?? tx.merchantName?.trim() ?? ''
+                txVal = tx.payee?.name ?? ''
               } else if (def.field === 'description') {
                 txVal = tx.description
               } else if (def.field === 'amount') {

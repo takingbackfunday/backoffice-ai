@@ -15,7 +15,7 @@ interface Props {
 
 type SortField = 'date' | 'amount' | 'description' | 'category'
 type SortDir = 'asc' | 'desc'
-type EditableField = 'description' | 'merchantName' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount'
+type EditableField = 'description' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount'
 
 interface EditingCell {
   id: string
@@ -516,7 +516,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     } else if (field === 'categoryId') {
       displayValue = row.categoryRef?.name ?? row.category ?? '—'
     } else if (field === 'payeeId') {
-      displayValue = row.payee?.name ?? row.merchantName ?? '—'
+      displayValue = row.payee?.name ?? '—'
     } else if (field === 'amount') {
       const n = Number(row.amount)
       displayValue = (n >= 0 ? '+' : '') + n.toFixed(2)

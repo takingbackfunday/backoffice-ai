@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-response'
 
 const ConditionDefSchema = z.object({
-  field: z.enum(['description', 'merchantName', 'payeeName', 'rawDescription', 'amount', 'currency']),
+  field: z.enum(['description', 'payeeName', 'rawDescription', 'amount', 'currency']),
   operator: z.enum(['contains', 'equals', 'starts_with', 'regex', 'gt', 'lt', 'gte', 'lte', 'in', 'oneOf', 'between']),
   value: z.union([z.string(), z.number(), z.array(z.string()), z.tuple([z.number(), z.number()])]),
 })
@@ -22,7 +22,6 @@ const CreateRuleSchema = z.object({
   conditions: ConditionGroupSchema,
   categoryName: z.string().default(''),
   categoryId: z.string().nullable().optional(),
-  merchantName: z.string().nullable().optional(),
   payeeName: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
   isActive: z.boolean().optional().default(true),
@@ -60,7 +59,7 @@ export async function POST(request: Request) {
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
-    const { projectId, merchantName, payeeName, categoryId, ...rest } = parsed.data
+    const { projectId, payeeName, categoryId, ...rest } = parsed.data
 
     // Verify project belongs to user if provided
     if (projectId) {
@@ -82,7 +81,6 @@ export async function POST(request: Request) {
     const rule = await prisma.categorizationRule.create({
       data: {
         ...rest,
-        merchantName: merchantName ?? null,
         payeeId,
         projectId: projectId ?? null,
         categoryId: categoryId ?? null,

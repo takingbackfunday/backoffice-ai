@@ -2,10 +2,6 @@ import type { Rule } from './engine'
 import type { TransactionFact, CategorizationResult } from './categorization'
 import { allOf, anyOf, containsAny, isExpense, isIncome } from './conditions'
 
-// Combined description+merchant accessor for matching against either field
-const descAndMerchant = (f: TransactionFact) =>
-  `${f.description} ${f.merchantName ?? ''}`
-
 export const systemCategorizationRules: Rule<TransactionFact, CategorizationResult>[] = [
   // ── priority 5: Transfers — must be detected before income/expense rules ──
   {
@@ -21,7 +17,6 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     action: () => ({
       categoryName: 'Account Transfer',
       categoryId: null,
-      merchantName: null,
       payeeId: null,
       projectId: null,
       confidence: 'high',
@@ -45,7 +40,6 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     action: () => ({
       categoryName: 'Bank Fees',
       categoryId: null,
-      merchantName: null,
       payeeId: null,
       projectId: null,
       confidence: 'high',
@@ -67,7 +61,6 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     action: () => ({
       categoryName: 'Interest',
       categoryId: null,
-      merchantName: null,
       payeeId: null,
       projectId: null,
       confidence: 'high',
@@ -82,7 +75,7 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     priority: 20,
     condition: allOf(
       isExpense,
-      containsAny(descAndMerchant, [
+      containsAny((f) => f.description, [
         'github', 'notion', 'figma', 'slack', 'zoom', 'dropbox',
         'adobe', 'google workspace', 'microsoft 365', 'office 365',
         'aws', 'amazon web services', 'heroku', 'vercel', 'netlify',
@@ -94,7 +87,6 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     action: () => ({
       categoryName: 'Software & Subscriptions',
       categoryId: null,
-      merchantName: null,
       payeeId: null,
       projectId: null,
       confidence: 'high',
@@ -109,7 +101,7 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     priority: 30,
     condition: allOf(
       isExpense,
-      containsAny(descAndMerchant, [
+      containsAny((f) => f.description, [
         'airline', 'airways', 'ryanair', 'easyjet', 'lufthansa',
         'british airways', 'delta', 'united air', 'american air',
         'booking.com', 'airbnb', 'expedia', 'hotels.com',
@@ -122,7 +114,6 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     action: () => ({
       categoryName: 'Travel',
       categoryId: null,
-      merchantName: null,
       payeeId: null,
       projectId: null,
       confidence: 'high',
@@ -137,7 +128,7 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     priority: 40,
     condition: allOf(
       isExpense,
-      containsAny(descAndMerchant, [
+      containsAny((f) => f.description, [
         'restaurant', 'cafe', 'coffee', 'starbucks', 'costa coffee',
         'mcdonald', 'burger king', 'subway', 'kfc', 'nando',
         'deliveroo', 'uber eats', 'doordash', 'grubhub', 'just eat',
@@ -147,7 +138,6 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     action: () => ({
       categoryName: 'Meals & Entertainment',
       categoryId: null,
-      merchantName: null,
       payeeId: null,
       projectId: null,
       confidence: 'medium', // could be personal — flag for review
@@ -162,7 +152,7 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     priority: 50,
     condition: allOf(
       isExpense,
-      containsAny(descAndMerchant, [
+      containsAny((f) => f.description, [
         'staples', 'office depot', 'officeworks', 'ryman',
         'apple store', 'apple.com/bill', 'media markt', 'currys',
         'best buy', 'dell', 'lenovo',
@@ -171,7 +161,6 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     action: () => ({
       categoryName: 'Office Supplies',
       categoryId: null,
-      merchantName: null,
       payeeId: null,
       projectId: null,
       confidence: 'medium',
@@ -186,7 +175,7 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     priority: 55,
     condition: allOf(
       isExpense,
-      containsAny(descAndMerchant, [
+      containsAny((f) => f.description, [
         'accountant', 'solicitor', 'lawyer', 'legal', 'notary',
         'consultant', 'freelancer', 'contractor',
       ])
@@ -194,7 +183,6 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     action: () => ({
       categoryName: 'Professional Services',
       categoryId: null,
-      merchantName: null,
       payeeId: null,
       projectId: null,
       confidence: 'medium',
@@ -209,7 +197,7 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     priority: 60,
     condition: allOf(
       isExpense,
-      containsAny(descAndMerchant, [
+      containsAny((f) => f.description, [
         'electric', 'electricity', 'gas bill', 'water bill',
         'internet', 'broadband', 'bt group', 'virgin media',
         'comcast', 'at&t', 'verizon', 'tmobile',
@@ -219,7 +207,6 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
     action: () => ({
       categoryName: 'Rent & Utilities',
       categoryId: null,
-      merchantName: null,
       payeeId: null,
       projectId: null,
       confidence: 'high',

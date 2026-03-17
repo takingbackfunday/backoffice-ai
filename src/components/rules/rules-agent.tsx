@@ -44,7 +44,6 @@ function suggestionToRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): 
     categoryName: resolvedCat?.name ?? s.categoryName,
     categoryId: resolvedCat?.id ?? null,
     categoryRef: null,
-    merchantName: null,
     payeeId: s.payeeId,
     payee: s.payeeName ? { id: s.payeeId ?? '', name: s.payeeName } : null,
     projectId: null,

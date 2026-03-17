@@ -8,7 +8,7 @@ import { RulesAgent } from './rules-agent'
 // ── Local helpers (only needed for RuleCard display) ──────────────────────────
 
 const FIELD_LABELS: Record<string, string> = {
-  description: 'Description', payeeName: 'Payee', merchantName: 'Merchant (legacy)',
+  description: 'Description', payeeName: 'Payee',
   rawDescription: 'Raw description', amount: 'Amount', currency: 'Currency',
 }
 
