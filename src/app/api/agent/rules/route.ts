@@ -35,7 +35,8 @@ Constraints on suggestions:
 - 2+ matching transactions required for high confidence; 1 acceptable for medium
 - reasoning is 1 sentence
 - Aim for 5–20 high-quality suggestions, not quantity
-- Prioritise patterns from the last 18 months; include older patterns only if they recur frequently`
+- Prioritise patterns from the last 18 months; include older patterns only if they recur frequently
+- Prioritise by financial impact (highest absolute spend first) — a single large uncategorised vendor matters more than many small ones`
 
 const MAX_TOOL_ROUNDS = 20
 

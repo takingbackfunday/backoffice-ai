@@ -128,7 +128,7 @@ export async function get_uncategorised_transactions(
 
   const sorted = [...groups.entries()]
     .filter(([, v]) => v.count >= minCount)
-    .sort((a, b) => b[1].count - a[1].count)
+    .sort((a, b) => Math.abs(b[1].totalAmount) - Math.abs(a[1].totalAmount))
     .slice(0, topN)
 
   if (!sorted.length) return 'No uncategorised transaction groups found matching criteria.'
@@ -163,7 +163,7 @@ export async function get_uncategorised_transactions(
     `  name:"${name}" | matchField:${v.matchField} | count:${v.count} | total:${v.totalAmount.toFixed(2)} | samples:${v.samples.join('; ')}`
   )
 
-  let result = `${sorted.length} uncategorised groups (min count: ${minCount}):\nname | matchField | count | total | samples\n${lines.join('\n')}`
+  let result = `${sorted.length} uncategorised groups, sorted by absolute spend descending (min count: ${minCount}):\nname | matchField | count | total_spend | samples\n${lines.join('\n')}`
   if (uniqueSingletons.length) {
     result += `\n\nSingleton transactions (count=1, use world knowledge):\n${uniqueSingletons.join('\n')}`
   }
