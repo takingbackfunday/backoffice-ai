@@ -35,6 +35,20 @@ export async function PATCH(
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
+    // Verify foreign IDs belong to this user
+    if (parsed.data.categoryId) {
+      const cat = await prisma.category.findFirst({ where: { id: parsed.data.categoryId, userId } })
+      if (!cat) return badRequest('Category not found or does not belong to you')
+    }
+    if (parsed.data.payeeId) {
+      const payee = await prisma.payee.findFirst({ where: { id: parsed.data.payeeId, userId } })
+      if (!payee) return badRequest('Payee not found or does not belong to you')
+    }
+    if (parsed.data.projectId) {
+      const project = await prisma.project.findFirst({ where: { id: parsed.data.projectId, userId } })
+      if (!project) return badRequest('Project not found or does not belong to you')
+    }
+
     const updated = await prisma.transaction.update({
       where: { id },
       data: parsed.data,

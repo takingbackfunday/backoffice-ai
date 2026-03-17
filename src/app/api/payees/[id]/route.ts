@@ -24,6 +24,12 @@ export async function PATCH(
     const parsed = UpdatePayeeSchema.safeParse(body)
     if (!parsed.success) return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
 
+    // Verify defaultCategoryId belongs to this user
+    if (parsed.data.defaultCategoryId) {
+      const cat = await prisma.category.findFirst({ where: { id: parsed.data.defaultCategoryId, userId } })
+      if (!cat) return badRequest('Category not found or does not belong to you')
+    }
+
     const payee = await prisma.payee.update({
       where: { id },
       data: parsed.data,

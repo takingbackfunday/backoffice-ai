@@ -38,6 +38,12 @@ export async function POST(request: Request) {
     const parsed = CreatePayeeSchema.safeParse(body)
     if (!parsed.success) return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
 
+    // Verify defaultCategoryId belongs to this user
+    if (parsed.data.defaultCategoryId) {
+      const cat = await prisma.category.findFirst({ where: { id: parsed.data.defaultCategoryId, userId } })
+      if (!cat) return badRequest('Category not found or does not belong to you')
+    }
+
     const payee = await prisma.payee.create({
       data: {
         userId,
