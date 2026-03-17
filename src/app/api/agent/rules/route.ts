@@ -113,6 +113,8 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
 
         let finished = false
         let everEmitted = false  // true once any emit_rule_suggestion has been called
+        let emitCount = 0
+        const MAX_EMITS = 20
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4-5')
@@ -163,6 +165,11 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
               content: result,
             })
 
+            if (toolName === 'emit_rule_suggestion') {
+              emitCount++
+              if (emitCount >= MAX_EMITS) { finished = true; break }
+            }
+
             if (result === 'FINISH_ANALYSIS') {
               finished = true
               break
@@ -175,6 +182,8 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
 
         // ── Step 4: done ──────────────────────────────────────────────────
         send({ type: 'done', uncategorised: uncatCount, noPayee: noPayeeCount })
+        // Small delay so the done event flushes before the stream closes
+        await new Promise((r) => setTimeout(r, 200))
       } catch (err) {
         send({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
       } finally {
