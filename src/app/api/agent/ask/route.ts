@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
+import { FINANCE_TOOLS, dispatchTool } from '@/lib/agent/finance-tools'
 
 interface SseEvent {
   type: 'status' | 'answer' | 'done' | 'error'
@@ -13,105 +14,19 @@ function encode(event: SseEvent): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
 }
 
-// ── Tool schema the LLM can invoke ────────────────────────────────────────────
-interface LookupParams {
-  dateFrom?: string    // YYYY-MM-DD — use the earliest date you need
-  dateTo?: string      // YYYY-MM-DD — use the latest date you need (covers multiple months)
-  categories?: string[]
-  payees?: string[]
-  minAmount?: number
-  maxAmount?: number
-  limit?: number       // default 200, max 500
-  description?: string // substring match
-}
+const MAX_TOOL_ROUNDS = 8
 
-async function runLookup(userId: string, p: LookupParams): Promise<string> {
-  const limit = Math.min(p.limit ?? 200, 500)
+const SYSTEM_PROMPT = `You are a personal finance assistant with access to a set of database tools.
 
-  const rows = await prisma.transaction.findMany({
-    where: {
-      account: { userId },
-      ...(p.dateFrom || p.dateTo ? {
-        date: {
-          ...(p.dateFrom ? { gte: new Date(p.dateFrom) } : {}),
-          ...(p.dateTo ? { lte: new Date(new Date(p.dateTo).setHours(23, 59, 59, 999)) } : {}),
-        },
-      } : {}),
-      ...(p.categories?.length ? {
-        OR: [
-          { categoryRef: { name: { in: p.categories } } },
-          ...(p.categories.includes('(uncategorised)') ? [{ categoryId: null }] : []),
-        ],
-      } : {}),
-      ...(p.payees?.length ? {
-        payee: { name: { in: p.payees } },
-      } : {}),
-      ...(p.minAmount !== undefined || p.maxAmount !== undefined ? {
-        amount: {
-          ...(p.minAmount !== undefined ? { gte: p.minAmount } : {}),
-          ...(p.maxAmount !== undefined ? { lte: p.maxAmount } : {}),
-        },
-      } : {}),
-      ...(p.description ? {
-        description: { contains: p.description, mode: 'insensitive' as const },
-      } : {}),
-    },
-    select: {
-      date: true,
-      amount: true,
-      description: true,
-      categoryRef: { select: { name: true } },
-      category: true,
-      payee: { select: { name: true } },
-      account: { select: { name: true } },
-      notes: true,
-    },
-    orderBy: { date: 'asc' },
-    take: limit,
-  })
+Use the tools to look up whatever data you need to answer the user's question accurately. You can call multiple tools in sequence — for example, call get_categories first to discover exact category names, then aggregate_transactions to get totals.
 
-  if (rows.length === 0) return '(no transactions matched)'
-
-  const lines = rows.map((t) => {
-    const date = new Date(t.date).toISOString().slice(0, 10)
-    const amt = Number(t.amount).toFixed(2)
-    const cat = t.categoryRef?.name ?? t.category ?? '(uncategorised)'
-    const payee = t.payee?.name ?? '(no payee)'
-    const desc = t.description.replace(/\|/g, '-').slice(0, 80)
-    const notes = t.notes ? ` [note: ${t.notes.slice(0, 40)}]` : ''
-    return `${date}|${amt}|${cat}|${payee}|${t.account.name}|${desc}${notes}`
-  })
-
-  const total = rows.reduce((s, t) => s + Math.abs(Number(t.amount)), 0)
-  return `${rows.length} transactions (total: ${total.toFixed(2)}):\ndate|amount|category|payee|account|description\n${lines.join('\n')}`
-}
-
-// ── Parse a LOOKUP: {...} response from the LLM ───────────────────────────────
-function parseLookup(text: string): LookupParams | null {
-  // Strip markdown code fences
-  const stripped = text.replace(/```(?:json)?/gi, '')
-  const idx = stripped.search(/LOOKUP\s*:/i)
-  if (idx === -1) return null
-  // Find the opening brace after LOOKUP:
-  const braceStart = stripped.indexOf('{', idx)
-  if (braceStart === -1) return null
-  // Walk forward counting braces to find the matching closing brace
-  let depth = 0
-  let braceEnd = -1
-  for (let i = braceStart; i < stripped.length; i++) {
-    if (stripped[i] === '{') depth++
-    else if (stripped[i] === '}') {
-      depth--
-      if (depth === 0) { braceEnd = i; break }
-    }
-  }
-  if (braceEnd === -1) return null
-  try {
-    return JSON.parse(stripped.slice(braceStart, braceEnd + 1)) as LookupParams
-  } catch {
-    return null
-  }
-}
+Guidelines:
+- Always use the most efficient tool for the job (aggregate_transactions for totals, query_transactions for individual rows)
+- When asked about a specific period, always filter by date
+- When asked "why" something is high/low, drill into the details with query_transactions
+- Be specific and data-driven in your answers — cite actual amounts, dates, payee names
+- Keep answers concise but complete — bullet points are fine, no markdown headers
+- Plain text only, no markdown formatting`
 
 export async function POST(request: Request) {
   const { userId } = await auth()
@@ -124,7 +39,6 @@ export async function POST(request: Request) {
   } catch {
     return new Response('Bad request', { status: 400 })
   }
-
   if (!question) return new Response('Missing question', { status: 400 })
 
   const stream = new ReadableStream({
@@ -136,221 +50,82 @@ export async function POST(request: Request) {
       }, 5000)
 
       try {
-        send({ type: 'status', message: 'Fetching summary data…' })
+        // ── Build a lightweight financial snapshot for context ──────────────
+        send({ type: 'status', message: 'Loading your financial overview…' })
 
-        // ── Phase 0: fetch aggregated data (lightweight — no tx rows yet) ──────
-        const [accounts, categoryGroups, payees, projects, activeRules] = await Promise.all([
+        const [txCount, accounts, activeRules] = await Promise.all([
+          prisma.transaction.count({ where: { account: { userId } } }),
           prisma.account.findMany({ where: { userId }, select: { name: true, currency: true } }),
-          prisma.categoryGroup.findMany({ where: { userId }, include: { categories: { select: { name: true } } } }),
-          prisma.payee.findMany({ where: { userId }, select: { name: true } }),
-          prisma.project.findMany({ where: { userId }, select: { name: true } }),
           prisma.categorizationRule.count({ where: { userId, isActive: true } }),
         ])
 
-        // Aggregate stats in one DB pass
-        const allTx = await prisma.transaction.findMany({
+        const dateRange = await prisma.transaction.aggregate({
           where: { account: { userId } },
-          select: {
-            amount: true,
-            date: true,
-            categoryId: true,
-            projectId: true,
-            categoryRef: { select: { name: true, group: { select: { name: true } } } },
-            category: true,
-            payee: { select: { name: true } },
-            project: { select: { name: true } },
-          },
-          orderBy: { date: 'asc' },
+          _min: { date: true },
+          _max: { date: true },
         })
 
-        send({ type: 'status', message: `Building context over ${allTx.length} transactions…` })
+        const snapshot = `Financial database snapshot:
+- Accounts: ${accounts.map(a => `${a.name} (${a.currency})`).join(', ')}
+- Transactions: ${txCount} total
+- Date range: ${dateRange._min.date?.toISOString().slice(0, 10) ?? 'n/a'} → ${dateRange._max.date?.toISOString().slice(0, 10) ?? 'n/a'}
+- Active rules: ${activeRules}
+Use the tools to query any data you need.`
 
-        const expenses = allTx.filter((t) => Number(t.amount) < 0)
-        const income = allTx.filter((t) => Number(t.amount) > 0)
-        const totalIncome = income.reduce((s, t) => s + Number(t.amount), 0)
-        const totalExpenses = expenses.reduce((s, t) => s + Math.abs(Number(t.amount)), 0)
-        const categorised = allTx.filter((t) => t.categoryId).length
+        // ── Agentic tool loop ──────────────────────────────────────────────
+        const messages: ChatMessage[] = [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `${snapshot}\n\nQuestion: ${question}` },
+        ]
 
-        const dates = allTx.map((t) => new Date(t.date).getTime())
-        const earliest = dates.length ? new Date(Math.min(...dates)).toISOString().slice(0, 10) : 'n/a'
-        const latest = dates.length ? new Date(Math.max(...dates)).toISOString().slice(0, 10) : 'n/a'
+        send({ type: 'status', message: 'Thinking…' })
 
-        const byCat = new Map<string, number>()
-        for (const t of expenses) {
-          const k = t.categoryRef?.name ?? t.category ?? '(uncategorised)'
-          byCat.set(k, (byCat.get(k) ?? 0) + Math.abs(Number(t.amount)))
-        }
-        const topCats = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)
+        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          const response = await openrouterWithTools(messages, FINANCE_TOOLS)
 
-        const byPayee = new Map<string, number>()
-        for (const t of expenses) {
-          const k = t.payee?.name; if (!k) continue
-          byPayee.set(k, (byPayee.get(k) ?? 0) + Math.abs(Number(t.amount)))
-        }
-        const topPayees = [...byPayee.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)
+          // Append assistant turn
+          messages.push({
+            role: 'assistant',
+            content: response.content ?? '',
+            ...(response.tool_calls ? { tool_calls: response.tool_calls } as unknown as Record<string, unknown> : {}),
+          } as ChatMessage)
 
-        const byMonth = new Map<string, number>()
-        const byMonthCat = new Map<string, Map<string, number>>()
-        for (const t of expenses) {
-          const d = new Date(t.date)
-          const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-          const amt = Math.abs(Number(t.amount))
-          byMonth.set(m, (byMonth.get(m) ?? 0) + amt)
-          const cat = t.categoryRef?.name ?? t.category ?? '(uncategorised)'
-          if (!byMonthCat.has(m)) byMonthCat.set(m, new Map())
-          const cm = byMonthCat.get(m)!
-          cm.set(cat, (cm.get(cat) ?? 0) + amt)
-        }
-        const monthlySpend = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+          // No tool calls → final answer
+          if (!response.tool_calls || response.tool_calls.length === 0) {
+            const answer = (response.content ?? '').trim()
+            send({ type: 'answer', answer })
+            send({ type: 'done' })
+            return
+          }
 
-        const byProject = new Map<string, number>()
-        for (const t of allTx) {
-          if (!t.project) continue
-          byProject.set(t.project.name, (byProject.get(t.project.name) ?? 0) + Math.abs(Number(t.amount)))
-        }
-        const projectTotals = [...byProject.entries()].sort((a, b) => b[1] - a[1])
+          // Execute all tool calls in this round
+          for (const tc of response.tool_calls) {
+            const toolName = tc.function.name
+            let args: unknown
+            try { args = JSON.parse(tc.function.arguments) } catch { args = {} }
 
-        const byGroup = new Map<string, number>()
-        for (const t of expenses) {
-          const k = t.categoryRef?.group?.name ?? '(no group)'
-          byGroup.set(k, (byGroup.get(k) ?? 0) + Math.abs(Number(t.amount)))
-        }
-        const groupBreakdown = [...byGroup.entries()].sort((a, b) => b[1] - a[1])
+            send({ type: 'status', message: `Querying ${toolName.replace(/_/g, ' ')}…` })
 
-        const currencies = [...new Set(accounts.map((a) => a.currency))].join(', ')
+            let result: string
+            try {
+              result = await dispatchTool(userId, toolName, args)
+            } catch (e) {
+              result = `Error: ${e instanceof Error ? e.message : String(e)}`
+            }
 
-        const summaryBlock = `
-FINANCIAL SUMMARY
-=================
-Period: ${earliest} → ${latest}
-Accounts: ${accounts.map((a) => a.name).join(', ')} (${currencies})
-Transactions: ${allTx.length} total | ${income.length} income | ${expenses.length} expenses
-Income: ${totalIncome.toFixed(2)} | Expenses: ${totalExpenses.toFixed(2)} | Net: ${(totalIncome - totalExpenses).toFixed(2)}
-Categorised: ${categorised}/${allTx.length} (${Math.round((categorised / (allTx.length || 1)) * 100)}%)
-Active rules: ${activeRules}
-Projects: ${projects.map((p) => p.name).join(', ') || '(none)'}
-Known payees: ${payees.length}
-Categories: ${categoryGroups.flatMap((g) => g.categories).map((c) => c.name).join(', ') || '(none)'}
-
-TOP SPEND CATEGORIES:
-${topCats.map(([c, a]) => `  ${c}: ${a.toFixed(2)}`).join('\n') || '  (none)'}
-
-CATEGORY GROUP TOTALS:
-${groupBreakdown.map(([g, a]) => `  ${g}: ${a.toFixed(2)}`).join('\n') || '  (none)'}
-
-TOP PAYEES BY SPEND:
-${topPayees.map(([p, a]) => `  ${p}: ${a.toFixed(2)}`).join('\n') || '  (none)'}
-
-MONTHLY SPEND (all time, top-5 categories per month):
-${monthlySpend.map(([m, a]) => {
-  const cats = [...(byMonthCat.get(m)?.entries() ?? [])].sort((x, y) => y[1] - x[1]).slice(0, 5)
-  return `  ${m}: ${a.toFixed(2)} [${cats.map(([c, v]) => `${c} ${v.toFixed(2)}`).join(', ')}]`
-}).join('\n') || '  (none)'}
-
-PROJECT TOTALS:
-${projectTotals.map(([p, a]) => `  ${p}: ${a.toFixed(2)}`).join('\n') || '  (none)'}`.trim()
-
-        // ── Phase 1: ask LLM — can it answer from summaries, or does it need rows? ──
-        send({ type: 'status', message: 'Reasoning…' })
-
-        const systemPrompt = `You are a personal finance assistant with access to a financial database.
-
-You will be given a summary of the user's finances and a question.
-
-If the summary contains enough detail to answer fully, respond with:
-ANSWER: <your answer>
-
-If you need to look up specific transactions to answer properly, respond with a single tool call:
-LOOKUP: <JSON object with any of these optional filters>
-  dateFrom: "YYYY-MM-DD"   (set to the earliest date across ALL periods you need)
-  dateTo: "YYYY-MM-DD"     (set to the latest date across ALL periods you need)
-  categories: ["category name", ...]   (use exact names from the summary; use "(uncategorised)" for uncategorised)
-  payees: ["payee name", ...]
-  minAmount: number   (raw signed amount, e.g. -5000 for expenses over 5000)
-  maxAmount: number
-  description: "substring to match"
-  limit: number  (default 200, max 500)
-
-CRITICAL RULES:
-- You get exactly ONE LOOKUP. Make it cover everything you need in one go. If the question asks about multiple months, set dateFrom/dateTo to span all of them.
-- After receiving lookup results you MUST respond with ANSWER: and nothing else.
-- Never emit a second LOOKUP.
-Plain text only — no markdown, no code fences, ever.`
-
-        const phase1 = await openrouterChat(
-          [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `${summaryBlock}\n\nUSER QUESTION: ${question}` },
-          ],
-          'anthropic/claude-sonnet-4-5'
-        )
-
-        // ── Parse phase 1 response ──────────────────────────────────────────────
-        const lookup = parseLookup(phase1)
-        console.log('[ask] phase1 raw:', JSON.stringify(phase1.slice(0, 300)))
-        console.log('[ask] parsed lookup:', lookup)
-
-        if (!lookup) {
-          // LLM answered directly from summaries
-          const answer = phase1.replace(/^ANSWER:\s*/i, '').trim()
-          send({ type: 'answer', answer })
-          send({ type: 'done' })
-          return
+            messages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: result,
+            })
+          }
         }
 
-        // ── Phase 2: run the targeted DB lookup ─────────────────────────────────
-        const filterDesc = [
-          lookup.dateFrom || lookup.dateTo ? `${lookup.dateFrom ?? '…'} → ${lookup.dateTo ?? '…'}` : null,
-          lookup.categories?.length ? `categories: ${lookup.categories.join(', ')}` : null,
-          lookup.payees?.length ? `payees: ${lookup.payees.join(', ')}` : null,
-          lookup.description ? `desc contains "${lookup.description}"` : null,
-        ].filter(Boolean).join(' | ')
-
-        send({ type: 'status', message: `Looking up transactions${filterDesc ? ` (${filterDesc})` : ''}…` })
-
-        let lookupResult: string
-        try {
-          lookupResult = await runLookup(userId, lookup)
-          console.log('[ask] lookup result length:', lookupResult.length, 'preview:', lookupResult.slice(0, 100))
-        } catch (e) {
-          console.error('[ask] lookup error:', e)
-          throw e
-        }
-
-        // ── Phase 3: final answer with transaction rows in context ───────────────
+        // Exceeded max rounds — ask for a final answer with what we have
         send({ type: 'status', message: 'Composing answer…' })
-
-        const phase2 = await openrouterChat(
-          [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `${summaryBlock}\n\nUSER QUESTION: ${question}` },
-            { role: 'assistant', content: phase1 },
-            { role: 'user', content: `LOOKUP RESULTS:\n${lookupResult}\n\nYou now have all the data you need. You MUST respond with ANSWER: followed by your answer. Do not emit another LOOKUP.` },
-          ],
-          'anthropic/claude-sonnet-4-5'
-        )
-
-        console.log('[ask] phase2 raw:', JSON.stringify(phase2.slice(0, 300)))
-
-        // If the model emitted another LOOKUP instead of answering, tell it to stop and answer
-        let answer: string
-        if (/^LOOKUP\s*:/i.test(phase2.trim())) {
-          const phase3 = await openrouterChat(
-            [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: `${summaryBlock}\n\nUSER QUESTION: ${question}` },
-              { role: 'assistant', content: phase1 },
-              { role: 'user', content: `LOOKUP RESULTS:\n${lookupResult}\n\nYou now have all the data you need. You MUST respond with ANSWER: followed by your answer. Do not emit another LOOKUP.` },
-              { role: 'assistant', content: phase2 },
-              { role: 'user', content: 'Stop. Do not do another LOOKUP. Using only what you already have, give your final ANSWER: now.' },
-            ],
-            'anthropic/claude-sonnet-4-5'
-          )
-          answer = phase3.replace(/^ANSWER:\s*/i, '').trim()
-        } else {
-          answer = phase2.replace(/^ANSWER:\s*/i, '').trim()
-        }
-        send({ type: 'answer', answer })
+        messages.push({ role: 'user', content: 'Please give your final answer now based on the data you have gathered.' })
+        const final = await openrouterWithTools(messages, [])
+        send({ type: 'answer', answer: (final.content ?? 'Unable to answer.').trim() })
         send({ type: 'done' })
 
       } catch (err) {
