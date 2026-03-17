@@ -112,7 +112,7 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
         ]
 
         let finished = false
-        let emitRoundSeen = false  // true once we've seen a round containing emit_rule_suggestion
+        let everEmitted = false  // true once any emit_rule_suggestion has been called
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4-5')
@@ -133,6 +133,10 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
           }
 
           const roundHasEmit = response.tool_calls.some((tc) => tc.function.name === 'emit_rule_suggestion')
+
+          // Once the LLM has emitted suggestions and then starts a round with no
+          // emits, it's going back to investigate — stop here.
+          if (everEmitted && !roundHasEmit) break
 
           // Execute tool calls
           for (const tc of response.tool_calls) {
@@ -166,18 +170,7 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
           }
 
           if (finished) break
-
-          // Once we've seen an emit round, stop after it completes.
-          // This prevents the LLM from looping back for a second pass.
-          if (roundHasEmit) {
-            if (emitRoundSeen) {
-              // Second emit round — done
-              break
-            }
-            emitRoundSeen = true
-            // If the very next round also has only emit calls it's a continuation
-            // of the same batch — that's fine, handled by the check above on round+1
-          }
+          if (roundHasEmit) everEmitted = true
         }
 
         // ── Step 4: done ──────────────────────────────────────────────────
