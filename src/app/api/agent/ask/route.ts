@@ -323,15 +323,31 @@ Plain text only — no markdown, no code fences, ever.`
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `${summaryBlock}\n\nUSER QUESTION: ${question}` },
             { role: 'assistant', content: phase1 },
-            { role: 'user', content: `LOOKUP RESULTS:\n${lookupResult}\n\nNow answer the question.` },
+            { role: 'user', content: `LOOKUP RESULTS:\n${lookupResult}\n\nYou now have all the data you need. You MUST respond with ANSWER: followed by your answer. Do not emit another LOOKUP.` },
           ],
           'anthropic/claude-sonnet-4-5'
         )
 
         console.log('[ask] phase2 raw:', JSON.stringify(phase2.slice(0, 300)))
 
-        // Strip ANSWER: prefix if present, otherwise use response as-is
-        const answer = phase2.replace(/^ANSWER:\s*/i, '').trim()
+        // If the model emitted another LOOKUP instead of answering, tell it to stop and answer
+        let answer: string
+        if (/^LOOKUP\s*:/i.test(phase2.trim())) {
+          const phase3 = await openrouterChat(
+            [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: `${summaryBlock}\n\nUSER QUESTION: ${question}` },
+              { role: 'assistant', content: phase1 },
+              { role: 'user', content: `LOOKUP RESULTS:\n${lookupResult}\n\nYou now have all the data you need. You MUST respond with ANSWER: followed by your answer. Do not emit another LOOKUP.` },
+              { role: 'assistant', content: phase2 },
+              { role: 'user', content: 'Stop. Do not do another LOOKUP. Using only what you already have, give your final ANSWER: now.' },
+            ],
+            'anthropic/claude-sonnet-4-5'
+          )
+          answer = phase3.replace(/^ANSWER:\s*/i, '').trim()
+        } else {
+          answer = phase2.replace(/^ANSWER:\s*/i, '').trim()
+        }
         send({ type: 'answer', answer })
         send({ type: 'done' })
 
