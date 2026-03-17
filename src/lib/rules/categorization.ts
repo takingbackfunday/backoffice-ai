@@ -5,6 +5,9 @@ export interface TransactionFact {
   currency: string
   date: Date
   rawDescription: string
+  accountName: string
+  notes: string | null
+  tags: string[]
 }
 
 export interface CategorizationResult {
@@ -12,6 +15,8 @@ export interface CategorizationResult {
   categoryId: string | null
   payeeId: string | null
   projectId: string | null
+  notes: string | null        // set notes when rule fires
+  addTags: string[]           // tags to append
   confidence: 'high' | 'medium'
   ruleId: string
 }

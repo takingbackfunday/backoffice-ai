@@ -164,6 +164,8 @@ model CategorizationRule {
   payee        Payee?    @relation(fields: [payeeId], references: [id])
   projectId    String?   // optional: also tag to a project
   project      Project?  @relation(fields: [projectId], references: [id])
+  setNotes     String?   // optional: set notes on matched transactions
+  addTags      String[]  @default([]) // optional: append tags to matched transactions
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

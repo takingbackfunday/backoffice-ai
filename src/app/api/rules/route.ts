@@ -4,8 +4,16 @@ import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-response'
 
 const ConditionDefSchema = z.object({
-  field: z.enum(['description', 'payeeName', 'rawDescription', 'amount', 'currency']),
-  operator: z.enum(['contains', 'equals', 'starts_with', 'regex', 'gt', 'lt', 'gte', 'lte', 'in', 'oneOf', 'between']),
+  field: z.enum([
+    'description', 'payeeName', 'rawDescription', 'amount', 'currency',
+    'accountName', 'notes', 'tag', 'date', 'month', 'dayOfWeek',
+  ]),
+  operator: z.enum([
+    'contains', 'not_contains', 'equals', 'not_equals',
+    'starts_with', 'ends_with', 'regex',
+    'gt', 'lt', 'gte', 'lte', 'between',
+    'in', 'oneOf', 'includes', 'excludes',
+  ]),
   value: z.union([z.string(), z.number(), z.array(z.string()), z.tuple([z.number(), z.number()])]),
 })
 
@@ -24,6 +32,8 @@ const CreateRuleSchema = z.object({
   categoryId: z.string().nullable().optional(),
   payeeName: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
+  setNotes: z.string().nullable().optional(),
+  addTags: z.array(z.string()).optional().default([]),
   isActive: z.boolean().optional().default(true),
 })
 
@@ -59,7 +69,7 @@ export async function POST(request: Request) {
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
-    const { projectId, payeeName, categoryId, ...rest } = parsed.data
+    const { projectId, payeeName, categoryId, setNotes, addTags, ...rest } = parsed.data
 
     // Verify project belongs to user if provided
     if (projectId) {
@@ -84,6 +94,8 @@ export async function POST(request: Request) {
         payeeId,
         projectId: projectId ?? null,
         categoryId: categoryId ?? null,
+        setNotes: setNotes ?? null,
+        addTags: addTags ?? [],
         userId,
       },
       include: {

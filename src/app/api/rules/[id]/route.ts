@@ -4,8 +4,16 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 
 const ConditionDefSchema = z.object({
-  field: z.enum(['description', 'payeeName', 'rawDescription', 'amount', 'currency']),
-  operator: z.enum(['contains', 'equals', 'starts_with', 'regex', 'gt', 'lt', 'gte', 'lte', 'in', 'oneOf', 'between']),
+  field: z.enum([
+    'description', 'payeeName', 'rawDescription', 'amount', 'currency',
+    'accountName', 'notes', 'tag', 'date', 'month', 'dayOfWeek',
+  ]),
+  operator: z.enum([
+    'contains', 'not_contains', 'equals', 'not_equals',
+    'starts_with', 'ends_with', 'regex',
+    'gt', 'lt', 'gte', 'lte', 'between',
+    'in', 'oneOf', 'includes', 'excludes',
+  ]),
   value: z.union([z.string(), z.number(), z.array(z.string()), z.tuple([z.number(), z.number()])]),
 })
 
@@ -22,6 +30,8 @@ const UpdateRuleSchema = z.object({
   categoryId: z.string().nullable().optional(),
   payeeName: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
+  setNotes: z.string().nullable().optional(),
+  addTags: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
 })
 

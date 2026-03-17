@@ -21,6 +21,8 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
       projectId: null,
       confidence: 'high',
       ruleId: 'sys-transfer',
+      notes: null,
+      addTags: [],
     }),
   },
 
@@ -44,6 +46,8 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
       projectId: null,
       confidence: 'high',
       ruleId: 'sys-bank-fees',
+      notes: null,
+      addTags: [],
     }),
   },
 
@@ -65,6 +69,8 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
       projectId: null,
       confidence: 'high',
       ruleId: 'sys-interest',
+      notes: null,
+      addTags: [],
     }),
   },
 
@@ -91,6 +97,8 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
       projectId: null,
       confidence: 'high',
       ruleId: 'sys-software',
+      notes: null,
+      addTags: [],
     }),
   },
 
@@ -118,6 +126,8 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
       projectId: null,
       confidence: 'high',
       ruleId: 'sys-travel',
+      notes: null,
+      addTags: [],
     }),
   },
 
@@ -142,6 +152,8 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
       projectId: null,
       confidence: 'medium', // could be personal — flag for review
       ruleId: 'sys-meals',
+      notes: null,
+      addTags: [],
     }),
   },
 
@@ -165,6 +177,8 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
       projectId: null,
       confidence: 'medium',
       ruleId: 'sys-office',
+      notes: null,
+      addTags: [],
     }),
   },
 
@@ -187,6 +201,8 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
       projectId: null,
       confidence: 'medium',
       ruleId: 'sys-professional',
+      notes: null,
+      addTags: [],
     }),
   },
 
@@ -211,6 +227,8 @@ export const systemCategorizationRules: Rule<TransactionFact, CategorizationResu
       projectId: null,
       confidence: 'high',
       ruleId: 'sys-utilities',
+      notes: null,
+      addTags: [],
     }),
   },
 ]

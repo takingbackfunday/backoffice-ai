@@ -51,6 +51,9 @@ export async function POST(request: Request) {
         currency: tx.account.currency,
         date: tx.date,
         rawDescription: tx.description,
+        accountName: tx.account.name,
+        notes: tx.notes,
+        tags: tx.tags,
       }
       return testCondition(fact)
     }).slice(0, 10)

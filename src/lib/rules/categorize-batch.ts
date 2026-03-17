@@ -48,6 +48,9 @@ export function categorizeRows(
       currency: row.currency ?? 'USD',
       date: new Date(row.date),
       rawDescription: row.description,
+      accountName: '',
+      notes: null,
+      tags: [],
     }
 
     const matches = evaluateRules(fact, allRules, 'first')

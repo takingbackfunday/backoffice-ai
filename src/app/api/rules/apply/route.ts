@@ -13,10 +13,10 @@ export async function POST() {
     const userRules = await loadUserRules(userId)
     if (userRules.length === 0) return ok({ updated: 0, total: 0 })
 
-    // Fetch all transactions for this user with their payee
+    // Fetch all transactions for this user with their payee and account
     const transactions = await prisma.transaction.findMany({
       where: { account: { userId } },
-      include: { account: { select: { currency: true } }, payee: { select: { name: true } } },
+      include: { account: { select: { name: true, currency: true } }, payee: { select: { name: true } } },
     })
 
     // Build list of patches to apply
@@ -30,6 +30,9 @@ export async function POST() {
         currency: tx.account.currency,
         date: tx.date,
         rawDescription: tx.description,
+        accountName: tx.account.name,
+        notes: tx.notes,
+        tags: tx.tags,
       }
 
       const matches = evaluateRules(fact, userRules, 'first')
@@ -43,11 +46,14 @@ export async function POST() {
       } else if (!match.categoryId && match.categoryName && match.categoryName !== tx.category) {
         patch.category = match.categoryName
       }
-      if (match.payeeId && match.payeeId !== tx.payeeId) {
-        patch.payeeId = match.payeeId
-      }
-      if (match.projectId && match.projectId !== tx.projectId) {
-        patch.projectId = match.projectId
+      if (match.payeeId && match.payeeId !== tx.payeeId) patch.payeeId = match.payeeId
+      if (match.projectId && match.projectId !== tx.projectId) patch.projectId = match.projectId
+      if (match.notes && match.notes !== tx.notes) patch.notes = match.notes
+      if (match.addTags?.length) {
+        const merged = [...new Set([...tx.tags, ...match.addTags])]
+        if (merged.length !== tx.tags.length || merged.some((t) => !tx.tags.includes(t))) {
+          patch.tags = merged
+        }
       }
 
       if (Object.keys(patch).length === 0) continue
