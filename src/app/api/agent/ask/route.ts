@@ -15,13 +15,13 @@ function encode(event: SseEvent): Uint8Array {
 
 // ── Tool schema the LLM can invoke ────────────────────────────────────────────
 interface LookupParams {
-  dateFrom?: string   // YYYY-MM-DD
-  dateTo?: string     // YYYY-MM-DD
+  dateFrom?: string    // YYYY-MM-DD — use the earliest date you need
+  dateTo?: string      // YYYY-MM-DD — use the latest date you need (covers multiple months)
   categories?: string[]
   payees?: string[]
   minAmount?: number
   maxAmount?: number
-  limit?: number      // default 200, max 500
+  limit?: number       // default 200, max 500
   description?: string // substring match
 }
 
@@ -262,8 +262,8 @@ ANSWER: <your answer>
 
 If you need to look up specific transactions to answer properly, respond with a single tool call:
 LOOKUP: <JSON object with any of these optional filters>
-  dateFrom: "YYYY-MM-DD"
-  dateTo: "YYYY-MM-DD"
+  dateFrom: "YYYY-MM-DD"   (set to the earliest date across ALL periods you need)
+  dateTo: "YYYY-MM-DD"     (set to the latest date across ALL periods you need)
   categories: ["category name", ...]   (use exact names from the summary; use "(uncategorised)" for uncategorised)
   payees: ["payee name", ...]
   minAmount: number   (raw signed amount, e.g. -5000 for expenses over 5000)
@@ -271,8 +271,10 @@ LOOKUP: <JSON object with any of these optional filters>
   description: "substring to match"
   limit: number  (default 200, max 500)
 
-Only use LOOKUP when you genuinely need transaction-level detail. Be as specific as possible with filters to keep the result set small.
-After receiving lookup results you must give a final ANSWER.
+CRITICAL RULES:
+- You get exactly ONE LOOKUP. Make it cover everything you need in one go. If the question asks about multiple months, set dateFrom/dateTo to span all of them.
+- After receiving lookup results you MUST respond with ANSWER: and nothing else.
+- Never emit a second LOOKUP.
 Plain text only — no markdown, no code fences, ever.`
 
         const phase1 = await openrouterChat(
