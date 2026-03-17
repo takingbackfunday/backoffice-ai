@@ -7,13 +7,14 @@ import {
 } from 'recharts'
 import type { CashflowPoint } from '@/app/api/widgets/cashflow/route'
 
-type Period = 'last-3-months' | 'last-6-months' | 'last-12-months' | 'ytd'
+type Period = 'last-3-months' | 'last-6-months' | 'last-12-months' | 'ytd' | 'custom'
 
 const PERIOD_OPTIONS: { value: Period; label: string }[] = [
   { value: 'last-3-months',  label: '3M' },
   { value: 'last-6-months',  label: '6M' },
   { value: 'last-12-months', label: '12M' },
   { value: 'ytd',            label: 'YTD' },
+  { value: 'custom',         label: 'Custom' },
 ]
 
 function fmt(value: number): string {
@@ -56,14 +57,23 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export function CashflowWidget() {
   const [period, setPeriod] = useState<Period>('last-6-months')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
   const [data, setData] = useState<CashflowPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // appliedRange is what actually drives the fetch — only updated when Apply is clicked for custom
+  const [appliedRange, setAppliedRange] = useState<{ period: Period; start?: string; end?: string }>({ period: 'last-6-months' })
+
   useEffect(() => {
+    if (appliedRange.period === 'custom' && (!appliedRange.start || !appliedRange.end)) return
     setLoading(true)
     setError(null)
-    fetch(`/api/widgets/cashflow?period=${period}`)
+    const url = appliedRange.period === 'custom'
+      ? `/api/widgets/cashflow?period=custom&start=${appliedRange.start}&end=${appliedRange.end}`
+      : `/api/widgets/cashflow?period=${appliedRange.period}`
+    fetch(url)
       .then((r) => r.json())
       .then((json) => {
         if (json.error) throw new Error(json.error)
@@ -71,7 +81,17 @@ export function CashflowWidget() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [period])
+  }, [appliedRange])
+
+  function handlePeriod(p: Period) {
+    setPeriod(p)
+    if (p !== 'custom') setAppliedRange({ period: p })
+  }
+
+  function applyCustomRange() {
+    if (!customStart || !customEnd) return
+    setAppliedRange({ period: 'custom', start: customStart, end: customEnd })
+  }
 
   // For the Y axis domain: include a small buffer above max and below min
   const allValues = data.flatMap((d) => [d.income, d.expenses, d.net])
@@ -94,7 +114,7 @@ export function CashflowWidget() {
           {PERIOD_OPTIONS.map(({ value, label }) => (
             <button
               key={value}
-              onClick={() => setPeriod(value)}
+              onClick={() => handlePeriod(value)}
               className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${
                 period === value
                   ? 'bg-[#3C3489] text-[#EEEDFE]'
@@ -106,6 +126,32 @@ export function CashflowWidget() {
           ))}
         </div>
       </div>
+
+      {/* Custom date range inputs */}
+      {period === 'custom' && (
+        <div className="flex items-center gap-2 mb-4">
+          <input
+            type="date"
+            value={customStart}
+            onChange={(e) => setCustomStart(e.target.value)}
+            className="text-xs border border-black/15 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+          />
+          <span className="text-xs text-muted-foreground">to</span>
+          <input
+            type="date"
+            value={customEnd}
+            onChange={(e) => setCustomEnd(e.target.value)}
+            className="text-xs border border-black/15 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+          />
+          <button
+            onClick={applyCustomRange}
+            disabled={!customStart || !customEnd}
+            className="px-3 py-1.5 text-xs rounded-lg bg-[#3C3489] text-white font-medium disabled:opacity-40 hover:bg-[#2e2870] transition-colors"
+          >
+            Apply
+          </button>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center h-[350px]">
