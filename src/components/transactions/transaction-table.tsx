@@ -196,6 +196,70 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [loading, setLoading] = useState(!initialRows)
 
+  // Date filter
+  type DatePreset = 'this-month' | 'last-month' | 'last-3-months' | 'last-6-months' | 'ytd'
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const datePickerRef = useRef<HTMLDivElement>(null)
+
+  // Close date picker on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
+        setShowDatePicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function applyPreset(preset: DatePreset) {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    let from: Date
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0) // end of current month
+    switch (preset) {
+      case 'this-month': from = new Date(now.getFullYear(), now.getMonth(), 1); break
+      case 'last-month': from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        to.setFullYear(now.getFullYear()); to.setMonth(now.getMonth()); to.setDate(0); break
+      case 'last-3-months': from = new Date(now.getFullYear(), now.getMonth() - 2, 1); break
+      case 'last-6-months': from = new Date(now.getFullYear(), now.getMonth() - 5, 1); break
+      case 'ytd': from = new Date(now.getFullYear(), 0, 1); break
+    }
+    setDateFrom(fmt(from))
+    setDateTo(fmt(to))
+    setPage(1)
+    setShowDatePicker(false)
+  }
+
+  function applyCustomDates() {
+    if (!customFrom && !customTo) return
+    setDateFrom(customFrom)
+    setDateTo(customTo)
+    setPage(1)
+    setShowDatePicker(false)
+  }
+
+  function clearDateFilter() {
+    setDateFrom('')
+    setDateTo('')
+    setCustomFrom('')
+    setCustomTo('')
+    setPage(1)
+  }
+
+  function dateFilterLabel() {
+    if (!dateFrom && !dateTo) return null
+    const fmt = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    if (dateFrom && dateTo) return `${fmt(dateFrom)} – ${fmt(dateTo)}`
+    if (dateFrom) return `From ${fmt(dateFrom)}`
+    return `Until ${fmt(dateTo)}`
+  }
+
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 400)
     return () => clearTimeout(t)
@@ -248,7 +312,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   // Fetch transactions
   const fetchTransactions = useCallback(() => {
     // Skip the initial fetch if we have server-provided data and nothing has changed
-    if (isFirstRender.current && initialRows && page === 1 && debouncedSearch === '' && sortBy === 'date' && sortDir === 'desc') {
+    if (isFirstRender.current && initialRows && page === 1 && debouncedSearch === '' && sortBy === 'date' && sortDir === 'desc' && !dateFrom && !dateTo) {
       isFirstRender.current = false
       return () => {}
     }
@@ -264,6 +328,8 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       sortBy,
       sortDir,
       ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
     })
 
     fetch(`/api/transactions?${params}`, { signal: controller.signal })
@@ -278,7 +344,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [page, pageSize, debouncedSearch, sortBy, sortDir])
+  }, [page, pageSize, debouncedSearch, sortBy, sortDir, dateFrom, dateTo])
 
   useEffect(() => {
     return fetchTransactions()
@@ -643,6 +709,85 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
             )}
           </div>
         )}
+        {/* Active date filter chip */}
+        {dateFilterLabel() && (
+          <span className="flex items-center gap-1 text-xs bg-[#EEEDFE] text-[#3C3489] border border-[#534AB7]/20 rounded-full px-2.5 py-1">
+            <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            {dateFilterLabel()}
+            <button onClick={clearDateFilter} className="ml-0.5 hover:opacity-70" aria-label="Clear date filter">✕</button>
+          </span>
+        )}
+
+        {/* Date filter button + dropdown */}
+        <div ref={datePickerRef} className="relative">
+          <button
+            onClick={() => setShowDatePicker((v) => !v)}
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+              dateFrom || dateTo
+                ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489]'
+                : 'border-black/10 text-muted-foreground hover:text-foreground'
+            }`}
+            aria-label="Filter by date"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Date
+          </button>
+
+          {showDatePicker && (
+            <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-black/10 rounded-lg shadow-lg w-56 p-3 space-y-3">
+              {/* Presets */}
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Quick select</p>
+                {([
+                  ['this-month', 'This month'],
+                  ['last-month', 'Last month'],
+                  ['last-3-months', 'Last 3 months'],
+                  ['last-6-months', 'Last 6 months'],
+                  ['ytd', 'Year to date'],
+                ] as const).map(([preset, label]) => (
+                  <button
+                    key={preset}
+                    onClick={() => applyPreset(preset)}
+                    className="w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-muted/60 transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom range */}
+              <div className="border-t border-black/5 pt-3 space-y-2">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Custom range</p>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="w-full text-xs border border-black/15 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                  placeholder="From"
+                />
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="w-full text-xs border border-black/15 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                  placeholder="To"
+                />
+                <button
+                  onClick={applyCustomDates}
+                  disabled={!customFrom && !customTo}
+                  className="w-full text-xs py-1.5 rounded-md bg-[#3C3489] text-[#EEEDFE] hover:bg-[#2d2770] disabled:opacity-40 transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="relative">
           <input
             type="search"

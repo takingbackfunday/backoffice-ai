@@ -16,6 +16,8 @@ export async function GET(request: Request) {
     const accountId = searchParams.get('accountId') ?? undefined
     const projectId = searchParams.get('projectId') ?? undefined
     const search = searchParams.get('search') ?? undefined
+    const dateFrom = searchParams.get('dateFrom') ?? undefined
+    const dateTo = searchParams.get('dateTo') ?? undefined
 
     const rawSortBy = searchParams.get('sortBy') ?? 'date'
     const sortBy: SortField = (SORT_FIELDS as readonly string[]).includes(rawSortBy)
@@ -27,6 +29,12 @@ export async function GET(request: Request) {
       account: { userId },
       ...(accountId ? { accountId } : {}),
       ...(projectId ? { projectId } : {}),
+      ...(dateFrom || dateTo ? {
+        date: {
+          ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+          ...(dateTo ? { lte: new Date(new Date(dateTo).setHours(23, 59, 59, 999)) } : {}),
+        },
+      } : {}),
       ...(search
         ? {
             OR: [
