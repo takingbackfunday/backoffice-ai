@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { resolveDateRange } from '@/lib/widgets/date-utils'
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
+import { format, startOfMonth } from 'date-fns'
 
 export interface CashflowPoint {
   label: string   // 'YYYY-MM'
@@ -20,6 +20,9 @@ export async function GET(request: Request) {
     const period = searchParams.get('period') ?? 'last-6-months'
     const customStart = searchParams.get('start')
     const customEnd = searchParams.get('end')
+    // comma-separated category names; empty/absent = all
+    const categoriesParam = searchParams.get('categories')
+    const categoryNames = categoriesParam ? categoriesParam.split(',').filter(Boolean) : []
 
     const dateRange = customStart && customEnd
       ? { type: 'static' as const, start: customStart, end: customEnd }
@@ -27,10 +30,31 @@ export async function GET(request: Request) {
 
     const { start, end } = resolveDateRange(dateRange)
 
+    // Build category filter if needed
+    let categoryFilter: object | undefined
+    if (categoryNames.length > 0) {
+      const hasUncategorized = categoryNames.includes('Uncategorized')
+      const namedCategories = categoryNames.filter((n) => n !== 'Uncategorized')
+
+      if (hasUncategorized && namedCategories.length > 0) {
+        categoryFilter = {
+          OR: [
+            { categoryId: null },
+            { categoryRef: { name: { in: namedCategories } } },
+          ],
+        }
+      } else if (hasUncategorized) {
+        categoryFilter = { categoryId: null }
+      } else {
+        categoryFilter = { categoryRef: { name: { in: namedCategories } } }
+      }
+    }
+
     const rows = await prisma.transaction.findMany({
       where: {
         account: { userId },
         date: { gte: start, lte: end },
+        ...categoryFilter,
       },
       select: { date: true, amount: true },
       orderBy: { date: 'asc' },
