@@ -11,6 +11,8 @@ interface SseEvent {
   reasoning?: string
   matchCount?: number
   error?: string
+  uncategorised?: number
+  noPayee?: number
 }
 
 interface RuleSuggestionRaw {
@@ -427,7 +429,7 @@ Rules:
           await new Promise((r) => setTimeout(r, 80))
         }
 
-        send({ type: 'done' })
+        send({ type: 'done', uncategorised: uncategorisedCount, noPayee: noPayeeCount })
       } catch (err) {
         send({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
       } finally {

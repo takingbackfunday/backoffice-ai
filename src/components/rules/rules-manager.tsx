@@ -43,8 +43,11 @@ function RuleCard({
   selected: boolean
   onSelect: () => void
 }) {
+  const defs = rule.conditions.all ?? rule.conditions.any ?? []
+  const joinWord = rule.conditions.any ? 'OR' : 'AND'
+
   return (
-    <div className={`rounded-lg border bg-white px-3 py-2 transition-opacity ${deleting ? 'opacity-30' : !rule.isActive ? 'opacity-50' : ''} ${selected ? 'border-primary/50 bg-blue-50/40' : ''}`}>
+    <div className={`border border-black/10 rounded-lg px-3.5 py-2.5 bg-white transition-opacity ${deleting ? 'opacity-30' : !rule.isActive ? 'opacity-50' : ''} ${selected ? 'border-[#534AB7]/30 bg-[#EEEDFE]/20' : ''}`}>
       <div className="flex items-center justify-between gap-3">
         <input
           type="checkbox"
@@ -53,22 +56,48 @@ function RuleCard({
           className="cursor-pointer shrink-0"
           aria-label={`Select rule ${rule.name}`}
         />
-        <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-medium text-foreground truncate">{conditionSummary(rule)}</p>
-          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs px-2 py-0.5">
-            <span className="text-blue-400">cat</span>
-            {rule.categoryRef?.name ?? rule.categoryName}
-          </span>
+
+        {/* Condition pills + arrow + action pills */}
+        <div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
+          {/* Conditions */}
+          {defs.map((c, i) => (
+            <span key={i} className="inline-flex items-center gap-0 flex-shrink-0">
+              {i > 0 && (
+                <span className="text-[11px] text-muted-foreground font-medium mx-1">{joinWord}</span>
+              )}
+              <span className="text-xs px-2 py-0.5 rounded bg-[#E6F1FB] text-[#0C447C]">
+                <span className="font-medium">{FIELD_LABELS[c.field] ?? c.field}</span>
+                {' '}{OPERATOR_LABELS[c.operator] ?? c.operator}{' '}
+                {Array.isArray(c.value) ? c.value.join(', ') : `"${c.value}"`}
+              </span>
+            </span>
+          ))}
+          {defs.length === 0 && (
+            <span className="text-xs text-muted-foreground">(no conditions)</span>
+          )}
+
+          {/* Arrow */}
+          <svg className="w-3.5 h-3.5 text-muted-foreground shrink-0 mx-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+
+          {/* Action pills */}
+          {(rule.categoryRef?.name ?? rule.categoryName) && (
+            <span className="text-xs px-2 py-0.5 rounded bg-[#EEEDFE]">
+              <span className="text-[#534AB7]/80">cat </span>
+              <span className="text-[#3C3489] font-medium">{rule.categoryRef?.name ?? rule.categoryName}</span>
+            </span>
+          )}
           {rule.payee && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-xs px-2 py-0.5">
-              <span className="text-violet-400">payee</span>
-              {rule.payee.name}
+            <span className="text-xs px-2 py-0.5 rounded bg-[#E1F5EE]">
+              <span className="text-[#0F6E56]/80">payee </span>
+              <span className="text-[#085041] font-medium">{rule.payee.name}</span>
             </span>
           )}
           {rule.project && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs px-2 py-0.5">
-              <span className="text-emerald-400">proj</span>
-              {rule.project.name}
+            <span className="text-xs px-2 py-0.5 rounded bg-[#FEF3E2]">
+              <span className="text-amber-600/80">proj </span>
+              <span className="text-amber-800 font-medium">{rule.project.name}</span>
             </span>
           )}
         </div>
@@ -77,9 +106,9 @@ function RuleCard({
           <span className="text-xs text-muted-foreground tabular-nums">#{rule.priority}</span>
 
           <button onClick={onToggle} disabled={toggling}
-            className={`relative inline-flex h-5 w-9 rounded-full transition-colors disabled:opacity-50 ${rule.isActive ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+            className={`relative inline-flex h-[18px] w-8 rounded-full transition-colors disabled:opacity-50 ${rule.isActive ? 'bg-[#085041]' : 'bg-gray-200'}`}
             aria-label={rule.isActive ? 'Disable rule' : 'Enable rule'}>
-            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform mt-0.5 ${rule.isActive ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform mt-[2px] ${rule.isActive ? 'translate-x-[14px]' : 'translate-x-[2px]'}`} />
           </button>
 
           <button onClick={onEdit}
@@ -133,9 +162,11 @@ export function RulesManager({
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<{ updated: number; total: number } | null>(null)
   const [showAgent, setShowAgent] = useState(false)
+  const [agentFinishedSummary, setAgentFinishedSummary] = useState<{ uncategorised: number; noPayee: number } | null>(null)
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     // Skip fetch if data was passed from the server
@@ -153,6 +184,15 @@ export function RulesManager({
     }).catch(() => setError('Failed to load'))
       .finally(() => setLoading(false))
   }, [initialRules])
+
+  // Auto-dismiss agent banner after 8s
+  useEffect(() => {
+    if (agentFinishedSummary) {
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current)
+      bannerTimerRef.current = setTimeout(() => setAgentFinishedSummary(null), 8000)
+    }
+    return () => { if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current) }
+  }, [agentFinishedSummary])
 
   async function toggleActive(rule: UserRule) {
     setTogglingId(rule.id)
@@ -224,6 +264,13 @@ export function RulesManager({
     setEditingRule(undefined)
   }
 
+  function handleAgentClose(summary?: { uncategorised: number; noPayee: number }) {
+    setShowAgent(false)
+    if (summary) {
+      setAgentFinishedSummary(summary)
+    }
+  }
+
   const filteredRules = query.trim()
     ? rules.filter((rule) => {
         const q = query.toLowerCase()
@@ -279,14 +326,24 @@ export function RulesManager({
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="font-semibold text-base">Your rules</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <h2 className="text-xl font-medium">Your rules</h2>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
             Rules run automatically on every import. Apply them retroactively to existing transactions below.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Agent finished banner */}
+          {agentFinishedSummary && (
+            <div className="flex items-center gap-2 text-[12px] bg-[#E1F5EE] text-[#085041] rounded-lg px-3 py-1.5">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Rules agent finished — {agentFinishedSummary.uncategorised} uncategorised &amp; {agentFinishedSummary.noPayee} unmatched-payee analysed</span>
+              <button onClick={() => setAgentFinishedSummary(null)} className="ml-1 hover:opacity-70 leading-none">✕</button>
+            </div>
+          )}
           {applyResult && (
             <span className="text-xs text-muted-foreground">
               Updated {applyResult.updated} of {applyResult.total} transactions
@@ -295,20 +352,20 @@ export function RulesManager({
           <button
             onClick={applyAllRules}
             disabled={applying || rules.filter((r) => r.isActive).length === 0}
-            className="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50 transition-colors"
+            className="rounded-md border border-black/20 px-3 py-1.5 text-sm text-[#666] hover:bg-muted disabled:opacity-50 transition-colors"
           >
             {applying ? 'Applying…' : 'Apply all rules'}
           </button>
           <button
             onClick={() => setShowAgent((v) => !v)}
-            className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-100 transition-colors"
+            className="text-[13px] text-[#534AB7] hover:underline"
           >
-            {showAgent ? 'Hide agent' : 'Engage rules agent'}
+            {showAgent ? 'Hide agent' : 'Run rules agent'}
           </button>
           {!showEditor && (
             <button
               onClick={openNewEditor}
-              className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="rounded-md bg-[#3C3489] px-4 py-1.5 text-sm font-medium text-[#EEEDFE] hover:bg-[#2d2770] transition-colors"
               data-testid="new-rule-btn"
             >
               + New rule
@@ -319,13 +376,18 @@ export function RulesManager({
 
       {/* Search */}
       {rules.length > 0 && (
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search rules by condition, category, payee, project…"
-          className="w-full rounded-md border px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
+          </svg>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search rules by condition, category, payee, project…"
+            className="w-full pl-8 pr-3 py-2 text-[13px] border border-black/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+          />
+        </div>
       )}
 
       {/* Agent panel */}
@@ -335,7 +397,7 @@ export function RulesManager({
           payees={payees}
           projects={projects}
           onRuleAccepted={(rule) => setRules((prev) => [rule as UserRule, ...prev])}
-          onClose={() => setShowAgent(false)}
+          onClose={handleAgentClose}
           onApplyComplete={handleApplyComplete}
         />
       )}
@@ -364,7 +426,7 @@ export function RulesManager({
 
       {/* Rule cards */}
       {rules.length > 0 && (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-1">
           {/* Select-all + bulk toolbar */}
           <div className="flex items-center gap-3 px-1 text-xs">
             <input
@@ -397,12 +459,12 @@ export function RulesManager({
                 </>
               )
             ) : (
-              <span className="text-muted-foreground">{filteredRules.length} rule{filteredRules.length !== 1 ? 's' : ''}</span>
+              <span className="text-[12px] text-muted-foreground">{filteredRules.length} rule{filteredRules.length !== 1 ? 's' : ''}</span>
             )}
           </div>
 
           {filteredRules.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No rules match "{query}"</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No rules match &quot;{query}&quot;</p>
           )}
           {filteredRules.map((rule) => (
             <RuleCard

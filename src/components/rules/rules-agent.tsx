@@ -25,7 +25,7 @@ interface RulesAgentProps {
   payees: Payee[]
   projects: Project[]
   onRuleAccepted: (rule: unknown) => void
-  onClose: () => void
+  onClose: (summary?: { uncategorised: number; noPayee: number }) => void
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
 }
 
@@ -131,6 +131,7 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
   const [thinkingIdx, setThinkingIdx] = useState(0)
   const [suggestions, setSuggestions] = useState<AgentSuggestion[]>([])
   const [dismissed, setDismissed] = useState<Set<number>>(new Set())
+  const [doneSummary, setDoneSummary] = useState<{ uncategorised: number; noPayee: number } | undefined>(undefined)
   const esRef = useRef<EventSource | null>(null)
   const thinkingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -177,6 +178,9 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
         ])
       } else if (event.type === 'done') {
         setStatus('done')
+        if (event.uncategorised !== undefined && event.noPayee !== undefined) {
+          setDoneSummary({ uncategorised: event.uncategorised, noPayee: event.noPayee })
+        }
         es.close()
       } else if (event.type === 'error') {
         setStatusMessages((prev) => [...prev, `Error: ${event.error}`])
@@ -209,7 +213,7 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-sm">Rules Agent</h3>
         <button
-          onClick={onClose}
+          onClick={() => onClose(doneSummary)}
           className="text-muted-foreground hover:text-foreground text-lg leading-none px-1"
           aria-label="Close agent panel"
         >
@@ -277,13 +281,19 @@ export function RulesAgent({ categoryGroups, payees, projects, onRuleAccepted, o
           )}
 
           {status === 'done' && visibleCount === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-2">All suggestions handled.</p>
+            <div className="text-center py-2 space-y-2">
+              <p className="text-sm text-muted-foreground">All suggestions handled.</p>
+              <button onClick={() => onClose(doneSummary)} className="text-xs text-[#534AB7] hover:underline">Close panel</button>
+            </div>
           )}
         </div>
       )}
 
       {status === 'done' && suggestions.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-2">No new rule suggestions found.</p>
+        <div className="text-center py-2 space-y-2">
+          <p className="text-sm text-muted-foreground">No new rule suggestions found.</p>
+          <button onClick={() => onClose(doneSummary)} className="text-xs text-[#534AB7] hover:underline">Close panel</button>
+        </div>
       )}
     </div>
   )
