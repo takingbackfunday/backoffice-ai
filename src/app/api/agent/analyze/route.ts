@@ -132,7 +132,7 @@ Write 3–5 tight bullet observations + a 1-line action recommendation. No fluff
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt },
             ],
-            'anthropic/claude-sonnet-4-5'
+            'minimax/minimax-m2.7'
           )
         } finally {
           clearInterval(keepAlive)

@@ -122,7 +122,7 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
         const MAX_QUERIES = 2  // hard cap on query_transactions / search_transactions calls
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4-5')
+          const response = await openrouterWithTools(messages, RULES_TOOLS, 'minimax/minimax-m2.7')
 
           // Push assistant message
           messages.push({

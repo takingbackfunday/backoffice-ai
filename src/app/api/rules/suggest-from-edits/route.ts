@@ -113,7 +113,7 @@ export async function POST(request: Request) {
 
     for (let round = 0; round < MAX_ROUNDS && !finished; round++) {
       console.log(`[suggest-from-edits] round ${round + 1}/${MAX_ROUNDS}`)
-      const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4-5')
+      const response = await openrouterWithTools(messages, RULES_TOOLS, 'minimax/minimax-m2.7')
 
       const toolNames = response.tool_calls?.map((tc) => tc.function.name) ?? []
       console.log(`[suggest-from-edits] round ${round + 1} tools:`, toolNames.length ? toolNames : '(none — finished)')
