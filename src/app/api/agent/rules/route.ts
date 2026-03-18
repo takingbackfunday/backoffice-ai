@@ -123,7 +123,7 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
 
         const userMessage = `${snapshot}
 
---- AVAILABLE CATEGORIES ---
+--- AVAILABLE CATEGORIES (use ONLY these exact names) ---
 ${catsData}
 
 --- EXISTING PAYEES (reuse exact spelling if the merchant matches) ---
@@ -135,7 +135,12 @@ ${uncatData}
 --- TRANSACTIONS WITH CATEGORY BUT NO PAYEE (assign payee rules) ---
 ${noPayeeData}
 
-Now emit all rule suggestions using emit_rule_suggestion. For every suggestion where the merchant is identifiable (use world knowledge), set payeeName. Then call finish_analysis.`
+Instructions:
+1. Call record_plan with your strategy (which merchants → which category from the list above)
+2. Emit rule suggestions using emit_rule_suggestion — categoryName must be copied VERBATIM from the AVAILABLE CATEGORIES list above
+3. For every suggestion where the merchant is identifiable (use world knowledge), set payeeName
+4. If emit_rule_suggestion returns "Rejected", fix the issue described and resubmit
+5. Call finish_analysis when done`
 
         const messages: ChatMessage[] = [
           { role: 'system', content: SYSTEM_PROMPT },
@@ -143,11 +148,13 @@ Now emit all rule suggestions using emit_rule_suggestion. For every suggestion w
         ]
 
         let finished = false
-        let everEmitted = false  // true once any emit_rule_suggestion has been called
+        let everEmitted = false  // true once any emit_rule_suggestion succeeds
         let emitCount = 0
         const MAX_EMITS = 20
         let queryCount = 0
         const MAX_QUERIES = 2  // hard cap on query_transactions / search_transactions calls
+        let consecutiveRejections = 0
+        const MAX_CONSECUTIVE_REJECTIONS = 5
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           console.log(`[rules-agent] round ${round + 1}, messages:`, messages.length, 'last role:', messages[messages.length-1]?.role)
@@ -206,6 +213,10 @@ Now emit all rule suggestions using emit_rule_suggestion. For every suggestion w
               result = `Error: ${e instanceof Error ? e.message : String(e)}`
             }
 
+            if (toolName === 'emit_rule_suggestion' && result.startsWith('Rejected')) {
+              console.log(`[rules-agent] rejection:`, result, '| args:', JSON.stringify(args).slice(0, 200))
+            }
+
             messages.push({
               role: 'tool',
               tool_call_id: tc.id,
@@ -213,8 +224,19 @@ Now emit all rule suggestions using emit_rule_suggestion. For every suggestion w
             })
 
             if (toolName === 'emit_rule_suggestion') {
-              emitCount++
-              if (emitCount >= MAX_EMITS) { finished = true; break }
+              // Only count successful emits (not rejections) toward the cap
+              if (result.startsWith('Emitted:')) {
+                emitCount++
+                consecutiveRejections = 0
+                if (emitCount >= MAX_EMITS) { finished = true; break }
+              } else {
+                consecutiveRejections++
+                if (consecutiveRejections >= MAX_CONSECUTIVE_REJECTIONS) {
+                  console.log('[rules-agent] too many consecutive rejections, stopping')
+                  finished = true
+                  break
+                }
+              }
             }
 
             if (result === 'FINISH_ANALYSIS') {
@@ -224,7 +246,8 @@ Now emit all rule suggestions using emit_rule_suggestion. For every suggestion w
           }
 
           if (finished) break
-          if (roundHasEmit) everEmitted = true
+          // Only set everEmitted if at least one successful emit happened this round
+          if (roundHasEmit && emitCount > 0) everEmitted = true
         }
 
         // ── Step 4: done ──────────────────────────────────────────────────
