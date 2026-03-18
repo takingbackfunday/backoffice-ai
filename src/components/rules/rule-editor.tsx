@@ -550,7 +550,8 @@ export function RuleEditor({
       })
       const json = await res.json()
       if (!res.ok || json.error) { setError(json.error ?? 'Failed to save rule'); return }
-      const shouldApply = applyAfterSaveRef.current
+      // Always apply after an update; only apply after create if user clicked "Save & apply"
+      const shouldApply = isEdit || applyAfterSaveRef.current
       onSave(json.data)
       if (shouldApply) {
         fetch('/api/rules/apply', { method: 'POST' })
@@ -653,7 +654,7 @@ export function RuleEditor({
           <button type="submit" disabled={saving}
             onClick={() => { applyAfterSaveRef.current = false }}
             className="rounded-lg border border-black/20 text-[#555] px-4 py-1.5 text-[13px] disabled:opacity-50 hover:bg-muted">
-            {saving ? 'Saving…' : (saveLabel ?? (editingRule ? 'Update rule' : 'Save rule'))}
+            {saving ? 'Saving…' : (saveLabel ?? (editingRule ? 'Update & apply' : 'Save rule'))}
           </button>
           <button type="button" onClick={onCancel}
             className="text-[#999] px-3 py-1.5 text-[13px] hover:text-[#555]">
