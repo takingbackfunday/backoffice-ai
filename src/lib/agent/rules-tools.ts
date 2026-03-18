@@ -272,6 +272,16 @@ export async function emit_rule_suggestion(
   const hasNonAmount = defs.some((d) => d.field !== 'amount')
   if (!hasNonAmount) return 'Rejected: must have at least one non-amount condition. Add a description or payeeName condition alongside the amount condition and resubmit.'
 
+  // Reject overly short/generic description contains values
+  for (const def of defs) {
+    if (def.field === 'description' && def.operator === 'contains') {
+      const val = String(def.value).trim()
+      if (val.length < 5) {
+        return `Rejected: description contains value "${val}" is too short (min 5 characters) and would match unrelated transactions. Use a more specific keyword (e.g. the merchant name or a distinctive phrase) and resubmit.`
+      }
+    }
+  }
+
   // Validate category exists
   const categoryId = ctx.categoryMap.get(args.categoryName.toLowerCase()) ?? null
   if (!categoryId) {
