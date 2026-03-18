@@ -24,14 +24,14 @@ export function BarChartWidget({ data, seriesKeys, config }: Props) {
       <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
         {config.showGrid && <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />}
         <XAxis dataKey="label" fontSize={11} tickLine={false} axisLine={false} tick={{ fill: '#6b7280' }} />
-        <YAxis fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatAmount} tick={{ fill: '#6b7280' }} width={56} />
+        <YAxis fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatAmount} tick={{ fill: '#6b7280' }} width={64} />
         {config.showTooltip && (
           <Tooltip
             formatter={(v) => [formatAmount(Number(v)), '']}
             contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
           />
         )}
-        {config.showLegend && <Legend wrapperStyle={{ fontSize: 12 }} />}
+        {config.showLegend && <Legend wrapperStyle={{ fontSize: 9 }} />}
         {seriesKeys.map((key, i) => (
           <Bar
             key={key}

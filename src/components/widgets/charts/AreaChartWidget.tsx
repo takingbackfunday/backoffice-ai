@@ -24,7 +24,7 @@ export function AreaChartWidget({ data, seriesKeys, config }: Props) {
       <AreaChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
         {config.showGrid && <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />}
         <XAxis dataKey="label" fontSize={11} tickLine={false} axisLine={false} tick={{ fill: '#6b7280' }} />
-        <YAxis fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatAmount} tick={{ fill: '#6b7280' }} width={56} />
+        <YAxis fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatAmount} tick={{ fill: '#6b7280' }} width={64} />
         {config.showTooltip && (
           <Tooltip
             formatter={(v) => [formatAmount(Number(v)), '']}

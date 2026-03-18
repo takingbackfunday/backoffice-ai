@@ -426,7 +426,7 @@ export function CashflowWidget() {
               axisLine={false}
               tickFormatter={fmt}
               tick={{ fill: '#6b7280' }}
-              width={56}
+              width={64}
               domain={[yMin, yMax]}
             />
             <Tooltip content={<CustomTooltip />} />
