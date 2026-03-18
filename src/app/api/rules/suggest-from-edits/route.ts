@@ -52,9 +52,11 @@ export async function POST(request: Request) {
     }
 
     const { edits } = parsed.data
+    console.log(`[suggest-from-edits] userId=${userId} edits=${edits.length}`, edits.map(e => `"${e.description}" → ${e.categoryName ?? '(none)'}`))
 
     // Pre-load context (transactions, category/payee maps, existing rules)
     const preloaded = await loadRulesContext(userId)
+    console.log(`[suggest-from-edits] context loaded: ${preloaded.transactions.length} txns, ${preloaded.categoryMap.size} categories, ${preloaded.payeeMap.size} payees`)
 
     type CollectedSuggestion = {
       conditions: { all?: object[]; any?: object[] }
@@ -110,7 +112,11 @@ export async function POST(request: Request) {
     const MAX_ROUNDS = 6
 
     for (let round = 0; round < MAX_ROUNDS && !finished; round++) {
+      console.log(`[suggest-from-edits] round ${round + 1}/${MAX_ROUNDS}`)
       const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4-5')
+
+      const toolNames = response.tool_calls?.map((tc) => tc.function.name) ?? []
+      console.log(`[suggest-from-edits] round ${round + 1} tools:`, toolNames.length ? toolNames : '(none — finished)')
 
       messages.push({
         role: 'assistant',
@@ -137,6 +143,7 @@ export async function POST(request: Request) {
         // Block data-fetch tools — this prompt should only use category/rules lookups + emit
         if (toolName === 'query_transactions' || toolName === 'search_transactions' ||
             toolName === 'get_uncategorised_transactions' || toolName === 'get_no_payee_transactions') {
+          console.log(`[suggest-from-edits] blocked tool: ${toolName}`)
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
@@ -152,6 +159,8 @@ export async function POST(request: Request) {
           result = `Error: ${e instanceof Error ? e.message : String(e)}`
         }
 
+        console.log(`[suggest-from-edits] tool ${toolName} → ${result.slice(0, 120)}`)
+
         messages.push({ role: 'tool', tool_call_id: tc.id, content: result })
 
         if (result === 'FINISH_ANALYSIS') {
@@ -160,6 +169,8 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    console.log(`[suggest-from-edits] collected ${collectedSuggestions.length} suggestions`)
 
     if (collectedSuggestions.length === 0) {
       return ok({ count: 0, suggestions: [] })
@@ -187,9 +198,10 @@ export async function POST(request: Request) {
       )
     )
 
+    console.log(`[suggest-from-edits] saved ${saved.length} suggestions to DB`)
     return ok({ count: saved.length, suggestions: saved })
   } catch (err) {
-    console.error('[suggest-from-edits]', err)
+    console.error('[suggest-from-edits] ERROR:', err)
     return serverError('Failed to generate suggestions')
   }
 }

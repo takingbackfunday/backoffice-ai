@@ -380,7 +380,6 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   // Maps txn id → latest row snapshot after a successful edit
   const editQueueRef = useRef<Map<string, TransactionWithRelations>>(new Map())
   const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [suggestionPending, setSuggestionPending] = useState(false)
   const [suggestionReady, setSuggestionReady] = useState(false)
 
   const pageSize = 200
@@ -512,40 +511,53 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       })
       if (!res.ok) throw new Error('patch failed')
 
-      // Queue this edit for deferred rule suggestion generation
-      // Get the latest row from localRows after optimistic update
-      const updatedRow = localRows.find((r) => r.id === id)
-      if (updatedRow) {
-        editQueueRef.current.set(id, updatedRow)
+      // Queue this edit for deferred rule suggestion generation.
+      // Build the edit snapshot from patchBody + existing row so we capture
+      // the values that were actually saved, not the pre-patch state.
+      const allCats = categoryGroups.flatMap((g) => g.categories)
+      const resolvedCatName =
+        field === 'categoryId'
+          ? (allCats.find((c) => c.id === rawValue)?.name ?? null)
+          : field === 'category'
+          ? (rawValue ?? null)
+          : (row.categoryRef?.name ?? (row as unknown as Record<string, unknown>).category as string ?? null)
+      const resolvedPayeeName =
+        field === 'payeeId'
+          ? (freshPayee?.name ?? payees.find((p) => p.id === rawValue)?.name ?? null)
+          : (row.payee?.name ?? null)
+
+      const editSnapshot = {
+        id: row.id,
+        description: field === 'description' ? (rawValue ?? row.description) : row.description,
+        payeeName: resolvedPayeeName,
+        categoryId: field === 'categoryId' ? rawValue : (row.categoryId ?? null),
+        categoryName: resolvedCatName,
+        amount: Number(row.amount),
       }
-      // Reset 30-second debounce
+      editQueueRef.current.set(id, editSnapshot as unknown as TransactionWithRelations)
+
+      // Reset 30-second debounce — no UI shown until suggestions are actually ready
       if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
-      setSuggestionPending(true)
       setSuggestionReady(false)
       suggestionTimerRef.current = setTimeout(() => {
         const queue = editQueueRef.current
         if (queue.size === 0) return
-        const edits = Array.from(queue.values())
+        const snapshots = Array.from(queue.values()) as unknown as typeof editSnapshot[]
         editQueueRef.current = new Map()
-        setSuggestionPending(false)
 
-        const payload = edits.map((tx) => ({
-          id: tx.id,
-          description: tx.description,
-          payeeName: tx.payee?.name ?? null,
-          categoryId: tx.categoryId ?? null,
-          categoryName: tx.categoryRef?.name ?? (tx as unknown as Record<string, unknown>).category as string ?? null,
-          amount: Number(tx.amount),
-        }))
+        console.log('[suggest-from-edits] firing for', snapshots.length, 'edits', snapshots)
 
         fetch('/api/rules/suggest-from-edits', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ edits: payload }),
+          body: JSON.stringify({ edits: snapshots }),
         })
           .then((r) => r.json())
-          .then((j) => { if (!j.error && j.data?.count > 0) setSuggestionReady(true) })
-          .catch(() => {})
+          .then((j) => {
+            console.log('[suggest-from-edits] response:', j)
+            if (!j.error && j.data?.count > 0) setSuggestionReady(true)
+          })
+          .catch((e) => console.error('[suggest-from-edits] fetch error:', e))
       }, 30000)
     } catch {
       // Revert on error
@@ -856,25 +868,16 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
 
-      {/* Rule suggestion notification */}
-      {(suggestionPending || suggestionReady) && (
+      {/* Rule suggestion notification — only shown when suggestions are ready */}
+      {suggestionReady && (
         <div className="flex items-center gap-2.5 rounded-lg border border-[#534AB7]/20 bg-[#EEEDFE]/60 px-4 py-2.5 text-xs text-[#3C3489]">
-          {suggestionPending ? (
-            <>
-              <span className="inline-block w-2 h-2 rounded-full bg-[#534AB7] animate-pulse shrink-0" />
-              <span>Analysing your edits for rule suggestions…</span>
-            </>
-          ) : (
-            <>
-              <span>💡</span>
-              <span>New rule suggestions are ready.</span>
-              <a href="/rules" className="font-medium underline underline-offset-2 hover:text-[#2d2770]">
-                View on Rules page
-              </a>
-            </>
-          )}
+          <span>💡</span>
+          <span>New rule suggestions are ready based on your recent edits.</span>
+          <a href="/rules" className="font-medium underline underline-offset-2 hover:text-[#2d2770]">
+            View on Rules page
+          </a>
           <button
-            onClick={() => { setSuggestionPending(false); setSuggestionReady(false) }}
+            onClick={() => setSuggestionReady(false)}
             className="ml-auto text-[#534AB7]/60 hover:text-[#534AB7] leading-none"
             aria-label="Dismiss"
           >✕</button>
