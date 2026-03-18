@@ -251,6 +251,28 @@ Instructions:
         }
 
         // ── Step 4: done ──────────────────────────────────────────────────
+        console.log('[rules-agent] ── FULL CONVERSATION DUMP ──')
+        for (const msg of messages) {
+          const m = msg as Record<string, unknown>
+          const role = m.role as string
+          const tcs = m.tool_calls as { id: string; function: { name: string; arguments: string } }[] | undefined
+          if (role === 'system') {
+            console.log(`[${role}] (system prompt — ${String(m.content).length} chars)`)
+          } else if (role === 'user' && !m.tool_call_id) {
+            console.log(`[${role}] (initial user message — ${String(m.content).length} chars)`)
+          } else if (role === 'tool') {
+            console.log(`[tool result | id:${m.tool_call_id}] ${String(m.content).slice(0, 300)}`)
+          } else if (tcs && tcs.length > 0) {
+            for (const tc of tcs) {
+              console.log(`[assistant → ${tc.function.name}] ${tc.function.arguments.slice(0, 300)}`)
+            }
+            if (m.content) console.log(`[assistant text] ${String(m.content).slice(0, 200)}`)
+          } else {
+            console.log(`[${role}] ${String(m.content).slice(0, 300)}`)
+          }
+        }
+        console.log('[rules-agent] ── END DUMP ──')
+
         send({ type: 'done', uncategorised: uncatCount, noPayee: noPayeeCount })
         // Small delay so the done event flushes before the stream closes
         await new Promise((r) => setTimeout(r, 200))
