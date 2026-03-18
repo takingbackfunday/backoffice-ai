@@ -171,9 +171,29 @@ export async function get_uncategorised_transactions(
     return true
   }).slice(0, 20)
 
-  const lines = sorted.map(([name, v]) =>
-    `  name:"${name}" | matchField:${v.matchField} | count:${v.count} | total:${v.totalAmount.toFixed(2)} | samples:${v.samples.join('; ')}`
-  )
+  // Collect all unique raw descriptions per group (up to 8) so the agent
+  // can spot description variants and choose the right match condition
+  const groupDescriptions = new Map<string, Set<string>>()
+  for (const tx of uncategorised) {
+    let key: string
+    if (tx.payeeName) {
+      key = tx.payeeName
+    } else {
+      const words = tx.description.trim().split(/\s+/)
+      const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
+      const twoWords = words.slice(0, 2).join(' ')
+      key = twoWords.length >= 6 ? twoWords : firstMeaningful
+    }
+    if (!key || key.length < 2) continue
+    if (!groupDescriptions.has(key)) groupDescriptions.set(key, new Set())
+    const set = groupDescriptions.get(key)!
+    if (set.size < 8) set.add(tx.description.slice(0, 80))
+  }
+
+  const lines = sorted.map(([name, v]) => {
+    const descs = [...(groupDescriptions.get(name) ?? [])].join(' | ')
+    return `  name:"${name}" | matchField:${v.matchField} | count:${v.count} | total:${v.totalAmount.toFixed(2)} | descriptions: ${descs}`
+  })
 
   let result = `${sorted.length} uncategorised groups, sorted by absolute spend descending (min count: ${minCount}):\nname | matchField | count | total_spend | samples\n${lines.join('\n')}`
   if (uniqueSingletons.length) {
@@ -241,19 +261,20 @@ export async function emit_rule_suggestion(
 ): Promise<string> {
   // Validate shape
   if (!args.conditions || (!args.conditions.all && !args.conditions.any)) {
-    return 'Rejected: conditions must have "all" or "any" array.'
+    return 'Rejected: conditions must have "all" or "any" array. Fix the conditions structure and resubmit.'
   }
   const defs = args.conditions.all ?? args.conditions.any ?? []
-  if (!defs.length) return 'Rejected: conditions array is empty.'
+  if (!defs.length) return 'Rejected: conditions array is empty. Add at least one condition (description contains / payeeName equals) and resubmit.'
 
   // Reject amount-only conditions
   const hasNonAmount = defs.some((d) => d.field !== 'amount')
-  if (!hasNonAmount) return 'Rejected: must have at least one non-amount condition (description or payeeName).'
+  if (!hasNonAmount) return 'Rejected: must have at least one non-amount condition. Add a description or payeeName condition alongside the amount condition and resubmit.'
 
   // Validate category exists
   const categoryId = ctx.categoryMap.get(args.categoryName.toLowerCase()) ?? null
   if (!categoryId) {
-    return `Rejected: category "${args.categoryName}" not found. Call get_categories to see available category names.`
+    const available = [...ctx.categoryMap.keys()].slice(0, 10).join(', ')
+    return `Rejected: category "${args.categoryName}" not found. Available categories (sample): ${available}. Fix the categoryName to exactly match one of these and resubmit.`
   }
 
   // Resolve payeeId (may be null if payee doesn't exist yet — that's OK)
@@ -274,12 +295,12 @@ export async function emit_rule_suggestion(
   const totalMatched = matchedIds.size
 
   if (totalMatched > 0 && (overlapExisting + overlapRun) / totalMatched > 0.5) {
-    return `Rejected: >50% overlap with existing rules or prior suggestions this run (${overlapExisting + overlapRun}/${totalMatched} transactions already covered). If you have no more new suggestions, call finish_analysis.`
+    return `Rejected: >50% overlap with existing rules or prior suggestions this run (${overlapExisting + overlapRun}/${totalMatched} already covered). Try a more specific condition to target the uncovered transactions, or skip this merchant and continue with others.`
   }
 
   // Medium-confidence suggestions with 0 matches are still allowed (singletons with description drift)
   if (matchCount === 0 && args.confidence !== 'medium') {
-    return 'Rejected: 0 transactions matched and confidence is not medium. Refine conditions or lower confidence.'
+    return 'Rejected: 0 transactions matched. Either (a) broaden the condition (use "contains" instead of "equals", or use a shorter keyword), (b) set confidence to "medium" if you are reasoning from world knowledge, or (c) skip this one.'
   }
 
   // Mark as covered
@@ -366,6 +387,18 @@ export async function loadRulesContext(userId: string): Promise<{
   return { transactions: txSnapshots, categoryMap, payeeMap, existingRuleConditions, coveredByExisting }
 }
 
+export async function record_plan(
+  _userId: string,
+  args: { summary: string },
+  ctx: RulesContext
+): Promise<string> {
+  if (!args.summary || typeof args.summary !== 'string') {
+    return 'Rejected: summary is required.'
+  }
+  ctx.send({ type: 'status', message: `Plan: ${args.summary.slice(0, 200)}` })
+  return 'Plan recorded.'
+}
+
 // ── Dispatcher ────────────────────────────────────────────────────────────────
 
 export async function dispatchRulesTool(
@@ -382,6 +415,8 @@ export async function dispatchRulesTool(
       return get_no_payee_transactions(userId, a as { topN?: number }, ctx)
     case 'emit_rule_suggestion':
       return emit_rule_suggestion(userId, a as Parameters<typeof emit_rule_suggestion>[1], ctx)
+    case 'record_plan':
+      return record_plan(userId, a as { summary: string }, ctx)
     case 'finish_analysis':
       return 'FINISH_ANALYSIS'
     default:
@@ -514,6 +549,25 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'record_plan',
+      description:
+        'Record your analysis strategy before emitting suggestions. Call this FIRST, before any emit_rule_suggestion calls. Describe which patterns you identified and how you plan to categorise them. This is shown to the user as a status message.',
+      parameters: {
+        type: 'object',
+        required: ['summary'],
+        properties: {
+          summary: {
+            type: 'string',
+            description:
+              'Brief (1-3 sentence) plan: which merchant/pattern groups you spotted, which categories they map to, and any payees you will assign. Example: "Found 6 Wayfair charges → Household. 4 Uber → Transport (payee: Uber). 3 AWS → Software (payee: Amazon Web Services). Checking rules first to avoid duplicates."',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'finish_analysis',
       description:
         'Call this when you have finished emitting all rule suggestions. Signals the server to close the stream.',
@@ -525,5 +579,5 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
   },
 ]
 
-// All 18 tools: 14 finance + 4 rules
+// All 19 tools: 14 finance + 5 rules
 export const RULES_TOOLS: ToolDefinition[] = [...FINANCE_TOOLS, ...RULES_ONLY_TOOLS]

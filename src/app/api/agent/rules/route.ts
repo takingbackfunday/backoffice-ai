@@ -24,14 +24,15 @@ All core data is pre-loaded in the user message (uncategorised transactions, cat
 
 Workflow:
 1. Read the pre-loaded data carefully
-2. Optionally use get_rules ONCE to check existing rule coverage and avoid duplicating them
-3. Optionally use search_transactions or query_transactions (max 2 calls total) to investigate a specific ambiguous pattern
-4. Emit all suggestions via emit_rule_suggestion
-5. Call finish_analysis
+2. Call record_plan ONCE with your strategy: which merchant/pattern groups you spotted, which categories they map to, which payees you will assign
+3. Optionally use get_rules ONCE to check existing rule coverage and avoid duplicating them
+4. Optionally use search_transactions or query_transactions (max 2 calls total) to investigate a specific ambiguous pattern
+5. Emit all suggestions via emit_rule_suggestion (if a suggestion is rejected, read the rejection reason and resubmit with a fix)
+6. Call finish_analysis
 
 PAYEE ASSIGNMENT — CRITICAL:
 - ALWAYS set payeeName on every suggestion where the merchant/counterparty is identifiable
-- Use your world knowledge aggressively: "Wayfair", "Zalando", "Stripe", "Github", etc. are recognisable merchants — set them as payee even if not in the existing payees list
+- Use your world knowledge aggressively: "Wayfair", "Zalando", "Stripe", "Github", "Netflix", "Spotify", "Uber", "Amazon", "AWS", etc. are recognisable merchants — set them as payee even if not in the existing payees list
 - If the transaction description or existing payeeName on the group clearly identifies the merchant, use it
 - Only leave payeeName null if the counterparty is genuinely ambiguous (e.g. "Bank transfer ref 12345")
 - Check the existing payees list — if the payee already exists there, use the exact same spelling
@@ -42,7 +43,7 @@ RULE QUALITY:
 - 2+ matching transactions = high confidence; 1 = medium
 - 1 sentence reasoning referencing the specific pattern observed
 - Aim for 5–20 suggestions prioritised by financial impact (highest absolute spend first)
-- Do NOT loop back to investigate after emitting — emit all at once then finish`
+- When emit_rule_suggestion returns a rejection, READ the reason and immediately resubmit with the corrected suggestion — do NOT skip it`
 
 const MAX_TOOL_ROUNDS = 12
 

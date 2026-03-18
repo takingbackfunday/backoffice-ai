@@ -28,8 +28,9 @@ const SYSTEM_PROMPT = `You are a financial categorisation assistant. A user just
 Workflow (STRICT — follow this order):
 1. Call get_categories ONCE to confirm exact category names
 2. Optionally call get_rules ONCE to avoid duplicating existing rules
-3. Emit suggestions using emit_rule_suggestion for each clear pattern
-4. Call finish_analysis immediately after your last suggestion
+3. Call record_plan ONCE with your strategy before emitting
+4. Emit suggestions using emit_rule_suggestion for each clear pattern (if rejected, read the reason and resubmit with a fix)
+5. Call finish_analysis immediately after your last suggestion
 
 CRITICAL constraints:
 - Base suggestions ONLY on the patterns visible in the provided edits
