@@ -8,6 +8,7 @@ import {
   type RulesSseEvent,
   type RulesContext,
 } from '@/lib/agent/rules-tools'
+import { dispatchTool } from '@/lib/agent/finance-tools'
 
 // ── SSE helper ────────────────────────────────────────────────────────────────
 
@@ -17,28 +18,31 @@ function encode(event: RulesSseEvent): Uint8Array {
 
 // ── System prompt ──────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a financial categorisation assistant. Analyse the user's transactions and suggest automation rules using the tools provided.
+const SYSTEM_PROMPT = `You are an expert financial categorisation assistant. Your job is to analyse the user's transaction data and suggest high-quality automation rules.
 
-The initial data snapshot (uncategorised transactions, categories, no-payee transactions) is already provided in the user message — you do NOT need to call get_uncategorised_transactions, get_categories, or get_no_payee_transactions to start.
+All core data is pre-loaded in the user message (uncategorised transactions, categories, existing payees, no-payee transactions). Do NOT re-fetch this data.
 
 Workflow:
-1. Analyse the pre-loaded data already in the prompt
-2. Use get_rules ONCE if you want to check existing coverage
-3. Use query_transactions or search_transactions (max 2 calls total) ONLY if you need to investigate a specific pattern more deeply
-4. Emit ALL your suggestions by calling emit_rule_suggestion for each clear pattern
-5. Call finish_analysis immediately after your last suggestion
+1. Read the pre-loaded data carefully
+2. Optionally use get_rules ONCE to check existing rule coverage and avoid duplicating them
+3. Optionally use search_transactions or query_transactions (max 2 calls total) to investigate a specific ambiguous pattern
+4. Emit all suggestions via emit_rule_suggestion
+5. Call finish_analysis
 
-CRITICAL constraints:
-- Do NOT call get_uncategorised_transactions, get_categories, or get_no_payee_transactions — this data is already in the prompt
-- Do NOT loop back to investigate after emitting — emit all at once then finish
-- Never use amount as the only condition — always use description or payeeName
-- categoryName must exactly match one of the category names provided
-- Each suggestion covers distinct transactions (emit_rule_suggestion will reject duplicates)
-- 2+ matching transactions required for high confidence; 1 acceptable for medium
-- reasoning is 1 sentence
-- Aim for 5–20 high-quality suggestions, not quantity
-- Prioritise patterns from the last 18 months; include older patterns only if they recur frequently
-- Prioritise by financial impact (highest absolute spend first) — a single large uncategorised vendor matters more than many small ones`
+PAYEE ASSIGNMENT — CRITICAL:
+- ALWAYS set payeeName on every suggestion where the merchant/counterparty is identifiable
+- Use your world knowledge aggressively: "Wayfair", "Zalando", "Stripe", "Github", etc. are recognisable merchants — set them as payee even if not in the existing payees list
+- If the transaction description or existing payeeName on the group clearly identifies the merchant, use it
+- Only leave payeeName null if the counterparty is genuinely ambiguous (e.g. "Bank transfer ref 12345")
+- Check the existing payees list — if the payee already exists there, use the exact same spelling
+
+RULE QUALITY:
+- categoryName must exactly match one of the provided category names (case-insensitive)
+- Prefer description contains over payeeName equals for more robust matching
+- 2+ matching transactions = high confidence; 1 = medium
+- 1 sentence reasoning referencing the specific pattern observed
+- Aim for 5–20 suggestions prioritised by financial impact (highest absolute spend first)
+- Do NOT loop back to investigate after emitting — emit all at once then finish`
 
 const MAX_TOOL_ROUNDS = 12
 
@@ -105,12 +109,12 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
         }
 
         // Pre-fetch all data the LLM would normally call tools to get.
-        // Injecting it directly means the LLM only needs ONE round (emit + finish).
         send({ type: 'status', message: 'Fetching transaction data…' })
-        const [uncatData, catsData, noPayeeData] = await Promise.all([
-          dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 20 }, ctx),
+        const [uncatData, catsData, noPayeeData, payeesData] = await Promise.all([
+          dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 25 }, ctx),
           dispatchRulesTool(userId, 'get_categories', {}, ctx),
-          dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 15 }, ctx),
+          dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 20 }, ctx),
+          dispatchTool(userId, 'get_payees', {}),
         ])
 
         // ── Step 3: single LLM round to emit suggestions ──────────────────
@@ -118,16 +122,19 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
 
         const userMessage = `${snapshot}
 
---- UNCATEGORISED TRANSACTIONS ---
-${uncatData}
-
 --- AVAILABLE CATEGORIES ---
 ${catsData}
 
---- TRANSACTIONS WITH CATEGORY BUT NO PAYEE ---
+--- EXISTING PAYEES (reuse exact spelling if the merchant matches) ---
+${payeesData}
+
+--- UNCATEGORISED TRANSACTIONS (top 25 by spend) ---
+${uncatData}
+
+--- TRANSACTIONS WITH CATEGORY BUT NO PAYEE (assign payee rules) ---
 ${noPayeeData}
 
-Now emit all rule suggestions using emit_rule_suggestion, then call finish_analysis.`
+Now emit all rule suggestions using emit_rule_suggestion. For every suggestion where the merchant is identifiable (use world knowledge), set payeeName. Then call finish_analysis.`
 
         const messages: ChatMessage[] = [
           { role: 'system', content: SYSTEM_PROMPT },

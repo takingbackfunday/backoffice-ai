@@ -495,7 +495,7 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
           payeeName: {
             type: ['string', 'null'],
             description:
-              'Payee name to assign. Set to the real-world merchant name if identifiable, otherwise null.',
+              'Payee name to assign. ALWAYS set this using world knowledge when the merchant is identifiable (e.g. "Wayfair", "Zalando", "GitHub", "Stripe", "AWS"). Check existing payees list first and reuse exact spelling if matched. Only null if the counterparty is genuinely ambiguous.',
           },
           confidence: {
             type: 'string',
