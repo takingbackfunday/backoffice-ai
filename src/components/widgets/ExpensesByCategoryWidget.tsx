@@ -69,7 +69,7 @@ function CategoryFilterDropdown({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+        className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border transition-colors ${
           selected.size > 0 && selected.size < allNames.length
             ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489]'
             : 'border-black/10 text-muted-foreground hover:text-foreground'
@@ -294,12 +294,12 @@ export function ExpensesByCategoryWidget() {
   }
 
   return (
-    <div className="rounded-lg border bg-white p-5">
+    <div className="rounded-lg border bg-white p-4">
       {/* Header row */}
       <div className="flex items-center justify-between mb-4 gap-4">
         <div>
-          <h3 className="text-sm font-medium text-foreground">Expenses by category</h3>
-          <p className="text-[12px] text-muted-foreground mt-0.5">Monthly spending breakdown</p>
+          <h3 className="text-xs font-medium text-foreground">Expenses by category</h3>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Monthly spending breakdown</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -318,7 +318,7 @@ export function ExpensesByCategoryWidget() {
               <button
                 key={value}
                 onClick={() => setPeriod(value)}
-                className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${
+                className={`px-2 py-0.5 text-[11px] rounded-md font-medium transition-colors ${
                   activePeriod === value
                     ? 'bg-[#3C3489] text-[#EEEDFE]'
                     : 'text-muted-foreground hover:text-foreground'
@@ -334,7 +334,7 @@ export function ExpensesByCategoryWidget() {
             onClick={toggleLock}
             disabled={saving}
             title={locked ? 'Filters locked — click to unlock' : 'Lock current filters'}
-            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
+            className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border transition-colors disabled:opacity-50 ${
               locked
                 ? 'border-[#085041]/30 bg-[#E1F5EE] text-[#085041] hover:bg-[#d0efe5]'
                 : 'border-black/10 text-muted-foreground hover:text-foreground hover:border-black/20'
