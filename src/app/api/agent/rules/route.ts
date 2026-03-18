@@ -253,7 +253,7 @@ Instructions:
         // ── Step 4: done ──────────────────────────────────────────────────
         console.log('[rules-agent] ── FULL CONVERSATION DUMP ──')
         for (const msg of messages) {
-          const m = msg as Record<string, unknown>
+          const m = msg as unknown as Record<string, unknown>
           const role = m.role as string
           const tcs = m.tool_calls as { id: string; function: { name: string; arguments: string } }[] | undefined
           if (role === 'system') {
