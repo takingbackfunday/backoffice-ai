@@ -55,7 +55,7 @@ export async function openrouterChat(
   return json.choices[0].message.content as string
 }
 
-// ── Tool-use completion ────────────────────────────────────────────────────────
+// ── Tool-use completion (streaming to avoid serverless timeouts) ──────────────
 
 export async function openrouterWithTools(
   messages: ChatMessage[],
@@ -74,6 +74,7 @@ export async function openrouterWithTools(
       tools,
       tool_choice: 'auto',
       max_tokens: 4096,
+      stream: true,
     }),
   })
 
@@ -82,12 +83,66 @@ export async function openrouterWithTools(
     throw new Error(`OpenRouter ${res.status}: ${text}`)
   }
 
-  const json = await res.json()
-  console.log('[openrouterWithTools] raw response:', JSON.stringify(json).slice(0, 2000))
-  const choice = json.choices[0]
+  // Accumulate streamed SSE chunks into a final ChatResponse
+  let content = ''
+  let finish_reason = 'stop'
+  // tool_calls indexed by index
+  const toolCallMap: Record<number, { id: string; type: string; function: { name: string; arguments: string } }> = {}
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      if (data === '[DONE]') break
+
+      let chunk: Record<string, unknown>
+      try { chunk = JSON.parse(data) } catch { continue }
+
+      const choice = (chunk.choices as { delta?: Record<string, unknown>; finish_reason?: string }[] | undefined)?.[0]
+      if (!choice) continue
+
+      if (choice.finish_reason) finish_reason = choice.finish_reason
+
+      const delta = choice.delta ?? {}
+
+      if (typeof delta.content === 'string') content += delta.content
+
+      const deltaToolCalls = delta.tool_calls as { index: number; id?: string; type?: string; function?: { name?: string; arguments?: string } }[] | undefined
+      if (deltaToolCalls) {
+        for (const tc of deltaToolCalls) {
+          const i = tc.index
+          if (!toolCallMap[i]) {
+            toolCallMap[i] = { id: tc.id ?? '', type: tc.type ?? 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
+          } else {
+            if (tc.id) toolCallMap[i].id = tc.id
+            if (tc.function?.name) toolCallMap[i].function.name += tc.function.name
+          }
+          if (tc.function?.arguments) toolCallMap[i].function.arguments += tc.function.arguments
+        }
+      }
+    }
+  }
+
+  const tool_calls = Object.keys(toolCallMap).length > 0
+    ? Object.values(toolCallMap) as ToolCall[]
+    : null
+
+  console.log('[openrouterWithTools] finish_reason:', finish_reason, 'tool_calls:', tool_calls?.map(t => t.function.name))
+
   return {
-    content: choice.message.content ?? null,
-    tool_calls: choice.message.tool_calls ?? null,
-    finish_reason: choice.finish_reason,
+    content: content || null,
+    tool_calls,
+    finish_reason,
   }
 }
