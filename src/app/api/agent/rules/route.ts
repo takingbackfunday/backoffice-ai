@@ -203,6 +203,7 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
         // Small delay so the done event flushes before the stream closes
         await new Promise((r) => setTimeout(r, 200))
       } catch (err) {
+        console.error('[rules-agent] error:', err)
         send({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
       } finally {
         clearInterval(keepAlive)

@@ -83,6 +83,7 @@ export async function openrouterWithTools(
   }
 
   const json = await res.json()
+  console.log('[openrouterWithTools] raw response:', JSON.stringify(json).slice(0, 500))
   const choice = json.choices[0]
   return {
     content: choice.message.content ?? null,
