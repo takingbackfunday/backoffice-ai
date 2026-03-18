@@ -266,42 +266,7 @@ Instructions:
         }
 
         // ── Step 4: done ──────────────────────────────────────────────────
-        console.log('\n[rules-agent] ════════════════════════════════════════')
-        console.log('[rules-agent] FULL CONVERSATION DUMP')
-        console.log('[rules-agent] ════════════════════════════════════════\n')
-        for (let i = 0; i < messages.length; i++) {
-          const m = messages[i] as unknown as Record<string, unknown>
-          const role = m.role as string
-          const tcs = m.tool_calls as { id: string; function: { name: string; arguments: string } }[] | undefined
-          console.log(`\n[rules-agent] ── msg[${i}] role=${role} ──`)
-          if (role === 'system') {
-            // Print full system prompt
-            console.log(String(m.content))
-          } else if (role === 'user') {
-            // Print full user message (includes all pre-loaded data)
-            console.log(String(m.content))
-          } else if (role === 'tool') {
-            // Print full tool result
-            console.log(`tool_call_id: ${m.tool_call_id}`)
-            console.log(String(m.content))
-          } else if (role === 'assistant') {
-            if (m.content) console.log(`text: ${String(m.content)}`)
-            if (tcs && tcs.length > 0) {
-              for (const tc of tcs) {
-                console.log(`\ntool_call id=${tc.id} name=${tc.function.name}`)
-                // Pretty-print tool call arguments
-                try {
-                  console.log(JSON.stringify(JSON.parse(tc.function.arguments), null, 2))
-                } catch {
-                  console.log(tc.function.arguments)
-                }
-              }
-            }
-          }
-        }
-        console.log('\n[rules-agent] ════════════════════════════════════════')
-        console.log('[rules-agent] END DUMP')
-        console.log('[rules-agent] ════════════════════════════════════════\n')
+        console.log(`[rules-agent] done — ${emitCount} suggestions emitted in ${messages.length} messages`)
 
         send({ type: 'done', uncategorised: uncatCount, noPayee: noPayeeCount })
         // Small delay so the done event flushes before the stream closes
