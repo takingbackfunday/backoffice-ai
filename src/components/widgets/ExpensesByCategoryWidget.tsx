@@ -85,7 +85,7 @@ function CategoryFilterDropdown({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-black/10 rounded-lg shadow-lg w-56 py-1 max-h-72 overflow-y-auto">
+        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-black/10 rounded-lg shadow-lg w-56 py-1 max-h-72 overflow-y-auto">
           <button
             onClick={toggleAll}
             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/50 text-left"
@@ -296,14 +296,11 @@ export function ExpensesByCategoryWidget() {
 
   return (
     <div className="rounded-lg border bg-white p-4">
-      {/* Header row */}
-      <div className="flex items-center justify-between mb-3 gap-4">
-        <div>
-          <h3 className="text-xs font-medium text-foreground">Expenses by category</h3>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Monthly spending breakdown</p>
-        </div>
-
-        <div className="flex items-center gap-2">
+      {/* Header */}
+      <div className="mb-3">
+        <h3 className="text-xs font-medium text-foreground">Expenses by category</h3>
+        <p className="text-[10px] text-muted-foreground mt-0.5">Monthly spending breakdown</p>
+        <div className="flex items-center gap-2 mt-2">
           {/* Period pills */}
           <div className="flex items-center gap-1 rounded-lg border border-black/10 p-0.5">
             {PERIOD_OPTIONS.map(({ value, label }) => (
