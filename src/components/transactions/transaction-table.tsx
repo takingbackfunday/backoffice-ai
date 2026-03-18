@@ -126,6 +126,35 @@ function CategoryCell({
   )
 }
 
+// ── Floating toast: rule suggestions ready ────────────────────────
+function SuggestionToast({ onDismiss }: { onDismiss: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 8000)
+    return () => clearTimeout(t)
+  }, [onDismiss])
+
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-[#534AB7]/20 bg-white shadow-lg px-4 py-3 text-xs text-[#3C3489] max-w-xs">
+      <span className="text-base">💡</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium leading-tight">Rule suggestions ready</p>
+        <p className="text-[#534AB7]/70 mt-0.5 leading-tight">Based on your recent edits.</p>
+      </div>
+      <a
+        href="/rules"
+        className="shrink-0 rounded-md bg-[#534AB7] px-2.5 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors"
+      >
+        View
+      </a>
+      <button
+        onClick={onDismiss}
+        className="shrink-0 text-[#534AB7]/50 hover:text-[#534AB7] leading-none"
+        aria-label="Dismiss"
+      >✕</button>
+    </div>
+  )
+}
+
 // ── Inline payee combobox (type to filter or create new) ──────────
 function PayeeCell({
   value,
@@ -534,7 +563,10 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
         categoryName: resolvedCatName,
         amount: Number(row.amount),
       }
-      editQueueRef.current.set(id, editSnapshot as unknown as TransactionWithRelations)
+      // Merge into existing snapshot so multiple edits to the same row accumulate
+      const existing = editQueueRef.current.get(id) as unknown as typeof editSnapshot | undefined
+      const merged = existing ? { ...existing, ...editSnapshot } : editSnapshot
+      editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
 
       // Reset 30-second debounce — no UI shown until suggestions are actually ready
       if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
@@ -868,20 +900,9 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
 
-      {/* Rule suggestion notification — only shown when suggestions are ready */}
+      {/* Rule suggestion floating toast — fixed bottom-right, auto-dismisses */}
       {suggestionReady && (
-        <div className="flex items-center gap-2.5 rounded-lg border border-[#534AB7]/20 bg-[#EEEDFE]/60 px-4 py-2.5 text-xs text-[#3C3489]">
-          <span>💡</span>
-          <span>New rule suggestions are ready based on your recent edits.</span>
-          <a href="/rules" className="font-medium underline underline-offset-2 hover:text-[#2d2770]">
-            View on Rules page
-          </a>
-          <button
-            onClick={() => setSuggestionReady(false)}
-            className="ml-auto text-[#534AB7]/60 hover:text-[#534AB7] leading-none"
-            aria-label="Dismiss"
-          >✕</button>
-        </div>
+        <SuggestionToast onDismiss={() => setSuggestionReady(false)} />
       )}
 
       {/* Table */}
