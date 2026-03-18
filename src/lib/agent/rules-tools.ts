@@ -33,8 +33,8 @@ export type RuleImpact = 'low' | 'medium' | 'high'
 // high if: many transactions OR large dollar volume
 // low only if: few transactions AND small dollar volume
 export function computeImpact(matchCount: number, totalAbsAmount: number): RuleImpact {
-  if (matchCount > 20 || totalAbsAmount > 2000) return 'high'
-  if (matchCount <= 5 && totalAbsAmount <= 500) return 'low'
+  if (matchCount > 20 || totalAbsAmount > 700) return 'high'
+  if (matchCount <= 5 && totalAbsAmount <= 100) return 'low'
   return 'medium'
 }
 
