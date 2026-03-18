@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/header'
 import { DashboardAnalyzer } from '@/components/dashboard/dashboard-analyzer'
 import { ExpensesByCategoryWidget } from '@/components/widgets/ExpensesByCategoryWidget'
 import { CashflowWidget } from '@/components/widgets/CashflowWidget'
+import { NetWorthWidget } from '@/components/widgets/NetWorthWidget'
 import { FinanceQA } from '@/components/dashboard/finance-qa'
 
 export default async function DashboardPage() {
@@ -21,6 +22,7 @@ export default async function DashboardPage() {
             <ExpensesByCategoryWidget />
             <CashflowWidget />
           </div>
+          <NetWorthWidget />
           <FinanceQA />
           <DashboardAnalyzer />
         </main>

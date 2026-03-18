@@ -1,0 +1,79 @@
+import { auth } from '@clerk/nextjs/server'
+import { prisma } from '@/lib/prisma'
+import { ok, unauthorized, serverError } from '@/lib/api-response'
+import { resolveDateRange } from '@/lib/widgets/date-utils'
+import { format, startOfMonth } from 'date-fns'
+
+export interface NetWorthPoint {
+  label: string    // 'YYYY-MM'
+  netWorth: number // cumulative running total up to this month
+}
+
+export async function GET(request: Request) {
+  try {
+    const { userId } = await auth()
+    if (!userId) return unauthorized()
+
+    const { searchParams } = new URL(request.url)
+    const period = searchParams.get('period') ?? 'all-time'
+    const customStart = searchParams.get('start')
+    const customEnd = searchParams.get('end')
+
+    const dateRange = customStart && customEnd
+      ? { type: 'static' as const, start: customStart, end: customEnd }
+      : { type: 'live' as const, period: period as 'last-3-months' | 'last-6-months' | 'last-12-months' | 'ytd' | 'all-time' }
+
+    const { start, end } = resolveDateRange(dateRange)
+
+    // Fetch ALL transactions (no date filter) — needed for correct cumulative totals
+    const rows = await prisma.transaction.findMany({
+      where: { account: { userId } },
+      select: { date: true, amount: true },
+      orderBy: { date: 'asc' },
+    })
+
+    // Group by month bucket
+    const buckets = new Map<string, number>()
+    for (const row of rows) {
+      const key = format(new Date(row.date), 'yyyy-MM')
+      buckets.set(key, (buckets.get(key) ?? 0) + Number(row.amount))
+    }
+
+    // Compute cumulative running total across all months
+    const sortedMonths = [...buckets.keys()].sort()
+    const cumulative = new Map<string, number>()
+    let running = 0
+    for (const month of sortedMonths) {
+      running += buckets.get(month)!
+      cumulative.set(month, Math.round(running * 100) / 100)
+    }
+
+    // Pre-populate window months so there are no gaps in the returned range
+    const windowMonths: string[] = []
+    let cursor = startOfMonth(start)
+    while (cursor <= end) {
+      windowMonths.push(format(cursor, 'yyyy-MM'))
+      cursor = startOfMonth(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
+    }
+
+    // For months in window with no transactions, carry forward the last known cumulative value
+    let lastKnown = 0
+    // Find the cumulative value just before the window starts
+    for (const month of sortedMonths) {
+      if (month < windowMonths[0]) lastKnown = cumulative.get(month) ?? lastKnown
+      else break
+    }
+
+    const data: NetWorthPoint[] = windowMonths.map((label) => {
+      if (cumulative.has(label)) {
+        lastKnown = cumulative.get(label)!
+      }
+      return { label, netWorth: lastKnown }
+    })
+
+    return ok(data)
+  } catch (err) {
+    console.error('[GET /api/widgets/networth]', err)
+    return serverError('Failed to fetch net worth data')
+  }
+}
