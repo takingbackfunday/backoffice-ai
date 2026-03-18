@@ -122,6 +122,7 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
         const MAX_QUERIES = 2  // hard cap on query_transactions / search_transactions calls
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          console.log(`[rules-agent] round ${round + 1}, messages:`, messages.length, 'last role:', messages[messages.length-1]?.role)
           const response = await openrouterWithTools(messages, RULES_TOOLS, 'minimax/minimax-m2.7')
 
           // Push assistant message
@@ -203,7 +204,7 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
         // Small delay so the done event flushes before the stream closes
         await new Promise((r) => setTimeout(r, 200))
       } catch (err) {
-        console.error('[rules-agent] error:', err)
+        console.error('[rules-agent] error:', err instanceof Error ? err.stack : err)
         send({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
       } finally {
         clearInterval(keepAlive)
