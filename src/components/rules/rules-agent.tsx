@@ -16,8 +16,10 @@ export interface AgentSuggestion {
   payeeName: string | null
   payeeId: string | null
   confidence: 'high' | 'medium'
+  impact: 'low' | 'medium' | 'high'
   reasoning: string
   matchCount: number
+  autoAccepted?: boolean
 }
 
 interface RulesAgentProps {
@@ -52,6 +54,32 @@ function suggestionToRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): 
     conditions: s.conditions,
     isActive: true,
   }
+}
+
+// ── Auto-accept helper ────────────────────────────────────────────────────────
+
+async function saveRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): Promise<UserRule | null> {
+  const rule = suggestionToRule(s, categoryGroups)
+  const res = await fetch('/api/rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: `${s.categoryName}${s.payeeName ? ` — ${s.payeeName}` : ''} (auto)`,
+      priority: 50,
+      conditions: s.conditions,
+      categoryId: rule.categoryId,
+      categoryName: rule.categoryName,
+      payeeName: s.payeeName ?? undefined,
+      isActive: true,
+    }),
+  })
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data ?? null
+}
+
+function shouldAutoAccept(s: AgentSuggestion): boolean {
+  return s.confidence === 'high' && s.impact !== 'high'
 }
 
 // ── SuggestionCard ─────────────────────────────────────────────────────────────
@@ -138,6 +166,8 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
   const [doneSummary, setDoneSummary] = useState<{ uncategorised: number; noPayee: number } | undefined>(undefined)
   const esRef = useRef<EventSource | null>(null)
   const thinkingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const categoryGroupsRef = useRef<CategoryGroup[]>(categoryGroups)
+  useEffect(() => { categoryGroupsRef.current = categoryGroups }, [categoryGroups])
 
   useEffect(() => {
     if (status === 'running') {
@@ -167,19 +197,30 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
         setStatusMessages((prev) => [...prev, event.message])
       } else if (event.type === 'suggestion') {
         const rule = event.rule
-        setSuggestions((prev) => [
-          ...prev,
-          {
-            conditions: rule.conditions,
-            categoryName: rule.categoryName,
-            categoryId: rule.categoryId,
-            payeeName: rule.payeeName,
-            payeeId: rule.payeeId,
-            confidence: rule.confidence,
-            reasoning: rule.reasoning,
-            matchCount: event.matchCount ?? 0,
-          },
-        ])
+        const suggestion: AgentSuggestion = {
+          conditions: rule.conditions,
+          categoryName: rule.categoryName,
+          categoryId: rule.categoryId,
+          payeeName: rule.payeeName,
+          payeeId: rule.payeeId,
+          confidence: rule.confidence,
+          impact: rule.impact ?? 'low',
+          reasoning: rule.reasoning,
+          matchCount: event.matchCount ?? 0,
+        }
+        if (shouldAutoAccept(suggestion)) {
+          saveRule(suggestion, categoryGroupsRef.current).then((saved) => {
+            if (saved) {
+              onRuleAccepted(saved)
+              setSuggestions((prev) => [...prev, { ...suggestion, autoAccepted: true }])
+            } else {
+              // fallback: show card for manual review if save failed
+              setSuggestions((prev) => [...prev, suggestion])
+            }
+          })
+        } else {
+          setSuggestions((prev) => [...prev, suggestion])
+        }
       } else if (event.type === 'done') {
         setStatus('done')
         if (event.uncategorised !== undefined && event.noPayee !== undefined) {
@@ -214,7 +255,8 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
     setDismissed((prev) => new Set(prev).add(i))
   }
 
-  const visibleCount = suggestions.filter((_, i) => !dismissed.has(i)).length
+  const autoAcceptedCount = suggestions.filter((s) => s.autoAccepted).length
+  const visibleCount = suggestions.filter((s, i) => !s.autoAccepted && !dismissed.has(i)).length
 
   return (
     <div className="rounded-lg border bg-muted/10 p-4 space-y-4">
@@ -280,12 +322,38 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
       {/* Suggestions */}
       {suggestions.length > 0 && (
         <div className="border-t pt-3 space-y-4">
-          {visibleCount > 0 && (
-            <p className="text-xs text-muted-foreground">{visibleCount} suggestion{visibleCount !== 1 ? 's' : ''} — edit any before accepting</p>
+          {(visibleCount > 0 || autoAcceptedCount > 0) && (
+            <div className="flex items-center gap-3">
+              {autoAcceptedCount > 0 && (
+                <span className="text-[11px] bg-[#E1F5EE] text-[#0F6E56] px-2 py-0.5 rounded-full font-medium">
+                  {autoAcceptedCount} auto-accepted
+                </span>
+              )}
+              {visibleCount > 0 && (
+                <p className="text-xs text-muted-foreground">{visibleCount} need{visibleCount === 1 ? 's' : ''} review</p>
+              )}
+            </div>
+          )}
+
+          {/* Auto-accepted compact list */}
+          {suggestions.some((s) => s.autoAccepted) && (
+            <div className="space-y-1">
+              {suggestions.filter((s) => s.autoAccepted).map((s, i) => (
+                <div key={`auto-${i}`} className="flex items-center gap-2 text-[11px] text-[#0F6E56] bg-[#E1F5EE]/60 rounded px-2.5 py-1.5">
+                  <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="font-medium">{s.categoryName}{s.payeeName ? ` — ${s.payeeName}` : ''}</span>
+                  <span className="text-[#0F6E56]/60">·</span>
+                  <span className="text-[#0F6E56]/70">{s.reasoning}</span>
+                  <span className="ml-auto text-[#0F6E56]/50 tabular-nums shrink-0">~{s.matchCount} txns</span>
+                </div>
+              ))}
+            </div>
           )}
 
           {suggestions.map((s, i) =>
-            dismissed.has(i) ? null : (
+            s.autoAccepted || dismissed.has(i) ? null : (
               <SuggestionCard
                 key={i}
                 suggestion={s}

@@ -28,6 +28,14 @@ export interface RulesContext {
   coveredThisRun: Set<string>
 }
 
+export type RuleImpact = 'low' | 'medium' | 'high'
+
+export function computeImpact(matchCount: number): RuleImpact {
+  if (matchCount <= 5) return 'low'
+  if (matchCount <= 20) return 'medium'
+  return 'high'
+}
+
 export interface RulesSseEvent {
   type: 'status' | 'suggestion' | 'done' | 'error'
   message?: string
@@ -38,6 +46,7 @@ export interface RulesSseEvent {
     payeeName: string | null
     payeeId: string | null
     confidence: 'high' | 'medium'
+    impact: RuleImpact
     reasoning: string
   }
   reasoning?: string
@@ -273,6 +282,8 @@ export async function emit_rule_suggestion(
   // Mark as covered
   newIds.forEach((id) => ctx.coveredThisRun.add(id))
 
+  const impact = computeImpact(matchCount)
+
   // Stream suggestion
   ctx.send({
     type: 'suggestion',
@@ -283,6 +294,7 @@ export async function emit_rule_suggestion(
       payeeName: args.payeeName ?? null,
       payeeId,
       confidence: args.confidence,
+      impact,
       reasoning: args.reasoning,
     },
     reasoning: args.reasoning,
