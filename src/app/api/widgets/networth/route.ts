@@ -18,6 +18,8 @@ export async function GET(request: Request) {
     const period = searchParams.get('period') ?? 'all-time'
     const customStart = searchParams.get('start')
     const customEnd = searchParams.get('end')
+    const categoriesParam = searchParams.get('categories')
+    const categoryNames = categoriesParam ? categoriesParam.split(',').filter(Boolean) : []
 
     const dateRange = customStart && customEnd
       ? { type: 'static' as const, start: customStart, end: customEnd }
@@ -25,9 +27,32 @@ export async function GET(request: Request) {
 
     const { start, end } = resolveDateRange(dateRange)
 
+    // Build category filter if needed
+    let categoryFilter: object | undefined
+    if (categoryNames.length > 0) {
+      const hasUncategorized = categoryNames.includes('Uncategorized')
+      const namedCategories = categoryNames.filter((n) => n !== 'Uncategorized')
+
+      if (hasUncategorized && namedCategories.length > 0) {
+        categoryFilter = {
+          OR: [
+            { categoryId: null },
+            { categoryRef: { name: { in: namedCategories } } },
+          ],
+        }
+      } else if (hasUncategorized) {
+        categoryFilter = { categoryId: null }
+      } else {
+        categoryFilter = { categoryRef: { name: { in: namedCategories } } }
+      }
+    }
+
     // Fetch ALL transactions (no date filter) — needed for correct cumulative totals
     const rows = await prisma.transaction.findMany({
-      where: { account: { userId } },
+      where: {
+        account: { userId },
+        ...categoryFilter,
+      },
       select: { date: true, amount: true },
       orderBy: { date: 'asc' },
     })
@@ -58,7 +83,6 @@ export async function GET(request: Request) {
 
     // For months in window with no transactions, carry forward the last known cumulative value
     let lastKnown = 0
-    // Find the cumulative value just before the window starts
     for (const month of sortedMonths) {
       if (month < windowMonths[0]) lastKnown = cumulative.get(month) ?? lastKnown
       else break
