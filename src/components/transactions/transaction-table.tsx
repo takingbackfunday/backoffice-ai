@@ -224,7 +224,7 @@ function PayeeCell({
       {open && (filtered.length > 0 || showCreate) && (
         <ul
           ref={listRef}
-          className="absolute z-50 mt-0.5 w-full rounded border border-black/10 bg-white shadow-md text-xs max-h-44 overflow-y-auto"
+          className="absolute z-50 mt-0.5 w-full rounded border border-black/10 bg-white shadow-md text-[10px] max-h-44 overflow-y-auto"
         >
           {filtered.map((p) => (
             <li
@@ -268,7 +268,7 @@ function SortHeader({
   const active = sortBy === field
   return (
     <th
-      className={`px-3 py-1.5 text-left font-medium cursor-pointer select-none whitespace-nowrap hover:bg-muted/80 ${className}`}
+      className={`px-3 py-1 text-left font-medium cursor-pointer select-none whitespace-nowrap hover:bg-muted/80 ${className}`}
       onClick={() => onSort(field)}
       aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
@@ -684,7 +684,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     }
 
     const cellClass = [
-      'px-3 py-1 cursor-pointer',
+      'px-3 py-0.5 cursor-pointer',
       isSaving ? 'opacity-50' : '',
       hasError ? 'ring-1 ring-inset ring-red-400 rounded' : '',
       field === 'amount' ? 'text-right font-mono' : '',
@@ -695,7 +695,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     if (isEditing) {
       if (field === 'projectId') {
         return (
-          <td key={field} className="px-3 py-1 min-w-[120px]">
+          <td key={field} className="px-3 py-0.5 min-w-[120px]">
             <ProjectCell
               value={row.projectId ?? null}
               projects={projects}
@@ -708,7 +708,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
       if (field === 'categoryId') {
         return (
-          <td key={field} className="px-3 py-1 min-w-[160px]">
+          <td key={field} className="px-3 py-0.5 min-w-[160px]">
             <CategoryCell
               value={row.categoryId ?? null}
               groups={categoryGroups}
@@ -721,7 +721,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
       if (field === 'payeeId') {
         return (
-          <td key={field} className="px-3 py-1 min-w-[140px]">
+          <td key={field} className="px-3 py-0.5 min-w-[140px]">
             <PayeeCell
               value={row.payeeId ?? null}
               payees={payees}
@@ -739,7 +739,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
           : (row[field as keyof TransactionWithRelations] as string | null) ?? ''
 
       return (
-        <td key={field} className="px-3 py-1 min-w-[100px]">
+        <td key={field} className="px-3 py-0.5 min-w-[100px]">
           <TextCell
             value={rawVal as string}
             type={field === 'amount' ? 'number' : 'text'}
@@ -759,7 +759,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
         data-testid={`cell-${field}`}
       >
         {field === 'categoryId' ? (
-          <span className={displayValue !== '—' ? 'text-xs rounded-full bg-blue-100 text-blue-700 px-2 py-0.5' : ''}>
+          <span className={displayValue !== '—' ? 'text-[10px] rounded-full bg-blue-100 text-blue-700 px-1.5 py-px max-w-[120px] truncate block' : ''}>
             {displayValue}
           </span>
         ) : (
@@ -1026,7 +1026,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
           <thead className="bg-muted text-[10px] uppercase tracking-wide">
             <tr>
               {/* Checkbox */}
-              <th className="px-3 py-1.5 w-8">
+              <th className="px-3 py-1 w-8">
                 <input
                   type="checkbox"
                   checked={allChecked}
@@ -1038,13 +1038,13 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                 />
               </th>
               <SortHeader label="Date" field="date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <th className="px-3 py-1.5 text-left font-medium">Account</th>
+              <th className="px-3 py-1 text-left font-medium">Account</th>
               <SortHeader label="Description" field="description" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <SortHeader label="Amount" field="amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="text-right" />
-              <th className="px-3 py-1.5 text-left font-medium">Payee</th>
-              <th className="px-3 py-1.5 text-left font-medium">Notes</th>
-              <th className="px-3 py-1.5 text-left font-medium">Category</th>
-              <th className="px-3 py-1.5 text-left font-medium">Project</th>
+              <th className="px-3 py-1 text-left font-medium">Payee</th>
+              <th className="px-3 py-1 text-left font-medium">Notes</th>
+              <th className="px-3 py-1 text-left font-medium">Category</th>
+              <th className="px-3 py-1 text-left font-medium">Project</th>
             </tr>
           </thead>
           <tbody>
@@ -1076,7 +1076,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                     data-testid="transaction-row"
                   >
                     {/* Checkbox */}
-                    <td className="px-3 py-1 w-8">
+                    <td className="px-3 py-0.5 w-8">
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -1087,11 +1087,11 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                     </td>
 
                     {/* Date — read-only */}
-                    <td className="px-3 py-1 whitespace-nowrap text-muted-foreground">
+                    <td className="px-3 py-0.5 whitespace-nowrap text-muted-foreground">
                       {new Date(row.date).toLocaleDateString()}
                     </td>
 
-                    <td className="px-3 py-1 text-muted-foreground whitespace-nowrap">{row.account.name}</td>
+                    <td className="px-3 py-0.5 text-muted-foreground whitespace-nowrap">{row.account.name}</td>
                     {renderEditableCell(row, 'description')}
                     {renderEditableCell(row, 'amount')}
                     {renderEditableCell(row, 'payeeId')}
