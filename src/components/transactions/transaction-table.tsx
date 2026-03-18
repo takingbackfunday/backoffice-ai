@@ -170,8 +170,9 @@ function PayeeCell({
       if (!res.ok) { setCreating(false); return }
       const json = await res.json()
       const newPayee: Payee = { id: json.data.id, name: json.data.name }
+      // onNewPayee adds to state AND commits the transaction in one shot,
+      // so we skip the separate onCommit call to avoid a double-patch.
       onNewPayee(newPayee)
-      onCommit(newPayee.id)
     } catch {
       setCreating(false)
     }
@@ -460,7 +461,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     setEditingCell({ id, field })
   }
 
-  async function commitEdit(id: string, field: EditableField, rawValue: string | null) {
+  async function commitEdit(id: string, field: EditableField, rawValue: string | null, freshPayee?: Payee) {
     setEditingCell(null)
 
     const row = localRows.find((r) => r.id === id)
@@ -492,7 +493,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
         }
         if (field === 'payeeId') {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const payee = (payees.find((p) => p.id === rawValue) ?? null) as any
+          const payee = (freshPayee ?? payees.find((p) => p.id === rawValue) ?? null) as any
           return { ...r, payeeId: rawValue, payee }
         }
         return { ...r, [field]: patchValue }
@@ -727,7 +728,10 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
               payees={payees}
               onCommit={(v) => commitEdit(row.id, 'payeeId', v)}
               onCancel={cancelEdit}
-              onNewPayee={(p) => setPayees((prev) => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))}
+              onNewPayee={(p) => {
+                setPayees((prev) => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))
+                commitEdit(row.id, 'payeeId', p.id, p)
+              }}
             />
           </td>
         )
