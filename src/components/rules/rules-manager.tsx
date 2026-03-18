@@ -145,12 +145,14 @@ export function RulesManager({
   initialPayees,
   initialAccounts,
   initialCategoryGroups,
+  initialPendingSuggestions,
 }: {
   initialRules?: UserRule[]
   initialProjects?: Project[]
   initialPayees?: Payee[]
   initialAccounts?: { id: string; name: string }[]
   initialCategoryGroups?: CategoryGroup[]
+  initialPendingSuggestions?: PersistedSuggestion[]
 } = {}) {
   const [rules, setRules] = useState<UserRule[]>(initialRules ?? [])
   const [projects, setProjects] = useState<Project[]>(initialProjects ?? [])
@@ -175,7 +177,7 @@ export function RulesManager({
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [pendingSuggestions, setPendingSuggestions] = useState<PersistedSuggestion[]>([])
+  const [pendingSuggestions, setPendingSuggestions] = useState<PersistedSuggestion[]>(initialPendingSuggestions ?? [])
   const [suggestionsOpen, setSuggestionsOpen] = useState(true)
   const [ignoringAll, setIgnoringAll] = useState(false)
   const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<Set<number>>(new Set())
@@ -196,7 +198,7 @@ export function RulesManager({
       if (!groupsJson.error) setCategoryGroups(groupsJson.data ?? [])
       if (!payeesJson.error) setPayees(payeesJson.data ?? [])
       if (!accountsJson.error) setAccounts(accountsJson.data ?? [])
-      if (!suggestionsJson.error) setPendingSuggestions(suggestionsJson.data ?? [])
+      if (!suggestionsJson.error && !initialPendingSuggestions) setPendingSuggestions(suggestionsJson.data ?? [])
     }).catch(() => setError('Failed to load'))
       .finally(() => setLoading(false))
   }, [initialRules])

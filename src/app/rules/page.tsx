@@ -13,7 +13,7 @@ export default async function RulesPage() {
   if (!userId) redirect('/sign-in')
 
   // Fetch all data server-side in parallel — no client-side waterfall
-  const [rules, projects, payees, categoryGroupsRaw, accounts] = await Promise.all([
+  const [rules, projects, payees, categoryGroupsRaw, accounts, pendingSuggestions] = await Promise.all([
     prisma.categorizationRule.findMany({
       where: { userId },
       include: {
@@ -41,6 +41,10 @@ export default async function RulesPage() {
       where: { userId },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
+    }),
+    prisma.ruleSuggestion.findMany({
+      where: { userId, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
     }),
   ])
 
@@ -72,6 +76,7 @@ export default async function RulesPage() {
             initialProjects={projects}
             initialPayees={payees}
             initialAccounts={accounts}
+            initialPendingSuggestions={pendingSuggestions as never}
             initialCategoryGroups={categoryGroups.map((g) => ({
               id: g.id,
               name: g.name,
