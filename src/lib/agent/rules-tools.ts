@@ -30,10 +30,12 @@ export interface RulesContext {
 
 export type RuleImpact = 'low' | 'medium' | 'high'
 
-export function computeImpact(matchCount: number): RuleImpact {
-  if (matchCount <= 5) return 'low'
-  if (matchCount <= 20) return 'medium'
-  return 'high'
+// high if: many transactions OR large dollar volume
+// low only if: few transactions AND small dollar volume
+export function computeImpact(matchCount: number, totalAbsAmount: number): RuleImpact {
+  if (matchCount > 20 || totalAbsAmount > 2000) return 'high'
+  if (matchCount <= 5 && totalAbsAmount <= 500) return 'low'
+  return 'medium'
 }
 
 export interface RulesSseEvent {
@@ -51,6 +53,7 @@ export interface RulesSseEvent {
   }
   reasoning?: string
   matchCount?: number
+  totalAmount?: number
   error?: string
   uncategorised?: number
   noPayee?: number
@@ -282,7 +285,13 @@ export async function emit_rule_suggestion(
   // Mark as covered
   newIds.forEach((id) => ctx.coveredThisRun.add(id))
 
-  const impact = computeImpact(matchCount)
+  // Compute total absolute dollar amount of newly matched transactions
+  const newIdSet = new Set(newIds)
+  const totalAbsAmount = ctx.transactions
+    .filter((t) => newIdSet.has(t.id))
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+
+  const impact = computeImpact(matchCount, totalAbsAmount)
 
   // Stream suggestion
   ctx.send({
@@ -299,6 +308,7 @@ export async function emit_rule_suggestion(
     },
     reasoning: args.reasoning,
     matchCount,
+    totalAmount: Math.round(totalAbsAmount * 100) / 100,
   })
 
   return `Emitted: ${matchCount} new transaction(s) matched.`

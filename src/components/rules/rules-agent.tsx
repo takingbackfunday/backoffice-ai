@@ -19,6 +19,7 @@ export interface AgentSuggestion {
   impact: 'low' | 'medium' | 'high'
   reasoning: string
   matchCount: number
+  totalAmount: number
   autoAccepted?: boolean
 }
 
@@ -207,6 +208,7 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
           impact: rule.impact ?? 'low',
           reasoning: rule.reasoning,
           matchCount: event.matchCount ?? 0,
+          totalAmount: event.totalAmount ?? 0,
         }
         if (shouldAutoAccept(suggestion)) {
           saveRule(suggestion, categoryGroupsRef.current).then((saved) => {
@@ -346,7 +348,7 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
                   <span className="font-medium">{s.categoryName}{s.payeeName ? ` — ${s.payeeName}` : ''}</span>
                   <span className="text-[#0F6E56]/60">·</span>
                   <span className="text-[#0F6E56]/70">{s.reasoning}</span>
-                  <span className="ml-auto text-[#0F6E56]/50 tabular-nums shrink-0">~{s.matchCount} txns</span>
+                  <span className="ml-auto text-[#0F6E56]/50 tabular-nums shrink-0">~{s.matchCount} txns · ${s.totalAmount >= 1000 ? `${(s.totalAmount / 1000).toFixed(1)}k` : s.totalAmount.toFixed(0)}</span>
                 </div>
               ))}
             </div>
