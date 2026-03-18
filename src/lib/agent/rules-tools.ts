@@ -104,7 +104,8 @@ export async function get_uncategorised_transactions(
   const topN = args.topN ?? 30
   const minCount = args.minCount ?? 1
 
-  const uncategorised = ctx.transactions.filter((t) => !t.categoryId)
+  // Exclude transactions already covered by existing rules — no point suggesting rules for those
+  const uncategorised = ctx.transactions.filter((t) => !t.categoryId && !ctx.coveredByExisting.has(t.id))
 
   if (!uncategorised.length) return 'No uncategorised transactions found.'
 
@@ -209,7 +210,8 @@ export async function get_no_payee_transactions(
 ): Promise<string> {
   const topN = args.topN ?? 20
 
-  const noPayeeWithCategory = ctx.transactions.filter((t) => t.categoryId && !t.payeeName)
+  // Exclude transactions already covered by existing rules
+  const noPayeeWithCategory = ctx.transactions.filter((t) => t.categoryId && !t.payeeName && !ctx.coveredByExisting.has(t.id))
 
   if (!noPayeeWithCategory.length) return 'No transactions found with a category but no payee.'
 
