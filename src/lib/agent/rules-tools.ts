@@ -261,6 +261,16 @@ export async function emit_rule_suggestion(
   },
   ctx: RulesContext
 ): Promise<string> {
+  // Reject reasoning that mentions unrelated merchants (copy-paste artifact)
+  if (args.reasoning && args.payeeName) {
+    const otherMerchantPattern = /\b(wayfair|zalando|amazon|stripe|github|netflix|spotify|uber|aws)\b/i
+    const mentionsOther = otherMerchantPattern.test(args.reasoning)
+    const mentionsSelf = args.payeeName && args.reasoning.toLowerCase().includes(args.payeeName.toLowerCase())
+    if (mentionsOther && !mentionsSelf) {
+      return `Rejected: reasoning mentions an unrelated merchant. Write a 1-sentence reasoning specific to "${args.payeeName}" and resubmit.`
+    }
+  }
+
   // Validate shape
   if (!args.conditions || (!args.conditions.all && !args.conditions.any)) {
     return 'Rejected: conditions must have "all" or "any" array. Fix the conditions structure and resubmit.'
