@@ -126,35 +126,126 @@ function CategoryCell({
   )
 }
 
-// ── Inline payee select ────────────────────────────────────────────
+// ── Inline payee combobox (type to filter or create new) ──────────
 function PayeeCell({
   value,
   payees,
   onCommit,
   onCancel,
+  onNewPayee,
 }: {
   value: string | null
   payees: Payee[]
   onCommit: (id: string | null) => void
   onCancel: () => void
+  onNewPayee: (p: Payee) => void
 }) {
-  const ref = useRef<HTMLSelectElement>(null)
-  useEffect(() => { ref.current?.focus() }, [])
+  const currentName = payees.find((p) => p.id === value)?.name ?? ''
+  const [draft, setDraft] = useState(currentName)
+  const [open, setOpen] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select() }, [])
+
+  const filtered = draft.trim()
+    ? payees.filter((p) => p.name.toLowerCase().includes(draft.toLowerCase()))
+    : payees
+
+  const exactMatch = payees.some((p) => p.name.toLowerCase() === draft.trim().toLowerCase())
+  const showCreate = draft.trim().length > 0 && !exactMatch
+
+  async function createAndCommit() {
+    const name = draft.trim()
+    if (!name || creating) return
+    setCreating(true)
+    try {
+      const res = await fetch('/api/payees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (!res.ok) { setCreating(false); return }
+      const json = await res.json()
+      const newPayee: Payee = { id: json.data.id, name: json.data.name }
+      onNewPayee(newPayee)
+      onCommit(newPayee.id)
+    } catch {
+      setCreating(false)
+    }
+  }
+
+  function pickExisting(p: Payee) {
+    onCommit(p.id)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') { onCancel(); return }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const exact = payees.find((p) => p.name.toLowerCase() === draft.trim().toLowerCase())
+      if (exact) { onCommit(exact.id); return }
+      if (filtered.length === 1) { onCommit(filtered[0].id); return }
+      if (showCreate) createAndCommit()
+    }
+  }
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        // Commit best match or cancel
+        const exact = payees.find((p) => p.name.toLowerCase() === draft.trim().toLowerCase())
+        if (exact) onCommit(exact.id)
+        else if (draft.trim() === '') onCommit(null)
+        else onCancel()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, payees])
+
   return (
-    <select
-      ref={ref}
-      defaultValue={value ?? ''}
-      onChange={(e) => onCommit(e.target.value || null)}
-      onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
-      onBlur={() => onCancel()}
-      className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none focus:ring-1 focus:ring-blue-400"
-      aria-label="Select payee"
-    >
-      <option value="">— None —</option>
-      {payees.map((p) => (
-        <option key={p.id} value={p.id}>{p.name}</option>
-      ))}
-    </select>
+    <div ref={wrapRef} className="relative w-full min-w-[140px]">
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => { setDraft(e.target.value); setOpen(true) }}
+        onKeyDown={handleKeyDown}
+        placeholder="Type to search or create…"
+        disabled={creating}
+        className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-60"
+        aria-label="Select or create payee"
+        autoComplete="off"
+      />
+      {open && (filtered.length > 0 || showCreate) && (
+        <ul
+          ref={listRef}
+          className="absolute z-50 mt-0.5 w-full rounded border border-black/10 bg-white shadow-md text-xs max-h-44 overflow-y-auto"
+        >
+          {filtered.map((p) => (
+            <li
+              key={p.id}
+              onMouseDown={(e) => { e.preventDefault(); pickExisting(p) }}
+              className="px-2 py-1 cursor-pointer hover:bg-blue-50"
+            >
+              {p.name}
+            </li>
+          ))}
+          {showCreate && (
+            <li
+              onMouseDown={(e) => { e.preventDefault(); createAndCommit() }}
+              className="px-2 py-1 cursor-pointer hover:bg-green-50 text-green-700 font-medium border-t border-black/5"
+            >
+              {creating ? 'Creating…' : `+ Create "${draft.trim()}"`}
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -636,6 +727,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
               payees={payees}
               onCommit={(v) => commitEdit(row.id, 'payeeId', v)}
               onCancel={cancelEdit}
+              onNewPayee={(p) => setPayees((prev) => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))}
             />
           </td>
         )
@@ -930,8 +1022,8 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
       {/* Table */}
       <div className="overflow-auto rounded-lg border">
-        <table className="w-full text-xs" aria-label="Transactions">
-          <thead className="bg-muted text-xs uppercase tracking-wide">
+        <table className="w-full text-[11px]" aria-label="Transactions">
+          <thead className="bg-muted text-[10px] uppercase tracking-wide">
             <tr>
               {/* Checkbox */}
               <th className="px-3 py-1.5 w-8">
