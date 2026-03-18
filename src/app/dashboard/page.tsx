@@ -18,11 +18,11 @@ export default async function DashboardPage() {
       <div className="flex flex-1 flex-col">
         <Header title="Dashboard" />
         <main className="flex-1 p-6 space-y-6" role="main">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <ExpensesByCategoryWidget />
             <CashflowWidget />
+            <NetWorthWidget />
           </div>
-          <NetWorthWidget />
           <FinanceQA />
           <DashboardAnalyzer />
         </main>
