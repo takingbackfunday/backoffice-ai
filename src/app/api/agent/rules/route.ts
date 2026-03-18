@@ -20,32 +20,32 @@ function encode(event: RulesSseEvent): Uint8Array {
 
 const SYSTEM_PROMPT = `You are an expert financial categorisation assistant. Your job is to analyse the user's transaction data and suggest high-quality automation rules.
 
-All core data is pre-loaded in the user message (uncategorised transactions, categories, existing payees, no-payee transactions). Do NOT re-fetch this data.
+ALL data is pre-loaded in the user message. Do NOT call get_rules, get_categories, get_uncategorised_transactions, get_no_payee_transactions, or get_payees — the data is already there.
 
 Workflow:
-1. Read the pre-loaded data carefully
-2. Call record_plan ONCE with your strategy: which merchant/pattern groups you spotted, which categories they map to, which payees you will assign
-3. Optionally use get_rules ONCE to check existing rule coverage and avoid duplicating them
-4. Optionally use search_transactions or query_transactions (max 2 calls total) to investigate a specific ambiguous pattern
-5. Emit all suggestions via emit_rule_suggestion (if a suggestion is rejected, read the rejection reason and resubmit with a fix)
-6. Call finish_analysis
+1. Read ALL pre-loaded data carefully (categories, payees, existing rules, uncategorised transactions, no-payee transactions)
+2. Call record_plan ONCE: list every merchant group you identified, the category you'll map it to, and the payee you'll assign
+3. Emit ALL suggestions in a SINGLE round by calling emit_rule_suggestion multiple times in one response — do NOT spread them across multiple rounds
+4. If any suggestion is rejected, immediately resubmit with the fix described in the rejection message — in the same round if possible
+5. Call finish_analysis
 
 PAYEE ASSIGNMENT — CRITICAL:
 - ALWAYS set payeeName on every suggestion where the merchant/counterparty is identifiable
-- Use your world knowledge aggressively: "Wayfair", "Zalando", "Stripe", "Github", "Netflix", "Spotify", "Uber", "Amazon", "AWS", etc. are recognisable merchants — set them as payee even if not in the existing payees list
-- If the transaction description or existing payeeName on the group clearly identifies the merchant, use it
+- Use your world knowledge aggressively: "Wayfair", "Zalando", "Stripe", "GitHub", "Netflix", "Spotify", "Uber", "Amazon", "AWS", "SUPER.COM", etc. are recognisable merchants — set them as payee even if not in the existing payees list
+- If the transaction description or existing payeeName clearly identifies the merchant, use it
 - Only leave payeeName null if the counterparty is genuinely ambiguous (e.g. "Bank transfer ref 12345")
-- Check the existing payees list — if the payee already exists there, use the exact same spelling
+- Check the EXISTING PAYEES list first — if the payee already exists there, use the exact same spelling
 
 RULE QUALITY:
-- categoryName must exactly match one of the provided category names (case-insensitive)
+- categoryName must be copied VERBATIM from the AVAILABLE CATEGORIES list (case-insensitive match is fine)
 - Prefer description contains over payeeName equals for more robust matching
-- 2+ matching transactions = high confidence; 1 = medium
+- The "descriptions" field in the uncategorised data shows the actual raw transaction text — use it to pick the right keyword
+- 2+ matching transactions = high confidence; 1 or world-knowledge = medium
 - 1 sentence reasoning referencing the specific pattern observed
 - Aim for 5–20 suggestions prioritised by financial impact (highest absolute spend first)
-- When emit_rule_suggestion returns a rejection, READ the reason and immediately resubmit with the corrected suggestion — do NOT skip it`
+- SKIP any merchant that appears in the EXISTING RULES list — a rule already covers it`
 
-const MAX_TOOL_ROUNDS = 12
+const MAX_TOOL_ROUNDS = 16
 
 // ── Route ──────────────────────────────────────────────────────────────────────
 
@@ -111,11 +111,12 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
 
         // Pre-fetch all data the LLM would normally call tools to get.
         send({ type: 'status', message: 'Fetching transaction data…' })
-        const [uncatData, catsData, noPayeeData, payeesData] = await Promise.all([
-          dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 25 }, ctx),
+        const [uncatData, catsData, noPayeeData, payeesData, rulesData] = await Promise.all([
+          dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 40 }, ctx),
           dispatchRulesTool(userId, 'get_categories', {}, ctx),
-          dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 20 }, ctx),
+          dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 30 }, ctx),
           dispatchTool(userId, 'get_payees', {}),
+          dispatchRulesTool(userId, 'get_rules', {}, ctx),
         ])
 
         // ── Step 3: single LLM round to emit suggestions ──────────────────
@@ -123,24 +124,27 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
 
         const userMessage = `${snapshot}
 
---- AVAILABLE CATEGORIES (use ONLY these exact names) ---
+--- AVAILABLE CATEGORIES (copy names VERBATIM from this list) ---
 ${catsData}
 
 --- EXISTING PAYEES (reuse exact spelling if the merchant matches) ---
 ${payeesData}
 
---- UNCATEGORISED TRANSACTIONS (top 25 by spend) ---
+--- EXISTING RULES (SKIP merchants already covered here — do not suggest duplicate rules) ---
+${rulesData}
+
+--- UNCATEGORISED TRANSACTIONS NOT COVERED BY EXISTING RULES (top 40 by spend) ---
 ${uncatData}
 
---- TRANSACTIONS WITH CATEGORY BUT NO PAYEE (assign payee rules) ---
+--- TRANSACTIONS WITH CATEGORY BUT NO PAYEE (top 30) ---
 ${noPayeeData}
 
 Instructions:
-1. Call record_plan with your strategy (which merchants → which category from the list above)
-2. Emit rule suggestions using emit_rule_suggestion — categoryName must be copied VERBATIM from the AVAILABLE CATEGORIES list above
-3. For every suggestion where the merchant is identifiable (use world knowledge), set payeeName
-4. If emit_rule_suggestion returns "Rejected", fix the issue described and resubmit
-5. Call finish_analysis when done`
+1. Call record_plan listing every merchant group you spotted → category → payee
+2. Emit ALL suggestions in ONE response (call emit_rule_suggestion multiple times at once)
+3. Use the "descriptions" field to pick the right keyword for each condition
+4. If a suggestion is rejected, fix and resubmit immediately
+5. Call finish_analysis`
 
         const messages: ChatMessage[] = [
           { role: 'system', content: SYSTEM_PROMPT },
@@ -191,6 +195,17 @@ Instructions:
               args = {}
             }
 
+            // Block pre-loaded tools — data is already in the user message
+            const PRELOADED = ['get_rules', 'get_categories', 'get_uncategorised_transactions', 'get_no_payee_transactions', 'get_payees']
+            if (PRELOADED.includes(toolName)) {
+              messages.push({
+                role: 'tool',
+                tool_call_id: tc.id,
+                content: `This data is already pre-loaded in the user message above. Do not call ${toolName} again — use the data already provided and emit your suggestions.`,
+              })
+              continue
+            }
+
             // Hard cap on expensive investigation tools
             if (toolName === 'query_transactions' || toolName === 'search_transactions') {
               queryCount++
@@ -198,7 +213,7 @@ Instructions:
                 messages.push({
                   role: 'tool',
                   tool_call_id: tc.id,
-                  content: 'Query limit reached. Please emit your suggestions now using emit_rule_suggestion, then call finish_analysis.',
+                  content: 'Query limit reached. Emit your suggestions now using emit_rule_suggestion, then call finish_analysis.',
                 })
                 continue
               }
