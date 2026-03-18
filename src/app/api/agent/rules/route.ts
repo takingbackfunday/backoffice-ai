@@ -19,16 +19,18 @@ function encode(event: RulesSseEvent): Uint8Array {
 
 const SYSTEM_PROMPT = `You are a financial categorisation assistant. Analyse the user's transactions and suggest automation rules using the tools provided.
 
-Workflow:
-1. Call get_uncategorised_transactions to find patterns
-2. Optionally drill deeper with search_transactions or query_transactions on specific patterns
-3. Call get_categories to confirm exact category names
-4. Call get_rules to avoid duplicating existing coverage
-5. Call get_no_payee_transactions for payee-assignment opportunities
-6. Emit ALL your suggestions in a single batch by calling emit_rule_suggestion for each one
-7. Call finish_analysis immediately after your last emit_rule_suggestion — do not loop back
+Workflow (STRICT — follow this order exactly):
+1. Call get_uncategorised_transactions ONCE to find patterns
+2. Call get_categories ONCE to confirm exact category names
+3. Call get_no_payee_transactions ONCE for payee-assignment opportunities
+4. Optionally call get_rules ONCE to check existing coverage
+5. Emit ALL your suggestions now by calling emit_rule_suggestion for each one
+6. Call finish_analysis immediately after your last emit_rule_suggestion
 
-Constraints on suggestions:
+CRITICAL constraints:
+- Do NOT call query_transactions or search_transactions more than 2 times total — use the grouped data from get_uncategorised_transactions directly
+- Do NOT loop back to investigate after emitting — emit all at once then finish
+- Do NOT call get_uncategorised_transactions more than once
 - Never use amount as the only condition — always use description or payeeName
 - categoryName must exactly match one of the user's category names (call get_categories first)
 - Each suggestion covers distinct transactions (emit_rule_suggestion will reject duplicates)
@@ -38,7 +40,7 @@ Constraints on suggestions:
 - Prioritise patterns from the last 18 months; include older patterns only if they recur frequently
 - Prioritise by financial impact (highest absolute spend first) — a single large uncategorised vendor matters more than many small ones`
 
-const MAX_TOOL_ROUNDS = 20
+const MAX_TOOL_ROUNDS = 12
 
 // ── Route ──────────────────────────────────────────────────────────────────────
 
@@ -116,6 +118,8 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
         let everEmitted = false  // true once any emit_rule_suggestion has been called
         let emitCount = 0
         const MAX_EMITS = 20
+        let queryCount = 0
+        const MAX_QUERIES = 2  // hard cap on query_transactions / search_transactions calls
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4-5')
@@ -149,6 +153,19 @@ Start by calling get_uncategorised_transactions, then get_categories to confirm 
               args = JSON.parse(tc.function.arguments)
             } catch {
               args = {}
+            }
+
+            // Hard cap on expensive investigation tools
+            if (toolName === 'query_transactions' || toolName === 'search_transactions') {
+              queryCount++
+              if (queryCount > MAX_QUERIES) {
+                messages.push({
+                  role: 'tool',
+                  tool_call_id: tc.id,
+                  content: 'Query limit reached. Please emit your suggestions now using emit_rule_suggestion, then call finish_analysis.',
+                })
+                continue
+              }
             }
 
             send({ type: 'status', message: `→ ${toolName.replace(/_/g, ' ')}…` })
