@@ -210,6 +210,7 @@ export function NetWorthWidget() {
   const [error, setError] = useState<string | null>(null)
   const [locked, setLocked] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   // appliedRange drives the fetch — only updated when Apply is clicked for custom
   const [appliedRange, setAppliedRange] = useState<{ period: Period; start?: string; end?: string }>({ period: 'all-time' })
@@ -315,16 +316,7 @@ export function NetWorthWidget() {
           <p className="text-[10px] text-muted-foreground mt-0.5">Cumulative running total over time</p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          {/* Category filter */}
-          {categoryGroups.length > 0 && (
-            <CategoryFilterDropdown
-              groups={categoryGroups}
-              selected={selectedCategories}
-              onChange={setSelectedCategories}
-            />
-          )}
-
+        <div className="flex items-center gap-2">
           {/* Period pills */}
           <div className="flex items-center gap-1 rounded-lg border border-black/10 p-0.5">
             {PERIOD_OPTIONS.map(({ value, label }) => (
@@ -342,7 +334,29 @@ export function NetWorthWidget() {
             ))}
           </div>
 
-          {/* Lock button */}
+          {/* Filters disclosure toggle */}
+          <button
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border border-black/10 text-muted-foreground hover:text-foreground hover:border-black/20 transition-colors"
+          >
+            Filters
+            <svg className={`w-3 h-3 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Collapsible filters row */}
+      {filtersOpen && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {categoryGroups.length > 0 && (
+            <CategoryFilterDropdown
+              groups={categoryGroups}
+              selected={selectedCategories}
+              onChange={setSelectedCategories}
+            />
+          )}
           <button
             onClick={toggleLock}
             disabled={saving}
@@ -365,7 +379,7 @@ export function NetWorthWidget() {
             {locked ? 'Locked' : 'Lock'}
           </button>
         </div>
-      </div>
+      )}
 
       {/* Custom relative date range picker */}
       {period === 'custom' && (
