@@ -76,6 +76,7 @@ model Category {
   payees          Payee[]
   transactions    Transaction[]
   rules           CategorizationRule[]
+  ruleSuggestions RuleSuggestion[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -90,6 +91,7 @@ model Payee {
   defaultCategory   Category?     @relation(fields: [defaultCategoryId], references: [id])
   transactions      Transaction[]
   rules             CategorizationRule[]
+  ruleSuggestions   RuleSuggestion[]
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -179,4 +181,34 @@ model UserPreference {
   userId    String   @id  // Clerk userId — one row per user
   data      Json     @default("{}")
   updatedAt DateTime @updatedAt
+}
+
+// Persisted rule suggestions generated from transaction edits
+model RuleSuggestion {
+  id           String           @id @default(cuid())
+  userId       String
+  status       RuleSuggestionStatus @default(PENDING)
+  conditions   Json             // { all?: ConditionDef[], any?: ConditionDef[] }
+  categoryName String
+  categoryId   String?
+  categoryRef  Category?        @relation(fields: [categoryId], references: [id])
+  payeeName    String?
+  payeeId      String?
+  payee        Payee?           @relation(fields: [payeeId], references: [id])
+  confidence   String           // 'high' | 'medium'
+  impact       String           // 'low' | 'medium' | 'high'
+  reasoning    String
+  matchCount   Int              @default(0)
+  totalAmount  Decimal          @default(0) @db.Decimal(12, 2)
+  sourceEdits  Json             // Array of edit snapshots that triggered this
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([userId, status])
+}
+
+enum RuleSuggestionStatus {
+  PENDING
+  ACCEPTED
+  IGNORED
 }

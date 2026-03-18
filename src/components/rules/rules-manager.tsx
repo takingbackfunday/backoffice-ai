@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Project } from '@prisma/client'
 import { RuleEditor, Toast, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
-import { RulesAgent } from './rules-agent'
+import { RulesAgent, SuggestionCard, type PersistedSuggestion } from './rules-agent'
 
 // ── Local helpers (only needed for RuleCard display) ──────────────────────────
 
@@ -175,6 +175,10 @@ export function RulesManager({
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [pendingSuggestions, setPendingSuggestions] = useState<PersistedSuggestion[]>([])
+  const [suggestionsOpen, setSuggestionsOpen] = useState(true)
+  const [ignoringAll, setIgnoringAll] = useState(false)
+  const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     // Skip fetch if data was passed from the server
@@ -185,12 +189,14 @@ export function RulesManager({
       fetch('/api/category-groups').then((r) => r.json()),
       fetch('/api/payees').then((r) => r.json()),
       fetch('/api/accounts').then((r) => r.json()),
-    ]).then(([rulesJson, projectsJson, groupsJson, payeesJson, accountsJson]) => {
+      fetch('/api/rules/suggestions').then((r) => r.json()),
+    ]).then(([rulesJson, projectsJson, groupsJson, payeesJson, accountsJson, suggestionsJson]) => {
       if (!rulesJson.error) setRules(rulesJson.data ?? [])
       if (!projectsJson.error) setProjects(projectsJson.data ?? [])
       if (!groupsJson.error) setCategoryGroups(groupsJson.data ?? [])
       if (!payeesJson.error) setPayees(payeesJson.data ?? [])
       if (!accountsJson.error) setAccounts(accountsJson.data ?? [])
+      if (!suggestionsJson.error) setPendingSuggestions(suggestionsJson.data ?? [])
     }).catch(() => setError('Failed to load'))
       .finally(() => setLoading(false))
   }, [initialRules])
@@ -222,6 +228,13 @@ export function RulesManager({
     setDeletingId(null)
   }
 
+
+  async function ignoreAllSuggestions() {
+    setIgnoringAll(true)
+    const res = await fetch('/api/rules/suggestions', { method: 'DELETE' })
+    if (res.ok) setPendingSuggestions([])
+    setIgnoringAll(false)
+  }
 
   async function applyAllRules() {
     setApplying(true)
@@ -428,6 +441,70 @@ export function RulesManager({
 
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {/* Pending suggestions from transaction edits */}
+      {pendingSuggestions.length > 0 && (
+        <div className="rounded-xl border border-[#534AB7]/25 bg-[#FAFAFE] overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setSuggestionsOpen((v) => !v)}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#EEEDFE]/40 transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-[13px]">💡</span>
+              <div>
+                <span className="text-sm font-medium text-[#3C3489]">
+                  {pendingSuggestions.length - dismissedSuggestionIds.size} rule suggestion{pendingSuggestions.length - dismissedSuggestionIds.size !== 1 ? 's' : ''} from your recent edits
+                </span>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Review and accept to automate these patterns</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); ignoreAllSuggestions() }}
+                disabled={ignoringAll}
+                className="text-[11px] text-muted-foreground hover:text-foreground border border-black/15 rounded px-2 py-1 disabled:opacity-50"
+              >
+                {ignoringAll ? 'Ignoring…' : 'Ignore all'}
+              </button>
+              <svg
+                className={`w-4 h-4 text-[#534AB7] transition-transform ${suggestionsOpen ? 'rotate-180' : ''}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+
+          {suggestionsOpen && (
+            <div className="border-t border-[#534AB7]/10 divide-y divide-black/5">
+              {pendingSuggestions.map((s, i) =>
+                dismissedSuggestionIds.has(i) ? null : (
+                  <div key={s.id} className="p-4">
+                    <SuggestionCard
+                      suggestion={s}
+                      index={i}
+                      total={pendingSuggestions.length}
+                      categoryGroups={categoryGroups}
+                      payees={payees}
+                      projects={projects}
+                      accounts={accounts}
+                      onAccepted={(rule) => {
+                        setRules((prev) => [rule, ...prev])
+                        setDismissedSuggestionIds((d) => new Set(d).add(i))
+                        showToast(`Rule accepted — ${rule.categoryName ?? rule.name}`)
+                      }}
+                      onDecline={() => setDismissedSuggestionIds((d) => new Set(d).add(i))}
+                      onApplyComplete={handleApplyComplete}
+                    />
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {!loading && rules.length === 0 && !showEditor && (
         <p className="text-sm text-muted-foreground rounded-lg border border-dashed px-4 py-8 text-center">

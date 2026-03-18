@@ -23,6 +23,11 @@ export interface AgentSuggestion {
   autoAccepted?: boolean
 }
 
+// Persisted suggestion from DB (has an id, accepted via /api/rules/suggestions/[id])
+export interface PersistedSuggestion extends Omit<AgentSuggestion, 'autoAccepted'> {
+  id: string
+}
+
 interface RulesAgentProps {
   categoryGroups: CategoryGroup[]
   payees: Payee[]
@@ -85,7 +90,7 @@ function shouldAutoAccept(s: AgentSuggestion): boolean {
 
 // ── SuggestionCard ─────────────────────────────────────────────────────────────
 
-function SuggestionCard({
+export function SuggestionCard({
   suggestion,
   index,
   total,
@@ -97,7 +102,7 @@ function SuggestionCard({
   onDecline,
   onApplyComplete,
 }: {
-  suggestion: AgentSuggestion
+  suggestion: AgentSuggestion | PersistedSuggestion
   index: number
   total: number
   categoryGroups: CategoryGroup[]
@@ -108,6 +113,8 @@ function SuggestionCard({
   onDecline: () => void
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
 }) {
+  const isPersisted = 'id' in suggestion
+
   const header = (
     <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-black/[0.07]">
       <div className="flex items-center gap-2 shrink-0">
@@ -120,10 +127,32 @@ function SuggestionCard({
           {suggestion.confidence.toUpperCase()}
         </span>
         <span className="text-[12px] text-[#999]">~{suggestion.matchCount} txns</span>
+        {isPersisted && (
+          <span className="text-[10px] bg-[#EEEDFE] text-[#534AB7] px-1.5 py-px rounded-full">from edits</span>
+        )}
       </div>
       <p className="text-[12px] text-[#666] text-right leading-snug">{suggestion.reasoning}</p>
     </div>
   )
+
+  async function handleSave(rule: UserRule) {
+    if (isPersisted) {
+      // Accept persisted suggestion — creates the real rule server-side
+      const res = await fetch(`/api/rules/suggestions/${(suggestion as PersistedSuggestion).id}`, { method: 'POST' })
+      if (!res.ok) return
+      const json = await res.json()
+      onAccepted(json.data ?? rule, index)
+    } else {
+      onAccepted(rule, index)
+    }
+  }
+
+  async function handleDecline() {
+    if (isPersisted) {
+      await fetch(`/api/rules/suggestions/${(suggestion as PersistedSuggestion).id}`, { method: 'DELETE' })
+    }
+    onDecline()
+  }
 
   return (
     <RuleEditor
@@ -132,11 +161,11 @@ function SuggestionCard({
       accounts={accounts}
       categoryGroups={categoryGroups}
       editingRule={suggestionToRule(suggestion, categoryGroups)}
-      onSave={(rule) => onAccepted(rule, index)}
-      onCancel={onDecline}
+      onSave={handleSave}
+      onCancel={handleDecline}
       saveLabel="Accept"
       cancelLabel="Decline"
-      showSaveAndApply
+      showSaveAndApply={!isPersisted}
       onApplyComplete={onApplyComplete}
       cardHeader={header}
     />
