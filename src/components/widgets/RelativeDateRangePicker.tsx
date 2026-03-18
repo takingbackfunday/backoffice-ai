@@ -82,7 +82,7 @@ const UNIT_OPTIONS: { value: Unit; label: string }[] = [
   { value: 'year',    label: 'Year' },
 ]
 
-const SELECT_CLASS = 'text-xs border border-black/15 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30'
+const SELECT_CLASS = 'text-[10px] border border-black/15 rounded px-1.5 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30'
 
 function ExprEditor({
   value,
@@ -92,7 +92,7 @@ function ExprEditor({
   onChange: (next: RelativeDateExpr) => void
 }) {
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
+    <div className="flex items-center gap-1 flex-wrap">
       <select
         value={value.anchor}
         onChange={(e) => onChange({ ...value, anchor: e.target.value as Anchor })}
@@ -117,7 +117,7 @@ function ExprEditor({
         step={1}
         value={value.value}
         onChange={(e) => onChange({ ...value, value: Math.max(0, Math.floor(Number(e.target.value))) })}
-        className={`${SELECT_CLASS} w-16`}
+        className={`${SELECT_CLASS} w-12`}
       />
       <select
         value={value.unit}
@@ -170,14 +170,14 @@ export function RelativeDateRangePicker({ value, onChange, onApply, onCancel, ap
   // ── Collapsed summary ──
   if (!editing && appliedStart && appliedEnd) {
     return (
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xs text-muted-foreground">Custom:</span>
-        <span className="text-xs font-medium text-foreground">
+      <div className="flex items-center gap-1.5 mb-3">
+        <span className="text-[10px] text-muted-foreground">Custom:</span>
+        <span className="text-[10px] font-medium text-foreground">
           {fmtSummary(appliedStart)} – {fmtSummary(appliedEnd)}
         </span>
         <button
           onClick={() => setEditing(true)}
-          className="text-xs px-2 py-1 rounded-md border border-black/15 text-muted-foreground hover:text-foreground hover:border-black/25 transition-colors"
+          className="text-[10px] px-1.5 py-0.5 rounded border border-black/15 text-muted-foreground hover:text-foreground hover:border-black/25 transition-colors"
         >
           Edit
         </button>
@@ -187,12 +187,12 @@ export function RelativeDateRangePicker({ value, onChange, onApply, onCancel, ap
 
   // ── Editor ──
   return (
-    <div className="mb-4 p-3 rounded-lg border border-black/10 bg-muted/20">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="mb-3 p-2.5 rounded-lg border border-black/10 bg-muted/20">
+      <div className="grid grid-cols-2 gap-3">
         {/* Start */}
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Start date</p>
-          <p className="text-xs text-muted-foreground">{fmtPreview(startDate)}</p>
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Start</p>
+          <p className="text-[10px] text-muted-foreground">{fmtPreview(startDate)}</p>
           <ExprEditor
             value={value.start}
             onChange={(next) => onChange({ ...value, start: next })}
@@ -200,9 +200,9 @@ export function RelativeDateRangePicker({ value, onChange, onApply, onCancel, ap
         </div>
 
         {/* End */}
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">End date</p>
-          <p className="text-xs text-muted-foreground">{fmtPreview(endDate)}</p>
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">End</p>
+          <p className="text-[10px] text-muted-foreground">{fmtPreview(endDate)}</p>
           <ExprEditor
             value={value.end}
             onChange={(next) => onChange({ ...value, end: next })}
@@ -210,23 +210,23 @@ export function RelativeDateRangePicker({ value, onChange, onApply, onCancel, ap
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-3">
+      <div className="flex items-center justify-between mt-2">
         {invalid ? (
-          <p className="text-xs text-red-500">Start must be before end</p>
+          <p className="text-[10px] text-red-500">Start must be before end</p>
         ) : (
           <span />
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 text-xs rounded-lg border border-black/15 text-muted-foreground hover:text-foreground hover:border-black/25 transition-colors"
+            className="px-2 py-0.5 text-[10px] rounded border border-black/15 text-muted-foreground hover:text-foreground hover:border-black/25 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleApply}
             disabled={invalid}
-            className="px-3 py-1.5 text-xs rounded-lg bg-[#3C3489] text-white font-medium disabled:opacity-40 hover:bg-[#2e2870] transition-colors"
+            className="px-2 py-0.5 text-[10px] rounded bg-[#3C3489] text-white font-medium disabled:opacity-40 hover:bg-[#2e2870] transition-colors"
           >
             Apply
           </button>

@@ -313,7 +313,7 @@ export function CashflowWidget() {
   return (
     <div className="rounded-lg border bg-white p-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 gap-4">
+      <div className="flex items-center justify-between mb-3 gap-4">
         <div>
           <h3 className="text-xs font-medium text-foreground">Cashflow</h3>
           <p className="text-[10px] text-muted-foreground mt-0.5">Income, expenses &amp; net by month</p>
@@ -352,7 +352,7 @@ export function CashflowWidget() {
 
       {/* Collapsible filters row */}
       {filtersOpen && (
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="flex items-center gap-2 pt-2 pb-1 border-t border-black/5 flex-wrap w-full">
           {categoryGroups.length > 0 && (
             <CategoryFilterDropdown
               groups={categoryGroups}
