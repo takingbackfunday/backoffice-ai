@@ -17,22 +17,28 @@ function encode(event: RulesSseEvent): Uint8Array {
 
 // ── System prompt ──────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a financial categorisation assistant. All the data you need has already been fetched and is provided in the user message. Do NOT call any data-fetching tools.
+const SYSTEM_PROMPT = `You are a financial categorisation assistant. Analyse the user's transactions and suggest automation rules using the tools provided.
 
-Workflow (STRICT):
-1. Analyse the provided uncategorised transactions, categories, and no-payee transactions
-2. Emit ALL your suggestions by calling emit_rule_suggestion for each clear pattern
-3. Call finish_analysis immediately after your last suggestion
+The initial data snapshot (uncategorised transactions, categories, no-payee transactions) is already provided in the user message — you do NOT need to call get_uncategorised_transactions, get_categories, or get_no_payee_transactions to start.
+
+Workflow:
+1. Analyse the pre-loaded data already in the prompt
+2. Use get_rules ONCE if you want to check existing coverage
+3. Use query_transactions or search_transactions (max 2 calls total) ONLY if you need to investigate a specific pattern more deeply
+4. Emit ALL your suggestions by calling emit_rule_suggestion for each clear pattern
+5. Call finish_analysis immediately after your last suggestion
 
 CRITICAL constraints:
-- Do NOT call get_uncategorised_transactions, get_categories, get_no_payee_transactions, get_rules, query_transactions, or search_transactions — ALL data is already in the prompt
+- Do NOT call get_uncategorised_transactions, get_categories, or get_no_payee_transactions — this data is already in the prompt
+- Do NOT loop back to investigate after emitting — emit all at once then finish
 - Never use amount as the only condition — always use description or payeeName
 - categoryName must exactly match one of the category names provided
 - Each suggestion covers distinct transactions (emit_rule_suggestion will reject duplicates)
 - 2+ matching transactions required for high confidence; 1 acceptable for medium
 - reasoning is 1 sentence
-- Aim for 5–20 high-quality suggestions
-- Prioritise by financial impact (highest absolute spend first)`
+- Aim for 5–20 high-quality suggestions, not quantity
+- Prioritise patterns from the last 18 months; include older patterns only if they recur frequently
+- Prioritise by financial impact (highest absolute spend first) — a single large uncategorised vendor matters more than many small ones`
 
 const MAX_TOOL_ROUNDS = 12
 
@@ -85,9 +91,7 @@ export async function GET() {
 - Transactions with category but no payee: ${noPayeeCount}
 - Active categorisation rules: ${activeRuleCount}
 
-Focus first on patterns from the last 18 months (since ${recentCutoff.toISOString().slice(0, 10)}). The full history is available via tools if a pattern spans a longer period.
-
-Start by calling get_uncategorised_transactions, then get_categories to confirm names. Emit all suggestions in one pass then call finish_analysis.`
+Focus first on patterns from the last 18 months (since ${recentCutoff.toISOString().slice(0, 10)}). The full history is available via query_transactions if a pattern spans a longer period.`
 
         // ── Step 2: pre-load context + pre-fetch all data ─────────────────
         send({ type: 'status', message: 'Pre-loading transaction index…' })
