@@ -291,18 +291,16 @@ export async function emit_rule_suggestion(
   )
   const matchCount = newIds.length
 
-  // Check overlap with existing rules + prior suggestions
-  const overlapExisting = [...matchedIds].filter((id) => ctx.coveredByExisting.has(id)).length
-  const overlapRun = [...matchedIds].filter((id) => ctx.coveredThisRun.has(id)).length
-  const totalMatched = matchedIds.size
-
-  if (totalMatched > 0 && (overlapExisting + overlapRun) / totalMatched > 0.5) {
-    return `Rejected: >50% overlap with existing rules or prior suggestions this run (${overlapExisting + overlapRun}/${totalMatched} already covered). Try a more specific condition to target the uncovered transactions, or skip this merchant and continue with others.`
-  }
-
-  // Medium-confidence suggestions with 0 matches are still allowed (singletons with description drift)
-  if (matchCount === 0 && args.confidence !== 'medium') {
-    return 'Rejected: 0 transactions matched. Either (a) broaden the condition (use "contains" instead of "equals", or use a shorter keyword), (b) set confidence to "medium" if you are reasoning from world knowledge, or (c) skip this one.'
+  // Reject only if this suggestion adds zero new coverage
+  if (matchCount === 0) {
+    const overlapRun = [...matchedIds].filter((id) => ctx.coveredThisRun.has(id)).length
+    if (overlapRun > 0) {
+      return `Rejected: all matched transactions are already covered by a suggestion emitted earlier this run. Skip this one and continue with others.`
+    }
+    if (args.confidence !== 'medium') {
+      return 'Rejected: 0 transactions matched. Either (a) broaden the condition (use "contains" instead of "equals", or use a shorter keyword), (b) set confidence to "medium" if you are reasoning from world knowledge, or (c) skip this one.'
+    }
+    // medium confidence + 0 matches = allowed (singleton/world-knowledge suggestion)
   }
 
   // Mark as covered
