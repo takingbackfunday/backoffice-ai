@@ -440,7 +440,7 @@ export function OutputRow({
 
 export function RuleEditor({
   projects, payees, accounts, categoryGroups, editingRule, onSave, onCancel, saveLabel, cancelLabel, showSaveAndApply, onApplyComplete,
-  cardHeader,
+  cardHeader, onSaveOverride,
 }: {
   projects: Project[]
   payees: Payee[]
@@ -454,6 +454,8 @@ export function RuleEditor({
   showSaveAndApply?: boolean
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
   cardHeader?: React.ReactNode
+  /** If provided, replaces the API save — called with form state so the caller can persist instead */
+  onSaveOverride?: (shouldApply: boolean) => Promise<void>
 }) {
   const initialConditions = (): ConditionDef[] => {
     if (!editingRule) return [defaultCondition()]
@@ -534,6 +536,13 @@ export function RuleEditor({
 
     try {
       const isEdit = !!editingRule?.id
+      const shouldApply = isEdit || applyAfterSaveRef.current
+
+      if (onSaveOverride) {
+        await onSaveOverride(shouldApply)
+        return
+      }
+
       const url = isEdit ? `/api/rules/${editingRule!.id}` : '/api/rules'
       const method = isEdit ? 'PATCH' : 'POST'
 
@@ -550,8 +559,6 @@ export function RuleEditor({
       })
       const json = await res.json()
       if (!res.ok || json.error) { setError(json.error ?? 'Failed to save rule'); return }
-      // Always apply after an update; only apply after create if user clicked "Save & apply"
-      const shouldApply = isEdit || applyAfterSaveRef.current
       onSave(json.data)
       if (shouldApply) {
         fetch('/api/rules/apply', { method: 'POST' })

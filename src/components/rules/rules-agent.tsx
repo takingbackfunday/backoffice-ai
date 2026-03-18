@@ -136,14 +136,22 @@ export function SuggestionCard({
   )
 
   async function handleSave(rule: UserRule) {
-    if (isPersisted) {
-      // Accept persisted suggestion — creates the real rule server-side
-      const res = await fetch(`/api/rules/suggestions/${(suggestion as PersistedSuggestion).id}`, { method: 'POST' })
-      if (!res.ok) return
-      const json = await res.json()
-      onAccepted(json.data ?? rule, index)
-    } else {
-      onAccepted(rule, index)
+    onAccepted(rule, index)
+  }
+
+  async function handleSaveOverride(shouldApply: boolean) {
+    // For persisted suggestions: POST to accept API (creates the real rule) then optionally apply
+    const res = await fetch(`/api/rules/suggestions/${(suggestion as PersistedSuggestion).id}`, { method: 'POST' })
+    if (!res.ok) return
+    const json = await res.json()
+    onAccepted(json.data, index)
+    if (shouldApply) {
+      fetch('/api/rules/apply', { method: 'POST' })
+        .then((r) => r.json().then((applyJson) => ({ ok: r.ok, applyJson })))
+        .then(({ ok: applyOk, applyJson }) => {
+          if (onApplyComplete) onApplyComplete(applyOk ? (applyJson.data ?? null) : null)
+        })
+        .catch(() => { if (onApplyComplete) onApplyComplete(null) })
     }
   }
 
@@ -165,9 +173,10 @@ export function SuggestionCard({
       onCancel={handleDecline}
       saveLabel="Accept"
       cancelLabel="Decline"
-      showSaveAndApply={!isPersisted}
+      showSaveAndApply={true}
       onApplyComplete={onApplyComplete}
       cardHeader={header}
+      onSaveOverride={isPersisted ? handleSaveOverride : undefined}
     />
   )
 }
