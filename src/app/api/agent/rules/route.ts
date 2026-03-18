@@ -139,7 +139,7 @@ Now emit all rule suggestions using emit_rule_suggestion, then call finish_analy
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           console.log(`[rules-agent] round ${round + 1}, messages:`, messages.length, 'last role:', messages[messages.length-1]?.role)
-          const response = await openrouterWithTools(messages, RULES_TOOLS, 'minimax/minimax-m2.7')
+          const response = await openrouterWithTools(messages, RULES_TOOLS, 'mistralai/mistral-small-2603')
 
           // Push assistant message
           messages.push({

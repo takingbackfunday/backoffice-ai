@@ -60,7 +60,7 @@ export async function openrouterChat(
 export async function openrouterWithTools(
   messages: ChatMessage[],
   tools: ToolDefinition[],
-  model = 'minimax/minimax-m2.7'
+  model = 'mistralai/mistral-small-2603'
 ): Promise<ChatResponse> {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',

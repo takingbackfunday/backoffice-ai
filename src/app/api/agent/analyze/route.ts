@@ -132,7 +132,7 @@ Write 3–5 tight bullet observations + a 1-line action recommendation. No fluff
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt },
             ],
-            'minimax/minimax-m2.7'
+            'mistralai/mistral-small-2603'
           )
         } finally {
           clearInterval(keepAlive)
