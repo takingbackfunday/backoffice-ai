@@ -30,8 +30,8 @@ CRITICAL — CATEGORY NAMES:
 - If no category fits perfectly, pick the closest match from the list. Never invent a name.
 
 Workflow:
-1. Read the AVAILABLE CATEGORIES list carefully — write down the exact names you will use for each merchant group
-2. Call record_plan ONCE: list every merchant group → exact category name from the list → payee
+1. Read the AVAILABLE CATEGORIES list carefully — identify the exact category name for each merchant group
+2. Call record_plan FIRST — before any other tool. List every merchant group → exact category name → payee. Do NOT call query_transactions before record_plan.
 3. Emit ALL suggestions in a SINGLE round by calling emit_rule_suggestion multiple times in one response — do NOT spread them across multiple rounds
 4. If any suggestion is rejected for a bad categoryName, look at the full list in the rejection message and resubmit with the correct name immediately
 5. Call finish_analysis
@@ -232,6 +232,7 @@ Instructions:
           // Execute tool calls — collect outcomes for round summary log
           type RoundOutcome = { tool: string; status: string; detail: string }
           const roundOutcomes: RoundOutcome[] = []
+          const roundHasRecordPlan = response.tool_calls.some(tc => tc.function.name === 'record_plan')
 
           for (const tc of response.tool_calls) {
             const toolName = tc.function.name
@@ -240,6 +241,13 @@ Instructions:
               args = JSON.parse(tc.function.arguments)
             } catch {
               args = {}
+            }
+
+            // Round 1: block queries before record_plan — Opus must plan first
+            if (round === 0 && !roundHasRecordPlan && (toolName === 'query_transactions' || toolName === 'search_transactions')) {
+              messages.push({ role: 'tool', tool_call_id: tc.id, content: 'You must call record_plan FIRST before querying transactions. Call record_plan now with your analysis plan, then you may query for additional detail.' })
+              roundOutcomes.push({ tool: toolName, status: 'blocked:no-plan-yet', detail: '' })
+              continue
             }
 
             // Block pre-loaded tools — data is already in the user message

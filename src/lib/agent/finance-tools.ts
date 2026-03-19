@@ -268,11 +268,10 @@ export async function get_categories(userId: string): Promise<string> {
 
   if (!groups.length) return 'No categories found.'
 
-  const lines = groups.flatMap(g => [
-    `  [${g.name}]`,
-    ...g.categories.map(c => `    - ${c.name}`),
-  ])
-  return `Category groups and categories:\n${lines.join('\n')}`
+  const lines = groups.flatMap(g =>
+    g.categories.map(c => `  ${c.name}  (group: ${g.name})`)
+  )
+  return `Available categories — use the EXACT name before the parenthesis as categoryName:\n${lines.join('\n')}`
 }
 
 export async function get_payees(userId: string, args: {
