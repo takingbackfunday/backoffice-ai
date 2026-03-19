@@ -95,6 +95,10 @@ export async function POST(request: Request) {
       coveredThisRun: new Set<string>(),
     }
 
+    // Pre-load rules so the agent can skip already-covered merchants
+    const rulesData = await dispatchRulesTool(userId, 'get_rules', {}, ctx)
+    const catsData = await dispatchRulesTool(userId, 'get_categories', {}, ctx)
+
     const editsSummary = edits
       .map((e, i) =>
         `Edit ${i + 1}: description="${e.description}"${e.payeeName ? ` payee="${e.payeeName}"` : ''} → category="${e.categoryName ?? '(none)'}" | amount=${e.amount.toFixed(2)}`
@@ -105,12 +109,24 @@ export async function POST(request: Request) {
       { role: 'system', content: SYSTEM_PROMPT },
       {
         role: 'user',
-        content: `The user just manually edited these ${edits.length} transaction(s):\n\n${editsSummary}\n\nAnalyse the patterns and emit rule suggestions.`,
+        content: `The user just manually edited these ${edits.length} transaction(s):
+
+${editsSummary}
+
+--- AVAILABLE CATEGORIES ---
+${catsData}
+
+--- EXISTING RULES (SKIP merchants already covered here) ---
+${rulesData}
+
+Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchants already covered in EXISTING RULES above.`,
       },
     ]
 
     let finished = false
-    const MAX_ROUNDS = 6
+    let consecutiveRejections = 0
+    const MAX_CONSECUTIVE_REJECTIONS = 3
+    const MAX_ROUNDS = 8
 
     for (let round = 0; round < MAX_ROUNDS && !finished; round++) {
       console.log(`[suggest-from-edits] round ${round + 1}/${MAX_ROUNDS}`)
@@ -141,14 +157,16 @@ export async function POST(request: Request) {
           args = {}
         }
 
-        // Block data-fetch tools — this prompt should only use category/rules lookups + emit
-        if (toolName === 'query_transactions' || toolName === 'search_transactions' ||
-            toolName === 'get_uncategorised_transactions' || toolName === 'get_no_payee_transactions') {
+        // Block all data-fetch tools — everything is pre-loaded in the user message
+        const BLOCKED = ['query_transactions', 'search_transactions',
+          'get_uncategorised_transactions', 'get_no_payee_transactions',
+          'get_categories', 'get_rules', 'get_payees']
+        if (BLOCKED.includes(toolName)) {
           console.log(`[suggest-from-edits] blocked tool: ${toolName}`)
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
-            content: 'Not available in this context. Use the edit data provided and emit suggestions directly.',
+            content: 'This data is already provided in the user message above. Use it directly and emit suggestions.',
           })
           continue
         }
@@ -163,6 +181,19 @@ export async function POST(request: Request) {
         console.log(`[suggest-from-edits] tool ${toolName} → ${result.slice(0, 120)}`)
 
         messages.push({ role: 'tool', tool_call_id: tc.id, content: result })
+
+        if (toolName === 'emit_rule_suggestion') {
+          if (result.startsWith('Rejected') || result === 'Emitted: 0 new transaction(s) matched.') {
+            consecutiveRejections++
+            if (consecutiveRejections >= MAX_CONSECUTIVE_REJECTIONS) {
+              console.log(`[suggest-from-edits] too many consecutive rejections, stopping`)
+              finished = true
+              break
+            }
+          } else {
+            consecutiveRejections = 0
+          }
+        }
 
         if (result === 'FINISH_ANALYSIS') {
           finished = true
