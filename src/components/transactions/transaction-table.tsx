@@ -69,6 +69,7 @@ function ProjectCell({
   onCancel: () => void
 }) {
   const ref = useRef<HTMLSelectElement>(null)
+  const committed = useRef(false)
 
   useEffect(() => { ref.current?.focus() }, [])
 
@@ -76,9 +77,14 @@ function ProjectCell({
     <select
       ref={ref}
       defaultValue={value ?? ''}
-      onChange={(e) => onCommit(e.target.value || null)}
+      onChange={(e) => {
+        committed.current = true
+        const scrollY = window.scrollY
+        onCommit(e.target.value || null)
+        requestAnimationFrame(() => { window.scrollTo({ top: scrollY, behavior: 'instant' }) })
+      }}
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
-      onBlur={() => onCancel()}
+      onBlur={() => { if (!committed.current) onCancel() }}
       className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none focus:ring-1 focus:ring-blue-400"
       aria-label="Select project"
     >
@@ -103,14 +109,22 @@ function CategoryCell({
   onCancel: () => void
 }) {
   const ref = useRef<HTMLSelectElement>(null)
+  const committed = useRef(false)
   useEffect(() => { ref.current?.focus() }, [])
   return (
     <select
       ref={ref}
       defaultValue={value ?? ''}
-      onChange={(e) => onCommit(e.target.value || null)}
+      onChange={(e) => {
+        committed.current = true
+        // Preserve scroll position — committing unmounts this select which
+        // can cause the browser to snap the viewport.
+        const scrollY = window.scrollY
+        onCommit(e.target.value || null)
+        requestAnimationFrame(() => { window.scrollTo({ top: scrollY, behavior: 'instant' }) })
+      }}
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
-      onBlur={() => onCancel()}
+      onBlur={() => { if (!committed.current) onCancel() }}
       className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none focus:ring-1 focus:ring-blue-400"
       aria-label="Select category"
     >
