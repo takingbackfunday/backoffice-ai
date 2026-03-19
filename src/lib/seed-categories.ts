@@ -436,7 +436,7 @@ export async function seedDefaultCategories(
 
     for (let ci = 0; ci < categories.length; ci++) {
       const catName = categories[ci]
-      const catId = `default-${userId}-${catName.toLowerCase().replace(/[\s/&'(),<>]+/g, '-').replace(/-+/g, '-').replace(/-$/, '')}`
+      const catId = `default-${userId}-${groupId.replace(`default-${userId}-`, '')}-${catName.toLowerCase().replace(/[\s/&'(),<>]+/g, '-').replace(/-+/g, '-').replace(/-$/, '')}`
 
       await db.category.upsert({
         where: { id: catId },
