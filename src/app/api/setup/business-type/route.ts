@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { seedDefaultCategories, type BusinessType } from '@/lib/seed-categories'
 
-const VALID_TYPES: BusinessType[] = ['freelance', 'property', 'both']
+const VALID_TYPES: BusinessType[] = ['freelance', 'property', 'both', 'personal']
 
 export async function POST(request: Request) {
   try {

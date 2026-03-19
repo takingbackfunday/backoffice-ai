@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-type BusinessType = 'freelance' | 'property' | 'both'
+type BusinessType = 'freelance' | 'property' | 'both' | 'personal'
 
 interface Option {
   type: BusinessType
@@ -39,6 +39,14 @@ const OPTIONS: Option[] = [
     groups: 0,
     categories: 0,
   },
+  {
+    type: 'personal',
+    title: 'Personal finance',
+    description: 'Track personal income and spending — not for a business.',
+    examples: 'Individuals tracking household budgets, personal savings goals',
+    groups: 0,
+    categories: 0,
+  },
 ]
 
 interface Props {
@@ -46,6 +54,7 @@ interface Props {
     freelance: { groups: number; categories: number }
     property: { groups: number; categories: number }
     both: { groups: number; categories: number }
+    personal: { groups: number; categories: number }
   }
 }
 

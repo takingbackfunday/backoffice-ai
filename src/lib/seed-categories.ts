@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 
-export type BusinessType = 'freelance' | 'property' | 'both'
+export type BusinessType = 'freelance' | 'property' | 'both' | 'personal'
 
 interface GroupDef {
   group: string
@@ -394,13 +394,202 @@ const ALL_CATEGORIES: GroupDef[] = [
   },
 ]
 
+// ── PERSONAL FINANCE taxonomy (entirely separate from Schedule C/E) ──────────
+const PERSONAL_CATEGORIES: GroupDef[] = [
+  {
+    group: 'Income',
+    scheduleRef: 'none',
+    taxType: 'income',
+    categories: [
+      'Salary & wages',
+      'Freelance / side income',
+      'Rental income',
+      'Investment income',
+      'Government benefits',
+      'Gifts received',
+      'Other income',
+    ],
+  },
+  {
+    group: 'Housing',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Rent / mortgage',
+      'Electric & gas',
+      'Water & sewer',
+      'Internet & cable',
+      'Home insurance',
+      'Repairs & maintenance',
+      'Furniture & decor',
+      'Cleaning services',
+    ],
+  },
+  {
+    group: 'Food & dining',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Groceries',
+      'Restaurants & takeout',
+      'Coffee & cafes',
+      'Alcohol & bars',
+      'Meal delivery',
+    ],
+  },
+  {
+    group: 'Transport',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Car payment / lease',
+      'Fuel & gas',
+      'Car insurance',
+      'Parking & tolls',
+      'Public transit',
+      'Rideshare (Uber/Lyft)',
+      'Car repairs & maintenance',
+    ],
+  },
+  {
+    group: 'Health',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Health insurance',
+      'Doctor & specialist',
+      'Dental & vision',
+      'Prescriptions',
+      'Therapy & mental health',
+      'Gym & fitness',
+    ],
+  },
+  {
+    group: 'Shopping',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Clothing & shoes',
+      'Electronics & tech',
+      'Household goods',
+      'Books & stationery',
+      'Gifts given',
+    ],
+  },
+  {
+    group: 'Entertainment',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Streaming services',
+      'Movies & concerts',
+      'Hobbies & sports',
+      'Games',
+      'Events & experiences',
+    ],
+  },
+  {
+    group: 'Travel',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Flights',
+      'Hotels & accommodation',
+      'Car rental',
+      'Activities & tours',
+      'Travel insurance',
+    ],
+  },
+  {
+    group: 'Education',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Tuition & fees',
+      'Student loan payments',
+      'Books & supplies',
+      'Online courses',
+      'Childcare & school',
+    ],
+  },
+  {
+    group: 'Personal care',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Haircuts & salon',
+      'Toiletries & cosmetics',
+      'Spa & wellness',
+      'Clothing care (dry cleaning)',
+    ],
+  },
+  {
+    group: 'Family & pets',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Childcare',
+      'Kids\' activities',
+      'Pet food & supplies',
+      'Vet & pet insurance',
+      'Elder care',
+    ],
+  },
+  {
+    group: 'Subscriptions',
+    scheduleRef: 'none',
+    taxType: 'expense',
+    categories: [
+      'Software & apps',
+      'Memberships & clubs',
+      'News & media',
+      'Cloud storage',
+    ],
+  },
+  {
+    group: 'Savings & investments',
+    scheduleRef: 'none',
+    taxType: 'non_deductible',
+    categories: [
+      'Emergency fund',
+      '401(k) / IRA contribution',
+      'Brokerage / stocks',
+      'Crypto',
+      'Other savings',
+    ],
+  },
+  {
+    group: 'Debt payments',
+    scheduleRef: 'none',
+    taxType: 'non_deductible',
+    categories: [
+      'Credit card payment',
+      'Student loan payment',
+      'Car loan payment',
+      'Personal loan payment',
+    ],
+  },
+  {
+    group: 'Transfers & other',
+    scheduleRef: 'none',
+    taxType: 'non_deductible',
+    categories: [
+      'Account transfer',
+      'Cash withdrawal',
+      'Uncategorized',
+    ],
+  },
+]
+
 /**
  * Filter the master category list based on business type.
  * 'freelance' → C + C,E + none
  * 'property'  → E + C,E + none
  * 'both'      → everything
+ * 'personal'  → PERSONAL_CATEGORIES (entirely separate list)
  */
 function getGroupsForType(type: BusinessType): GroupDef[] {
+  if (type === 'personal') return PERSONAL_CATEGORIES
   return ALL_CATEGORIES.filter((g) => {
     if (g.scheduleRef === 'none' || g.scheduleRef === 'C,E') return true
     if (type === 'both') return true
@@ -473,6 +662,10 @@ export function getCategoryCounts() {
     both: {
       groups: ALL_CATEGORIES.length,
       categories: ALL_CATEGORIES.reduce((s, g) => s + g.categories.length, 0),
+    },
+    personal: {
+      groups: PERSONAL_CATEGORIES.length,
+      categories: PERSONAL_CATEGORIES.reduce((s, g) => s + g.categories.length, 0),
     },
   }
 }
