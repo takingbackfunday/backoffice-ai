@@ -20,11 +20,18 @@ const SYSTEM_PROMPT = `You are a personal finance assistant with access to a set
 
 Use the tools to look up whatever data you need to answer the user's question accurately. You can call multiple tools in sequence — for example, call get_categories first to discover exact category names, then aggregate_transactions to get totals.
 
+CRITICAL RULES — follow these exactly:
+1. NEVER state a dollar amount you have not directly read from a tool result. No estimates, no sums in your head, no invented figures.
+2. For any total/sum, call aggregate_transactions — do NOT compute it yourself from a list of rows.
+3. For "why is X high", first call aggregate_transactions with categoryNames filter and date range to get the real total, then call query_transactions to list the individual transactions. Report ONLY what the tools returned.
+4. If a category name is unknown, call get_categories first to find the exact name.
+5. When asked about a specific time period, always pass dateFrom and dateTo to every tool call.
+6. Do not confuse different categories — Bank Fees transactions are NOT the same as tax payments or transfers, even if they appear in the same account.
+
 Guidelines:
 - Always use the most efficient tool for the job (aggregate_transactions for totals, query_transactions for individual rows)
 - When asked about a specific period, always filter by date
-- When asked "why" something is high/low, drill into the details with query_transactions
-- Be specific and data-driven in your answers — cite actual amounts, dates, payee names
+- Be specific and data-driven — cite only actual amounts from tool results
 - Keep answers concise but complete — bullet points are fine, no markdown headers
 - Plain text only, no markdown formatting`
 
@@ -81,7 +88,7 @@ Use the tools to query any data you need.`
         send({ type: 'status', message: 'Thinking…' })
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          const response = await openrouterWithTools(messages, FINANCE_TOOLS)
+          const response = await openrouterWithTools(messages, FINANCE_TOOLS, 'anthropic/claude-sonnet-4.6')
 
           // Append assistant turn
           messages.push({
@@ -93,6 +100,7 @@ Use the tools to query any data you need.`
           // No tool calls → final answer
           if (!response.tool_calls || response.tool_calls.length === 0) {
             const answer = (response.content ?? '').trim()
+            console.log(`[ask-agent] final answer (${answer.length} chars):`, answer.slice(0, 500))
             send({ type: 'answer', answer })
             send({ type: 'done' })
             return
@@ -104,6 +112,7 @@ Use the tools to query any data you need.`
             let args: unknown
             try { args = JSON.parse(tc.function.arguments) } catch { args = {} }
 
+            console.log(`[ask-agent] round ${round + 1} tool: ${toolName}`, JSON.stringify(args))
             send({ type: 'status', message: `Querying ${toolName.replace(/_/g, ' ')}…` })
 
             let result: string
@@ -113,6 +122,7 @@ Use the tools to query any data you need.`
               result = `Error: ${e instanceof Error ? e.message : String(e)}`
             }
 
+            console.log(`[ask-agent] tool ${toolName} result: ${result.slice(0, 300)}`)
             messages.push({
               role: 'tool',
               tool_call_id: tc.id,
@@ -124,7 +134,7 @@ Use the tools to query any data you need.`
         // Exceeded max rounds — ask for a final answer with what we have
         send({ type: 'status', message: 'Composing answer…' })
         messages.push({ role: 'user', content: 'Please give your final answer now based on the data you have gathered.' })
-        const final = await openrouterWithTools(messages, [])
+        const final = await openrouterWithTools(messages, [], 'google/gemini-3.1-flash-lite-preview')
         send({ type: 'answer', answer: (final.content ?? 'Unable to answer.').trim() })
         send({ type: 'done' })
 
