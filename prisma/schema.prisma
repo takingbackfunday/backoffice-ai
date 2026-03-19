@@ -123,6 +123,9 @@ model Transaction {
   updatedAt     DateTime     @updatedAt
 
   @@index([accountId, date])
+  @@index([categoryId])
+  @@index([payeeId])
+  @@index([projectId])
 }
 
 model ImportBatch {

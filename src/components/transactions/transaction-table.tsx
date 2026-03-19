@@ -22,6 +22,17 @@ interface EditingCell {
   field: EditableField
 }
 
+interface ColumnFilters {
+  description?: string
+  accountName?: string
+  amountMin?: string
+  amountMax?: string
+  payeeName?: string
+  notes?: string
+  categoryId?: string
+  projectId?: string
+}
+
 // ── Inline text input ──────────────────────────────────────────────
 function TextCell({
   value,
@@ -293,31 +304,351 @@ function PayeeCell({
   )
 }
 
-// ── Sortable header cell ───────────────────────────────────────────
-function SortHeader({
+// ── Funnel icon SVG ────────────────────────────────────────────────
+function FunnelIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      className={`w-3 h-3 shrink-0 ${active ? 'text-[#534AB7]' : 'text-muted-foreground opacity-50'}`}
+      fill={active ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      strokeWidth={2}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18l-7 9v6l-4-2v-4L3 4z" />
+    </svg>
+  )
+}
+
+// ── Column filter popover ──────────────────────────────────────────
+function ColumnFilterPopover({
+  column,
+  isOpen,
+  onOpen,
+  onClose,
+  filterValue,
+  filterValue2,
+  onChange,
+  onChange2,
+  type,
+  options,
+  groups,
+  label,
+}: {
+  column: string
+  isOpen: boolean
+  onOpen: () => void
+  onClose: () => void
+  filterValue: string
+  filterValue2?: string
+  onChange: (v: string) => void
+  onChange2?: (v: string) => void
+  type: 'text' | 'select' | 'optgroup-select' | 'amount-range' | 'date'
+  options?: { value: string; label: string }[]
+  groups?: CategoryGroup[]
+  label: string
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const isActive = Boolean(filterValue || filterValue2)
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        onClose()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [isOpen, onClose])
+
+  return (
+    <div ref={wrapRef} className="relative inline-flex items-center">
+      <button
+        onMouseDown={(e) => { e.stopPropagation(); isOpen ? onClose() : onOpen() }}
+        className="p-0.5 rounded hover:bg-black/10 transition-colors"
+        aria-label={`Filter by ${label}`}
+        title={`Filter by ${label}`}
+      >
+        <FunnelIcon active={isActive} />
+      </button>
+      {isOpen && (
+        <div className="absolute top-full left-0 z-30 mt-1 bg-white border border-black/10 rounded-lg shadow-lg p-2 min-w-[160px]">
+          <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">{label}</p>
+          {type === 'text' && (
+            <input
+              autoFocus
+              type="text"
+              value={filterValue}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="contains…"
+              className="w-full text-xs border border-black/15 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+            />
+          )}
+          {type === 'select' && options && (
+            <select
+              autoFocus
+              value={filterValue}
+              onChange={(e) => { onChange(e.target.value); onClose() }}
+              className="w-full text-xs border border-black/15 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+            >
+              <option value="">— All —</option>
+              {options.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          )}
+          {type === 'optgroup-select' && groups && (
+            <select
+              autoFocus
+              value={filterValue}
+              onChange={(e) => { onChange(e.target.value); onClose() }}
+              className="w-full text-xs border border-black/15 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+            >
+              <option value="">— All —</option>
+              {groups.map((g) => (
+                <optgroup key={g.id} label={g.name}>
+                  {g.categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          )}
+          {type === 'amount-range' && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1">
+                <label className="text-[10px] text-muted-foreground w-6 shrink-0">Min</label>
+                <input
+                  autoFocus
+                  type="number"
+                  value={filterValue}
+                  onChange={(e) => onChange(e.target.value)}
+                  placeholder="0.00"
+                  className="flex-1 min-w-0 text-xs border border-black/15 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <label className="text-[10px] text-muted-foreground w-6 shrink-0">Max</label>
+                <input
+                  type="number"
+                  value={filterValue2 ?? ''}
+                  onChange={(e) => onChange2?.(e.target.value)}
+                  placeholder="0.00"
+                  className="flex-1 min-w-0 text-xs border border-black/15 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                />
+              </div>
+            </div>
+          )}
+          {type === 'date' && (
+            <div className="text-xs text-muted-foreground italic">Use date column header</div>
+          )}
+          {filterValue && (
+            <button
+              onMouseDown={(e) => { e.stopPropagation(); onChange(''); onChange2?.('') }}
+              className="mt-1.5 text-[10px] text-[#534AB7] hover:underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Sortable + filterable header cell ─────────────────────────────
+function FilterableSortHeader({
   label,
   field,
   sortBy,
   sortDir,
   onSort,
+  filterCol,
+  openFilterCol,
+  setOpenFilterCol,
+  filterValue,
+  filterValue2,
+  onFilterChange,
+  onFilterChange2,
+  filterType,
+  filterOptions,
+  filterGroups,
+  sortable = true,
   className = '',
 }: {
   label: string
-  field: SortField
+  field: string
   sortBy: SortField
   sortDir: SortDir
   onSort: (f: SortField) => void
+  filterCol: string
+  openFilterCol: string | null
+  setOpenFilterCol: (col: string | null) => void
+  filterValue: string
+  filterValue2?: string
+  onFilterChange: (v: string) => void
+  onFilterChange2?: (v: string) => void
+  filterType: 'text' | 'select' | 'optgroup-select' | 'amount-range' | 'date'
+  filterOptions?: { value: string; label: string }[]
+  filterGroups?: CategoryGroup[]
+  sortable?: boolean
   className?: string
 }) {
-  const active = sortBy === field
+  const isSortActive = sortBy === (field as SortField)
   return (
     <th
-      className={`px-3 py-1 text-left font-medium cursor-pointer select-none whitespace-nowrap hover:bg-muted/80 ${className}`}
-      onClick={() => onSort(field)}
-      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={`px-3 py-1 text-left font-medium whitespace-nowrap relative ${className}`}
     >
-      {label}
-      {active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕'}
+      <div className="flex items-center gap-1">
+        {sortable ? (
+          <span
+            className="cursor-pointer select-none hover:text-foreground"
+            onClick={() => onSort(field as SortField)}
+            aria-sort={isSortActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+          >
+            {label}{isSortActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕'}
+          </span>
+        ) : (
+          <span className="select-none">{label}</span>
+        )}
+        <ColumnFilterPopover
+          column={filterCol}
+          isOpen={openFilterCol === filterCol}
+          onOpen={() => setOpenFilterCol(filterCol)}
+          onClose={() => setOpenFilterCol(null)}
+          filterValue={filterValue}
+          filterValue2={filterValue2}
+          onChange={onFilterChange}
+          onChange2={onFilterChange2}
+          type={filterType}
+          options={filterOptions}
+          groups={filterGroups}
+          label={label}
+        />
+      </div>
+    </th>
+  )
+}
+
+// ── Date filter header ─────────────────────────────────────────────
+function DateFilterHeader({
+  sortBy,
+  sortDir,
+  onSort,
+  dateFrom,
+  dateTo,
+  customFrom,
+  customTo,
+  onCustomFromChange,
+  onCustomToChange,
+  onApplyPreset,
+  onApplyCustom,
+  onClear,
+  openFilterCol,
+  setOpenFilterCol,
+}: {
+  sortBy: SortField
+  sortDir: SortDir
+  onSort: (f: SortField) => void
+  dateFrom: string
+  dateTo: string
+  customFrom: string
+  customTo: string
+  onCustomFromChange: (v: string) => void
+  onCustomToChange: (v: string) => void
+  onApplyPreset: (preset: 'this-month' | 'last-month' | 'last-3-months' | 'last-6-months' | 'ytd') => void
+  onApplyCustom: () => void
+  onClear: () => void
+  openFilterCol: string | null
+  setOpenFilterCol: (col: string | null) => void
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const isOpen = openFilterCol === 'date'
+  const isActive = Boolean(dateFrom || dateTo)
+  const isSortActive = sortBy === 'date'
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpenFilterCol(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [isOpen, setOpenFilterCol])
+
+  return (
+    <th className="px-3 py-1 text-left font-medium whitespace-nowrap relative">
+      <div className="flex items-center gap-1" ref={wrapRef}>
+        <span
+          className="cursor-pointer select-none hover:text-foreground"
+          onClick={() => onSort('date')}
+          aria-sort={isSortActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+        >
+          Date{isSortActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕'}
+        </span>
+        <button
+          onMouseDown={(e) => { e.stopPropagation(); isOpen ? setOpenFilterCol(null) : setOpenFilterCol('date') }}
+          className="p-0.5 rounded hover:bg-black/10 transition-colors"
+          aria-label="Filter by date"
+          title="Filter by date"
+        >
+          <FunnelIcon active={isActive} />
+        </button>
+        {isOpen && (
+          <div className="absolute top-full left-0 z-30 mt-1 bg-white border border-black/10 rounded-lg shadow-lg w-52 p-3 space-y-3">
+            <div className="space-y-1">
+              <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Quick select</p>
+              {([
+                ['this-month', 'This month'],
+                ['last-month', 'Last month'],
+                ['last-3-months', 'Last 3 months'],
+                ['last-6-months', 'Last 6 months'],
+                ['ytd', 'Year to date'],
+              ] as const).map(([preset, lbl]) => (
+                <button
+                  key={preset}
+                  onMouseDown={(e) => { e.stopPropagation(); onApplyPreset(preset); setOpenFilterCol(null) }}
+                  className="w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-muted/60 transition-colors"
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            <div className="border-t border-black/5 pt-3 space-y-2">
+              <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Custom range</p>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => onCustomFromChange(e.target.value)}
+                className="w-full text-xs border border-black/15 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+              />
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => onCustomToChange(e.target.value)}
+                className="w-full text-xs border border-black/15 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+              />
+              <button
+                onMouseDown={(e) => { e.stopPropagation(); onApplyCustom(); setOpenFilterCol(null) }}
+                disabled={!customFrom && !customTo}
+                className="w-full text-xs py-1.5 rounded-md bg-[#3C3489] text-[#EEEDFE] hover:bg-[#2d2770] disabled:opacity-40 transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+            {isActive && (
+              <button
+                onMouseDown={(e) => { e.stopPropagation(); onClear(); setOpenFilterCol(null) }}
+                className="text-[10px] text-[#534AB7] hover:underline"
+              >
+                Clear date filter
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </th>
   )
 }
@@ -327,36 +658,26 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const [localRows, setLocalRows] = useState<TransactionWithRelations[]>(initialRows ?? [])
   const [total, setTotal] = useState(initialTotal ?? 0)
   const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [loading, setLoading] = useState(!initialRows)
+
+  // Column filters
+  const [filters, setFilters] = useState<ColumnFilters>({})
+  const [debouncedFilters, setDebouncedFilters] = useState<ColumnFilters>({})
+  const [openFilterCol, setOpenFilterCol] = useState<string | null>(null)
 
   // Date filter
   type DatePreset = 'this-month' | 'last-month' | 'last-3-months' | 'last-6-months' | 'ytd'
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [showDatePicker, setShowDatePicker] = useState(false)
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
-  const datePickerRef = useRef<HTMLDivElement>(null)
-
-  // Close date picker on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
-        setShowDatePicker(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   function applyPreset(preset: DatePreset) {
     const now = new Date()
     const pad = (n: number) => String(n).padStart(2, '0')
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
     let from: Date
-    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0) // end of current month
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 0)
     switch (preset) {
       case 'this-month': from = new Date(now.getFullYear(), now.getMonth(), 1); break
       case 'last-month': from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -368,7 +689,6 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     setDateFrom(fmt(from))
     setDateTo(fmt(to))
     setPage(1)
-    setShowDatePicker(false)
   }
 
   function applyCustomDates() {
@@ -376,7 +696,6 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     setDateFrom(customFrom)
     setDateTo(customTo)
     setPage(1)
-    setShowDatePicker(false)
   }
 
   function clearDateFilter() {
@@ -387,18 +706,12 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     setPage(1)
   }
 
-  function dateFilterLabel() {
-    if (!dateFrom && !dateTo) return null
-    const fmt = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    if (dateFrom && dateTo) return `${fmt(dateFrom)} – ${fmt(dateTo)}`
-    if (dateFrom) return `From ${fmt(dateFrom)}`
-    return `Until ${fmt(dateTo)}`
-  }
-
+  // Debounce text filters at 600ms
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 400)
+    const t = setTimeout(() => { setDebouncedFilters(filters); setPage(1) }, 600)
     return () => clearTimeout(t)
-  }, [search])
+  }, [filters])
+
   const [error, setError] = useState<string | null>(null)
 
   const [sortBy, setSortBy] = useState<SortField>('date')
@@ -420,7 +733,6 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const [payees, setPayees] = useState<Payee[]>(initialPayees ?? [])
 
   // ── Edit queue for deferred rule suggestions ──────────────────────
-  // Maps txn id → latest row snapshot after a successful edit
   const editQueueRef = useRef<Map<string, TransactionWithRelations>>(new Map())
   const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [suggestionReady, setSuggestionReady] = useState(false)
@@ -438,10 +750,15 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   // Track whether this is the very first render with server data
   const isFirstRender = useRef(true)
 
+  // Derive unique account names from loaded rows for account filter
+  const accountOptions = Array.from(
+    new Map(localRows.map((r) => [r.account.name, r.account.name])).entries()
+  ).map(([name]) => ({ value: name, label: name }))
+
   // Fetch transactions
   const fetchTransactions = useCallback(() => {
-    // Skip the initial fetch if we have server-provided data and nothing has changed
-    if (isFirstRender.current && initialRows && page === 1 && debouncedSearch === '' && sortBy === 'date' && sortDir === 'desc' && !dateFrom && !dateTo) {
+    const hasFilters = Object.values(debouncedFilters).some(Boolean) || dateFrom || dateTo
+    if (isFirstRender.current && initialRows && page === 1 && !hasFilters && sortBy === 'date' && sortDir === 'desc') {
       isFirstRender.current = false
       return () => {}
     }
@@ -456,7 +773,14 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       pageSize: String(pageSize),
       sortBy,
       sortDir,
-      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(debouncedFilters.description ? { description: debouncedFilters.description } : {}),
+      ...(debouncedFilters.accountName ? { accountName: debouncedFilters.accountName } : {}),
+      ...(debouncedFilters.payeeName ? { payeeName: debouncedFilters.payeeName } : {}),
+      ...(debouncedFilters.notes ? { notes: debouncedFilters.notes } : {}),
+      ...(debouncedFilters.categoryId ? { categoryId: debouncedFilters.categoryId } : {}),
+      ...(debouncedFilters.projectId ? { projectId: debouncedFilters.projectId } : {}),
+      ...(debouncedFilters.amountMin ? { amountMin: debouncedFilters.amountMin } : {}),
+      ...(debouncedFilters.amountMax ? { amountMax: debouncedFilters.amountMax } : {}),
       ...(dateFrom ? { dateFrom } : {}),
       ...(dateTo ? { dateTo } : {}),
     })
@@ -473,11 +797,22 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [page, pageSize, debouncedSearch, sortBy, sortDir, dateFrom, dateTo])
+  }, [page, pageSize, debouncedFilters, sortBy, sortDir, dateFrom, dateTo, initialRows])
 
   useEffect(() => {
     return fetchTransactions()
   }, [fetchTransactions])
+
+  // ── Active filter count ───────────────────────────────────────────
+  const activeFilterCount = Object.values(debouncedFilters).filter(Boolean).length + (dateFrom || dateTo ? 1 : 0)
+  const hasActiveFilters = activeFilterCount > 0
+
+  function clearAllFilters() {
+    setFilters({})
+    setDebouncedFilters({})
+    setDateFrom(''); setDateTo(''); setCustomFrom(''); setCustomTo('')
+    setPage(1)
+  }
 
   // ── Sorting ──────────────────────────────────────────────────────
   function handleSort(field: SortField) {
@@ -564,8 +899,6 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       if (!res.ok) throw new Error('patch failed')
 
       // Queue this edit for deferred rule suggestion generation.
-      // Build the edit snapshot from patchBody + existing row so we capture
-      // the values that were actually saved, not the pre-patch state.
       const allCats = categoryGroups.flatMap((g) => g.categories)
       const resolvedCatName =
         field === 'categoryId'
@@ -586,12 +919,10 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
         categoryName: resolvedCatName,
         amount: Number(row.amount),
       }
-      // Merge into existing snapshot so multiple edits to the same row accumulate
       const existing = editQueueRef.current.get(id) as unknown as typeof editSnapshot | undefined
       const merged = existing ? { ...existing, ...editSnapshot } : editSnapshot
       editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
 
-      // Reset 30-second debounce — no UI shown until suggestions are actually ready
       if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
       setSuggestionReady(false)
       suggestionTimerRef.current = setTimeout(() => {
@@ -643,7 +974,6 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       ids.map((id) =>
         fetch(`/api/transactions/${id}`, { method: 'DELETE' }).then((r) => {
           if (!r.ok) throw new Error('failed')
-          // Remove each row as soon as it's deleted
           setLocalRows((rows) => rows.filter((r) => r.id !== id))
           setDeletingIds((s) => { const n = new Set(s); n.delete(id); return n })
           deleted++
@@ -808,11 +1138,27 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="space-y-3" data-testid="transaction-table">
-      {/* Search bar + actions */}
-      <div className="flex items-center gap-2">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 flex-wrap">
         <p className="text-xs text-muted-foreground mr-auto">
           {loading && total === 0 ? 'Loading transactions…' : `${total} transaction${total !== 1 ? 's' : ''}`}
         </p>
+
+        {/* Active filter count + clear */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#3C3489] bg-[#EEEDFE] border border-[#534AB7]/20 rounded-full px-2.5 py-1">
+              {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
+            </span>
+            <button
+              onClick={clearAllFilters}
+              className="text-xs text-muted-foreground hover:text-foreground border border-black/10 rounded-lg px-2.5 py-1.5 transition-colors"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+
         {(someChecked || bulkDeleting) && (
           <div className="flex items-center gap-2 text-xs" role="toolbar" aria-label="Bulk actions" data-testid="bulk-toolbar">
             {bulkDeleting ? (
@@ -837,104 +1183,6 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
             )}
           </div>
         )}
-        {/* Active date filter chip */}
-        {dateFilterLabel() && (
-          <span className="flex items-center gap-1 text-xs bg-[#EEEDFE] text-[#3C3489] border border-[#534AB7]/20 rounded-full px-2.5 py-1">
-            <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            {dateFilterLabel()}
-            <button onClick={clearDateFilter} className="ml-0.5 hover:opacity-70" aria-label="Clear date filter">✕</button>
-          </span>
-        )}
-
-        {/* Date filter button + dropdown */}
-        <div ref={datePickerRef} className="relative">
-          <button
-            onClick={() => setShowDatePicker((v) => !v)}
-            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
-              dateFrom || dateTo
-                ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489]'
-                : 'border-black/10 text-muted-foreground hover:text-foreground'
-            }`}
-            aria-label="Filter by date"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Date
-          </button>
-
-          {showDatePicker && (
-            <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-black/10 rounded-lg shadow-lg w-56 p-3 space-y-3">
-              {/* Presets */}
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Quick select</p>
-                {([
-                  ['this-month', 'This month'],
-                  ['last-month', 'Last month'],
-                  ['last-3-months', 'Last 3 months'],
-                  ['last-6-months', 'Last 6 months'],
-                  ['ytd', 'Year to date'],
-                ] as const).map(([preset, label]) => (
-                  <button
-                    key={preset}
-                    onClick={() => applyPreset(preset)}
-                    className="w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-muted/60 transition-colors"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Custom range */}
-              <div className="border-t border-black/5 pt-3 space-y-2">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Custom range</p>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  className="w-full text-xs border border-black/15 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-                  placeholder="From"
-                />
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  className="w-full text-xs border border-black/15 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-                  placeholder="To"
-                />
-                <button
-                  onClick={applyCustomDates}
-                  disabled={!customFrom && !customTo}
-                  className="w-full text-xs py-1.5 rounded-md bg-[#3C3489] text-[#EEEDFE] hover:bg-[#2d2770] disabled:opacity-40 transition-colors"
-                >
-                  Apply
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="relative">
-          <input
-            type="search"
-            placeholder="Search transactions…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="rounded-md border px-3 py-1.5 text-xs w-56 pr-7"
-            aria-label="Search transactions"
-            data-testid="transaction-search"
-          />
-          {loading && search && (
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg className="w-3.5 h-3.5 animate-spin text-muted-foreground" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-            </span>
-          )}
-        </div>
       </div>
 
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
@@ -961,14 +1209,139 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                   className="cursor-pointer"
                 />
               </th>
-              <SortHeader label="Date" field="date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <th className="px-3 py-1 text-left font-medium">Account</th>
-              <SortHeader label="Description" field="description" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortHeader label="Amount" field="amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="text-right" />
-              <th className="px-3 py-1 text-left font-medium">Payee</th>
-              <th className="px-3 py-1 text-left font-medium">Notes</th>
-              <th className="px-3 py-1 text-left font-medium">Category</th>
-              <th className="px-3 py-1 text-left font-medium">Project</th>
+
+              {/* Date column with filter */}
+              <DateFilterHeader
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={handleSort}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                customFrom={customFrom}
+                customTo={customTo}
+                onCustomFromChange={setCustomFrom}
+                onCustomToChange={setCustomTo}
+                onApplyPreset={applyPreset}
+                onApplyCustom={applyCustomDates}
+                onClear={clearDateFilter}
+                openFilterCol={openFilterCol}
+                setOpenFilterCol={setOpenFilterCol}
+              />
+
+              {/* Account */}
+              <FilterableSortHeader
+                label="Account"
+                field="account"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={handleSort}
+                filterCol="accountName"
+                openFilterCol={openFilterCol}
+                setOpenFilterCol={setOpenFilterCol}
+                filterValue={filters.accountName ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, accountName: v }))}
+                filterType="select"
+                filterOptions={accountOptions}
+                sortable={false}
+              />
+
+              {/* Description */}
+              <FilterableSortHeader
+                label="Description"
+                field="description"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={handleSort}
+                filterCol="description"
+                openFilterCol={openFilterCol}
+                setOpenFilterCol={setOpenFilterCol}
+                filterValue={filters.description ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, description: v }))}
+                filterType="text"
+              />
+
+              {/* Amount */}
+              <FilterableSortHeader
+                label="Amount"
+                field="amount"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={handleSort}
+                filterCol="amount"
+                openFilterCol={openFilterCol}
+                setOpenFilterCol={setOpenFilterCol}
+                filterValue={filters.amountMin ?? ''}
+                filterValue2={filters.amountMax ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, amountMin: v }))}
+                onFilterChange2={(v) => setFilters((f) => ({ ...f, amountMax: v }))}
+                filterType="amount-range"
+                className="text-right"
+              />
+
+              {/* Payee */}
+              <FilterableSortHeader
+                label="Payee"
+                field="payee"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={handleSort}
+                filterCol="payeeName"
+                openFilterCol={openFilterCol}
+                setOpenFilterCol={setOpenFilterCol}
+                filterValue={filters.payeeName ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, payeeName: v }))}
+                filterType="text"
+                sortable={false}
+              />
+
+              {/* Notes */}
+              <FilterableSortHeader
+                label="Notes"
+                field="notes"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={handleSort}
+                filterCol="notes"
+                openFilterCol={openFilterCol}
+                setOpenFilterCol={setOpenFilterCol}
+                filterValue={filters.notes ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, notes: v }))}
+                filterType="text"
+                sortable={false}
+              />
+
+              {/* Category */}
+              <FilterableSortHeader
+                label="Category"
+                field="category"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={handleSort}
+                filterCol="categoryId"
+                openFilterCol={openFilterCol}
+                setOpenFilterCol={setOpenFilterCol}
+                filterValue={filters.categoryId ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, categoryId: v }))}
+                filterType="optgroup-select"
+                filterGroups={categoryGroups}
+              />
+
+              {/* Project */}
+              <FilterableSortHeader
+                label="Project"
+                field="project"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={handleSort}
+                filterCol="projectId"
+                openFilterCol={openFilterCol}
+                setOpenFilterCol={setOpenFilterCol}
+                filterValue={filters.projectId ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, projectId: v }))}
+                filterType="select"
+                filterOptions={projects.map((p) => ({ value: p.id, label: p.name }))}
+                sortable={false}
+              />
             </tr>
           </thead>
           <tbody>
