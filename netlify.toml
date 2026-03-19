@@ -8,6 +8,9 @@
 [functions."api/agent/rules"]
   timeout = 60
 
+[functions."api/agent/ask"]
+  timeout = 60
+
 [functions."api/agent/analyze"]
   timeout = 60
 
