@@ -30,10 +30,11 @@ export async function GET() {
             where: { account: { userId } },
             select: {
               id: true, amount: true, description: true, date: true,
-              categoryId: true, category: true, projectId: true,
+              categoryId: true, projectId: true,
               payeeId: true, payee: { select: { name: true } },
               account: { select: { name: true, currency: true } },
               project: { select: { name: true } },
+              categoryRef: { select: { name: true } },
             },
           }),
           prisma.categorizationRule.count({ where: { userId, isActive: true } }),
@@ -59,7 +60,7 @@ export async function GET() {
         // Top 5 spend categories
         const byCat = new Map<string, number>()
         for (const tx of expenses) {
-          const key = tx.category ?? '(uncategorised)'
+          const key = tx.categoryRef?.name ?? '(uncategorised)'
           byCat.set(key, (byCat.get(key) ?? 0) + Math.abs(Number(tx.amount)))
         }
         const topCategories = [...byCat.entries()]
