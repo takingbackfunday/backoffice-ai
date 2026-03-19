@@ -289,6 +289,10 @@ export async function emit_rule_suggestion(
   const defs = args.conditions.all ?? args.conditions.any ?? []
   if (!defs.length) return 'Rejected: conditions array is empty. Add at least one condition (description contains / payeeName equals) and resubmit.'
 
+  // Reject date conditions — rules engine has no date field, they always match 0 transactions
+  const hasDate = defs.some((d) => d.field === 'date')
+  if (hasDate) return 'Rejected: "date" is not a valid rule condition field. Remove the date condition — rules match on description, payeeName, amount, and accountName only. Resubmit without the date condition.'
+
   // Reject amount-only conditions
   const hasNonAmount = defs.some((d) => d.field !== 'amount')
   if (!hasNonAmount) return 'Rejected: must have at least one non-amount condition. Add a description or payeeName condition alongside the amount condition and resubmit.'
@@ -527,7 +531,7 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
                     field: {
                       type: 'string',
                       enum: ['description', 'payeeName', 'amount', 'accountName'],
-                      description: 'Transaction field to match',
+                      description: 'Transaction field to match. ALWAYS use "description" as the primary condition — it is the most reliable. "payeeName" is secondary and only works if a payee already exists. Do NOT use "date".',
                     },
                     operator: {
                       type: 'string',
@@ -549,6 +553,7 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
                     field: {
                       type: 'string',
                       enum: ['description', 'payeeName', 'amount', 'accountName'],
+                      description: 'ALWAYS use "description" as the primary condition. Do NOT use "date".',
                     },
                     operator: {
                       type: 'string',

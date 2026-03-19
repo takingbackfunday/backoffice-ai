@@ -43,9 +43,14 @@ PAYEE ASSIGNMENT — CRITICAL:
 - Only leave payeeName null if the counterparty is genuinely ambiguous (e.g. "Bank transfer ref 12345")
 - Check the EXISTING PAYEES list first — if the payee already exists there, use the exact same spelling
 
+RULE CONDITIONS — CRITICAL:
+- Valid fields: description, payeeName, amount, accountName. Do NOT use "date" — it is not a valid field and will be rejected.
+- ALWAYS use description contains as the PRIMARY condition. It matches the raw transaction text and is the most reliable.
+- payeeName equals is SECONDARY — only add it if there is already a payee in the EXISTING PAYEES list. Do not use it as the sole condition because payees may not exist yet.
+- Never add a date condition. Rules are not time-bound.
+
 RULE QUALITY:
-- Prefer description contains over payeeName equals for more robust matching
-- The "descriptions" field in the uncategorised data shows the actual raw transaction text — use it to pick the right keyword
+- The "descriptions" field in the uncategorised data shows the actual raw transaction text — use it to pick the right keyword for a description contains condition
 - 2+ matching transactions = high confidence; 1 or world-knowledge = medium
 - 1 sentence reasoning referencing the specific pattern observed
 - Aim for 5–20 suggestions prioritised by financial impact (highest absolute spend first)
