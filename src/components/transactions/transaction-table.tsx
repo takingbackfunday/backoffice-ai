@@ -372,7 +372,7 @@ function ColumnFilterPopover({
         <FunnelIcon active={isActive} />
       </button>
       {isOpen && (
-        <div className="absolute top-full left-0 z-30 mt-1 bg-white border border-black/10 rounded-lg shadow-lg p-2 min-w-[160px]">
+        <div className="absolute top-full left-0 z-30 mt-1 bg-white border border-black/10 rounded-lg shadow-lg p-2 min-w-[160px] whitespace-normal">
           <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">{label}</p>
           {type === 'text' && (
             <input
@@ -597,7 +597,7 @@ function DateFilterHeader({
           <FunnelIcon active={isActive} />
         </button>
         {isOpen && (
-          <div className="absolute top-full left-0 z-30 mt-1 bg-white border border-black/10 rounded-lg shadow-lg w-52 p-3 space-y-3">
+          <div className="absolute top-full left-0 z-30 mt-1 bg-white border border-black/10 rounded-lg shadow-lg w-52 p-3 space-y-3 whitespace-normal">
             <div className="space-y-1">
               <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Quick select</p>
               {([
