@@ -663,6 +663,10 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   // Column filters
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [aiMode, setAiMode] = useState(false)
+  const [aiQuery, setAiQuery] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiExplanation, setAiExplanation] = useState('')
   const [filters, setFilters] = useState<ColumnFilters>({})
   const [debouncedFilters, setDebouncedFilters] = useState<ColumnFilters>({})
   const [openFilterCol, setOpenFilterCol] = useState<string | null>(null)
@@ -822,6 +826,65 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     setDebouncedFilters({})
     setDateFrom(''); setDateTo(''); setCustomFrom(''); setCustomTo('')
     setPage(1)
+  }
+
+  async function handleAiSearch() {
+    const q = aiQuery.trim()
+    if (!q || aiLoading) return
+    setAiLoading(true)
+    setAiExplanation('')
+    setError(null)
+
+    try {
+      const res = await fetch('/api/agent/search-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      })
+      const json = await res.json()
+      if (json.error) { setError(json.error); return }
+
+      const f = json.data.filters
+      setFilters({
+        description: f.description || undefined,
+        accountName: f.accountName || undefined,
+        payeeName: f.payeeName || undefined,
+        categoryId: f.categoryId || undefined,
+        projectId: f.projectId || undefined,
+        amountMin: f.amountMin || undefined,
+        amountMax: f.amountMax || undefined,
+        notes: undefined,
+      })
+      setDebouncedFilters({
+        description: f.description || undefined,
+        accountName: f.accountName || undefined,
+        payeeName: f.payeeName || undefined,
+        categoryId: f.categoryId || undefined,
+        projectId: f.projectId || undefined,
+        amountMin: f.amountMin || undefined,
+        amountMax: f.amountMax || undefined,
+        notes: undefined,
+      })
+      if (f.search) { setSearch(f.search); setDebouncedSearch(f.search) }
+      else { setSearch(''); setDebouncedSearch('') }
+      if (f.dateFrom) setDateFrom(f.dateFrom)
+      if (f.dateTo) setDateTo(f.dateTo)
+      if (f.sortBy) setSortBy(f.sortBy as SortField)
+      if (f.sortDir) setSortDir(f.sortDir as SortDir)
+      setPage(1)
+      setAiExplanation(json.data.explanation || '')
+    } catch {
+      setError('AI search failed')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  function clearAiSearch() {
+    setAiMode(false)
+    setAiQuery('')
+    setAiExplanation('')
+    clearAllFilters()
   }
 
   // ── Sorting ──────────────────────────────────────────────────────
@@ -1169,24 +1232,82 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
           </div>
         )}
 
-        {/* Global search */}
-        <div className="relative">
-          <input
-            type="search"
-            placeholder="Search transactions…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="rounded-md border px-3 py-1.5 text-xs w-52 pr-7"
-            aria-label="Search transactions"
-            data-testid="transaction-search"
-          />
-          {loading && search && (
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg className="w-3.5 h-3.5 animate-spin text-muted-foreground" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-            </span>
+        {/* Global search — keyword or AI mode */}
+        <div className="relative flex items-center gap-1">
+          {aiMode ? (
+            <>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Describe what you're looking for…"
+                  value={aiQuery}
+                  onChange={(e) => setAiQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAiSearch() }}
+                  className="rounded-md border border-purple-300 bg-purple-50/50 px-3 py-1.5 text-xs w-72 pr-7 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                  aria-label="AI search transactions"
+                  data-testid="ai-search-input"
+                  disabled={aiLoading}
+                />
+                {aiLoading && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <svg className="w-3.5 h-3.5 animate-spin text-purple-500" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={handleAiSearch}
+                disabled={aiLoading || !aiQuery.trim()}
+                className="rounded-md bg-purple-600 px-2.5 py-1.5 text-xs text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                data-testid="ai-search-btn"
+              >
+                Search
+              </button>
+              <button
+                onClick={clearAiSearch}
+                className="text-xs text-muted-foreground hover:text-foreground px-1"
+                title="Switch to keyword search"
+                aria-label="Exit AI search"
+              >
+                ✕
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="relative">
+                <input
+                  type="search"
+                  placeholder="Search transactions…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="rounded-md border px-3 py-1.5 text-xs w-52 pr-7"
+                  aria-label="Search transactions"
+                  data-testid="transaction-search"
+                />
+                {loading && search && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <svg className="w-3.5 h-3.5 animate-spin text-muted-foreground" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setAiMode(true)}
+                className="rounded-md border border-purple-200 bg-purple-50 px-2 py-1.5 text-xs text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-1"
+                title="Switch to AI search"
+                aria-label="AI search"
+                data-testid="ai-search-toggle"
+              >
+                <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4" strokeLinecap="round"/>
+                </svg>
+                AI
+              </button>
+            </>
           )}
         </div>
 
@@ -1217,6 +1338,16 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       </div>
 
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+
+      {aiExplanation && (
+        <div className="flex items-center gap-2 rounded-md border border-purple-200 bg-purple-50/50 px-3 py-2 text-xs text-purple-800">
+          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4" strokeLinecap="round"/>
+          </svg>
+          <span>{aiExplanation}</span>
+          <button onClick={clearAiSearch} className="ml-auto text-purple-500 hover:text-purple-700">✕</button>
+        </div>
+      )}
 
       {/* Rule suggestion floating toast — fixed bottom-right, auto-dismisses */}
       {suggestionReady && (
