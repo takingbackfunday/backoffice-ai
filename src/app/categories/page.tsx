@@ -6,6 +6,7 @@ import { CategoryManager } from '@/components/categories/category-manager'
 import { BusinessTypePicker } from '@/components/categories/business-type-picker'
 import { prisma } from '@/lib/prisma'
 import { getCategoryCounts } from '@/lib/seed-categories'
+import { ResetCategoriesButton } from '@/components/categories/reset-categories-button'
 
 export default async function CategoriesPage() {
   const { userId } = await auth()
@@ -39,7 +40,7 @@ export default async function CategoriesPage() {
             <BusinessTypePicker counts={getCategoryCounts()} />
           ) : (
             <>
-              <div className="mb-4">
+              <div className="mb-4 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
                   Manage your category groups and categories. Click a name to rename it.
                   {hasBusinessType && (
@@ -54,6 +55,7 @@ export default async function CategoriesPage() {
                     </span>
                   )}
                 </p>
+                <ResetCategoriesButton />
               </div>
               <CategoryManager initialGroups={groups} />
             </>
