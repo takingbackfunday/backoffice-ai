@@ -133,7 +133,7 @@ Write 3–5 tight bullet observations + a 1-line action recommendation. No fluff
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt },
             ],
-            'mistralai/mistral-small-2603'
+            'anthropic/claude-sonnet-4.6'
           )
         } finally {
           clearInterval(keepAlive)

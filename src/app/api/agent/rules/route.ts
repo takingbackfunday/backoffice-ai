@@ -175,7 +175,7 @@ Instructions:
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           consecutiveRejections = 0  // reset per round — each new LLM response gets a fresh chance
           console.log('[rules-agent] round:start', JSON.stringify({ round: round + 1, messages: messages.length, emitCount, lastRole: messages.at(-1)?.role }))
-          const response = await openrouterWithTools(messages, RULES_TOOLS, 'mistralai/mistral-small-2603')
+          const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4.6')
 
           // Push assistant message
           messages.push({
