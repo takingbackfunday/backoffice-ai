@@ -1,3 +1,13 @@
+// ── Logging ───────────────────────────────────────────────────────────────────
+
+function estimateTokens(text: string) {
+  return Math.ceil(text.length / 4)
+}
+
+function logLlm(tag: string, data: Record<string, unknown>) {
+  console.log(`[llm:${tag}]`, JSON.stringify(data))
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ChatMessage {
@@ -37,6 +47,15 @@ export async function openrouterChat(
   messages: { role: 'user' | 'assistant' | 'system'; content: string }[],
   model = 'mistralai/devstral-small'
 ): Promise<string> {
+  const inputTokens = messages.reduce((s, m) => s + estimateTokens(m.content), 0)
+  logLlm('chat:req', {
+    model,
+    messages: messages.length,
+    estimatedInputTokens: inputTokens,
+    lastUserMsg: messages.filter(m => m.role === 'user').at(-1)?.content.slice(0, 200),
+  })
+
+  const t0 = Date.now()
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -48,11 +67,19 @@ export async function openrouterChat(
 
   if (!res.ok) {
     const text = await res.text()
+    logLlm('chat:error', { model, status: res.status, body: text.slice(0, 300) })
     throw new Error(`OpenRouter ${res.status}: ${text}`)
   }
 
   const json = await res.json()
-  return json.choices[0].message.content as string
+  const content = json.choices[0].message.content as string
+  logLlm('chat:res', {
+    model,
+    latencyMs: Date.now() - t0,
+    estimatedOutputTokens: estimateTokens(content),
+    contentPreview: content.slice(0, 300),
+  })
+  return content
 }
 
 // ── Tool-use completion (streaming to avoid serverless timeouts) ──────────────
@@ -62,6 +89,18 @@ export async function openrouterWithTools(
   tools: ToolDefinition[],
   model = 'mistralai/mistral-small-2603'
 ): Promise<ChatResponse> {
+  const inputTokens = messages.reduce((s, m) => s + estimateTokens(typeof m.content === 'string' ? m.content : ''), 0)
+  logLlm('tools:req', {
+    model,
+    messages: messages.length,
+    tools: tools.length,
+    estimatedInputTokens: inputTokens,
+    lastRole: messages.at(-1)?.role,
+    // Show the last tool result (what the model is responding to) — most useful for debugging
+    lastToolResult: messages.filter(m => m.role === 'tool').at(-1)?.content?.slice(0, 300),
+  })
+
+  const t0 = Date.now()
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -80,6 +119,7 @@ export async function openrouterWithTools(
 
   if (!res.ok) {
     const text = await res.text()
+    logLlm('tools:error', { model, status: res.status, body: text.slice(0, 300) })
     throw new Error(`OpenRouter ${res.status}: ${text}`)
   }
 
@@ -138,7 +178,18 @@ export async function openrouterWithTools(
     ? Object.values(toolCallMap) as ToolCall[]
     : null
 
-  console.log('[openrouterWithTools] finish_reason:', finish_reason, 'tool_calls:', tool_calls?.map(t => t.function.name))
+  logLlm('tools:res', {
+    model,
+    latencyMs: Date.now() - t0,
+    finish_reason,
+    estimatedOutputTokens: estimateTokens(content),
+    contentPreview: content ? content.slice(0, 200) : null,
+    toolCalls: tool_calls?.map(t => ({
+      name: t.function.name,
+      // Show first 200 chars of args so we can see what values the LLM chose
+      argsPreview: t.function.arguments.slice(0, 200),
+    })) ?? null,
+  })
 
   return {
     content: content || null,

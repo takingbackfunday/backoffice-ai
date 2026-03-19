@@ -109,10 +109,11 @@ Use the tools to query any data you need.`
 
         // ── Route question to appropriate model ────────────────────────────
         send({ type: 'status', message: 'Routing…' })
+        const t0 = Date.now()
         const complexity = await routeQuestion(question)
         const model = complexity === 'complex' ? COMPLEX_MODEL : SIMPLE_MODEL
         const maxRounds = complexity === 'complex' ? MAX_TOOL_ROUNDS_COMPLEX : MAX_TOOL_ROUNDS_SIMPLE
-        console.log(`[ask-agent] complexity=${complexity} model=${model}`)
+        console.log('[ask-agent] start', JSON.stringify({ question: question.slice(0, 200), complexity, model, maxRounds }))
 
         // ── Agentic tool loop ──────────────────────────────────────────────
         const messages: ChatMessage[] = [
@@ -135,7 +136,7 @@ Use the tools to query any data you need.`
           // No tool calls → final answer
           if (!response.tool_calls || response.tool_calls.length === 0) {
             const answer = (response.content ?? '').trim()
-            console.log(`[ask-agent] final answer (${answer.length} chars):`, answer.slice(0, 500))
+            console.log('[ask-agent] done', JSON.stringify({ rounds: round + 1, totalMs: Date.now() - t0, answerLen: answer.length, answerPreview: answer.slice(0, 300) }))
             send({ type: 'answer', answer })
             send({ type: 'done' })
             return
@@ -147,9 +148,10 @@ Use the tools to query any data you need.`
             let args: unknown
             try { args = JSON.parse(tc.function.arguments) } catch { args = {} }
 
-            console.log(`[ask-agent] round ${round + 1} tool: ${toolName}`, JSON.stringify(args))
+            console.log('[ask-agent] tool:call', JSON.stringify({ round: round + 1, tool: toolName, args }))
             send({ type: 'status', message: `Querying ${toolName.replace(/_/g, ' ')}…` })
 
+            const tTool = Date.now()
             let result: string
             try {
               result = await dispatchTool(userId, toolName, args)
@@ -157,7 +159,7 @@ Use the tools to query any data you need.`
               result = `Error: ${e instanceof Error ? e.message : String(e)}`
             }
 
-            console.log(`[ask-agent] tool ${toolName} result: ${result.slice(0, 300)}`)
+            console.log('[ask-agent] tool:result', JSON.stringify({ tool: toolName, latencyMs: Date.now() - tTool, resultLen: result.length, preview: result.slice(0, 300) }))
             messages.push({
               role: 'tool',
               tool_call_id: tc.id,

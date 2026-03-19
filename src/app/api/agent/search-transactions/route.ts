@@ -98,6 +98,8 @@ Respond with ONLY a JSON object, no markdown, no explanation outside the JSON:
   "explanation": "One-sentence summary of what the filters show"
 }`
 
+    console.log('[search-transactions] query:', query)
+
     const raw = await openrouterChat(
       [
         { role: 'system', content: systemPrompt },
@@ -113,11 +115,17 @@ Respond with ONLY a JSON object, no markdown, no explanation outside the JSON:
     try {
       parsed = JSON.parse(cleaned)
     } catch {
+      console.error('[search-transactions] JSON parse failed, raw:', raw.slice(0, 500))
       return badRequest('Failed to parse AI response')
     }
 
+    // Log the active filters (non-empty values only)
+    const activeFilters = Object.fromEntries(Object.entries(parsed.filters).filter(([, v]) => v !== ''))
+    console.log('[search-transactions] result:', { activeFilters, explanation: parsed.explanation })
+
     return ok({ filters: parsed.filters, explanation: parsed.explanation ?? '' })
-  } catch {
+  } catch (err) {
+    console.error('[search-transactions] error:', err instanceof Error ? err.message : err)
     return serverError('AI search failed')
   }
 }

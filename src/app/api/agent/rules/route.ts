@@ -171,9 +171,10 @@ Instructions:
         let consecutiveRejections = 0
         const MAX_CONSECUTIVE_REJECTIONS = 5
 
+        const t0 = Date.now()
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           consecutiveRejections = 0  // reset per round — each new LLM response gets a fresh chance
-          console.log(`[rules-agent] round ${round + 1}, messages:`, messages.length, 'last role:', messages[messages.length-1]?.role)
+          console.log('[rules-agent] round:start', JSON.stringify({ round: round + 1, messages: messages.length, emitCount, lastRole: messages.at(-1)?.role }))
           const response = await openrouterWithTools(messages, RULES_TOOLS, 'mistralai/mistral-small-2603')
 
           // Push assistant message
@@ -240,8 +241,17 @@ Instructions:
               result = `Error: ${e instanceof Error ? e.message : String(e)}`
             }
 
-            if (toolName === 'emit_rule_suggestion' && result.startsWith('Rejected')) {
-              console.log(`[rules-agent] rejection:`, result, '| args:', JSON.stringify(args).slice(0, 200))
+            if (toolName === 'emit_rule_suggestion') {
+              const accepted = result.startsWith('Emitted:')
+              console.log('[rules-agent] emit', JSON.stringify({
+                accepted,
+                categoryName: (args as Record<string,unknown>).categoryName,
+                payeeName: (args as Record<string,unknown>).payeeName,
+                confidence: (args as Record<string,unknown>).confidence,
+                conditionFields: ((args as Record<string,unknown>).conditions as Record<string,unknown[]>
+                  )?.all?.map?.((c: unknown) => `${(c as Record<string,string>).field}:${(c as Record<string,string>).operator}:${String((c as Record<string,string>).value).slice(0,30)}`),
+                result: result.slice(0, 150),
+              }))
             }
 
             messages.push({
@@ -259,7 +269,7 @@ Instructions:
               } else {
                 consecutiveRejections++
                 if (consecutiveRejections >= MAX_CONSECUTIVE_REJECTIONS) {
-                  console.log('[rules-agent] too many consecutive rejections, stopping')
+                  console.log('[rules-agent] stopping: too many consecutive rejections in this round', JSON.stringify({ consecutiveRejections, emitCount }))
                   finished = true
                   break
                 }
@@ -278,7 +288,7 @@ Instructions:
         }
 
         // ── Step 4: done ──────────────────────────────────────────────────
-        console.log(`[rules-agent] done — ${emitCount} suggestions emitted in ${messages.length} messages`)
+        console.log('[rules-agent] done', JSON.stringify({ emitCount, messages: messages.length, totalMs: Date.now() - t0 }))
 
         send({ type: 'done', uncategorised: uncatCount, noPayee: noPayeeCount })
         // Small delay so the done event flushes before the stream closes
