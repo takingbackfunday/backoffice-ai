@@ -338,12 +338,33 @@ export async function emit_rule_suggestion(
     ? (ctx.payeeMap.get(args.payeeName.toLowerCase()) ?? null)
     : null
 
+  // Reject conditions that use payment processor names as keywords — they appear in
+  // descriptions as the payment rail ("Urban Sports Gmbh by Adyen") not as the merchant.
+  const PAYMENT_PROCESSORS = ['adyen', 'stripe', 'paypal', 'square', 'sumup', 'mollie', 'klarna', 'braintree', 'worldpay', 'checkout.com', 'mangopay']
+  for (const def of defs) {
+    if (def.field === 'description' && def.operator === 'contains') {
+      const val = String(def.value).toLowerCase().trim()
+      if (PAYMENT_PROCESSORS.includes(val)) {
+        return `Rejected: "${def.value}" is a payment processor, not a merchant — it appears in many unrelated transaction descriptions (e.g. "Urban Sports Gmbh by Adyen"). Use a more specific keyword that identifies the actual merchant instead.`
+      }
+    }
+  }
+
   // Count matched transactions
   const matchedIds = getMatchedIds(defs, ctx.transactions)
   const newIds = [...matchedIds].filter(
     (id) => !ctx.coveredByExisting.has(id) && !ctx.coveredThisRun.has(id)
   )
   const matchCount = newIds.length
+
+  // Reject if the majority of matched transactions already have a category — this rule
+  // would reclassify correctly-categorised transactions (e.g. "Adyen" matching "Urban Sports by Adyen")
+  const alreadyCategorised = [...matchedIds]
+    .map(id => ctx.transactions.find(t => t.id === id))
+    .filter(t => t?.categoryId != null).length
+  if (matchedIds.size > 0 && alreadyCategorised / matchedIds.size > 0.4) {
+    return `Rejected: ${alreadyCategorised} of ${matchedIds.size} matched transactions already have a category — this rule would reclassify them incorrectly. The keyword "${defs.find(d => d.field === 'description')?.value}" is too generic (likely a payment processor or shared term). Use a more specific keyword that only matches uncategorised transactions.`
+  }
 
   // Reject only if this suggestion adds zero new coverage
   if (matchCount === 0) {

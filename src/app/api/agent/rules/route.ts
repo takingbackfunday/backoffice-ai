@@ -52,6 +52,7 @@ RULE CONDITIONS — CRITICAL:
 - For multiple description variants (different spellings of the same merchant), use "any" (OR logic): { "any": [{ "field": "description", "operator": "contains", "value": "Zalando" }] } — or better, pick the ONE keyword that appears in all variants (e.g. "Zalando" matches all of them).
 - Prefer ONE broad keyword over multiple narrow variants. Check the "descriptions" field to find the common substring.
 - Matching is case-insensitive — never add two conditions that differ only by capitalisation (e.g. "Urban Sports GmbH" and "Urban Sports Gmbh" are identical). Use the lowercase version and move on.
+- NEVER use payment processor names as keywords: Adyen, Stripe, PayPal, Square, SumUp, Mollie, Klarna, Mangopay, Braintree. These appear in descriptions as the payment rail ("Urban Sports Gmbh by Adyen") — the keyword must be the actual merchant name, not the processor.
 
 RULE QUALITY:
 - The "descriptions" field in the uncategorised data shows the actual raw transaction text — use it to pick the right keyword for a description contains condition
