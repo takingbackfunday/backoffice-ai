@@ -15,7 +15,7 @@ interface Props {
 
 type SortField = 'date' | 'amount' | 'description' | 'category'
 type SortDir = 'asc' | 'desc'
-type EditableField = 'description' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount'
+type EditableField = 'description' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount' | 'date'
 
 interface EditingCell {
   id: string
@@ -32,7 +32,7 @@ function TextCell({
   value: string
   onCommit: (v: string) => void
   onCancel: () => void
-  type?: 'text' | 'number'
+  type?: 'text' | 'number' | 'date'
 }) {
   const ref = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(value)
@@ -496,6 +496,12 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       if (isNaN(n)) return // invalid number — discard
       patchValue = n
     }
+    if (field === 'date') {
+      if (!rawValue) return
+      const d = new Date(rawValue)
+      if (isNaN(d.getTime())) return // invalid date — discard
+      patchValue = d.toISOString()
+    }
 
     // Optimistic update
     setLocalRows((rows) =>
@@ -517,6 +523,9 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const payee = (freshPayee ?? payees.find((p) => p.id === rawValue) ?? null) as any
           return { ...r, payeeId: rawValue, payee }
+        }
+        if (field === 'date') {
+          return { ...r, date: new Date(rawValue!) }
         }
         return { ...r, [field]: patchValue }
       })
@@ -671,6 +680,8 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     } else if (field === 'amount') {
       const n = Number(row.amount)
       displayValue = (n >= 0 ? '+' : '') + n.toFixed(2)
+    } else if (field === 'date') {
+      displayValue = new Date(row.date).toLocaleDateString()
     } else {
       displayValue = (row[field as keyof TransactionWithRelations] as string | null) ?? '—'
     }
@@ -723,6 +734,20 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                 setPayees((prev) => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))
                 commitEdit(row.id, 'payeeId', p.id, p)
               }}
+            />
+          </td>
+        )
+      }
+
+      if (field === 'date') {
+        const isoDate = new Date(row.date).toISOString().slice(0, 10)
+        return (
+          <td key={field} className="px-3 py-0.5 min-w-[130px]">
+            <TextCell
+              value={isoDate}
+              type="date"
+              onCommit={(v) => commitEdit(row.id, 'date', v)}
+              onCancel={cancelEdit}
             />
           </td>
         )
@@ -971,10 +996,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                       />
                     </td>
 
-                    {/* Date — read-only */}
-                    <td className="px-3 py-0.5 whitespace-nowrap text-muted-foreground">
-                      {new Date(row.date).toLocaleDateString()}
-                    </td>
+                    {renderEditableCell(row, 'date')}
 
                     <td className="px-3 py-0.5 text-muted-foreground whitespace-nowrap">{row.account.name}</td>
                     {renderEditableCell(row, 'description')}

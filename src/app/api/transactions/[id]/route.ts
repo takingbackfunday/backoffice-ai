@@ -6,6 +6,7 @@ import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-r
 const UpdateTransactionSchema = z.object({
   description: z.string().min(1).optional(),
   amount: z.number().optional(),
+  date: z.string().datetime().optional().transform((v) => v ? new Date(v) : undefined),
   category: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   payeeId: z.string().nullable().optional(),
