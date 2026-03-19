@@ -9,6 +9,48 @@ import type { CashflowPoint } from '@/app/api/widgets/cashflow/route'
 import { RelativeDateRangePicker, resolveExpr, toDateString } from './RelativeDateRangePicker'
 import type { RelativeDateRange } from './RelativeDateRangePicker'
 
+// ── Custom split bar: green above zero (income), red below zero (expenses) ─────
+
+function SplitBar(props: Record<string, unknown>) {
+  const { x, y, width, height, income, expenses, yAxis } = props as {
+    x: number; y: number; width: number; height: number
+    income: number; expenses: number
+    yAxis: { scale: (v: number) => number }
+  }
+  if (!yAxis?.scale || width <= 0) return null
+
+  const zero = yAxis.scale(0)
+  const incomeY = income > 0 ? yAxis.scale(income) : zero
+  const expensesY = expenses < 0 ? yAxis.scale(expenses) : zero
+
+  const incomeH = Math.max(0, zero - incomeY)
+  const expensesH = Math.max(0, expensesY - zero)
+  const r = 3
+
+  return (
+    <g>
+      {incomeH > 0 && (
+        <rect
+          x={x} y={incomeY} width={width} height={incomeH}
+          fill="#16a34a" opacity={0.85}
+          rx={r} ry={r}
+          // Square off bottom corners
+          style={{ clipPath: `inset(0 0 ${r}px 0 round ${r}px)` }}
+        />
+      )}
+      {expensesH > 0 && (
+        <rect
+          x={x} y={zero} width={width} height={expensesH}
+          fill="#dc2626" opacity={0.85}
+          rx={r} ry={r}
+          // Square off top corners
+          style={{ clipPath: `inset(${r}px 0 0 0 round ${r}px)` }}
+        />
+      )}
+    </g>
+  )
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface CategoryGroup {
@@ -436,8 +478,10 @@ export function CashflowWidget() {
                 value === 'income' ? 'Income' : value === 'expenses' ? 'Expenses' : 'Net'
               }
             />
-            <Bar dataKey="income"   stackId="cf" fill="#16a34a" opacity={0.85} maxBarSize={40} radius={[3, 3, 0, 0]} />
-            <Bar dataKey="expenses" stackId="cf" fill="#dc2626" opacity={0.85} maxBarSize={40} radius={[0, 0, 3, 3]} />
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <Bar dataKey="income" maxBarSize={40} shape={((p: any) => <SplitBar {...p} />) as any} legendType="none" />
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <Bar dataKey="expenses" maxBarSize={40} shape={(() => null) as any} fill="transparent" />
             <Line
               dataKey="net"
               stroke="#534AB7"
