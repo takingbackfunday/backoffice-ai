@@ -12,40 +12,38 @@ import type { RelativeDateRange } from './RelativeDateRangePicker'
 // ── Custom split bar: green above zero (income), red below zero (expenses) ─────
 
 function SplitBar(props: Record<string, unknown>) {
-  const { x, y, width, height, income, expenses, yAxis } = props as {
+  // Recharts passes x, y, width, height (pixel coords of the bar for the dataKey value),
+  // plus the full data point. background gives us the chart area to derive zero position.
+  const { x, width, background, income, expenses } = props as {
     x: number; y: number; width: number; height: number
+    background: { y: number; height: number }
     income: number; expenses: number
-    yAxis: { scale: (v: number) => number }
   }
-  if (!yAxis?.scale || width <= 0) return null
+  if (!background || (width ?? 0) <= 0) return null
 
-  const zero = yAxis.scale(0)
-  const incomeY = income > 0 ? yAxis.scale(income) : zero
-  const expensesY = expenses < 0 ? yAxis.scale(expenses) : zero
+  // Use the background rect + yMin/yMax to find pixel position of zero
+  // We pass these via the data object in displayData
+  const { yMin, yMax } = props as { yMin: number; yMax: number }
+  const chartTop = background.y
+  const chartH = background.height
+  const range = yMax - yMin
+  if (range === 0) return null
 
-  const incomeH = Math.max(0, zero - incomeY)
-  const expensesH = Math.max(0, expensesY - zero)
+  const zero = chartTop + ((yMax - 0) / range) * chartH
+
+  const incomeH = income > 0 ? ((income) / range) * chartH : 0
+  const expensesH = expenses < 0 ? (Math.abs(expenses) / range) * chartH : 0
   const r = 3
 
   return (
     <g>
-      {incomeH > 0 && (
-        <rect
-          x={x} y={incomeY} width={width} height={incomeH}
-          fill="#16a34a" opacity={0.85}
-          rx={r} ry={r}
-          // Square off bottom corners
-          style={{ clipPath: `inset(0 0 ${r}px 0 round ${r}px)` }}
-        />
+      {incomeH > 1 && (
+        <rect x={x} y={zero - incomeH} width={width} height={incomeH}
+          fill="#16a34a" opacity={0.85} rx={r} ry={r} />
       )}
-      {expensesH > 0 && (
-        <rect
-          x={x} y={zero} width={width} height={expensesH}
-          fill="#dc2626" opacity={0.85}
-          rx={r} ry={r}
-          // Square off top corners
-          style={{ clipPath: `inset(${r}px 0 0 0 round ${r}px)` }}
-        />
+      {expensesH > 1 && (
+        <rect x={x} y={zero} width={width} height={expensesH}
+          fill="#dc2626" opacity={0.85} rx={r} ry={r} />
       )}
     </g>
   )
@@ -350,7 +348,7 @@ export function CashflowWidget() {
   const yMin = allValues.length ? Math.floor(Math.min(...allValues) * 1.1) : -1000
   const yMax = allValues.length ? Math.ceil(Math.max(...allValues) * 1.1) : 1000
 
-  const displayData = data.map((d) => ({ ...d, label: shortMonth(d.label) }))
+  const displayData = data.map((d) => ({ ...d, label: shortMonth(d.label), yMin, yMax }))
 
   return (
     <div className="rounded-lg border bg-white p-4">
