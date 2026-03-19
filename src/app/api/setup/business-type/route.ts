@@ -24,8 +24,8 @@ export async function POST(request: Request) {
 
     await prisma.userPreference.upsert({
       where: { userId },
-      create: { userId, data: merged },
-      update: { data: merged },
+      create: { userId, data: merged as never },
+      update: { data: merged as never },
     })
 
     // Seed categories for this business type
