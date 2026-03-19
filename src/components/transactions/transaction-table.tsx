@@ -661,6 +661,8 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const [loading, setLoading] = useState(!initialRows)
 
   // Column filters
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filters, setFilters] = useState<ColumnFilters>({})
   const [debouncedFilters, setDebouncedFilters] = useState<ColumnFilters>({})
   const [openFilterCol, setOpenFilterCol] = useState<string | null>(null)
@@ -705,6 +707,12 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     setCustomTo('')
     setPage(1)
   }
+
+  // Debounce search at 400ms
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 400)
+    return () => clearTimeout(t)
+  }, [search])
 
   // Debounce text filters at 600ms
   useEffect(() => {
@@ -757,7 +765,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
   // Fetch transactions
   const fetchTransactions = useCallback(() => {
-    const hasFilters = Object.values(debouncedFilters).some(Boolean) || dateFrom || dateTo
+    const hasFilters = Object.values(debouncedFilters).some(Boolean) || debouncedSearch || dateFrom || dateTo
     if (isFirstRender.current && initialRows && page === 1 && !hasFilters && sortBy === 'date' && sortDir === 'desc') {
       isFirstRender.current = false
       return () => {}
@@ -773,6 +781,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       pageSize: String(pageSize),
       sortBy,
       sortDir,
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
       ...(debouncedFilters.description ? { description: debouncedFilters.description } : {}),
       ...(debouncedFilters.accountName ? { accountName: debouncedFilters.accountName } : {}),
       ...(debouncedFilters.payeeName ? { payeeName: debouncedFilters.payeeName } : {}),
@@ -797,17 +806,18 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [page, pageSize, debouncedFilters, sortBy, sortDir, dateFrom, dateTo, initialRows])
+  }, [page, pageSize, debouncedSearch, debouncedFilters, sortBy, sortDir, dateFrom, dateTo, initialRows])
 
   useEffect(() => {
     return fetchTransactions()
   }, [fetchTransactions])
 
   // ── Active filter count ───────────────────────────────────────────
-  const activeFilterCount = Object.values(debouncedFilters).filter(Boolean).length + (dateFrom || dateTo ? 1 : 0)
+  const activeFilterCount = Object.values(debouncedFilters).filter(Boolean).length + (debouncedSearch ? 1 : 0) + (dateFrom || dateTo ? 1 : 0)
   const hasActiveFilters = activeFilterCount > 0
 
   function clearAllFilters() {
+    setSearch(''); setDebouncedSearch('')
     setFilters({})
     setDebouncedFilters({})
     setDateFrom(''); setDateTo(''); setCustomFrom(''); setCustomTo('')
@@ -1158,6 +1168,27 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
             </button>
           </div>
         )}
+
+        {/* Global search */}
+        <div className="relative">
+          <input
+            type="search"
+            placeholder="Search transactions…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="rounded-md border px-3 py-1.5 text-xs w-52 pr-7"
+            aria-label="Search transactions"
+            data-testid="transaction-search"
+          />
+          {loading && search && (
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg className="w-3.5 h-3.5 animate-spin text-muted-foreground" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            </span>
+          )}
+        </div>
 
         {(someChecked || bulkDeleting) && (
           <div className="flex items-center gap-2 text-xs" role="toolbar" aria-label="Bulk actions" data-testid="bulk-toolbar">

@@ -18,7 +18,10 @@ export async function GET(request: Request) {
     const dateFrom = searchParams.get('dateFrom') ?? undefined
     const dateTo = searchParams.get('dateTo') ?? undefined
 
-    // Targeted column filters (replaces global search)
+    // Global search
+    const search = searchParams.get('search') ?? undefined
+
+    // Targeted column filters
     const description = searchParams.get('description') ?? undefined
     const notes = searchParams.get('notes') ?? undefined
     const accountName = searchParams.get('accountName') ?? undefined
@@ -50,6 +53,16 @@ export async function GET(request: Request) {
       ...(notes ? { notes: { contains: notes, mode: 'insensitive' as const } } : {}),
       ...(payeeName ? { payee: { is: { name: { contains: payeeName, mode: 'insensitive' as const } } } } : {}),
       ...(categoryId ? { categoryId } : {}),
+      ...(search ? {
+        OR: [
+          { description: { contains: search, mode: 'insensitive' as const } },
+          { notes: { contains: search, mode: 'insensitive' as const } },
+          { category: { contains: search, mode: 'insensitive' as const } },
+          { payee: { is: { name: { contains: search, mode: 'insensitive' as const } } } },
+          { account: { name: { contains: search, mode: 'insensitive' as const } } },
+          { categoryRef: { is: { name: { contains: search, mode: 'insensitive' as const } } } },
+        ],
+      } : {}),
       ...(amountMin !== undefined && !isNaN(amountMin) ? { amount: { gte: amountMin } } : {}),
       ...(amountMax !== undefined && !isNaN(amountMax) ? {
         amount: {
