@@ -51,6 +51,7 @@ RULE CONDITIONS — CRITICAL:
 - "all" means AND — every condition must match the SAME transaction. Do NOT put multiple description variants in "all" — a single transaction cannot contain "Zalando Payments" AND "Www Zalando De" at the same time.
 - For multiple description variants (different spellings of the same merchant), use "any" (OR logic): { "any": [{ "field": "description", "operator": "contains", "value": "Zalando" }] } — or better, pick the ONE keyword that appears in all variants (e.g. "Zalando" matches all of them).
 - Prefer ONE broad keyword over multiple narrow variants. Check the "descriptions" field to find the common substring.
+- Matching is case-insensitive — never add two conditions that differ only by capitalisation (e.g. "Urban Sports GmbH" and "Urban Sports Gmbh" are identical). Use the lowercase version and move on.
 
 RULE QUALITY:
 - The "descriptions" field in the uncategorised data shows the actual raw transaction text — use it to pick the right keyword for a description contains condition

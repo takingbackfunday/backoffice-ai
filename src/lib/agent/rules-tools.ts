@@ -286,7 +286,20 @@ export async function emit_rule_suggestion(
   if (!args.conditions || (!args.conditions.all && !args.conditions.any)) {
     return 'Rejected: conditions must have "all" or "any" array. Fix the conditions structure and resubmit.'
   }
-  const defs = args.conditions.all ?? args.conditions.any ?? []
+  // Deduplicate conditions that differ only by case (matching is case-insensitive)
+  const dedupeKey = (d: ConditionDef) => `${d.field}|${d.operator}|${String(d.value).toLowerCase()}`
+  const rawDefs = args.conditions.all ?? args.conditions.any ?? []
+  const seen = new Set<string>()
+  const defs = rawDefs.filter((d) => {
+    const k = dedupeKey(d)
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+  // Write deduplicated list back so downstream logic uses it
+  if (args.conditions.all) args.conditions.all = defs as never
+  else if (args.conditions.any) args.conditions.any = defs as never
+
   if (!defs.length) return 'Rejected: conditions array is empty. Add at least one condition (description contains / payeeName equals) and resubmit.'
 
   // Reject date conditions — rules engine has no date field, they always match 0 transactions
