@@ -436,8 +436,8 @@ export function CashflowWidget() {
                 value === 'income' ? 'Income' : value === 'expenses' ? 'Expenses' : 'Net'
               }
             />
-            <Bar dataKey="income"   fill="#16a34a" opacity={0.85} maxBarSize={40} radius={[3, 3, 0, 0]} />
-            <Bar dataKey="expenses" fill="#dc2626" opacity={0.85} maxBarSize={40} radius={[0, 0, 3, 3]} />
+            <Bar dataKey="income"   stackId="cf" fill="#16a34a" opacity={0.85} maxBarSize={40} radius={[3, 3, 0, 0]} />
+            <Bar dataKey="expenses" stackId="cf" fill="#dc2626" opacity={0.85} maxBarSize={40} radius={[0, 0, 3, 3]} />
             <Line
               dataKey="net"
               stroke="#534AB7"
