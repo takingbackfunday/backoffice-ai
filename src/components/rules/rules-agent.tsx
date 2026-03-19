@@ -21,6 +21,7 @@ export interface AgentSuggestion {
   matchCount: number
   totalAmount: number
   autoAccepted?: boolean
+  savedRuleId?: string   // id of the already-saved rule (for auto-accepted entries)
 }
 
 // Persisted suggestion from DB (has an id, accepted via /api/rules/suggestions/[id])
@@ -202,6 +203,7 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
   const [thinkingIdx, setThinkingIdx] = useState(0)
   const [suggestions, setSuggestions] = useState<AgentSuggestion[]>([])
   const [dismissed, setDismissed] = useState<Set<number>>(new Set())
+  const [expandedAuto, setExpandedAuto] = useState<Set<number>>(new Set())
   const [doneSummary, setDoneSummary] = useState<{ uncategorised: number; noPayee: number } | undefined>(undefined)
   const esRef = useRef<EventSource | null>(null)
   const thinkingRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -252,7 +254,7 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
           saveRule(suggestion, categoryGroupsRef.current).then((saved) => {
             if (saved) {
               onRuleAccepted(saved)
-              setSuggestions((prev) => [...prev, { ...suggestion, autoAccepted: true }])
+              setSuggestions((prev) => [...prev, { ...suggestion, autoAccepted: true, savedRuleId: saved.id || undefined }])
             } else {
               // fallback: show card for manual review if save failed
               setSuggestions((prev) => [...prev, suggestion])
@@ -375,20 +377,64 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
             </div>
           )}
 
-          {/* Auto-accepted compact list */}
-          {suggestions.some((s) => s.autoAccepted) && (
+          {/* Auto-accepted list — compact by default, expandable to full editor */}
+          {suggestions.some((s) => s.autoAccepted && !dismissed.has(suggestions.indexOf(s))) && (
             <div className="space-y-1">
-              {suggestions.filter((s) => s.autoAccepted).map((s, i) => (
-                <div key={`auto-${i}`} className="flex items-center gap-2 text-[11px] text-[#0F6E56] bg-[#E1F5EE]/60 rounded px-2.5 py-1.5">
-                  <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="font-medium">{s.categoryName}{s.payeeName ? ` — ${s.payeeName}` : ''}</span>
-                  <span className="text-[#0F6E56]/60">·</span>
-                  <span className="text-[#0F6E56]/70">{s.reasoning}</span>
-                  <span className="ml-auto text-[#0F6E56]/50 tabular-nums shrink-0">~{s.matchCount} txns · ${s.totalAmount >= 1000 ? `${(s.totalAmount / 1000).toFixed(1)}k` : s.totalAmount.toFixed(0)}</span>
-                </div>
-              ))}
+              {suggestions.map((s, i) => {
+                if (!s.autoAccepted || dismissed.has(i)) return null
+                const isExpanded = expandedAuto.has(i)
+                if (isExpanded) {
+                  return (
+                    <div key={`auto-${i}`} className="border border-[#0F6E56]/20 rounded-lg overflow-hidden">
+                      <SuggestionCard
+                        suggestion={s}
+                        index={i}
+                        total={suggestions.length}
+                        categoryGroups={categoryGroups}
+                        payees={payees}
+                        projects={projects}
+                        accounts={accounts}
+                        onAccepted={(rule, idx) => {
+                          // Re-save with any edits (delete old rule first if id changed)
+                          if (s.savedRuleId && rule.id !== s.savedRuleId) {
+                            fetch(`/api/rules/${s.savedRuleId}`, { method: 'DELETE' }).catch(() => {})
+                          }
+                          onRuleAccepted(rule)
+                          setExpandedAuto((prev) => { const n = new Set(prev); n.delete(idx); return n })
+                          // Update the suggestion in-place so the compact row reflects edits
+                          setSuggestions((prev) => prev.map((x, xi) => xi === i ? { ...x, categoryName: rule.categoryName ?? x.categoryName, payeeName: rule.payee?.name ?? x.payeeName } : x))
+                        }}
+                        onDecline={() => {
+                          // Delete the already-saved rule
+                          if (s.savedRuleId) {
+                            fetch(`/api/rules/${s.savedRuleId}`, { method: 'DELETE' }).catch(() => {})
+                          }
+                          setDismissed((prev) => new Set(prev).add(i))
+                          setExpandedAuto((prev) => { const n = new Set(prev); n.delete(i); return n })
+                        }}
+                        onApplyComplete={onApplyComplete}
+                      />
+                    </div>
+                  )
+                }
+                return (
+                  <div key={`auto-${i}`} className="flex items-center gap-2 text-[11px] text-[#0F6E56] bg-[#E1F5EE]/60 rounded px-2.5 py-1.5">
+                    <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="font-medium">{s.categoryName}{s.payeeName ? ` — ${s.payeeName}` : ''}</span>
+                    <span className="text-[#0F6E56]/60">·</span>
+                    <span className="text-[#0F6E56]/70 truncate">{s.reasoning}</span>
+                    <span className="ml-auto text-[#0F6E56]/50 tabular-nums shrink-0">~{s.matchCount} txns</span>
+                    <button
+                      onClick={() => setExpandedAuto((prev) => { const n = new Set(prev); n.add(i); return n })}
+                      className="shrink-0 text-[10px] text-[#0F6E56]/70 hover:text-[#0F6E56] underline underline-offset-2 ml-1"
+                    >
+                      review
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           )}
 
