@@ -187,11 +187,26 @@ Instructions:
         let consecutiveRejections = 0
         const MAX_CONSECUTIVE_REJECTIONS = 5
 
+        // Two-model strategy:
+        // - Opus 4.6   → round 1 (record_plan only): deep reasoning on ambiguous merchants/categories
+        // - Haiku 4.5  → rounds 2-N: fast bulk emission guided by the Opus plan
+        // - Opus 4.6   → one final cleanup round if Haiku leaves unresolved rejections
+        const STRATEGY_MODEL = 'anthropic/claude-opus-4-6'
+        const EXECUTION_MODEL = 'anthropic/claude-haiku-4-5-20251001'
+
         const t0 = Date.now()
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           consecutiveRejections = 0  // reset per round — each new LLM response gets a fresh chance
-          console.log('[rules-agent] round:start', JSON.stringify({ round: round + 1, messages: messages.length, emitCount, lastRole: messages.at(-1)?.role }))
-          const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-haiku-4-5-20251001')
+
+          // Round 1: Opus reasons and plans. Escalation rounds (user message injected): Opus cleans up.
+          // All other rounds: Haiku executes fast.
+          const lastMsg = messages.at(-1)
+          const isStrategyRound = round === 0 || (lastMsg?.role === 'user' && round > 0)
+          const model = isStrategyRound ? STRATEGY_MODEL : EXECUTION_MODEL
+
+          console.log('[rules-agent] round:start', JSON.stringify({ round: round + 1, model, messages: messages.length, emitCount, lastRole: messages.at(-1)?.role }))
+          send({ type: 'status', message: round === 0 ? 'Opus reasoning…' : `Haiku emitting (round ${round + 1})…` })
+          const response = await openrouterWithTools(messages, RULES_TOOLS, model)
 
           // Push assistant message
           messages.push({
@@ -302,6 +317,20 @@ Instructions:
           if (finished) break
           // Only set everEmitted if at least one successful emit happened this round
           if (roundHasEmit && emitCount > 0) everEmitted = true
+
+          // If Haiku finished emitting but left rejections, inject an Opus cleanup prompt
+          if (everEmitted && rejected > 0 && !roundOutcomes.some(o => o.tool === 'finish_analysis')) {
+            const rejectedSummary = roundOutcomes
+              .filter(o => o.status === '✗')
+              .map(o => o.detail)
+              .join('\n')
+            messages.push({
+              role: 'user',
+              content: `Some suggestions were rejected. Please resolve each one using the exact category names from the AVAILABLE CATEGORIES list, correct conditions, and call finish_analysis when done.\n\nRejected:\n${rejectedSummary}`,
+            })
+            console.log('[rules-agent] escalating to Opus for cleanup', JSON.stringify({ rejected, emitCount }))
+            send({ type: 'status', message: 'Opus resolving rejections…' })
+          }
         }
 
         // ── Step 4: done ──────────────────────────────────────────────────
