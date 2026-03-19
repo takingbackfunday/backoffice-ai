@@ -3,27 +3,16 @@ import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { CategoryManager } from '@/components/categories/category-manager'
+import { BusinessTypePicker } from '@/components/categories/business-type-picker'
 import { prisma } from '@/lib/prisma'
-import { seedDefaultCategories } from '@/lib/seed-categories'
+import { getCategoryCounts } from '@/lib/seed-categories'
 
 export default async function CategoriesPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  let groups = await prisma.categoryGroup.findMany({
-    where: { userId },
-    include: {
-      categories: {
-        orderBy: { sortOrder: 'asc' },
-        include: { _count: { select: { transactions: true } } },
-      },
-    },
-    orderBy: { sortOrder: 'asc' },
-  })
-
-  if (groups.length === 0) {
-    await seedDefaultCategories(userId, prisma)
-    groups = await prisma.categoryGroup.findMany({
+  const [groups, prefs] = await Promise.all([
+    prisma.categoryGroup.findMany({
       where: { userId },
       include: {
         categories: {
@@ -32,8 +21,13 @@ export default async function CategoriesPage() {
         },
       },
       orderBy: { sortOrder: 'asc' },
-    })
-  }
+    }),
+    prisma.userPreference.findUnique({ where: { userId } }),
+  ])
+
+  const data = (prefs?.data ?? {}) as Record<string, unknown>
+  const hasBusinessType = typeof data.businessType === 'string'
+  const needsOnboarding = groups.length === 0 && !hasBusinessType
 
   return (
     <div className="flex min-h-screen">
@@ -41,12 +35,27 @@ export default async function CategoriesPage() {
       <div className="flex flex-1 flex-col">
         <Header title="Categories" />
         <main className="flex-1 p-6" role="main">
-          <div className="mb-4">
-            <p className="text-sm text-muted-foreground">
-              Manage your category groups and categories. Click a name to rename it.
-            </p>
-          </div>
-          <CategoryManager initialGroups={groups} />
+          {needsOnboarding ? (
+            <BusinessTypePicker counts={getCategoryCounts()} />
+          ) : (
+            <>
+              <div className="mb-4">
+                <p className="text-sm text-muted-foreground">
+                  Manage your category groups and categories. Click a name to rename it.
+                  {hasBusinessType && (
+                    <span className="ml-2 text-xs text-muted-foreground/70">
+                      ({data.businessType === 'freelance'
+                        ? 'Schedule C'
+                        : data.businessType === 'property'
+                          ? 'Schedule E'
+                          : 'Schedules C + E'})
+                    </span>
+                  )}
+                </p>
+              </div>
+              <CategoryManager initialGroups={groups} />
+            </>
+          )}
         </main>
       </div>
     </div>

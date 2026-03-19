@@ -55,13 +55,15 @@ model Project {
 }
 
 model CategoryGroup {
-  id         String     @id @default(cuid())
-  userId     String
-  name       String
-  sortOrder  Int        @default(0)
-  categories Category[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  sortOrder   Int        @default(0)
+  scheduleRef String?    // "C", "E", "C,E", or "none" — which tax schedule this maps to
+  taxType     String?    // "income", "expense", or "non_deductible"
+  categories  Category[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@index([userId])
 }
