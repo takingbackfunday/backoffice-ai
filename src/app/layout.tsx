@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
+import { ChatOverlay } from '@/components/chat/chat-overlay'
 import './globals.css'
 
 const inter = Inter({
@@ -28,6 +29,7 @@ export default function RootLayout({
       <html lang="en">
         <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
           {children}
+          <ChatOverlay />
         </body>
       </html>
     </ClerkProvider>

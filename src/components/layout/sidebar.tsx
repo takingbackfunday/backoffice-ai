@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { useChatStore } from '@/stores/chat-store'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '⬜' },
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const pathname = usePathname()
   const [pending, setPending] = useState<string | null>(null)
+  const { open, toggle } = useChatStore()
 
   // Clear pending state once navigation completes
   useEffect(() => {
@@ -67,6 +69,23 @@ export function Sidebar() {
           )
         })}
       </ul>
+
+      {/* Chat button — pinned to bottom */}
+      <div className="mt-auto pt-4 border-t">
+        <button
+          onClick={toggle}
+          aria-label="Chat with AI about your finances"
+          className={cn(
+            'w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+            open
+              ? 'bg-[#EEEDFE] text-[#3C3489] border-r-2 border-[#534AB7]'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          )}
+        >
+          <span aria-hidden="true">💬</span>
+          Chat with AI
+        </button>
+      </div>
     </nav>
   )
 }

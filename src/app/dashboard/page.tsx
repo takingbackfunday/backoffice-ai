@@ -2,7 +2,6 @@ import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
-import { DashboardAnalyzer } from '@/components/dashboard/dashboard-analyzer'
 import { ExpensesByCategoryWidget } from '@/components/widgets/ExpensesByCategoryWidget'
 import { CashflowWidget } from '@/components/widgets/CashflowWidget'
 import { NetWorthWidget } from '@/components/widgets/NetWorthWidget'
@@ -24,7 +23,6 @@ export default async function DashboardPage() {
             <NetWorthWidget />
           </div>
           <FinanceQA />
-          <DashboardAnalyzer />
         </main>
       </div>
     </div>

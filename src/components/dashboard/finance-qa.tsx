@@ -5,6 +5,7 @@ import { useRef, useState } from 'react'
 type Status = 'idle' | 'running' | 'done' | 'error'
 
 const EXAMPLE_QUESTIONS = [
+  'Give me a financial snapshot — income, expenses, top categories, and any patterns worth noting.',
   'What did I spend the most on last month?',
   'Which payee costs me the most overall?',
   'What is my average monthly spend?',
