@@ -81,10 +81,18 @@ function getMatchedIds(
       const v = String(def.value).toLowerCase()
       const t = txVal.toLowerCase()
       if (def.operator === 'contains') return t.includes(v)
+      if (def.operator === 'not_contains') return !t.includes(v)
       if (def.operator === 'equals') return t === v
+      if (def.operator === 'not_equals') return t !== v
       if (def.operator === 'starts_with') return t.startsWith(v)
+      if (def.operator === 'ends_with') return t.endsWith(v)
+      if (def.operator === 'regex') {
+        try { return new RegExp(String(def.value), 'i').test(txVal) } catch { return false }
+      }
       if (def.operator === 'gt') return Number(txVal) > Number(def.value)
       if (def.operator === 'lt') return Number(txVal) < Number(def.value)
+      if (def.operator === 'gte') return Number(txVal) >= Number(def.value)
+      if (def.operator === 'lte') return Number(txVal) <= Number(def.value)
       if (def.operator === 'oneOf')
         return (def.value as string[]).some((ov) => t === ov.toLowerCase())
       return false
@@ -282,16 +290,18 @@ export async function emit_rule_suggestion(
   const hasNonAmount = defs.some((d) => d.field !== 'amount')
   if (!hasNonAmount) return 'Rejected: must have at least one non-amount condition. Add a description or payeeName condition alongside the amount condition and resubmit.'
 
-  // Reject overly short/generic or regex-like description contains values
+  // Reject overly short/generic values for plain-string operators
   for (const def of defs) {
     if (def.field === 'description' && (def.operator === 'contains' || def.operator === 'starts_with' || def.operator === 'equals')) {
       const val = String(def.value).trim()
       if (val.length < 5) {
-        return `Rejected: description ${def.operator} value "${val}" is too short (min 5 characters) and would match unrelated transactions. Use a more specific keyword (e.g. the merchant name) and resubmit.`
+        return `Rejected: description ${def.operator} value "${val}" is too short (min 5 characters). Use a more specific keyword (e.g. the merchant name) or use operator "regex" for pattern matching and resubmit.`
       }
-      // Reject regex patterns — our rule engine does plain string matching only
-      if (/[\\^$*+?.()|[\]{}]/.test(val)) {
-        return `Rejected: description value "${val}" looks like a regex pattern. Our rule engine only supports plain string matching — use a literal merchant name or phrase instead and resubmit.`
+    }
+    // Validate regex patterns are valid
+    if (def.operator === 'regex') {
+      try { new RegExp(String(def.value)) } catch {
+        return `Rejected: regex pattern "${def.value}" is invalid. Fix the pattern and resubmit.`
       }
     }
   }
@@ -516,10 +526,11 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
                     },
                     operator: {
                       type: 'string',
-                      enum: ['contains', 'equals', 'starts_with', 'oneOf', 'gt', 'lt'],
+                      enum: ['contains', 'not_contains', 'equals', 'not_equals', 'starts_with', 'ends_with', 'regex', 'oneOf', 'gt', 'lt', 'gte', 'lte'],
+                      description: 'Use "regex" for pattern matching (e.g. matching alphanumeric codes). All other operators do plain string matching.',
                     },
                     value: {
-                      description: 'Value to match against — string, number, or array for oneOf',
+                      description: 'Value to match against — string, number, array for oneOf, or regex pattern string for regex operator',
                     },
                   },
                 },
@@ -536,7 +547,8 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
                     },
                     operator: {
                       type: 'string',
-                      enum: ['contains', 'equals', 'starts_with', 'oneOf', 'gt', 'lt'],
+                      enum: ['contains', 'not_contains', 'equals', 'not_equals', 'starts_with', 'ends_with', 'regex', 'oneOf', 'gt', 'lt', 'gte', 'lte'],
+                      description: 'Use "regex" for pattern matching. All other operators do plain string matching.',
                     },
                     value: {
                       description: 'Value to match against',
