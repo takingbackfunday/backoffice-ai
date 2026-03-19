@@ -131,6 +131,18 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
         ])
 
         // ── Step 3: single LLM round to emit suggestions ──────────────────
+        console.log('[rules-agent] context', JSON.stringify({
+          categoriesLen: catsData.length,
+          uncategorisedLen: uncatData.length,
+          payeesLen: payeesData.length,
+          rulesLen: rulesData.length,
+          noPayeeLen: noPayeeData.length,
+          // Log the first 800 chars of the categories list so we can see what the LLM has
+          categoriesPreview: catsData.slice(0, 800),
+          // Log the first 600 chars of uncategorised groups
+          uncategorisedPreview: uncatData.slice(0, 600),
+        }))
+
         send({ type: 'status', message: 'Ready — starting analysis…' })
 
         const userMessage = `${snapshot}
@@ -198,7 +210,10 @@ Instructions:
           // emits, it's going back to investigate — stop here.
           if (everEmitted && !roundHasEmit) break
 
-          // Execute tool calls
+          // Execute tool calls — collect outcomes for round summary log
+          type RoundOutcome = { tool: string; status: string; detail: string }
+          const roundOutcomes: RoundOutcome[] = []
+
           for (const tc of response.tool_calls) {
             const toolName = tc.function.name
             let args: unknown
@@ -211,11 +226,9 @@ Instructions:
             // Block pre-loaded tools — data is already in the user message
             const PRELOADED = ['get_rules', 'get_categories', 'get_uncategorised_transactions', 'get_no_payee_transactions', 'get_payees']
             if (PRELOADED.includes(toolName)) {
-              messages.push({
-                role: 'tool',
-                tool_call_id: tc.id,
-                content: `This data is already pre-loaded in the user message above. Do not call ${toolName} again — use the data already provided and emit your suggestions.`,
-              })
+              const msg = `This data is already pre-loaded in the user message above. Do not call ${toolName} again — use the data already provided and emit your suggestions.`
+              messages.push({ role: 'tool', tool_call_id: tc.id, content: msg })
+              roundOutcomes.push({ tool: toolName, status: 'blocked:preloaded', detail: '' })
               continue
             }
 
@@ -223,11 +236,8 @@ Instructions:
             if (toolName === 'query_transactions' || toolName === 'search_transactions') {
               queryCount++
               if (queryCount > MAX_QUERIES) {
-                messages.push({
-                  role: 'tool',
-                  tool_call_id: tc.id,
-                  content: 'Query limit reached. Emit your suggestions now using emit_rule_suggestion, then call finish_analysis.',
-                })
+                messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Query limit reached. Emit your suggestions now using emit_rule_suggestion, then call finish_analysis.' })
+                roundOutcomes.push({ tool: toolName, status: 'blocked:query-limit', detail: '' })
                 continue
               }
             }
@@ -241,45 +251,48 @@ Instructions:
               result = `Error: ${e instanceof Error ? e.message : String(e)}`
             }
 
-            if (toolName === 'emit_rule_suggestion') {
-              const accepted = result.startsWith('Emitted:')
-              console.log('[rules-agent] emit', JSON.stringify({
-                accepted,
-                categoryName: (args as Record<string,unknown>).categoryName,
-                payeeName: (args as Record<string,unknown>).payeeName,
-                confidence: (args as Record<string,unknown>).confidence,
-                conditionFields: ((args as Record<string,unknown>).conditions as Record<string,unknown[]>
-                  )?.all?.map?.((c: unknown) => `${(c as Record<string,string>).field}:${(c as Record<string,string>).operator}:${String((c as Record<string,string>).value).slice(0,30)}`),
-                result: result.slice(0, 150),
-              }))
-            }
-
-            messages.push({
-              role: 'tool',
-              tool_call_id: tc.id,
-              content: result,
-            })
+            messages.push({ role: 'tool', tool_call_id: tc.id, content: result })
 
             if (toolName === 'emit_rule_suggestion') {
-              // Only count successful emits (not rejections) toward the cap
+              const a = args as Record<string, unknown>
+              const conditions = (a.conditions as Record<string, unknown[]>)
+              const allConds = (conditions?.all ?? conditions?.any ?? []) as Record<string, string>[]
+              const condStr = allConds.map(c => `${c.field}:${c.operator}:"${String(c.value).slice(0, 40)}"`).join(' AND ')
               if (result.startsWith('Emitted:')) {
                 emitCount++
                 consecutiveRejections = 0
+                roundOutcomes.push({ tool: 'emit', status: '✓', detail: `[${a.categoryName}] ${condStr} → payee:${a.payeeName ?? 'null'} (${result})` })
                 if (emitCount >= MAX_EMITS) { finished = true; break }
               } else {
                 consecutiveRejections++
+                roundOutcomes.push({ tool: 'emit', status: '✗', detail: `[${a.categoryName}] ${condStr} → ${result.slice(0, 120)}` })
                 if (consecutiveRejections >= MAX_CONSECUTIVE_REJECTIONS) {
-                  console.log('[rules-agent] stopping: too many consecutive rejections in this round', JSON.stringify({ consecutiveRejections, emitCount }))
+                  console.log('[rules-agent] stopping: too many consecutive rejections', JSON.stringify({ consecutiveRejections, emitCount }))
                   finished = true
                   break
                 }
               }
+            } else if (toolName === 'record_plan') {
+              roundOutcomes.push({ tool: 'record_plan', status: 'ok', detail: '' })
+            } else if (toolName === 'finish_analysis') {
+              roundOutcomes.push({ tool: 'finish_analysis', status: 'ok', detail: '' })
+            } else {
+              // query_transactions, search_transactions, etc. — log result preview
+              roundOutcomes.push({ tool: toolName, status: 'ok', detail: result.slice(0, 200) })
             }
 
             if (result === 'FINISH_ANALYSIS') {
               finished = true
               break
             }
+          }
+
+          // Print full round summary — one log line per outcome
+          const accepted = roundOutcomes.filter(o => o.status === '✓').length
+          const rejected = roundOutcomes.filter(o => o.status === '✗').length
+          console.log(`[rules-agent] round:${round + 1} summary — ${accepted} accepted, ${rejected} rejected, ${roundOutcomes.length} total calls`)
+          for (const o of roundOutcomes) {
+            console.log(`  [${o.status}] ${o.tool}${o.detail ? ': ' + o.detail : ''}`)
           }
 
           if (finished) break

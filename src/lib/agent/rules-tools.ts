@@ -438,6 +438,8 @@ export async function record_plan(
   if (!args.summary || typeof args.summary !== 'string') {
     return 'Rejected: summary is required.'
   }
+  // Log full plan — this is the LLM's reasoning, most useful thing to see
+  console.log('[rules-agent] plan:\n' + args.summary)
   ctx.send({ type: 'status', message: `Plan: ${args.summary.slice(0, 200)}` })
   return 'Plan recorded.'
 }
