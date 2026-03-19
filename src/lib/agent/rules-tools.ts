@@ -16,6 +16,7 @@ export interface TxSnapshot {
   description: string
   payeeName: string | null
   categoryId: string | null
+  accountName: string | null
 }
 
 export interface RulesContext {
@@ -75,6 +76,8 @@ function getMatchedIds(
         txVal = tx.description
       } else if (def.field === 'amount') {
         txVal = String(tx.amount)
+      } else if (def.field === 'accountName') {
+        txVal = tx.accountName ?? ''
       } else {
         txVal = ''
       }
@@ -387,6 +390,7 @@ export async function loadRulesContext(userId: string): Promise<{
         description: true,
         categoryId: true,
         payee: { select: { name: true } },
+        account: { select: { name: true } },
       },
     }),
     prisma.category.findMany({ where: { userId }, select: { id: true, name: true } }),
@@ -403,6 +407,7 @@ export async function loadRulesContext(userId: string): Promise<{
     description: t.description,
     payeeName: t.payee?.name ?? null,
     categoryId: t.categoryId,
+    accountName: t.account?.name ?? null,
   }))
 
   const categoryMap = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]))
@@ -521,7 +526,7 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
                   properties: {
                     field: {
                       type: 'string',
-                      enum: ['description', 'payeeName', 'amount'],
+                      enum: ['description', 'payeeName', 'amount', 'accountName'],
                       description: 'Transaction field to match',
                     },
                     operator: {
@@ -543,7 +548,7 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
                   properties: {
                     field: {
                       type: 'string',
-                      enum: ['description', 'payeeName', 'amount'],
+                      enum: ['description', 'payeeName', 'amount', 'accountName'],
                     },
                     operator: {
                       type: 'string',
