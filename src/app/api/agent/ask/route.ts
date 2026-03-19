@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
+import { openrouterChat, openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
 import { FINANCE_TOOLS, dispatchTool } from '@/lib/agent/finance-tools'
 
 interface SseEvent {
@@ -14,7 +14,35 @@ function encode(event: SseEvent): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
 }
 
-const MAX_TOOL_ROUNDS = 8
+const ROUTER_MODEL = 'google/gemini-2.0-flash-lite-001'
+const SIMPLE_MODEL = 'anthropic/claude-sonnet-4.6'
+const COMPLEX_MODEL = 'anthropic/claude-opus-4-6'
+
+const MAX_TOOL_ROUNDS_SIMPLE = 4
+const MAX_TOOL_ROUNDS_COMPLEX = 8
+
+async function routeQuestion(question: string): Promise<'simple' | 'complex'> {
+  const prompt = `You are a router. Classify this finance question as "simple" or "complex".
+
+Simple: single category/account total, recent transactions list, payee lookup, basic balance query.
+Complex: multi-period comparisons, "why is X high", trend/anomaly analysis, questions spanning multiple categories or accounts.
+
+Reply with exactly one word: simple or complex.
+
+Question: ${question}`
+
+  try {
+    const result = await openrouterChat(
+      [{ role: 'user', content: prompt }],
+      ROUTER_MODEL
+    )
+    const word = result.trim().toLowerCase()
+    return word.startsWith('complex') ? 'complex' : 'simple'
+  } catch {
+    // Default to simple on router failure — Sonnet is still good
+    return 'simple'
+  }
+}
 
 const SYSTEM_PROMPT = `You are a personal finance assistant with access to a set of database tools.
 
@@ -79,16 +107,23 @@ export async function POST(request: Request) {
 - Active rules: ${activeRules}
 Use the tools to query any data you need.`
 
+        // ── Route question to appropriate model ────────────────────────────
+        send({ type: 'status', message: 'Routing…' })
+        const complexity = await routeQuestion(question)
+        const model = complexity === 'complex' ? COMPLEX_MODEL : SIMPLE_MODEL
+        const maxRounds = complexity === 'complex' ? MAX_TOOL_ROUNDS_COMPLEX : MAX_TOOL_ROUNDS_SIMPLE
+        console.log(`[ask-agent] complexity=${complexity} model=${model}`)
+
         // ── Agentic tool loop ──────────────────────────────────────────────
         const messages: ChatMessage[] = [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: `${snapshot}\n\nQuestion: ${question}` },
         ]
 
-        send({ type: 'status', message: 'Thinking…' })
+        send({ type: 'status', message: complexity === 'complex' ? 'Thinking deeply…' : 'Thinking…' })
 
-        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          const response = await openrouterWithTools(messages, FINANCE_TOOLS, 'anthropic/claude-sonnet-4.6')
+        for (let round = 0; round < maxRounds; round++) {
+          const response = await openrouterWithTools(messages, FINANCE_TOOLS, model)
 
           // Append assistant turn
           messages.push({
@@ -134,7 +169,7 @@ Use the tools to query any data you need.`
         // Exceeded max rounds — ask for a final answer with what we have
         send({ type: 'status', message: 'Composing answer…' })
         messages.push({ role: 'user', content: 'Please give your final answer now based on the data you have gathered.' })
-        const final = await openrouterWithTools(messages, [], 'google/gemini-3.1-flash-lite-preview')
+        const final = await openrouterWithTools(messages, [], model)
         send({ type: 'answer', answer: (final.content ?? 'Unable to answer.').trim() })
         send({ type: 'done' })
 
