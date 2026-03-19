@@ -312,8 +312,8 @@ export async function emit_rule_suggestion(
   // Validate category exists
   const categoryId = ctx.categoryMap.get(args.categoryName.toLowerCase()) ?? null
   if (!categoryId) {
-    const available = [...ctx.categoryMap.keys()].slice(0, 10).join(', ')
-    return `Rejected: category "${args.categoryName}" not found. Available categories (sample): ${available}. Fix the categoryName to exactly match one of these and resubmit.`
+    const available = [...ctx.categoryMap.keys()].join(', ')
+    return `Rejected: category "${args.categoryName}" not found. You MUST use an exact name from this list (case-insensitive): ${available}. Do NOT invent category names — pick the closest match from the list and resubmit.`
   }
 
   // Resolve payeeId (may be null if payee doesn't exist yet — that's OK)

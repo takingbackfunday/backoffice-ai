@@ -22,11 +22,18 @@ const SYSTEM_PROMPT = `You are an expert financial categorisation assistant. You
 
 ALL data is pre-loaded in the user message. Do NOT call get_rules, get_categories, get_uncategorised_transactions, get_no_payee_transactions, or get_payees — the data is already there.
 
+CRITICAL — CATEGORY NAMES:
+- The user message contains an "AVAILABLE CATEGORIES" section. Read it FIRST before doing anything else.
+- categoryName MUST be copied VERBATIM (exact spelling, exact capitalisation) from that list.
+- Do NOT use generic names like "Housing", "Education", "Food", "Transport", "Transfers & other" unless those exact strings appear in the list.
+- The taxonomy is user-specific — it may be IRS Schedule C, Schedule E, or personal finance categories. Only use what is in the list.
+- If no category fits perfectly, pick the closest match from the list. Never invent a name.
+
 Workflow:
-1. Read ALL pre-loaded data carefully (categories, payees, existing rules, uncategorised transactions, no-payee transactions)
-2. Call record_plan ONCE: list every merchant group you identified, the category you'll map it to, and the payee you'll assign
+1. Read the AVAILABLE CATEGORIES list carefully — write down the exact names you will use for each merchant group
+2. Call record_plan ONCE: list every merchant group → exact category name from the list → payee
 3. Emit ALL suggestions in a SINGLE round by calling emit_rule_suggestion multiple times in one response — do NOT spread them across multiple rounds
-4. If any suggestion is rejected, immediately resubmit with the fix described in the rejection message — in the same round if possible
+4. If any suggestion is rejected for a bad categoryName, look at the full list in the rejection message and resubmit with the correct name immediately
 5. Call finish_analysis
 
 PAYEE ASSIGNMENT — CRITICAL:
@@ -37,7 +44,6 @@ PAYEE ASSIGNMENT — CRITICAL:
 - Check the EXISTING PAYEES list first — if the payee already exists there, use the exact same spelling
 
 RULE QUALITY:
-- categoryName must be copied VERBATIM from the AVAILABLE CATEGORIES list (case-insensitive match is fine)
 - Prefer description contains over payeeName equals for more robust matching
 - The "descriptions" field in the uncategorised data shows the actual raw transaction text — use it to pick the right keyword
 - 2+ matching transactions = high confidence; 1 or world-knowledge = medium
@@ -161,6 +167,7 @@ Instructions:
         const MAX_CONSECUTIVE_REJECTIONS = 5
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          consecutiveRejections = 0  // reset per round — each new LLM response gets a fresh chance
           console.log(`[rules-agent] round ${round + 1}, messages:`, messages.length, 'last role:', messages[messages.length-1]?.role)
           const response = await openrouterWithTools(messages, RULES_TOOLS, 'mistralai/mistral-small-2603')
 
