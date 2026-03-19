@@ -301,8 +301,8 @@ export async function emit_rule_suggestion(
   for (const def of defs) {
     if (def.field === 'description' && (def.operator === 'contains' || def.operator === 'starts_with' || def.operator === 'equals')) {
       const val = String(def.value).trim()
-      if (val.length < 5) {
-        return `Rejected: description ${def.operator} value "${val}" is too short (min 5 characters). Use a more specific keyword (e.g. the merchant name) or use operator "regex" for pattern matching and resubmit.`
+      if (val.length < 3) {
+        return `Rejected: description ${def.operator} value "${val}" is too short (min 3 characters). Use a more specific keyword or use operator "regex" for pattern matching and resubmit.`
       }
     }
     // Validate regex patterns are valid

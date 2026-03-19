@@ -48,6 +48,9 @@ RULE CONDITIONS — CRITICAL:
 - ALWAYS use description contains as the PRIMARY condition. It matches the raw transaction text and is the most reliable.
 - payeeName equals is SECONDARY — only add it if there is already a payee in the EXISTING PAYEES list. Do not use it as the sole condition because payees may not exist yet.
 - Never add a date condition. Rules are not time-bound.
+- "all" means AND — every condition must match the SAME transaction. Do NOT put multiple description variants in "all" — a single transaction cannot contain "Zalando Payments" AND "Www Zalando De" at the same time.
+- For multiple description variants (different spellings of the same merchant), use "any" (OR logic): { "any": [{ "field": "description", "operator": "contains", "value": "Zalando" }] } — or better, pick the ONE keyword that appears in all variants (e.g. "Zalando" matches all of them).
+- Prefer ONE broad keyword over multiple narrow variants. Check the "descriptions" field to find the common substring.
 
 RULE QUALITY:
 - The "descriptions" field in the uncategorised data shows the actual raw transaction text — use it to pick the right keyword for a description contains condition
