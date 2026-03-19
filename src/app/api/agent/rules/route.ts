@@ -192,7 +192,7 @@ Instructions:
         // - Opus 4.6   → round 1 (record_plan only): deep reasoning on ambiguous merchants/categories
         // - Haiku 4.5  → rounds 2-N: fast bulk emission guided by the Opus plan
         // - Opus 4.6   → one final cleanup round if Haiku leaves unresolved rejections
-        const STRATEGY_MODEL = 'anthropic/claude-opus-4-6'
+        const STRATEGY_MODEL = 'anthropic/claude-sonnet-4.6'
         const EXECUTION_MODEL = 'google/gemini-3.1-flash-lite-preview'
 
         const t0 = Date.now()
