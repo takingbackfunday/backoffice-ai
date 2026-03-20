@@ -606,37 +606,33 @@ export async function seedDefaultCategories(
 ) {
   const groups = getGroupsForType(businessType)
 
-  // Build all IDs up front
-  const groupDefs = groups.map((g, gi) => {
-    const groupId = `default-${userId}-${g.group.toLowerCase().replace(/[\s/&'(),<>]+/g, '-').replace(/-+/g, '-').replace(/-$/, '')}`
-    const catDefs = g.categories.map((catName, ci) => ({
+  // Build all records up front
+  const groupRows = groups.map((g, gi) => ({
+    id: `default-${userId}-${g.group.toLowerCase().replace(/[\s/&'(),<>]+/g, '-').replace(/-+/g, '-').replace(/-$/, '')}`,
+    userId,
+    name: g.group,
+    sortOrder: gi,
+    scheduleRef: g.scheduleRef,
+    taxType: g.taxType,
+  }))
+
+  const categoryRows = groups.flatMap((g, gi) => {
+    const groupId = groupRows[gi].id
+    return g.categories.map((catName, ci) => ({
       id: `default-${userId}-${groupId.replace(`default-${userId}-`, '')}-${catName.toLowerCase().replace(/[\s/&'(),<>]+/g, '-').replace(/-+/g, '-').replace(/-$/, '')}`,
       userId,
       name: catName,
       groupId,
       sortOrder: ci,
     }))
-    return { id: groupId, userId, name: g.group, sortOrder: gi, scheduleRef: g.scheduleRef, taxType: g.taxType, catDefs }
   })
 
-  await db.$transaction(async (tx) => {
-    for (const g of groupDefs) {
-      await tx.categoryGroup.upsert({
-        where: { id: g.id },
-        update: {},
-        create: { id: g.id, userId: g.userId, name: g.name, sortOrder: g.sortOrder, scheduleRef: g.scheduleRef, taxType: g.taxType },
-      })
-    }
-    for (const g of groupDefs) {
-      for (const cat of g.catDefs) {
-        await tx.category.upsert({
-          where: { id: cat.id },
-          update: {},
-          create: cat,
-        })
-      }
-    }
-  }, { timeout: 30000 })
+  // Delete existing defaults for this user, then bulk insert — 3 queries total
+  await db.categoryGroup.deleteMany({
+    where: { userId, id: { startsWith: `default-${userId}-` } },
+  })
+  await db.categoryGroup.createMany({ data: groupRows })
+  await db.category.createMany({ data: categoryRows })
 }
 
 /** Re-export the list for the onboarding UI to show counts */
