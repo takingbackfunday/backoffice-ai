@@ -159,16 +159,15 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
           args = {}
         }
 
-        // Block all data-fetch tools — everything is pre-loaded in the user message
+        // Block only heavy transaction-fetch tools
         const BLOCKED = ['query_transactions', 'search_transactions',
-          'get_uncategorised_transactions', 'get_no_payee_transactions',
-          'get_categories', 'get_rules', 'get_payees']
+          'get_uncategorised_transactions', 'get_no_payee_transactions']
         if (BLOCKED.includes(toolName)) {
           console.log(`[suggest-from-edits] blocked tool: ${toolName}`)
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
-            content: 'This data is already provided in the user message above. Use it directly and emit suggestions.',
+            content: 'Do not fetch transactions — base your suggestions only on the edits provided in the user message. Emit rule suggestions now.',
           })
           continue
         }
