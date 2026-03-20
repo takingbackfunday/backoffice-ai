@@ -232,9 +232,9 @@ function RulePromptPanel({
     return () => clearInterval(interval)
   }, [state, editCount])
 
-  // Auto-dismiss ready/error after 10s
+  // Auto-dismiss ready after 10s — errors stay until manually dismissed
   useEffect(() => {
-    if (state !== 'ready' && state !== 'error') return
+    if (state !== 'ready') return
     const t = setTimeout(onDismiss, 10000)
     return () => clearTimeout(t)
   }, [state, onDismiss])
@@ -242,8 +242,9 @@ function RulePromptPanel({
   if (state === 'idle') return null
 
   return (
-    <div className="fixed bottom-24 right-6 z-50 flex items-center gap-3 rounded-xl border bg-white shadow-lg px-3 py-2.5 text-xs max-w-[270px] transition-all
-      border-black/10">
+    <div className={`fixed bottom-24 right-6 z-50 flex items-center gap-3 rounded-xl border bg-white shadow-lg px-3 py-2.5 text-xs max-w-[270px] transition-all ${
+      state === 'error' ? 'border-red-300 bg-red-50' : 'border-black/10'
+    }`}>
 
       {/* Icon / spinner */}
       {state === 'watching' && (
@@ -281,7 +282,7 @@ function RulePromptPanel({
         {state === 'error' && (
           <>
             <p className="font-medium text-red-600 leading-tight">Analysis failed</p>
-            <p className="text-muted-foreground mt-0.5 leading-tight">Check server logs</p>
+            <p className="text-red-500/70 mt-0.5 leading-tight">Try editing a transaction again to retry</p>
           </>
         )}
       </div>
