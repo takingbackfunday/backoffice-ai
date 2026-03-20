@@ -19,6 +19,20 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const pathname = usePathname()
   const [pending, setPending] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
+
+  // Persist collapsed state
+  useEffect(() => {
+    const stored = localStorage.getItem('sidebar-collapsed')
+    if (stored === 'true') setCollapsed(true)
+  }, [])
+
+  function toggleCollapsed() {
+    setCollapsed((c) => {
+      localStorage.setItem('sidebar-collapsed', String(!c))
+      return !c
+    })
+  }
 
   // Clear pending state once navigation completes
   useEffect(() => {
@@ -27,16 +41,26 @@ export function Sidebar() {
 
   return (
     <nav
-      className="w-56 flex-shrink-0 border-r bg-background flex flex-col py-6 px-3"
+      className={cn(
+        'flex-shrink-0 border-r bg-background flex flex-col py-6 transition-all duration-200',
+        collapsed ? 'w-14 px-2' : 'w-56 px-3'
+      )}
       aria-label="Main navigation"
       data-testid="sidebar"
     >
-      <div className="mb-8 px-3">
-        <h1 className="text-lg font-bold tracking-tight">Backoffice AI</h1>
-        <p className="text-xs text-muted-foreground">Financial management</p>
+      {/* Logo / title */}
+      <div className={cn('mb-8', collapsed ? 'px-1' : 'px-3')}>
+        {collapsed ? (
+          <span className="text-lg font-bold">B</span>
+        ) : (
+          <>
+            <h1 className="text-lg font-bold tracking-tight">Backoffice AI</h1>
+            <p className="text-xs text-muted-foreground">Financial management</p>
+          </>
+        )}
       </div>
 
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-1 flex-1">
         {NAV_ITEMS.map(({ href, label, icon }) => {
           const isActive = pathname === href
           const isPending = pending === href && !isActive
@@ -45,10 +69,12 @@ export function Sidebar() {
               <Link
                 href={href}
                 aria-label={label}
+                title={collapsed ? label : undefined}
                 data-testid={`nav-${label.toLowerCase().replace(' ', '-')}`}
                 onClick={() => { if (!isActive) setPending(href) }}
                 className={cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center rounded-md text-sm font-medium transition-colors',
+                  collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2',
                   isActive
                     ? 'bg-[#f5f5f4] text-[#1a1a1a] font-medium border-r-2 border-[#534AB7]'
                     : isPending
@@ -61,13 +87,31 @@ export function Sidebar() {
                 ) : (
                   <span aria-hidden="true">{icon}</span>
                 )}
-                {label}
+                {!collapsed && label}
               </Link>
             </li>
           )
         })}
       </ul>
 
+      {/* Collapse toggle */}
+      <button
+        onClick={toggleCollapsed}
+        className={cn(
+          'mt-4 flex items-center rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors',
+          collapsed ? 'justify-center px-2' : 'gap-2'
+        )}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        <svg
+          className={cn('w-4 h-4 shrink-0 transition-transform duration-200', collapsed ? 'rotate-180' : '')}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M18 19l-7-7 7-7" />
+        </svg>
+        {!collapsed && <span>Collapse</span>}
+      </button>
     </nav>
   )
 }
