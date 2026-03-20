@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const accountName = searchParams.get('accountName') ?? undefined
     const payeeName = searchParams.get('payeeName') ?? undefined
     const categoryId = searchParams.get('categoryId') ?? undefined
+    const categoryGroupId = searchParams.get('categoryGroupId') ?? undefined
     const amountMinRaw = searchParams.get('amountMin') ?? undefined
     const amountMaxRaw = searchParams.get('amountMax') ?? undefined
     const amountMin = amountMinRaw !== undefined ? parseFloat(amountMinRaw) : undefined
@@ -53,6 +54,7 @@ export async function GET(request: Request) {
       ...(notes ? { notes: { contains: notes, mode: 'insensitive' as const } } : {}),
       ...(payeeName ? { payee: { is: { name: { contains: payeeName, mode: 'insensitive' as const } } } } : {}),
       ...(categoryId ? { categoryId } : {}),
+      ...(categoryGroupId ? { categoryRef: { is: { groupId: categoryGroupId } } } : {}),
       ...(search ? {
         OR: [
           { description: { contains: search, mode: 'insensitive' as const } },

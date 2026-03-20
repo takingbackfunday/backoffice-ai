@@ -30,6 +30,7 @@ interface ColumnFilters {
   payeeName?: string
   notes?: string
   categoryId?: string
+  categoryGroupId?: string
   projectId?: string
 }
 
@@ -107,7 +108,7 @@ function ProjectCell({
   )
 }
 
-// ── Inline category select ────────────────────────────────────────
+// ── Inline category combobox (type to filter) ─────────────────────
 function CategoryCell({
   value,
   groups,
@@ -119,35 +120,85 @@ function CategoryCell({
   onCommit: (id: string | null) => void
   onCancel: () => void
 }) {
-  const ref = useRef<HTMLSelectElement>(null)
+  const allCats = groups.flatMap((g) => g.categories.map((c) => ({ ...c, groupName: g.name })))
+  const current = allCats.find((c) => c.id === value)
+  const [query, setQuery] = useState(current?.name ?? '')
+  const [activeIdx, setActiveIdx] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
   const committed = useRef(false)
-  useEffect(() => { ref.current?.focus() }, [])
+
+  const filtered = query.trim() === ''
+    ? allCats
+    : allCats.filter((c) =>
+        c.name.toLowerCase().includes(query.toLowerCase()) ||
+        c.groupName.toLowerCase().includes(query.toLowerCase())
+      )
+
+  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select() }, [])
+  useEffect(() => { setActiveIdx(0) }, [query])
+
+  function commit(id: string | null) {
+    committed.current = true
+    const scrollY = window.scrollY
+    onCommit(id)
+    requestAnimationFrame(() => { window.scrollTo({ top: scrollY, behavior: 'instant' }) })
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') { onCancel(); return }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, filtered.length - 1)); return }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); return }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (query.trim() === '' && activeIdx === -1) { commit(null); return }
+      const picked = filtered[activeIdx]
+      if (picked) commit(picked.id)
+      return
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (query === '') { commit(null) }
+    }
+  }
+
   return (
-    <select
-      ref={ref}
-      defaultValue={value ?? ''}
-      onChange={(e) => {
-        committed.current = true
-        // Preserve scroll position — committing unmounts this select which
-        // can cause the browser to snap the viewport.
-        const scrollY = window.scrollY
-        onCommit(e.target.value || null)
-        requestAnimationFrame(() => { window.scrollTo({ top: scrollY, behavior: 'instant' }) })
-      }}
-      onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
-      onBlur={() => { if (!committed.current) onCancel() }}
-      className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none focus:ring-1 focus:ring-blue-400"
-      aria-label="Select category"
-    >
-      <option value="">— None —</option>
-      {groups.map((g) => (
-        <optgroup key={g.id} label={g.name}>
-          {g.categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+    <div className="relative w-full">
+      <input
+        ref={inputRef}
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => { if (!committed.current) onCancel() }}
+        placeholder="Type to filter…"
+        className="w-full rounded border border-blue-400 bg-white px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-400"
+        aria-label="Select category"
+        autoComplete="off"
+      />
+      {filtered.length > 0 && (
+        <ul
+          ref={listRef}
+          className="absolute z-50 top-full left-0 mt-0.5 w-52 rounded border border-black/10 bg-white shadow-lg text-xs max-h-52 overflow-y-auto"
+        >
+          <li
+            onMouseDown={(e) => { e.preventDefault(); commit(null) }}
+            className={`px-2 py-1 cursor-pointer text-muted-foreground italic ${activeIdx === -1 ? 'bg-blue-50' : 'hover:bg-muted/40'}`}
+          >
+            — None —
+          </li>
+          {filtered.map((cat, i) => (
+            <li
+              key={cat.id}
+              onMouseDown={(e) => { e.preventDefault(); commit(cat.id) }}
+              className={`px-2 py-1 cursor-pointer ${i === activeIdx ? 'bg-blue-50' : 'hover:bg-muted/40'}`}
+            >
+              <span>{cat.name}</span>
+              <span className="ml-1.5 text-[10px] text-muted-foreground">{cat.groupName}</span>
+            </li>
           ))}
-        </optgroup>
-      ))}
-    </select>
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -791,6 +842,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       ...(debouncedFilters.payeeName ? { payeeName: debouncedFilters.payeeName } : {}),
       ...(debouncedFilters.notes ? { notes: debouncedFilters.notes } : {}),
       ...(debouncedFilters.categoryId ? { categoryId: debouncedFilters.categoryId } : {}),
+      ...(debouncedFilters.categoryGroupId ? { categoryGroupId: debouncedFilters.categoryGroupId } : {}),
       ...(debouncedFilters.projectId ? { projectId: debouncedFilters.projectId } : {}),
       ...(debouncedFilters.amountMin ? { amountMin: debouncedFilters.amountMin } : {}),
       ...(debouncedFilters.amountMax ? { amountMax: debouncedFilters.amountMax } : {}),
@@ -1473,7 +1525,21 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
               />
 
               {/* Category group */}
-              <th className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Group</th>
+              <FilterableSortHeader
+                label="Group"
+                field="category"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={handleSort}
+                filterCol="categoryGroupId"
+                openFilterCol={openFilterCol}
+                setOpenFilterCol={setOpenFilterCol}
+                filterValue={filters.categoryGroupId ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, categoryGroupId: v }))}
+                filterType="select"
+                filterOptions={categoryGroups.map((g) => ({ value: g.id, label: g.name }))}
+                sortable={false}
+              />
 
               {/* Category */}
               <FilterableSortHeader
