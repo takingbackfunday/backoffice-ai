@@ -158,16 +158,16 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
   if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>
 
   return (
-    <div className="space-y-2" data-testid="category-manager">
-      {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+    <div className="w-full max-w-md space-y-px" data-testid="category-manager">
+      {error && <p className="text-xs text-red-600 mb-1" role="alert">{error}</p>}
 
       {groups.map((group) => (
-        <div key={group.id} className="rounded-lg border overflow-hidden">
+        <div key={group.id} className="rounded border overflow-hidden">
           {/* Group header */}
-          <div className="flex items-center gap-2 bg-muted/60 px-3 py-1.5">
+          <div className="flex items-center gap-1.5 bg-muted/60 px-2 py-0.5">
             <button
               onClick={() => toggleCollapse(group.id)}
-              className="text-muted-foreground hover:text-foreground text-xs"
+              className="text-muted-foreground hover:text-foreground text-[10px] leading-none w-3"
               aria-label={collapsed.has(group.id) ? 'Expand group' : 'Collapse group'}
             >
               {collapsed.has(group.id) ? '▶' : '▼'}
@@ -183,7 +183,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
                   if (e.key === 'Escape') setRenamingId(null)
                 }}
                 onBlur={() => renameGroup(group.id)}
-                className="flex-1 rounded border border-blue-400 px-2 py-0.5 text-xs font-semibold outline-none"
+                className="flex-1 rounded border border-blue-400 px-1.5 py-px text-xs font-semibold outline-none"
                 aria-label="Rename group"
               />
             ) : (
@@ -196,12 +196,12 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
               </span>
             )}
 
-            <span className="text-xs text-muted-foreground">{group.categories.length} categories</span>
+            <span className="text-[10px] text-muted-foreground">{group.categories.length}</span>
 
             <button
               onClick={() => deleteGroup(group.id)}
               disabled={deletingId === group.id || group.categories.some((c) => c._count.transactions > 0)}
-              className="rounded p-1 text-muted-foreground hover:text-red-600 disabled:opacity-30"
+              className="text-muted-foreground hover:text-red-600 disabled:opacity-30 text-[11px] leading-none px-0.5"
               title={group.categories.some((c) => c._count.transactions > 0)
                 ? 'Cannot delete: categories have transactions'
                 : 'Delete group'}
@@ -213,9 +213,9 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
 
           {/* Categories */}
           {!collapsed.has(group.id) && (
-            <ul className="divide-y">
+            <ul className="divide-y divide-border/50">
               {group.categories.map((cat) => (
-                <li key={cat.id} className="flex items-center gap-2 px-6 py-1 hover:bg-muted/20">
+                <li key={cat.id} className="flex items-center gap-1.5 px-3 py-px hover:bg-muted/20">
                   {renamingId === cat.id && renameType === 'category' ? (
                     <input
                       ref={renameRef}
@@ -226,7 +226,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
                         if (e.key === 'Escape') setRenamingId(null)
                       }}
                       onBlur={() => renameCategory(cat.id)}
-                      className="flex-1 rounded border border-blue-400 px-2 py-0.5 text-xs outline-none"
+                      className="flex-1 rounded border border-blue-400 px-1.5 py-px text-xs outline-none"
                       aria-label="Rename category"
                     />
                   ) : (
@@ -239,14 +239,14 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
                     </span>
                   )}
 
-                  <span className="text-xs text-muted-foreground rounded-full bg-muted px-2 py-0.5">
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
                     {cat._count.transactions}
                   </span>
 
                   <button
                     onClick={() => deleteCategory(cat.id)}
                     disabled={deletingId === cat.id || cat._count.transactions > 0}
-                    className="rounded p-1 text-muted-foreground hover:text-red-600 disabled:opacity-30"
+                    className="text-muted-foreground hover:text-red-600 disabled:opacity-30 text-[11px] leading-none px-0.5"
                     title={cat._count.transactions > 0 ? 'Cannot delete: has transactions' : 'Delete category'}
                     aria-label="Delete category"
                   >
@@ -257,7 +257,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
 
               {/* Add category inline */}
               {addingCatGroupId === group.id ? (
-                <li className="flex items-center gap-2 px-6 py-1">
+                <li className="flex items-center gap-1.5 px-3 py-0.5">
                   <input
                     autoFocus
                     value={newCatName}
@@ -267,24 +267,24 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
                       if (e.key === 'Escape') { setAddingCatGroupId(null); setNewCatName('') }
                     }}
                     placeholder="Category name…"
-                    className="flex-1 rounded border px-2 py-0.5 text-xs"
+                    className="flex-1 rounded border px-1.5 py-px text-xs"
                     aria-label="New category name"
                   />
                   <button
                     onClick={() => addCategory(group.id)}
-                    className="rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground"
+                    className="rounded bg-primary px-2 py-px text-xs text-primary-foreground"
                   >
                     Add
                   </button>
                   <button
                     onClick={() => { setAddingCatGroupId(null); setNewCatName('') }}
-                    className="rounded border px-2 py-0.5 text-xs"
+                    className="rounded border px-2 py-px text-xs"
                   >
                     Cancel
                   </button>
                 </li>
               ) : (
-                <li className="px-6 py-1">
+                <li className="px-3 py-px">
                   <button
                     onClick={() => { setAddingCatGroupId(group.id); setNewCatName('') }}
                     className="text-xs text-primary hover:underline"
@@ -299,19 +299,19 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
       ))}
 
       {/* Add group */}
-      <div className="flex items-center gap-2 pt-2">
+      <div className="flex items-center gap-1.5 pt-1">
         <input
           value={newGroupName}
           onChange={(e) => setNewGroupName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') addGroup() }}
           placeholder="New group name…"
-          className="rounded-md border px-3 py-1.5 text-xs w-56"
+          className="rounded border px-2 py-0.5 text-xs w-44"
           aria-label="New group name"
         />
         <button
           onClick={addGroup}
           disabled={addingGroup || !newGroupName.trim()}
-          className="rounded-md bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          className="rounded bg-primary px-3 py-0.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
         >
           {addingGroup ? 'Adding…' : 'Add group'}
         </button>

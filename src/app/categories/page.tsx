@@ -35,13 +35,13 @@ export default async function CategoriesPage() {
       <Sidebar />
       <div className="flex flex-1 flex-col">
         <Header title="Categories" />
-        <main className="flex-1 p-6" role="main">
+        <main className="flex-1 p-3" role="main">
           {needsOnboarding ? (
             <BusinessTypePicker counts={getCategoryCounts()} />
           ) : (
             <>
-              <div className="mb-4 flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
                   Manage your category groups and categories. Click a name to rename it.
                   {hasBusinessType && (
                     <span className="ml-2 text-xs text-muted-foreground/70">

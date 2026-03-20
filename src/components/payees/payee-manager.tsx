@@ -93,7 +93,7 @@ export function PayeeManager({
   if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>
 
   return (
-    <div className="space-y-4" data-testid="payee-manager">
+    <div className="space-y-2" data-testid="payee-manager">
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
 
       {payees.length === 0 ? (
@@ -105,16 +105,16 @@ export function PayeeManager({
           <table className="w-full text-xs" aria-label="Payees">
             <thead className="bg-muted text-xs uppercase tracking-wide">
               <tr>
-                <th className="px-3 py-1.5 text-left font-medium">Payee name</th>
-                <th className="px-3 py-1.5 text-left font-medium">Default category</th>
-                <th className="px-3 py-1.5 text-center font-medium w-28">Transactions</th>
-                <th className="px-3 py-1.5 w-16" />
+                <th className="px-3 py-1 text-left font-medium">Payee name</th>
+                <th className="px-3 py-1 text-left font-medium">Default category</th>
+                <th className="px-3 py-1 text-center font-medium w-28">Transactions</th>
+                <th className="px-3 py-1 w-16" />
               </tr>
             </thead>
             <tbody>
               {payees.map((payee) => (
                 <tr key={payee.id} className="border-t hover:bg-muted/40" data-testid="payee-row">
-                  <td className="px-3 py-1">
+                  <td className="px-3 py-0.5">
                     {renamingId === payee.id ? (
                       <input
                         autoFocus
@@ -139,7 +139,7 @@ export function PayeeManager({
                     )}
                   </td>
 
-                  <td className="px-3 py-1">
+                  <td className="px-3 py-0.5">
                     <select
                       value={payee.defaultCategoryId ?? ''}
                       onChange={(e) => setDefaultCategory(payee.id, e.target.value || null)}
@@ -161,7 +161,7 @@ export function PayeeManager({
                     {payee._count.transactions}
                   </td>
 
-                  <td className="px-3 py-1">
+                  <td className="px-3 py-0.5">
                     {confirmDeleteId === payee.id ? (
                       <div className="flex gap-1">
                         <button

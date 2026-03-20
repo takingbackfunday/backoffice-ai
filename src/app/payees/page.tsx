@@ -30,9 +30,9 @@ export default async function PayeesPage() {
       <Sidebar />
       <div className="flex flex-1 flex-col">
         <Header title="Payees" />
-        <main className="flex-1 p-6" role="main">
-          <div className="mb-4">
-            <p className="text-sm text-muted-foreground">
+        <main className="flex-1 p-3" role="main">
+          <div className="mb-2">
+            <p className="text-xs text-muted-foreground">
               Payees are created automatically during import. Set a default category to auto-assign it to future transactions.
             </p>
           </div>
