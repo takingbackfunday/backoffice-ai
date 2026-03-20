@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { ok, unauthorized, serverError } from '@/lib/api-response'
+import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { buildDuplicateHash } from '@/lib/dedup'
 
 const SORT_FIELDS = ['date', 'amount', 'description', 'category'] as const
 type SortField = typeof SORT_FIELDS[number]
@@ -98,5 +99,61 @@ export async function GET(request: Request) {
     })
   } catch {
     return serverError('Failed to fetch transactions')
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { userId } = await auth()
+    if (!userId) return unauthorized()
+
+    const body = await request.json()
+    const { accountId, date, amount, description, categoryId, payeeId, projectId, notes } = body
+
+    if (!accountId || !date || amount === undefined || amount === '' || !description) {
+      return badRequest('accountId, date, amount and description are required')
+    }
+
+    const account = await prisma.account.findUnique({ where: { id: accountId } })
+    if (!account || account.userId !== userId) return notFound('Account not found')
+
+    const parsedAmount = parseFloat(String(amount))
+    if (isNaN(parsedAmount)) return badRequest('Invalid amount')
+
+    const duplicateHash = buildDuplicateHash({ accountId, date, amount: parsedAmount, description })
+
+    try {
+      const transaction = await prisma.transaction.create({
+        data: {
+          accountId,
+          date: new Date(date),
+          amount: parsedAmount,
+          description,
+          duplicateHash,
+          rawData: {},
+          ...(categoryId ? { categoryId } : {}),
+          ...(payeeId ? { payeeId } : {}),
+          ...(projectId ? { projectId } : {}),
+          ...(notes ? { notes } : {}),
+        },
+        include: {
+          account: { include: { institution: true } },
+          project: true,
+          categoryRef: { include: { group: true } },
+          payee: true,
+        },
+      })
+      return created(transaction)
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'code' in e && (e as { code: string }).code === 'P2002') {
+        return badRequest('Duplicate transaction')
+      }
+      throw e
+    }
+  } catch (e: unknown) {
+    if (e && typeof e === 'object' && 'code' in e && (e as { code: string }).code === 'P2002') {
+      return badRequest('Duplicate transaction')
+    }
+    return serverError('Failed to create transaction')
   }
 }

@@ -13,7 +13,7 @@ export default async function TransactionsPage() {
 
   const where = { account: { userId } }
 
-  const [projects, categoryGroups, payees, total, transactions] = await Promise.all([
+  const [projects, categoryGroups, payees, accounts, total, transactions] = await Promise.all([
     prisma.project.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -24,6 +24,11 @@ export default async function TransactionsPage() {
       orderBy: { sortOrder: 'asc' },
     }),
     prisma.payee.findMany({
+      where: { userId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.account.findMany({
       where: { userId },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
@@ -58,6 +63,7 @@ export default async function TransactionsPage() {
               categories: g.categories.map((c) => ({ id: c.id, name: c.name })),
             }))}
             initialPayees={payees}
+            initialAccounts={accounts}
           />
         </main>
       </div>

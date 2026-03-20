@@ -11,6 +11,7 @@ interface Props {
   initialProjects?: Project[]
   initialCategoryGroups?: CategoryGroup[]
   initialPayees?: Payee[]
+  initialAccounts?: { id: string; name: string }[]
 }
 
 type SortField = 'date' | 'amount' | 'description' | 'category'
@@ -791,11 +792,20 @@ function DateFilterHeader({
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function TransactionTable({ initialRows, initialTotal, initialProjects, initialCategoryGroups, initialPayees }: Props) {
+const todayISO = new Date().toISOString().slice(0, 10)
+
+export function TransactionTable({ initialRows, initialTotal, initialProjects, initialCategoryGroups, initialPayees, initialAccounts }: Props) {
   const [localRows, setLocalRows] = useState<TransactionWithRelations[]>(initialRows ?? [])
   const [total, setTotal] = useState(initialTotal ?? 0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(!initialRows)
+
+  // ── New row state ──────────────────────────────────────────────────
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>(initialAccounts ?? [])
+  const [addingRow, setAddingRow] = useState(false)
+  const [newRow, setNewRow] = useState({ accountId: '', date: todayISO, amount: '', description: '', categoryId: '', payeeId: '', projectId: '', notes: '' })
+  const [savingNew, setSavingNew] = useState(false)
+  const [newRowError, setNewRowError] = useState<string | null>(null)
 
   // Column filters
   const [search, setSearch] = useState('')
@@ -919,13 +929,18 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       })
   }, [])
 
-  // Load projects, categories, payees once (skip if passed from server)
+  // Load projects, categories, payees, accounts once (skip if passed from server)
   useEffect(() => {
     if (initialProjects && initialCategoryGroups && initialPayees) return
     if (!initialProjects) fetch('/api/projects').then((r) => r.json()).then((j) => { if (!j.error) setProjects(j.data ?? []) }).catch(() => {})
     if (!initialCategoryGroups) fetch('/api/category-groups').then((r) => r.json()).then((j) => { if (!j.error) setCategoryGroups(j.data ?? []) }).catch(() => {})
     if (!initialPayees) fetch('/api/payees').then((r) => r.json()).then((j) => { if (!j.error) setPayees(j.data ?? []) }).catch(() => {})
   }, [initialProjects, initialCategoryGroups, initialPayees])
+
+  useEffect(() => {
+    if (initialAccounts) return
+    fetch('/api/accounts').then((r) => r.json()).then((j) => { if (!j.error) setAccounts(j.data ?? []) }).catch(() => {})
+  }, [initialAccounts])
 
   // Track whether this is the very first render with server data
   const isFirstRender = useRef(true)
@@ -1189,6 +1204,52 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
     setEditingCell(null)
   }
 
+  // ── New row handlers ──────────────────────────────────────────────
+  function resetNewRow() {
+    setNewRow({ accountId: '', date: todayISO, amount: '', description: '', categoryId: '', payeeId: '', projectId: '', notes: '' })
+    setNewRowError(null)
+  }
+
+  async function handleSaveNewRow() {
+    if (!newRow.accountId || !newRow.date || newRow.amount === '' || !newRow.description) {
+      setNewRowError('Account, date, amount and description are required.')
+      return
+    }
+    setSavingNew(true)
+    setNewRowError(null)
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: newRow.accountId,
+          date: newRow.date,
+          amount: parseFloat(newRow.amount),
+          description: newRow.description,
+          ...(newRow.categoryId ? { categoryId: newRow.categoryId } : {}),
+          ...(newRow.payeeId ? { payeeId: newRow.payeeId } : {}),
+          ...(newRow.projectId ? { projectId: newRow.projectId } : {}),
+          ...(newRow.notes ? { notes: newRow.notes } : {}),
+        }),
+      })
+      const json = await res.json()
+      if (json.error) { setNewRowError(json.error); setSavingNew(false); return }
+      setLocalRows((prev) => [json.data, ...prev])
+      setTotal((t) => t + 1)
+      setAddingRow(false)
+      resetNewRow()
+    } catch {
+      setNewRowError('Failed to save transaction.')
+    } finally {
+      setSavingNew(false)
+    }
+  }
+
+  function handleCancelNewRow() {
+    setAddingRow(false)
+    resetNewRow()
+  }
+
   // ── Bulk delete ───────────────────────────────────────────────────
   async function confirmBulkDelete() {
     setBulkDeleteConfirm(false)
@@ -1371,6 +1432,17 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
         <p className="text-xs text-muted-foreground mr-auto">
           {loading && total === 0 ? 'Loading transactions…' : `${total} transaction${total !== 1 ? 's' : ''}`}
         </p>
+
+        {/* New transaction button */}
+        {!addingRow && (
+          <button
+            onClick={() => setAddingRow(true)}
+            className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-muted/60 transition-colors flex items-center gap-1"
+            data-testid="new-transaction-btn"
+          >
+            + New transaction
+          </button>
+        )}
 
         {/* Active filter count + clear */}
         {hasActiveFilters && (
@@ -1682,9 +1754,134 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
             </tr>
           </thead>
           <tbody>
+            {/* ── New row ─────────────────────────────────────────────── */}
+            {addingRow && (
+              <tr className="border-t bg-blue-50/60" data-testid="new-transaction-row">
+                <td className="px-3 py-1 w-8" />
+                {/* Date */}
+                <td className="px-3 py-1 min-w-[130px]">
+                  <input
+                    type="date"
+                    value={newRow.date}
+                    onChange={(e) => setNewRow((r) => ({ ...r, date: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNewRow(); if (e.key === 'Escape') handleCancelNewRow() }}
+                    className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-xs outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                </td>
+                {/* Account */}
+                <td className="px-3 py-1 min-w-[120px]">
+                  <select
+                    value={newRow.accountId}
+                    onChange={(e) => setNewRow((r) => ({ ...r, accountId: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Escape') handleCancelNewRow() }}
+                    className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-xs outline-none focus:ring-1 focus:ring-blue-400"
+                  >
+                    <option value="">— Select —</option>
+                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </td>
+                {/* Description */}
+                <td className="px-3 py-1 min-w-[160px]">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Description"
+                    value={newRow.description}
+                    onChange={(e) => setNewRow((r) => ({ ...r, description: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNewRow(); if (e.key === 'Escape') handleCancelNewRow() }}
+                    className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-xs outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                </td>
+                {/* Amount */}
+                <td className="px-3 py-1 min-w-[90px]">
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={newRow.amount}
+                    onChange={(e) => setNewRow((r) => ({ ...r, amount: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNewRow(); if (e.key === 'Escape') handleCancelNewRow() }}
+                    className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-xs outline-none focus:ring-1 focus:ring-blue-400 text-right font-mono"
+                  />
+                </td>
+                {/* Payee */}
+                <td className="px-3 py-1 min-w-[140px]">
+                  <PayeeCell
+                    value={newRow.payeeId || null}
+                    payees={payees}
+                    onCommit={(v) => setNewRow((r) => ({ ...r, payeeId: v ?? '' }))}
+                    onCancel={() => {}}
+                    onNewPayee={(p) => {
+                      setPayees((prev) => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))
+                      setNewRow((r) => ({ ...r, payeeId: p.id }))
+                    }}
+                  />
+                </td>
+                {/* Category */}
+                <td className="px-3 py-1 min-w-[160px]">
+                  <CategoryCell
+                    value={newRow.categoryId || null}
+                    groups={categoryGroups}
+                    onCommit={(v) => setNewRow((r) => ({ ...r, categoryId: v ?? '' }))}
+                    onCancel={() => {}}
+                  />
+                </td>
+                {/* Group — auto-derived */}
+                <td className="px-3 py-1 text-xs text-muted-foreground whitespace-nowrap">
+                  {newRow.categoryId
+                    ? (categoryGroups.find((g) => g.categories.some((c) => c.id === newRow.categoryId))?.name ?? '—')
+                    : '—'}
+                </td>
+                {/* Notes */}
+                <td className="px-3 py-1 min-w-[120px]">
+                  <input
+                    type="text"
+                    placeholder="Notes"
+                    value={newRow.notes}
+                    onChange={(e) => setNewRow((r) => ({ ...r, notes: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNewRow(); if (e.key === 'Escape') handleCancelNewRow() }}
+                    className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-xs outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                </td>
+                {/* Project */}
+                <td className="px-3 py-1 min-w-[120px]">
+                  <ProjectCell
+                    value={newRow.projectId || null}
+                    projects={projects}
+                    onCommit={(v) => setNewRow((r) => ({ ...r, projectId: v ?? '' }))}
+                    onCancel={() => {}}
+                  />
+                </td>
+                {/* Save / Cancel */}
+                <td className="px-3 py-1 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handleSaveNewRow}
+                      disabled={savingNew}
+                      className="rounded bg-[#534AB7] px-2 py-0.5 text-[10px] text-white hover:bg-[#4338CA] disabled:opacity-50 transition-colors"
+                      data-testid="new-row-save-btn"
+                    >
+                      {savingNew ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      onClick={handleCancelNewRow}
+                      className="text-muted-foreground hover:text-foreground text-xs leading-none px-0.5"
+                      aria-label="Cancel new row"
+                      data-testid="new-row-cancel-btn"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {newRowError && (
+                    <p className="text-[10px] text-red-600 mt-0.5 max-w-[200px]">{newRowError}</p>
+                  )}
+                </td>
+              </tr>
+            )}
+
             {loading && localRows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground" aria-live="polite">
+                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground" aria-live="polite">
                   <span className="inline-flex items-center gap-2">
                     <span className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
                     Loading from database…
@@ -1693,7 +1890,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
               </tr>
             ) : !loading && localRows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No transactions found.</td>
+                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">No transactions found.</td>
               </tr>
             ) : (
               localRows.map((row) => {
