@@ -202,6 +202,53 @@ function CategoryCell({
   )
 }
 
+// ── Floating: watching edits prompt ───────────────────────────────
+const SUGGEST_DELAY_MS = 30000
+
+function WatchingEditsPrompt({
+  editCount,
+  onAnalyseNow,
+}: {
+  editCount: number
+  onAnalyseNow: () => void
+}) {
+  const [secondsLeft, setSecondsLeft] = useState(Math.round(SUGGEST_DELAY_MS / 1000))
+
+  useEffect(() => {
+    setSecondsLeft(Math.round(SUGGEST_DELAY_MS / 1000))
+    const interval = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) { clearInterval(interval); return 0 }
+        return s - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [editCount])
+
+  return (
+    <div className="fixed bottom-24 right-6 z-50 flex items-center gap-3 rounded-xl border border-black/10 bg-white shadow-lg px-3 py-2.5 text-xs max-w-[260px]">
+      <span className="relative flex h-2.5 w-2.5 shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#534AB7] opacity-60" />
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#534AB7]" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-foreground leading-tight">
+          Watching {editCount} edit{editCount !== 1 ? 's' : ''}
+        </p>
+        <p className="text-muted-foreground mt-0.5 leading-tight">
+          Suggesting rules in {secondsLeft}s…
+        </p>
+      </div>
+      <button
+        onClick={onAnalyseNow}
+        className="shrink-0 rounded-md bg-[#534AB7] px-2 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
+      >
+        Analyse now
+      </button>
+    </div>
+  )
+}
+
 // ── Floating toast: rule suggestions ready ────────────────────────
 function SuggestionToast({ onDismiss }: { onDismiss: () => void }) {
   useEffect(() => {
@@ -210,7 +257,7 @@ function SuggestionToast({ onDismiss }: { onDismiss: () => void }) {
   }, [onDismiss])
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-[#534AB7]/20 bg-white shadow-lg px-4 py-3 text-xs text-[#3C3489] max-w-xs">
+    <div className="fixed bottom-24 right-6 z-50 flex items-center gap-3 rounded-xl border border-[#534AB7]/20 bg-white shadow-lg px-4 py-3 text-xs text-[#3C3489] max-w-xs">
       <span className="text-base">💡</span>
       <div className="flex-1 min-w-0">
         <p className="font-medium leading-tight">Rule suggestions ready</p>
@@ -799,8 +846,33 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const editQueueRef = useRef<Map<string, TransactionWithRelations>>(new Map())
   const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [suggestionReady, setSuggestionReady] = useState(false)
+  const [watchingEdits, setWatchingEdits] = useState(false)
+  const [watchingEditCount, setWatchingEditCount] = useState(0)
 
   const pageSize = 200
+
+  // ── Fire suggestion request (shared between timer + manual trigger) ─
+  const fireSuggestions = useCallback(() => {
+    if (suggestionTimerRef.current) { clearTimeout(suggestionTimerRef.current); suggestionTimerRef.current = null }
+    const queue = editQueueRef.current
+    if (queue.size === 0) { setWatchingEdits(false); return }
+    const snapshots = Array.from(queue.values())
+    editQueueRef.current = new Map()
+    setWatchingEdits(false)
+    setWatchingEditCount(0)
+    console.log('[suggest-from-edits] firing for', snapshots.length, 'edits', snapshots)
+    fetch('/api/rules/suggest-from-edits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ edits: snapshots }),
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        console.log('[suggest-from-edits] response:', j)
+        if (!j.error && j.data?.count > 0) setSuggestionReady(true)
+      })
+      .catch((e) => console.error('[suggest-from-edits] fetch error:', e))
+  }, [])
 
   // Load projects, categories, payees once (skip if passed from server)
   useEffect(() => {
@@ -1048,28 +1120,15 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       const merged = existing ? { ...existing, ...editSnapshot } : editSnapshot
       editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
 
+      const queueSize = editQueueRef.current.size
+      setWatchingEdits(true)
+      setWatchingEditCount(queueSize)
+
       if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
       setSuggestionReady(false)
       suggestionTimerRef.current = setTimeout(() => {
-        const queue = editQueueRef.current
-        if (queue.size === 0) return
-        const snapshots = Array.from(queue.values()) as unknown as typeof editSnapshot[]
-        editQueueRef.current = new Map()
-
-        console.log('[suggest-from-edits] firing for', snapshots.length, 'edits', snapshots)
-
-        fetch('/api/rules/suggest-from-edits', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ edits: snapshots }),
-        })
-          .then((r) => r.json())
-          .then((j) => {
-            console.log('[suggest-from-edits] response:', j)
-            if (!j.error && j.data?.count > 0) setSuggestionReady(true)
-          })
-          .catch((e) => console.error('[suggest-from-edits] fetch error:', e))
-      }, 30000)
+        fireSuggestions()
+      }, SUGGEST_DELAY_MS)
     } catch {
       // Revert on error
       if (row) {
@@ -1399,6 +1458,14 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
           <span>{aiExplanation}</span>
           <button onClick={clearAiSearch} className="ml-auto text-purple-500 hover:text-purple-700">✕</button>
         </div>
+      )}
+
+      {/* Watching edits prompt — shows while timer is running */}
+      {watchingEdits && !suggestionReady && (
+        <WatchingEditsPrompt
+          editCount={watchingEditCount}
+          onAnalyseNow={fireSuggestions}
+        />
       )}
 
       {/* Rule suggestion floating toast — fixed bottom-right, auto-dismisses */}
