@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/header'
 import { TransactionTable } from '@/components/transactions/transaction-table'
 import { prisma } from '@/lib/prisma'
 
-const PAGE_SIZE = 200
+const PAGE_SIZE = 50
 
 export default async function TransactionsPage() {
   const { userId } = await auth()
