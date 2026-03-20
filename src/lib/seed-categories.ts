@@ -606,40 +606,37 @@ export async function seedDefaultCategories(
 ) {
   const groups = getGroupsForType(businessType)
 
-  for (let gi = 0; gi < groups.length; gi++) {
-    const { group: groupName, scheduleRef, taxType, categories } = groups[gi]
-    const groupId = `default-${userId}-${groupName.toLowerCase().replace(/[\s/&'(),<>]+/g, '-').replace(/-+/g, '-').replace(/-$/, '')}`
+  // Build all IDs up front
+  const groupDefs = groups.map((g, gi) => {
+    const groupId = `default-${userId}-${g.group.toLowerCase().replace(/[\s/&'(),<>]+/g, '-').replace(/-+/g, '-').replace(/-$/, '')}`
+    const catDefs = g.categories.map((catName, ci) => ({
+      id: `default-${userId}-${groupId.replace(`default-${userId}-`, '')}-${catName.toLowerCase().replace(/[\s/&'(),<>]+/g, '-').replace(/-+/g, '-').replace(/-$/, '')}`,
+      userId,
+      name: catName,
+      groupId,
+      sortOrder: ci,
+    }))
+    return { id: groupId, userId, name: g.group, sortOrder: gi, scheduleRef: g.scheduleRef, taxType: g.taxType, catDefs }
+  })
 
-    const group = await db.categoryGroup.upsert({
-      where: { id: groupId },
-      update: {},
-      create: {
-        id: groupId,
-        userId,
-        name: groupName,
-        sortOrder: gi,
-        scheduleRef,
-        taxType,
-      },
-    })
-
-    for (let ci = 0; ci < categories.length; ci++) {
-      const catName = categories[ci]
-      const catId = `default-${userId}-${groupId.replace(`default-${userId}-`, '')}-${catName.toLowerCase().replace(/[\s/&'(),<>]+/g, '-').replace(/-+/g, '-').replace(/-$/, '')}`
-
-      await db.category.upsert({
-        where: { id: catId },
+  await db.$transaction(async (tx) => {
+    for (const g of groupDefs) {
+      await tx.categoryGroup.upsert({
+        where: { id: g.id },
         update: {},
-        create: {
-          id: catId,
-          userId,
-          name: catName,
-          groupId: group.id,
-          sortOrder: ci,
-        },
+        create: { id: g.id, userId: g.userId, name: g.name, sortOrder: g.sortOrder, scheduleRef: g.scheduleRef, taxType: g.taxType },
       })
     }
-  }
+    for (const g of groupDefs) {
+      for (const cat of g.catDefs) {
+        await tx.category.upsert({
+          where: { id: cat.id },
+          update: {},
+          create: cat,
+        })
+      }
+    }
+  }, { timeout: 30000 })
 }
 
 /** Re-export the list for the onboarding UI to show counts */
