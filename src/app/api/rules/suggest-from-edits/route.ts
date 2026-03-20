@@ -1,3 +1,5 @@
+export const maxDuration = 120
+
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
@@ -130,7 +132,7 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
 
     for (let round = 0; round < MAX_ROUNDS && !finished; round++) {
       console.log(`[suggest-from-edits] round ${round + 1}/${MAX_ROUNDS}`)
-      const response = await openrouterWithTools(messages, RULES_TOOLS, 'mistralai/mistral-small-2603')
+      const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4.6')
 
       const toolNames = response.tool_calls?.map((tc) => tc.function.name) ?? []
       console.log(`[suggest-from-edits] round ${round + 1} tools:`, toolNames.length ? toolNames : '(none — finished)')

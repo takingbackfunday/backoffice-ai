@@ -202,19 +202,26 @@ function CategoryCell({
   )
 }
 
-// ── Floating: watching edits prompt ───────────────────────────────
+// ── Floating: edit-monitor / analysing / ready panel ──────────────
 const SUGGEST_DELAY_MS = 30000
 
-function WatchingEditsPrompt({
+type RulePromptState = 'watching' | 'analysing' | 'ready' | 'error' | 'idle'
+
+function RulePromptPanel({
+  state,
   editCount,
   onAnalyseNow,
+  onDismiss,
 }: {
+  state: RulePromptState
   editCount: number
   onAnalyseNow: () => void
+  onDismiss: () => void
 }) {
   const [secondsLeft, setSecondsLeft] = useState(Math.round(SUGGEST_DELAY_MS / 1000))
 
   useEffect(() => {
+    if (state !== 'watching') return
     setSecondsLeft(Math.round(SUGGEST_DELAY_MS / 1000))
     const interval = setInterval(() => {
       setSecondsLeft((s) => {
@@ -223,57 +230,88 @@ function WatchingEditsPrompt({
       })
     }, 1000)
     return () => clearInterval(interval)
-  }, [editCount])
+  }, [state, editCount])
 
-  return (
-    <div className="fixed bottom-24 right-6 z-50 flex items-center gap-3 rounded-xl border border-black/10 bg-white shadow-lg px-3 py-2.5 text-xs max-w-[260px]">
-      <span className="relative flex h-2.5 w-2.5 shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#534AB7] opacity-60" />
-        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#534AB7]" />
-      </span>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-foreground leading-tight">
-          Watching {editCount} edit{editCount !== 1 ? 's' : ''}
-        </p>
-        <p className="text-muted-foreground mt-0.5 leading-tight">
-          Suggesting rules in {secondsLeft}s…
-        </p>
-      </div>
-      <button
-        onClick={onAnalyseNow}
-        className="shrink-0 rounded-md bg-[#534AB7] px-2 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
-      >
-        Analyse now
-      </button>
-    </div>
-  )
-}
-
-// ── Floating toast: rule suggestions ready ────────────────────────
-function SuggestionToast({ onDismiss }: { onDismiss: () => void }) {
+  // Auto-dismiss ready/error after 10s
   useEffect(() => {
-    const t = setTimeout(onDismiss, 8000)
+    if (state !== 'ready' && state !== 'error') return
+    const t = setTimeout(onDismiss, 10000)
     return () => clearTimeout(t)
-  }, [onDismiss])
+  }, [state, onDismiss])
+
+  if (state === 'idle') return null
 
   return (
-    <div className="fixed bottom-24 right-6 z-50 flex items-center gap-3 rounded-xl border border-[#534AB7]/20 bg-white shadow-lg px-4 py-3 text-xs text-[#3C3489] max-w-xs">
-      <span className="text-base">💡</span>
+    <div className="fixed bottom-24 right-6 z-50 flex items-center gap-3 rounded-xl border bg-white shadow-lg px-3 py-2.5 text-xs max-w-[270px] transition-all
+      border-black/10">
+
+      {/* Icon / spinner */}
+      {state === 'watching' && (
+        <span className="relative flex h-2.5 w-2.5 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#534AB7] opacity-60" />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#534AB7]" />
+        </span>
+      )}
+      {state === 'analysing' && (
+        <span className="shrink-0 w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" />
+      )}
+      {state === 'ready' && <span className="shrink-0 text-sm">💡</span>}
+      {state === 'error' && <span className="shrink-0 text-sm">⚠️</span>}
+
+      {/* Text */}
       <div className="flex-1 min-w-0">
-        <p className="font-medium leading-tight">Rule suggestions ready</p>
-        <p className="text-[#534AB7]/70 mt-0.5 leading-tight">Based on your recent edits.</p>
+        {state === 'watching' && (
+          <>
+            <p className="font-medium text-foreground leading-tight">Watching {editCount} edit{editCount !== 1 ? 's' : ''}</p>
+            <p className="text-muted-foreground mt-0.5 leading-tight">Suggesting rules in {secondsLeft}s…</p>
+          </>
+        )}
+        {state === 'analysing' && (
+          <>
+            <p className="font-medium text-foreground leading-tight">Analysing edits…</p>
+            <p className="text-muted-foreground mt-0.5 leading-tight">Looking for rule patterns</p>
+          </>
+        )}
+        {state === 'ready' && (
+          <>
+            <p className="font-medium text-[#3C3489] leading-tight">Rule suggestions ready</p>
+            <p className="text-[#534AB7]/70 mt-0.5 leading-tight">Based on your recent edits</p>
+          </>
+        )}
+        {state === 'error' && (
+          <>
+            <p className="font-medium text-red-600 leading-tight">Analysis failed</p>
+            <p className="text-muted-foreground mt-0.5 leading-tight">Check server logs</p>
+          </>
+        )}
       </div>
-      <a
-        href="/rules"
-        className="shrink-0 rounded-md bg-[#534AB7] px-2.5 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors"
-      >
-        View
-      </a>
-      <button
-        onClick={onDismiss}
-        className="shrink-0 text-[#534AB7]/50 hover:text-[#534AB7] leading-none"
-        aria-label="Dismiss"
-      >✕</button>
+
+      {/* Action */}
+      {state === 'watching' && (
+        <button
+          onClick={onAnalyseNow}
+          className="shrink-0 rounded-md bg-[#534AB7] px-2 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
+        >
+          Now
+        </button>
+      )}
+      {state === 'ready' && (
+        <a
+          href="/rules"
+          className="shrink-0 rounded-md bg-[#534AB7] px-2.5 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors"
+        >
+          View
+        </a>
+      )}
+
+      {/* Dismiss — not shown while analysing */}
+      {state !== 'analysing' && (
+        <button
+          onClick={onDismiss}
+          className="shrink-0 text-muted-foreground hover:text-foreground leading-none"
+          aria-label="Dismiss"
+        >✕</button>
+      )}
     </div>
   )
 }
@@ -845,8 +883,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   // ── Edit queue for deferred rule suggestions ──────────────────────
   const editQueueRef = useRef<Map<string, TransactionWithRelations>>(new Map())
   const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [suggestionReady, setSuggestionReady] = useState(false)
-  const [watchingEdits, setWatchingEdits] = useState(false)
+  const [rulePromptState, setRulePromptState] = useState<RulePromptState>('idle')
   const [watchingEditCount, setWatchingEditCount] = useState(0)
 
   const pageSize = 200
@@ -855,11 +892,11 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const fireSuggestions = useCallback(() => {
     if (suggestionTimerRef.current) { clearTimeout(suggestionTimerRef.current); suggestionTimerRef.current = null }
     const queue = editQueueRef.current
-    if (queue.size === 0) { setWatchingEdits(false); return }
+    if (queue.size === 0) { setRulePromptState('idle'); return }
     const snapshots = Array.from(queue.values())
     editQueueRef.current = new Map()
-    setWatchingEdits(false)
     setWatchingEditCount(0)
+    setRulePromptState('analysing')
     console.log('[suggest-from-edits] firing for', snapshots.length, 'edits', snapshots)
     fetch('/api/rules/suggest-from-edits', {
       method: 'POST',
@@ -869,9 +906,16 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       .then((r) => r.json())
       .then((j) => {
         console.log('[suggest-from-edits] response:', j)
-        if (!j.error && j.data?.count > 0) setSuggestionReady(true)
+        if (!j.error && j.data?.count > 0) {
+          setRulePromptState('ready')
+        } else {
+          setRulePromptState('idle')
+        }
       })
-      .catch((e) => console.error('[suggest-from-edits] fetch error:', e))
+      .catch((e) => {
+        console.error('[suggest-from-edits] fetch error:', e)
+        setRulePromptState('error')
+      })
   }, [])
 
   // Load projects, categories, payees once (skip if passed from server)
@@ -1121,11 +1165,10 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
 
       const queueSize = editQueueRef.current.size
-      setWatchingEdits(true)
       setWatchingEditCount(queueSize)
+      setRulePromptState('watching')
 
       if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
-      setSuggestionReady(false)
       suggestionTimerRef.current = setTimeout(() => {
         fireSuggestions()
       }, SUGGEST_DELAY_MS)
@@ -1460,18 +1503,13 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
         </div>
       )}
 
-      {/* Watching edits prompt — shows while timer is running */}
-      {watchingEdits && !suggestionReady && (
-        <WatchingEditsPrompt
-          editCount={watchingEditCount}
-          onAnalyseNow={fireSuggestions}
-        />
-      )}
-
-      {/* Rule suggestion floating toast — fixed bottom-right, auto-dismisses */}
-      {suggestionReady && (
-        <SuggestionToast onDismiss={() => setSuggestionReady(false)} />
-      )}
+      {/* Rule prompt — watching / analysing / ready / error */}
+      <RulePromptPanel
+        state={rulePromptState}
+        editCount={watchingEditCount}
+        onAnalyseNow={fireSuggestions}
+        onDismiss={() => setRulePromptState('idle')}
+      />
 
       {/* Table */}
       <div className="overflow-auto rounded-lg border">
