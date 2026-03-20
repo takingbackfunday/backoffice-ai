@@ -454,8 +454,8 @@ export function RuleEditor({
   showSaveAndApply?: boolean
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
   cardHeader?: React.ReactNode
-  /** If provided, replaces the API save — called with form state so the caller can persist instead */
-  onSaveOverride?: (shouldApply: boolean) => Promise<void>
+  /** If provided, replaces the API save — called with current form state so the caller can persist with user edits */
+  onSaveOverride?: (shouldApply: boolean, formData: { conditions: object; categoryId: string | null; categoryName: string; payeeId: string | null; payeeName: string | null }) => Promise<void>
 }) {
   const initialConditions = (): ConditionDef[] => {
     if (!editingRule) return [defaultCondition()]
@@ -539,7 +539,7 @@ export function RuleEditor({
       const shouldApply = isEdit || applyAfterSaveRef.current
 
       if (onSaveOverride) {
-        await onSaveOverride(shouldApply)
+        await onSaveOverride(shouldApply, { conditions: conditionsGroup, categoryId, categoryName, payeeId: null, payeeName })
         return
       }
 

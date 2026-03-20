@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, serverError } from '@/lib/api-response'
 
 // Accept a suggestion → create the real CategorizationRule
+// Optional body: { conditions, categoryId, categoryName, payeeId, payeeName } to override suggestion data
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -17,7 +18,20 @@ export async function POST(
     })
     if (!suggestion) return notFound('Suggestion not found')
 
-    const ruleName = `${suggestion.categoryName}${suggestion.payeeName ? ` — ${suggestion.payeeName}` : ''} (suggested)`
+    // Allow caller to override any fields (user may have edited the suggestion)
+    let overrides: Record<string, unknown> = {}
+    try {
+      const body = await request.json()
+      if (body && typeof body === 'object') overrides = body
+    } catch { /* no body is fine */ }
+
+    const conditions = (overrides.conditions ?? suggestion.conditions) as object
+    const categoryName = (overrides.categoryName as string | undefined) ?? suggestion.categoryName
+    const categoryId = (overrides.categoryId as string | null | undefined) ?? suggestion.categoryId ?? null
+    const payeeId = (overrides.payeeId as string | null | undefined) ?? suggestion.payeeId ?? null
+    const payeeName = (overrides.payeeName as string | null | undefined) ?? suggestion.payeeName
+
+    const ruleName = `${categoryName}${payeeName ? ` — ${payeeName}` : ''} (suggested)`
 
     const [rule] = await prisma.$transaction([
       prisma.categorizationRule.create({
@@ -25,10 +39,10 @@ export async function POST(
           userId,
           name: ruleName,
           priority: 50,
-          conditions: suggestion.conditions as object,
-          categoryName: suggestion.categoryName,
-          categoryId: suggestion.categoryId ?? null,
-          payeeId: suggestion.payeeId ?? null,
+          conditions,
+          categoryName,
+          categoryId,
+          payeeId,
           isActive: true,
         },
         include: {

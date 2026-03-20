@@ -140,9 +140,16 @@ export function SuggestionCard({
     onAccepted(rule, index)
   }
 
-  async function handleSaveOverride(shouldApply: boolean) {
-    // For persisted suggestions: POST to accept API (creates the real rule) then optionally apply
-    const res = await fetch(`/api/rules/suggestions/${(suggestion as PersistedSuggestion).id}`, { method: 'POST' })
+  async function handleSaveOverride(
+    shouldApply: boolean,
+    formData: { conditions: object; categoryId: string | null; categoryName: string; payeeId: string | null; payeeName: string | null }
+  ) {
+    // For persisted suggestions: POST to accept API with user-edited form data
+    const res = await fetch(`/api/rules/suggestions/${(suggestion as PersistedSuggestion).id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    })
     if (!res.ok) return
     const json = await res.json()
     onAccepted(json.data, index)
