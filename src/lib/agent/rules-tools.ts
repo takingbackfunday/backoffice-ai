@@ -27,6 +27,7 @@ export interface RulesContext {
   existingRuleConditions: ConditionDef[][]
   coveredByExisting: Set<string>
   coveredThisRun: Set<string>
+  sourceEditIds?: Set<string>        // tx IDs that triggered this run — exempt from reclassification guard
 }
 
 export type RuleImpact = 'low' | 'medium' | 'high'
@@ -358,10 +359,12 @@ export async function emit_rule_suggestion(
   const matchCount = newIds.length
 
   // Reject if the majority of matched transactions already have a category — this rule
-  // would reclassify correctly-categorised transactions (e.g. "Adyen" matching "Urban Sports by Adyen")
+  // would reclassify correctly-categorised transactions (e.g. "Adyen" matching "Urban Sports by Adyen").
+  // Exempt transactions that were part of the triggering edits — the user just set those categories
+  // deliberately, so they should count as intended matches, not reclassifications.
   const alreadyCategorised = [...matchedIds]
     .map(id => ctx.transactions.find(t => t.id === id))
-    .filter(t => t?.categoryId != null).length
+    .filter(t => t?.categoryId != null && !ctx.sourceEditIds?.has(t.id)).length
   if (matchedIds.size > 0 && alreadyCategorised / matchedIds.size > 0.4) {
     return `Rejected: ${alreadyCategorised} of ${matchedIds.size} matched transactions already have a category — this rule would reclassify them incorrectly. The keyword "${defs.find(d => d.field === 'description')?.value}" is too generic (likely a payment processor or shared term). Use a more specific keyword that only matches uncategorised transactions.`
   }

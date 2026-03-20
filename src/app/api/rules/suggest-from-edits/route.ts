@@ -95,6 +95,7 @@ export async function POST(request: Request) {
       },
       ...preloaded,
       coveredThisRun: new Set<string>(),
+      sourceEditIds: new Set(edits.map((e) => e.id)),
     }
 
     // Pre-load rules so the agent can skip already-covered merchants
