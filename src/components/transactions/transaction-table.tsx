@@ -1614,20 +1614,20 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                 sortable={false}
               />
 
-              {/* Notes */}
+              {/* Category */}
               <FilterableSortHeader
-                label="Notes"
-                field="notes"
+                label="Category"
+                field="category"
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={handleSort}
-                filterCol="notes"
+                filterCol="categoryId"
                 openFilterCol={openFilterCol}
                 setOpenFilterCol={setOpenFilterCol}
-                filterValue={filters.notes ?? ''}
-                onFilterChange={(v) => setFilters((f) => ({ ...f, notes: v }))}
-                filterType="text"
-                sortable={false}
+                filterValue={filters.categoryId ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, categoryId: v }))}
+                filterType="optgroup-select"
+                filterGroups={categoryGroups}
               />
 
               {/* Category group */}
@@ -1647,20 +1647,20 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                 sortable={false}
               />
 
-              {/* Category */}
+              {/* Notes */}
               <FilterableSortHeader
-                label="Category"
-                field="category"
+                label="Notes"
+                field="notes"
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={handleSort}
-                filterCol="categoryId"
+                filterCol="notes"
                 openFilterCol={openFilterCol}
                 setOpenFilterCol={setOpenFilterCol}
-                filterValue={filters.categoryId ?? ''}
-                onFilterChange={(v) => setFilters((f) => ({ ...f, categoryId: v }))}
-                filterType="optgroup-select"
-                filterGroups={categoryGroups}
+                filterValue={filters.notes ?? ''}
+                onFilterChange={(v) => setFilters((f) => ({ ...f, notes: v }))}
+                filterType="text"
+                sortable={false}
               />
 
               {/* Project */}
@@ -1726,11 +1726,11 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                     {renderEditableCell(row, 'description')}
                     {renderEditableCell(row, 'amount')}
                     {renderEditableCell(row, 'payeeId')}
-                    {renderEditableCell(row, 'notes')}
+                    {renderEditableCell(row, 'categoryId')}
                     <td className="px-3 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
                       {row.categoryRef?.group?.name ?? '—'}
                     </td>
-                    {renderEditableCell(row, 'categoryId')}
+                    {renderEditableCell(row, 'notes')}
                     {renderEditableCell(row, 'projectId')}
                   </tr>
                 )
