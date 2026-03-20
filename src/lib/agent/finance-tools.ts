@@ -823,7 +823,7 @@ export const FINANCE_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'aggregate_transactions',
-      description: 'Group and sum transactions by a dimension. Use for totals by category, payee, month, project, etc. Much more efficient than fetching raw rows when you just need totals.',
+      description: 'Group and sum transactions by a dimension. Use for totals by category, payee, month, project, etc. Much more efficient than fetching raw rows when you just need totals. When computing expenses or spending, exclude "Account Transfers" categories by passing them in a NOT filter or by omitting them — they are internal movements, not real expenses.',
       parameters: {
         type: 'object',
         required: ['groupBy'],
@@ -847,7 +847,7 @@ export const FINANCE_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_time_series',
-      description: 'Get income, expenses, or net over time at a given granularity. Use for trend questions, comparing periods, or spotting anomalies.',
+      description: 'Get income, expenses, or net over time at a given granularity. Use for trend questions, comparing periods, or spotting anomalies. Exclude "Account Transfers" categories when measuring expenses.',
       parameters: {
         type: 'object',
         required: ['granularity'],
