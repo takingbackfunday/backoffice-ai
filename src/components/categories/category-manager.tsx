@@ -183,12 +183,12 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
                   if (e.key === 'Escape') setRenamingId(null)
                 }}
                 onBlur={() => renameGroup(group.id)}
-                className="flex-1 rounded border border-blue-400 px-1.5 py-px text-xs font-semibold outline-none"
+                className="flex-1 rounded border border-blue-400 px-1.5 py-px text-sm font-semibold outline-none"
                 aria-label="Rename group"
               />
             ) : (
               <span
-                className="flex-1 text-xs font-semibold cursor-pointer hover:text-primary"
+                className="flex-1 text-sm font-semibold cursor-pointer hover:text-primary"
                 onClick={() => { setRenamingId(group.id); setRenameType('group'); setRenameValue(group.name) }}
                 title="Click to rename"
               >
@@ -215,7 +215,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
           {!collapsed.has(group.id) && (
             <ul className="divide-y divide-border/50">
               {group.categories.map((cat) => (
-                <li key={cat.id} className="flex items-center gap-1.5 px-3 py-px hover:bg-muted/20">
+                <li key={cat.id} className="flex items-center gap-1.5 px-6 py-px hover:bg-muted/20">
                   {renamingId === cat.id && renameType === 'category' ? (
                     <input
                       ref={renameRef}
@@ -257,7 +257,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
 
               {/* Add category inline */}
               {addingCatGroupId === group.id ? (
-                <li className="flex items-center gap-1.5 px-3 py-0.5">
+                <li className="flex items-center gap-1.5 px-6 py-0.5">
                   <input
                     autoFocus
                     value={newCatName}
@@ -284,7 +284,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
                   </button>
                 </li>
               ) : (
-                <li className="px-3 py-px">
+                <li className="px-6 py-px">
                   <button
                     onClick={() => { setAddingCatGroupId(group.id); setNewCatName('') }}
                     className="text-xs text-primary hover:underline"
