@@ -157,6 +157,7 @@ interface LockedChartFilters {
   period: Period
   relativeDateRange?: RelativeDateRange
   selectedCategories: string[]
+  drillDown?: boolean
 }
 
 const PREF_KEY = 'chartFilters'
@@ -164,7 +165,10 @@ const PREF_KEY = 'chartFilters'
 // ── Main widget ────────────────────────────────────────────────────────────────
 
 export function ExpensesByCategoryWidget() {
-  const [config, setConfig] = useState<WidgetConfig>(() => createDefaultWidgetConfig('stacked-bar'))
+  const [config, setConfig] = useState<WidgetConfig>(() => ({
+    ...createDefaultWidgetConfig('stacked-bar'),
+    splitBy: 'group',
+  }))
   const [data, setData] = useState<ChartDataPoint[]>([])
   const [seriesKeys, setSeriesKeys] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -172,6 +176,7 @@ export function ExpensesByCategoryWidget() {
 
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
+  const [drillDown, setDrillDown] = useState(false)
 
   const [activePeriod, setActivePeriod] = useState<Period>('last-6-months')
   const [relativeDateRange, setRelativeDateRange] = useState<RelativeDateRange>({
@@ -200,6 +205,8 @@ export function ExpensesByCategoryWidget() {
         if (saved.relativeDateRange) setRelativeDateRange(saved.relativeDateRange)
         const cats = new Set<string>(saved.selectedCategories ?? [])
         setSelectedCategories(cats)
+        const dd = saved.drillDown ?? false
+        setDrillDown(dd)
 
         // Apply to config immediately
         setConfig((c) => {
@@ -215,6 +222,7 @@ export function ExpensesByCategoryWidget() {
           const isAll = cats.size === 0
           return {
             ...withPeriod,
+            splitBy: dd ? 'category' : 'group',
             filters: isAll
               ? withPeriod.filters.filter((f) => f.field !== 'category')
               : [
@@ -252,6 +260,11 @@ export function ExpensesByCategoryWidget() {
     setConfig((c) => ({ ...c, dateRange: { type: 'live', period: period as Exclude<Period, 'custom'> } }))
   }
 
+  function handleDrillDown(enabled: boolean) {
+    setDrillDown(enabled)
+    setConfig((c) => ({ ...c, splitBy: enabled ? 'category' : 'group' }))
+  }
+
   function handleCategoryChange(next: Set<string>) {
     setSelectedCategories(next)
     const allCategories = [...categoryGroups.flatMap((g) => g.categories).map((c) => c.name), 'Uncategorized']
@@ -283,6 +296,7 @@ export function ExpensesByCategoryWidget() {
         period: activePeriod,
         relativeDateRange: activePeriod === 'custom' ? relativeDateRange : undefined,
         selectedCategories: [...selectedCategories],
+        drillDown,
       }
       await fetch('/api/preferences', {
         method: 'POST',
@@ -299,7 +313,7 @@ export function ExpensesByCategoryWidget() {
       {/* Header */}
       <div className="mb-3">
         <h3 className="text-xs font-medium text-foreground">Expenses by category</h3>
-        <p className="text-[10px] text-muted-foreground mt-0.5">Monthly spending breakdown</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">Monthly spending by {drillDown ? 'sub-category' : 'group'}</p>
         <div className="flex items-center gap-2 mt-2">
           {/* Period pills */}
           <div className="flex items-center gap-1 rounded-lg border border-black/10 p-0.5">
@@ -334,7 +348,22 @@ export function ExpensesByCategoryWidget() {
       {/* Collapsible filters row */}
       {filtersOpen && (
         <div className="flex items-center gap-2 pt-2 pb-1 border-t border-black/5 flex-wrap w-full">
-          {categoryGroups.length > 0 && (
+          {/* Drill-down toggle */}
+          <button
+            onClick={() => handleDrillDown(!drillDown)}
+            className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border transition-colors ${
+              drillDown
+                ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489]'
+                : 'border-black/10 text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+            {drillDown ? 'Sub-categories' : 'Groups'}
+          </button>
+
+          {categoryGroups.length > 0 && drillDown && (
             <CategoryFilterDropdown
               groups={categoryGroups}
               selected={selectedCategories}
