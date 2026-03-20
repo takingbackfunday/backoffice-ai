@@ -22,7 +22,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
   const [loading, setLoading] = useState(!initialGroups)
   const [error, setError] = useState<string | null>(null)
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(initialGroups?.map(g => g.id) ?? []))
 
   // Add group
   const [newGroupName, setNewGroupName] = useState('')
@@ -45,7 +45,7 @@ export function CategoryManager({ initialGroups }: { initialGroups?: CategoryGro
     if (initialGroups) return
     fetch('/api/category-groups')
       .then((r) => r.json())
-      .then((j) => { if (!j.error) setGroups(j.data ?? []) })
+      .then((j) => { if (!j.error) { setGroups(j.data ?? []); setCollapsed(new Set((j.data ?? []).map((g: { id: string }) => g.id))) } })
       .catch(() => setError('Failed to load categories'))
       .finally(() => setLoading(false))
   }, [initialGroups])
