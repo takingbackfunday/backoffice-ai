@@ -124,6 +124,7 @@ function CategoryCell({
   const allCats = groups.flatMap((g) => g.categories.map((c) => ({ ...c, groupName: g.name })))
   const current = allCats.find((c) => c.id === value)
   const [query, setQuery] = useState(current?.name ?? '')
+  const [open, setOpen] = useState(true)
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
@@ -141,6 +142,9 @@ function CategoryCell({
 
   function commit(id: string | null) {
     committed.current = true
+    setOpen(false)
+    const picked = allCats.find((c) => c.id === id)
+    if (picked) setQuery(picked.name)
     const scrollY = window.scrollY
     onCommit(id)
     requestAnimationFrame(() => { window.scrollTo({ top: scrollY, behavior: 'instant' }) })
@@ -170,13 +174,14 @@ function CategoryCell({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
+        onFocus={() => setOpen(true)}
         onBlur={() => { if (!committed.current) onCancel() }}
         placeholder="Type to filter…"
         className="w-full rounded border border-blue-400 bg-white px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-400"
         aria-label="Select category"
         autoComplete="off"
       />
-      {filtered.length > 0 && (
+      {open && filtered.length > 0 && (
         <ul
           ref={listRef}
           className="absolute z-50 top-full left-0 mt-0.5 w-52 rounded border border-black/10 bg-white shadow-lg text-xs max-h-52 overflow-y-auto"
@@ -362,6 +367,8 @@ function PayeeCell({
       if (!res.ok) { setCreating(false); return }
       const json = await res.json()
       const newPayee: Payee = { id: json.data.id, name: json.data.name }
+      setOpen(false)
+      setDraft(newPayee.name)
       // onNewPayee adds to state AND commits the transaction in one shot,
       // so we skip the separate onCommit call to avoid a double-patch.
       onNewPayee(newPayee)
@@ -371,6 +378,8 @@ function PayeeCell({
   }
 
   function pickExisting(p: Payee) {
+    setOpen(false)
+    setDraft(p.name)
     onCommit(p.id)
   }
 
@@ -389,6 +398,7 @@ function PayeeCell({
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false)
         // Commit best match or cancel
         const exact = payees.find((p) => p.name.toLowerCase() === draft.trim().toLowerCase())
         if (exact) onCommit(exact.id)
