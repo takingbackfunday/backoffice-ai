@@ -60,7 +60,7 @@ export function Sidebar() {
         )}
       </div>
 
-      <ul className="flex flex-col gap-1 flex-1">
+      <ul className="flex flex-col gap-1">
         {NAV_ITEMS.map(({ href, label, icon }) => {
           const isActive = pathname === href
           const isPending = pending === href && !isActive
@@ -98,7 +98,7 @@ export function Sidebar() {
       <button
         onClick={toggleCollapsed}
         className={cn(
-          'mt-4 flex items-center rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors',
+          'mt-1 flex items-center rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors',
           collapsed ? 'justify-center px-2' : 'gap-2'
         )}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
