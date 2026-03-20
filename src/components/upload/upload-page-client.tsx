@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { CsvDropzone } from '@/components/upload/csv-dropzone'
 import { ColumnMapper } from '@/components/upload/column-mapper'
 import { useUploadStore } from '@/stores/upload-store'
+import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
 
 interface Account {
   id: string
@@ -23,7 +25,8 @@ function toDisplayStep(step: string): DisplayStep {
   return step as DisplayStep
 }
 
-export function UploadPageClient({ initialAccounts }: { initialAccounts?: Account[] }) {
+export function UploadPageClient({ initialAccounts, onboarding }: { initialAccounts?: Account[]; onboarding?: boolean }) {
+  const router = useRouter()
   const { step, setAccountId, accountId } = useUploadStore()
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
   const [loadingAccounts, setLoadingAccounts] = useState(!initialAccounts)
@@ -36,6 +39,24 @@ export function UploadPageClient({ initialAccounts }: { initialAccounts?: Accoun
       .finally(() => setLoadingAccounts(false))
   }, [initialAccounts])
 
+  useEffect(() => {
+    if (!onboarding || step !== 'done') return
+    fetch('/api/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ onboardingStep: 'done' }),
+    }).then(() => router.push('/transactions'))
+  }, [onboarding, step, router])
+
+  async function handleSkipOnboarding() {
+    await fetch('/api/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ onboardingStep: 'done' }),
+    })
+    router.push('/transactions')
+  }
+
   const displayStep = toDisplayStep(step)
 
   return (
@@ -44,6 +65,14 @@ export function UploadPageClient({ initialAccounts }: { initialAccounts?: Accoun
       <div className="flex flex-1 flex-col">
         <Header title="Import Transactions" />
         <main className="flex-1 p-6 flex flex-col" role="main">
+
+          {onboarding && (
+            <OnboardingBanner
+              step={3}
+              message="Upload a CSV from your bank to import transactions."
+              onSkip={handleSkipOnboarding}
+            />
+          )}
 
           {/* Progress indicator */}
           <nav aria-label="Upload progress" className="flex gap-6 mb-8 text-sm">

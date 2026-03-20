@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     // Save preference
     const existing = await prisma.userPreference.findUnique({ where: { userId } })
     const current = (existing?.data ?? {}) as Record<string, unknown>
-    const merged = { ...current, businessType }
+    const merged = { ...current, businessType, onboardingStep: 'accounts' }
 
     await prisma.userPreference.upsert({
       where: { userId },

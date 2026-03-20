@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import { prisma } from '@/lib/prisma'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { ExpensesByCategoryWidget } from '@/components/widgets/ExpensesByCategoryWidget'
@@ -10,6 +11,10 @@ import { FinanceQA } from '@/components/dashboard/finance-qa'
 export default async function DashboardPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
+
+  const prefs = await prisma.userPreference.findUnique({ where: { userId } })
+  const data = (prefs?.data ?? {}) as Record<string, unknown>
+  if (!data.businessType) redirect('/categories')
 
   return (
     <div className="flex min-h-screen">

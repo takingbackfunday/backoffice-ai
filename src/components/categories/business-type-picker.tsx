@@ -86,7 +86,7 @@ export function BusinessTypePicker({ counts }: Props) {
         setError(json.error)
         return
       }
-      router.refresh()
+      router.push('/accounts?onboarding=1')
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {

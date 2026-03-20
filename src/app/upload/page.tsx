@@ -5,9 +5,15 @@ import { UploadPageClient } from '@/components/upload/upload-page-client'
 
 export const metadata = { title: 'Import — Backoffice AI' }
 
-export default async function UploadPage() {
+export default async function UploadPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ onboarding?: string }>
+}) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
+
+  const { onboarding } = await searchParams
 
   const accounts = await prisma.account.findMany({
     where: { userId },
@@ -23,6 +29,7 @@ export default async function UploadPage() {
         currency: a.currency,
         institution: { name: a.institution.name },
       }))}
+      onboarding={onboarding === '1'}
     />
   )
 }

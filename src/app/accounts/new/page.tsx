@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 
@@ -24,6 +24,9 @@ interface Institution {
 
 export default function NewAccountPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const isOnboarding = searchParams.get('onboarding') === '1'
+
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [form, setForm] = useState({
     institutionSchemaId: '',
@@ -61,7 +64,16 @@ export default function NewAccountPage() {
       return
     }
 
-    router.push('/accounts')
+    if (isOnboarding) {
+      await fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onboardingStep: 'upload' }),
+      })
+      router.push('/upload?onboarding=1')
+    } else {
+      router.push('/accounts')
+    }
   }
 
   return (
