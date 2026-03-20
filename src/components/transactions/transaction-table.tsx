@@ -1472,6 +1472,9 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                 sortable={false}
               />
 
+              {/* Category group */}
+              <th className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Group</th>
+
               {/* Category */}
               <FilterableSortHeader
                 label="Category"
@@ -1552,6 +1555,9 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                     {renderEditableCell(row, 'amount')}
                     {renderEditableCell(row, 'payeeId')}
                     {renderEditableCell(row, 'notes')}
+                    <td className="px-3 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
+                      {row.categoryRef?.group?.name ?? '—'}
+                    </td>
                     {renderEditableCell(row, 'categoryId')}
                     {renderEditableCell(row, 'projectId')}
                   </tr>
