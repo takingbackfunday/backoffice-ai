@@ -25,45 +25,72 @@ Required in `.env.local`:
 
 ## Architecture
 
-**Stack:** Next.js 15 App Router, TypeScript, PostgreSQL (Neon) + Prisma, Clerk auth, Tailwind CSS 4, shadcn/ui (base-nova), Zustand, Recharts, date-fns, decimal.js.
+**Stack:** Next.js App Router, TypeScript, PostgreSQL (Neon) + Prisma, Clerk auth, Tailwind CSS 4, shadcn/ui (base-nova), Zustand, Recharts, date-fns, decimal.js.
 
 ### Data Model
 
 All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma models:
 
-- `Account` — bank accounts/cards
-- `Transaction` — financial transactions; have optional `categoryId`, `payeeId`, `projectId`; duplicate detection via a content hash
-- `Category` / `CategoryGroup` — hierarchical expense categories
-- `Payee` — counterparties extracted from transaction descriptions
-- `CategorizationRule` — user-defined auto-categorization rules (evaluated by the rules engine)
-- `ImportBatch` — tracks CSV import sessions
-- `InstitutionSchema` — global (non-user) CSV column mapping templates for banks
-- `Project` — client/property/job entities for tagging transactions
-- `UserPreference` — per-user UI state
+- `Account` — bank accounts/cards; each belongs to an `InstitutionSchema`
+- `Transaction` — financial transactions; `amount` is signed (negative = expense, positive = income); duplicate detection via SHA-256 `duplicateHash` over `(accountId, date, amount, description)`; `rawData` preserves the original CSV row
+- `Category` / `CategoryGroup` — hierarchical; groups carry `scheduleRef` and `taxType` for tax schedule mapping
+- `Payee` — counterparties; unique per `(userId, name)`; have a `defaultCategoryId`
+- `CategorizationRule` — user-defined rules; `conditions` JSON stores `{ all?: ConditionDef[], any?: ConditionDef[] }`; `priority` 1–99 (lower = evaluated first, system rules are 100+); can set category, payee, project, notes, and tags on match
+- `RuleSuggestion` — AI-generated rule candidates derived from transaction edits; status `PENDING | ACCEPTED | IGNORED`
+- `ImportBatch` — tracks CSV import sessions; records `skippedCount` for duplicates
+- `InstitutionSchema` — global (non-user) CSV column mapping templates; `csvMapping` JSON: `{ dateCol, amountCol, descCol, dateFormat, amountSign }`
+- `Project` — client/property/job entities for tagging transactions; `ProjectType`: `CLIENT | PROPERTY | JOB | OTHER`
+- `UserPreference` — one row per user, `data` JSON for arbitrary UI state
 
 ### API Routes (`src/app/api/`)
 
-Each resource has its own directory (e.g. `api/transactions/`, `api/rules/`). Routes use `@/lib/api-response` helpers for consistent success/error responses. All routes are protected by Clerk middleware.
+Each resource has its own directory (e.g. `api/transactions/`, `api/rules/`). All routes:
+- Are protected by Clerk middleware (`src/middleware.ts`)
+- Extract `userId` via `auth()` from `@clerk/nextjs/server`
+- Return responses via helpers in `src/lib/api-response.ts`: `ok()`, `created()`, `badRequest()`, `unauthorized()`, `notFound()`, `serverError()` — all return `{ data, error, meta? }`
+
+Agent routes (`api/agent/`) stream SSE responses using `ReadableStream` with `text/event-stream`. Events are typed: `{ type: 'status' | 'answer' | 'done' | 'error', ... }`.
 
 ### Rules Engine (`src/lib/rules/`)
 
-`engine.ts` evaluates `CategorizationRule` records against transactions. Rules have typed conditions (field, operator, value) and an action (set category/payee). The engine is used both during CSV import (batch) and when manually triggering categorization.
+- `engine.ts` — generic `evaluateRules<TFact, TResult>(fact, rules, strategy)` where `strategy` is `'first'` (stop on first match) or `'all'`
+- `categorization.ts` — defines `TransactionFact` and `CategorizationResult` types
+- `conditions.ts` — helpers: `containsAny`, `isExpense`, `isIncome`, `allOf`, `anyOf`
+- `user-rules.ts` — `loadUserRules(userId)` loads `CategorizationRule` rows from DB and hydrates them into `Rule` objects; `buildCondition()` interprets the conditions JSON
+- `system-rules.ts` — built-in fallback rules at priority 100+
+- `categorize-batch.ts` — runs rules against an array of transactions during import
 
-### LLM / Agent Integration (`src/lib/agent/`, `src/lib/llm/`)
+Rule condition fields: `description`, `payeeName`, `rawDescription`, `amount`, `currency`, `accountName`, `notes`, `tag`, `date`, `month`, `dayOfWeek`. Operators include `contains`, `not_contains`, `equals`, `not_equals`, `starts_with`, `ends_with`, `regex`, `gt`, `lt`, `gte`, `lte`, `in`/`oneOf`, `between`.
 
-OpenRouter API (configured in `src/lib/llm/openrouter.ts`) with tool-calling support. Agents exist for:
-- Financial Q&A on dashboard data
-- Generating categorization rules from natural language
-- Validating and mapping CSV column headers during import
+### LLM / Agent Integration (`src/lib/llm/`, `src/lib/agent/`)
+
+`src/lib/llm/openrouter.ts` exposes two functions:
+- `openrouterChat(messages, model?)` — simple text completion; default model `mistralai/devstral-small`
+- `openrouterWithTools(messages, tools, model?)` — tool-calling with streaming SSE accumulation; default model `mistralai/mistral-small-2603`; streams to avoid serverless timeouts
+
+Agent routes use a router model (`google/gemini-2.0-flash-lite-001`) to classify questions as `simple` (→ Claude Sonnet 4.6) or `complex` (→ Claude Opus 4.6), then run an agentic tool loop (max 4 or 8 rounds respectively).
+
+`src/lib/agent/finance-tools.ts` defines `FINANCE_TOOLS` (OpenAI-format tool definitions) and `dispatchTool(userId, toolName, args)`. Tools include `query_transactions`, `aggregate_transactions`, `get_categories`, etc.
+
+`src/lib/agent/rules-tools.ts` — similar tool set for the rules-generation agent.
 
 ### CSV Import Flow
 
-Upload (`/upload`) and import are separate concerns. `InstitutionSchema` defines how columns map to `Transaction` fields per bank. LLM assists with fuzzy column matching. Duplicates are detected by hash before insert.
+1. Upload (`/upload`, `api/upload/`) — parse CSV client-side via `src/components/upload/csv-dropzone.tsx`; store in Zustand (`src/stores/upload-store.ts`)
+2. Column mapping (`src/components/upload/column-mapper.tsx`) — LLM validates/maps headers via `api/llm/validate-mapping/`
+3. Import preview (`src/components/upload/import-preview.tsx`) — apply institution schema
+4. Final import (`api/transactions/import/`) — dedup via `src/lib/dedup.ts` (`buildDuplicateHash`), then batch-categorize, insert transactions and update `ImportBatch`
 
 ### Dashboard Widgets (`src/components/widgets/`, `src/lib/widgets/`)
 
-Modular chart widgets (Recharts). Each widget fetches from a dedicated `api/widgets/` endpoint. Widgets support relative date range filtering with an Apply button pattern—the applied range is stored separately from the in-progress selection.
+Each widget fetches from a dedicated `api/widgets/` endpoint (`cashflow`, `categories`, `networth`, `data`). Widgets use a relative date range picker (`RelativeDateRangePicker.tsx`) where the applied range is stored separately from in-progress selection. Chart rendering is handled by `ChartRouter.tsx` which dispatches to `AreaChartWidget`, `BarChartWidget`, `DonutChartWidget`, or `LineChartWidget`.
+
+Widget data pipeline: `src/lib/widgets/data-fetcher.ts` → `data-transformer.ts` → component. Colors: `src/lib/widgets/colors.ts`. Date helpers: `src/lib/widgets/date-utils.ts`.
 
 ### Client State
 
-Zustand stores in `src/stores/` manage UI state (e.g. selected date ranges, filter state). Server data fetching uses standard Next.js patterns (server components + `fetch` in client components as needed).
+Zustand stores in `src/stores/`:
+- `upload-store.ts` — CSV import multi-step flow state
+- `chat-store.ts` — AI chat overlay state
+
+Server data fetching uses standard Next.js patterns (server components + `fetch` in client components). Shared types live in `src/types/index.ts` and `src/types/widgets.ts`.
