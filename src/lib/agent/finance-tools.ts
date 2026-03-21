@@ -700,6 +700,7 @@ export async function compute_runway(userId: string, args: {
       account: { userId },
       amount: { lt: 0 },
       date: { gte: lookbackFrom },
+      NOT: { categoryRef: { group: { taxType: 'non_deductible' } } },
     },
     select: { date: true, amount: true },
   })
@@ -746,6 +747,7 @@ export async function get_tax_estimate(userId: string, args: {
     where: {
       account: { userId },
       ...dateWhere(args.dateFrom, args.dateTo),
+      NOT: { categoryRef: { group: { taxType: 'non_deductible' } } },
     },
     select: { date: true, amount: true },
     orderBy: { date: 'asc' },
@@ -827,7 +829,7 @@ export const FINANCE_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'aggregate_transactions',
-      description: 'Group and sum transactions by a dimension. Use for totals by category, payee, month, project, etc. Much more efficient than fetching raw rows when you just need totals. When computing expenses or spending, exclude "Account Transfers" categories by passing them in a NOT filter or by omitting them — they are internal movements, not real expenses.',
+      description: 'Group and sum transactions by a dimension. Use for totals by category, payee, month, project, etc. Much more efficient than fetching raw rows when you just need totals. Non-deductible categories (transfers, owner draws) are automatically excluded unless you pass explicit categoryNames.',
       parameters: {
         type: 'object',
         required: ['groupBy'],
