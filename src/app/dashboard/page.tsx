@@ -20,10 +20,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
+      <div className="flex flex-1 flex-col min-w-0">
         <Header title="Dashboard" />
-        <main className="flex-1 p-5 space-y-4 max-w-[1200px]" role="main">
+        <main className="flex-1 p-4 sm:p-5 space-y-4 max-w-[1200px] w-full" role="main">
           {/* KPI strip — last full month */}
           <KpiBar />
 

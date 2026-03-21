@@ -36,7 +36,7 @@ function KpiCard({
   sub?: string
 }) {
   return (
-    <div className="flex flex-col gap-0.5 px-6 py-4 border-r border-black/[0.06] last:border-r-0 flex-1">
+    <div className="flex flex-col gap-0.5 px-6 py-4 border-b sm:border-b-0 border-black/[0.06] sm:border-r last:border-b-0 sm:last:border-r-0 flex-1">
       <p className="text-[10px] font-medium uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <div className="flex items-baseline gap-1.5">
         <span className="text-lg font-semibold tabular-nums tracking-tight">{value}</span>
@@ -76,8 +76,8 @@ export function KpiBar() {
 
   return (
     <div className="rounded-lg border bg-white">
-      <div className="flex items-center divide-x divide-black/[0.06]">
-        <div className="px-4 py-3 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:divide-x divide-black/[0.06]">
+        <div className="px-4 py-3 shrink-0 border-b sm:border-b-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Last month</p>
           <p className="text-xs font-medium text-foreground mt-0.5">{monthLabel(data.month)}</p>
         </div>
