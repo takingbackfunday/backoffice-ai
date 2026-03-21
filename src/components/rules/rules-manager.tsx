@@ -168,7 +168,7 @@ export function RulesManager({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
-  const [bulkDeletedCount, setBulkDeletedCount] = useState(0)
+  const [bulkDeleteProgress, setBulkDeleteProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<{ updated: number; total: number } | null>(null)
   const [showAgent, setShowAgent] = useState(false)
@@ -327,24 +327,24 @@ export function RulesManager({
   }
 
   async function confirmBulkDelete() {
+    const ids = Array.from(selectedIds)
     setBulkDeleteConfirm(false)
     setBulkDeleting(true)
-    setBulkDeletedCount(0)
-    const ids = Array.from(selectedIds)
-    let deleted = 0
+    setBulkDeleteProgress({ done: 0, total: ids.length })
+    let done = 0
     await Promise.allSettled(
       ids.map((id) =>
         fetch(`/api/rules/${id}`, { method: 'DELETE' }).then((r) => {
           if (!r.ok) throw new Error('failed')
           setRules((prev) => prev.filter((rule) => rule.id !== id))
-          deleted++
-          setBulkDeletedCount(deleted)
+          done++
+          setBulkDeleteProgress({ done, total: ids.length })
         })
       )
     )
     setSelectedIds(new Set())
     setBulkDeleting(false)
-    setBulkDeletedCount(0)
+    setBulkDeleteProgress({ done: 0, total: 0 })
   }
 
   return (
@@ -531,7 +531,7 @@ export function RulesManager({
               bulkDeleting ? (
                 <>
                   <span className="inline-block w-3 h-3 rounded-full border-2 border-red-500 border-t-transparent animate-spin" />
-                  <span className="text-muted-foreground">Deleting {bulkDeletedCount} of {selectedIds.size + bulkDeletedCount}…</span>
+                  <span className="text-muted-foreground">Deleting {bulkDeleteProgress.done} of {bulkDeleteProgress.total}…</span>
                 </>
               ) : (
                 <>
