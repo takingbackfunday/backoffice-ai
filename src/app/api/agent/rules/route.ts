@@ -31,7 +31,7 @@ CRITICAL — CATEGORY NAMES:
 
 Workflow:
 1. Read the AVAILABLE CATEGORIES list carefully — identify the exact category name for each merchant group
-2. Call record_plan FIRST — before any other tool. List every merchant group → exact category name → payee. Do NOT call query_transactions before record_plan.
+2. Call record_plan FIRST — before any other tool. List every merchant group in the format: "merchant → category (payee: PayeeName)". Example: "Spaetkauf → Groceries (payee: Spaetkauf)". This plan is passed to the execution model — it will copy payee names directly from it, so spell them correctly. Do NOT call query_transactions before record_plan.
 3. Emit ALL suggestions in a SINGLE round by calling emit_rule_suggestion multiple times in one response — do NOT spread them across multiple rounds
 4. If any suggestion is rejected for a bad categoryName, look at the full list in the rejection message and resubmit with the correct name immediately
 5. Call finish_analysis
@@ -42,6 +42,7 @@ PAYEE ASSIGNMENT — CRITICAL:
 - If the transaction description or existing payeeName clearly identifies the merchant, use it
 - Only leave payeeName null if the counterparty is genuinely ambiguous (e.g. "Bank transfer ref 12345")
 - Check the EXISTING PAYEES list first — if the payee already exists there, use the exact same spelling
+- When executing suggestions, copy the payee name EXACTLY from the record_plan output. If the plan says "payee: Sharenow", set payeeName to "Sharenow". Do not drop payees that were identified in the plan.
 
 RULE CONDITIONS — CRITICAL:
 - Valid fields: description, payeeName, amount, accountName. Do NOT use "date" — it is not a valid field and will be rejected.
@@ -59,7 +60,14 @@ RULE QUALITY:
 - 2+ matching transactions = high confidence; 1 or world-knowledge = medium
 - 1 sentence reasoning referencing the specific pattern observed
 - Aim for 5–20 suggestions prioritised by financial impact (highest absolute spend first)
-- SKIP any merchant that appears in the EXISTING RULES list — a rule already covers it`
+- SKIP any merchant that appears in the EXISTING RULES list — a rule already covers it
+
+TRANSACTION ANALYSIS — LOOK AT INDIVIDUAL AMOUNTS:
+- Each description now shows its individual amount in parentheses. ALWAYS examine these before suggesting a rule for a group.
+- Round amounts (−50.00, −100.00, −200.00, −500.00) at convenience stores, gas stations, kiosks, or supermarkets almost always indicate ATM cash withdrawals, NOT purchases at that merchant. Do NOT categorise these as groceries, fuel, etc. — skip the group or flag it as "Cash withdrawal" if that category exists.
+- When a group mixes round amounts and small irregular amounts (e.g. "Spaetkauf (−100.00) | Spaetkauf (−200.00) | Spaetkauf Friesen (−12.00)"), the round amounts are likely ATM withdrawals and only the small amounts are actual purchases. Consider whether a single rule for the whole group is appropriate — it may be better to skip the group entirely or add an amount condition to exclude round withdrawals.
+- Numeric prefixes in descriptions (e.g. "49005007 Spaetkauf") are typically ATM terminal or POS terminal IDs — the merchant name follows.
+- Amounts that are exact multiples of 10 or 50 with no cents at a physical retail location are a strong signal of cash withdrawal, not a purchase.`
 
 const MAX_TOOL_ROUNDS = 16
 
@@ -310,7 +318,15 @@ Instructions:
                 emitCount++
                 consecutiveRejections = 0
                 roundOutcomes.push({ tool: 'emit', status: '✓', detail: `[${a.categoryName}] ${condStr} → payee:${a.payeeName ?? 'null'} (${result})` })
-                if (emitCount >= MAX_EMITS) { finished = true; break }
+                if (emitCount >= MAX_EMITS) {
+                  const remainingCalls = response.tool_calls!.slice(response.tool_calls!.indexOf(tc) + 1)
+                  const droppedEmits = remainingCalls.filter(c => c.function.name === 'emit_rule_suggestion').length
+                  if (droppedEmits > 0) {
+                    console.log(`[rules-agent:${runId}] MAX_EMITS reached — dropping ${droppedEmits} remaining emit call(s)`)
+                  }
+                  finished = true
+                  break
+                }
               } else {
                 consecutiveRejections++
                 totalRejections++

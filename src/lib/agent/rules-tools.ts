@@ -30,6 +30,9 @@ export type RuleImpact = 'low' | 'medium' | 'high'
 
 // high if: many transactions OR large dollar volume
 // low only if: few transactions AND small dollar volume
+// TODO: thresholds are absolute values — they don't account for currency differences
+// (e.g. JPY amounts are 100x larger than EUR). Consider making these relative to
+// the user's median transaction amount once we have that data available in context.
 export function computeImpact(matchCount: number, totalAbsAmount: number): RuleImpact {
   if (matchCount > 20 || totalAbsAmount > 700) return 'high'
   if (matchCount <= 5 && totalAbsAmount <= 100) return 'low'
@@ -158,20 +161,22 @@ export async function get_uncategorised_transactions(
     return true
   }).slice(0, 20)
 
-  // Collect all unique raw descriptions per group (up to 8) so the agent
-  // can spot description variants and choose the right match condition
-  const groupDescriptions = new Map<string, Set<string>>()
+  // Collect raw descriptions WITH individual amounts per group (up to 8)
+  // so the agent can spot amount patterns (e.g. round amounts = ATM withdrawals)
+  const groupDescriptions = new Map<string, { desc: string; amount: number }[]>()
   for (const tx of uncategorised) {
     const result = extractGroupingKey(tx)
     if (!result) continue
     const { key } = result
-    if (!groupDescriptions.has(key)) groupDescriptions.set(key, new Set())
-    const set = groupDescriptions.get(key)!
-    if (set.size < 8) set.add(tx.description.slice(0, 80))
+    if (!groupDescriptions.has(key)) groupDescriptions.set(key, [])
+    const arr = groupDescriptions.get(key)!
+    if (arr.length < 8) arr.push({ desc: tx.description.slice(0, 80), amount: tx.amount })
   }
 
   const lines = sorted.map(([name, v]) => {
-    const descs = [...(groupDescriptions.get(name) ?? [])].join(' | ')
+    const descs = (groupDescriptions.get(name) ?? [])
+      .map((d) => `${d.desc} (${d.amount < 0 ? '−' : '+'}${Math.abs(d.amount).toFixed(2)})`)
+      .join(' | ')
     return `  name:"${name}" | matchField:${v.matchField} | count:${v.count} | total:${v.totalAmount.toFixed(2)} | descriptions: ${descs}`
   })
 
@@ -284,6 +289,13 @@ export async function emit_rule_suggestion(
         return `Rejected: description ${def.operator} value "${val}" is too short (min 3 characters). Use a more specific keyword or use operator "regex" for pattern matching and resubmit.`
       }
     }
+    // Reject short single-word contains values that are common names or words
+    if (def.field === 'description' && def.operator === 'contains') {
+      const val = String(def.value).trim()
+      if (val.length <= 5 && !val.includes(' ')) {
+        return `Rejected: description contains "${val}" is too short and generic — a ${val.length}-character single word will likely match unrelated transactions. Use a longer or more specific keyword (e.g. the full merchant name, or add a second condition to narrow the match). Resubmit with a more specific condition.`
+      }
+    }
     // Validate regex patterns are valid
     if (def.operator === 'regex') {
       try { new RegExp(String(def.value)) } catch {
@@ -390,9 +402,14 @@ export async function loadRulesContext(userId: string): Promise<{
   payeeMap: Map<string, string>
   coveredByExisting: Set<string>
 }> {
+  // Only load transactions from the last 24 months — the agent focuses on recent
+  // patterns and this keeps memory usage bounded as data grows.
+  const txCutoff = new Date()
+  txCutoff.setMonth(txCutoff.getMonth() - 24)
+
   const [transactions, categories, payees, existingRules] = await Promise.all([
     prisma.transaction.findMany({
-      where: { account: { userId } },
+      where: { account: { userId }, date: { gte: txCutoff } },
       select: {
         id: true,
         amount: true,
@@ -608,7 +625,7 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
           summary: {
             type: 'string',
             description:
-              'Brief (1-3 sentence) plan: which merchant/pattern groups you spotted, which categories they map to, and any payees you will assign. Example: "Found 6 Wayfair charges → Household. 4 Uber → Transport (payee: Uber). 3 AWS → Software (payee: Amazon Web Services). Checking rules first to avoid duplicates."',
+              'Structured plan listing EVERY group you will emit. Format each as: "merchant → category (payee: PayeeName)" or "merchant → SKIP (reason)". The execution model copies payee names directly from this plan. Example: "Spaetkauf → SKIP (round amounts suggest ATM withdrawals). Sharenow → Rideshare (payee: Sharenow). Transdev → Public transit (payee: Transdev Vertrieb GmbH). SHELL UK → Fuel & gas (payee: Shell)."',
           },
         },
       },
