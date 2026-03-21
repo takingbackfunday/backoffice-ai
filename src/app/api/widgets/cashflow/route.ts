@@ -54,6 +54,9 @@ export async function GET(request: Request) {
       where: {
         account: { userId },
         date: { gte: start, lte: end },
+        // Exclude non-deductible groups (account transfers, owner draws, etc.)
+        // unless the user has explicitly filtered to specific categories
+        ...(!categoryFilter ? { NOT: { categoryRef: { group: { taxType: 'non_deductible' } } } } : {}),
         ...categoryFilter,
       },
       select: { date: true, amount: true },

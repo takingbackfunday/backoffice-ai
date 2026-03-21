@@ -48,6 +48,9 @@ export async function fetchWidgetData(userId: string, config: WidgetConfig): Pro
       date: { gte: start, lte: end },
       // Only expenses (negative amounts) for spending charts
       amount: { lt: 0 },
+      // Exclude non-deductible groups (account transfers, owner draws, etc.)
+      // unless the user has explicitly filtered to specific categories
+      ...(!categoryWhere ? { NOT: { categoryRef: { group: { taxType: 'non_deductible' } } } } : {}),
       ...categoryWhere,
     },
     select: {
