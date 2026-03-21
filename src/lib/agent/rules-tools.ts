@@ -159,7 +159,7 @@ export async function get_uncategorised_transactions(
     if (seenSingle.has(s)) return false
     seenSingle.add(s)
     return true
-  }).slice(0, 20)
+  }).slice(0, 10)
 
   // Collect raw descriptions WITH individual amounts per group (up to 8)
   // so the agent can spot amount patterns (e.g. round amounts = ATM withdrawals)

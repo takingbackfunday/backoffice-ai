@@ -31,7 +31,7 @@ CRITICAL — CATEGORY NAMES:
 
 Workflow:
 1. Read the AVAILABLE CATEGORIES list carefully — identify the exact category name for each merchant group
-2. Call record_plan FIRST — before any other tool. List every merchant group in the format: "merchant → category (payee: PayeeName)". Example: "Spaetkauf → Groceries (payee: Spaetkauf)". This plan is passed to the execution model — it will copy payee names directly from it, so spell them correctly. Do NOT call query_transactions before record_plan.
+2. Call record_plan FIRST — before any other tool. List your TOP 20 merchant groups in ONE LINE EACH: "merchant → category (payee: PayeeName)" or "merchant → SKIP (reason)". Do NOT add explanatory notes, transaction counts, or reasoning — just the one-line mapping per merchant. The execution model copies payee names directly from this plan, so spell them correctly. Do NOT call query_transactions before record_plan.
 3. Emit ALL suggestions in a SINGLE round by calling emit_rule_suggestion multiple times in one response — do NOT spread them across multiple rounds
 4. If any suggestion is rejected for a bad categoryName, look at the full list in the rejection message and resubmit with the correct name immediately
 5. Call finish_analysis
@@ -108,6 +108,15 @@ export async function GET() {
         controller.enqueue(new TextEncoder().encode(': ping\n\n'))
       }, 5000)
 
+      // Hard timeout — close the stream gracefully before Netlify kills the function
+      const HARD_TIMEOUT_MS = 55_000
+      let hardTimedOut = false
+      const hardTimeout = setTimeout(() => {
+        hardTimedOut = true
+        console.log(`[rules-agent:${runId}] hard timeout reached — closing stream gracefully`)
+        send({ type: 'error', error: 'Analysis took too long. Partial results shown above — try again for more suggestions.' })
+      }, HARD_TIMEOUT_MS)
+
       try {
         // ── Step 1: lightweight snapshot for initial prompt ────────────────
         send({ type: 'status', message: 'Loading your financial data…' })
@@ -155,9 +164,9 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
         // Pre-fetch all data the LLM would normally call tools to get.
         send({ type: 'status', message: 'Fetching transaction data…' })
         const [uncatData, catsData, noPayeeData, payeesData, rulesData] = await Promise.all([
-          dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 40 }, ctx),
+          dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 25 }, ctx),
           dispatchRulesTool(userId, 'get_categories', {}, ctx),
-          dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 30 }, ctx),
+          dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 15 }, ctx),
           dispatchTool(userId, 'get_payees', {}),
           dispatchRulesTool(userId, 'get_rules', {}, ctx),
         ])
@@ -188,10 +197,10 @@ ${payeesData}
 --- EXISTING RULES (SKIP merchants already covered here — do not suggest duplicate rules) ---
 ${rulesData}
 
---- UNCATEGORISED TRANSACTIONS NOT COVERED BY EXISTING RULES (top 40 by spend) ---
+--- UNCATEGORISED TRANSACTIONS NOT COVERED BY EXISTING RULES (top 25 by spend) ---
 ${uncatData}
 
---- TRANSACTIONS WITH CATEGORY BUT NO PAYEE (top 30) ---
+--- TRANSACTIONS WITH CATEGORY BUT NO PAYEE (top 15) ---
 ${noPayeeData}
 
 Instructions:
@@ -226,6 +235,7 @@ Instructions:
 
         const t0 = Date.now()
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          if (hardTimedOut) break
 
           // Round 1: Sonnet reasons and plans. Escalation rounds (user message injected): Sonnet cleans up.
           // All other rounds: Haiku executes fast.
@@ -394,6 +404,7 @@ Instructions:
         console.error(`[rules-agent:${runId}] error:`, err instanceof Error ? err.stack : err)
         send({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
       } finally {
+        clearTimeout(hardTimeout)
         clearInterval(keepAlive)
         controller.close()
       }

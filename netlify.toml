@@ -6,7 +6,7 @@
   node_bundler = "nft"
 
 [functions."api/agent/rules"]
-  timeout = 60
+  timeout = 120
 
 [functions."api/agent/ask"]
   timeout = 60
