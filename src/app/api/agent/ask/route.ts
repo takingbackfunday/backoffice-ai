@@ -55,7 +55,7 @@ CRITICAL RULES — follow these exactly:
 4. If a category name is unknown, call get_categories first to find the exact name.
 5. When asked about a specific time period, always pass dateFrom and dateTo to every tool call.
 6. Do not confuse different categories — Bank Fees transactions are NOT the same as tax payments or transfers, even if they appear in the same account.
-7. When analysing expenses or spending, EXCLUDE transactions categorised as "Account Transfers" (or any category whose name contains "Transfer") — these are internal money movements, not real expenses. If the user explicitly asks about transfers, you may include them.
+7. When analysing expenses, spending, income, or revenue, EXCLUDE all categories listed under NON-DEDUCTIBLE CATEGORIES in the snapshot below — these are internal money movements (transfers, owner draws, etc.), not real income or expenses. The exact category names are given to you — always pass them as an exclusion filter. If the user explicitly asks about transfers or those specific categories, you may include them.
 
 Guidelines:
 - Always use the most efficient tool for the job (aggregate_transactions for totals, query_transactions for individual rows)
@@ -89,10 +89,14 @@ export async function POST(request: Request) {
         // ── Build a lightweight financial snapshot for context ──────────────
         send({ type: 'status', message: 'Loading your financial overview…' })
 
-        const [txCount, accounts, activeRules] = await Promise.all([
+        const [txCount, accounts, activeRules, nonDeductibleGroups] = await Promise.all([
           prisma.transaction.count({ where: { account: { userId } } }),
           prisma.account.findMany({ where: { userId }, select: { name: true, currency: true } }),
           prisma.categorizationRule.count({ where: { userId, isActive: true } }),
+          prisma.categoryGroup.findMany({
+            where: { userId, taxType: 'non_deductible' },
+            select: { name: true, categories: { select: { name: true } } },
+          }),
         ])
 
         const dateRange = await prisma.transaction.aggregate({
@@ -101,11 +105,17 @@ export async function POST(request: Request) {
           _max: { date: true },
         })
 
+        const nonDeductibleCategoryNames = nonDeductibleGroups.flatMap(g => g.categories.map(c => c.name))
+
         const snapshot = `Financial database snapshot:
 - Accounts: ${accounts.map(a => `${a.name} (${a.currency})`).join(', ')}
 - Transactions: ${txCount} total
 - Date range: ${dateRange._min.date?.toISOString().slice(0, 10) ?? 'n/a'} → ${dateRange._max.date?.toISOString().slice(0, 10) ?? 'n/a'}
 - Active rules: ${activeRules}
+
+NON-DEDUCTIBLE CATEGORIES (ALWAYS exclude from revenue/expense/spending analysis unless the user specifically asks about them):
+${nonDeductibleCategoryNames.length ? nonDeductibleCategoryNames.map(n => `  - ${n}`).join('\n') : '  (none configured)'}
+
 Use the tools to query any data you need.`
 
         // ── Route question to appropriate model ────────────────────────────
