@@ -391,7 +391,7 @@ export function NetWorthWidget() {
       )}
 
       {loading && (
-        <div className="flex items-center justify-center h-[350px]">
+        <div className="flex items-center justify-center h-[260px]">
           <div className="text-xs text-muted-foreground flex items-center gap-2">
             <span className="inline-block w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" />
             Loading…
@@ -400,13 +400,13 @@ export function NetWorthWidget() {
       )}
 
       {error && (
-        <div className="flex items-center justify-center h-[350px]">
+        <div className="flex items-center justify-center h-[260px]">
           <p className="text-xs text-red-500">{error}</p>
         </div>
       )}
 
       {!loading && !error && (
-        <ResponsiveContainer width="100%" height={350}>
+        <ResponsiveContainer width="100%" height={260}>
           <AreaChart data={displayData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="nwGradient" x1="0" y1="0" x2="0" y2="1">

@@ -36,7 +36,7 @@ function KpiCard({
   sub?: string
 }) {
   return (
-    <div className="flex flex-col gap-0.5 px-4 py-3 border-r border-black/[0.06] last:border-r-0">
+    <div className="flex flex-col gap-0.5 px-6 py-4 border-r border-black/[0.06] last:border-r-0 flex-1">
       <p className="text-[10px] font-medium uppercase tracking-[0.05em] text-muted-foreground">{label}</p>
       <div className="flex items-baseline gap-1.5">
         <span className="text-lg font-semibold tabular-nums tracking-tight">{value}</span>

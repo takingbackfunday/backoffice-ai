@@ -390,7 +390,7 @@ export function CashflowWidget() {
       )}
 
       {loading && (
-        <div className="flex items-center justify-center h-[350px]">
+        <div className="flex items-center justify-center h-[260px]">
           <div className="text-xs text-muted-foreground flex items-center gap-2">
             <span className="inline-block w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" />
             Loading…
@@ -399,13 +399,13 @@ export function CashflowWidget() {
       )}
 
       {error && (
-        <div className="flex items-center justify-center h-[350px]">
+        <div className="flex items-center justify-center h-[260px]">
           <p className="text-xs text-red-500">{error}</p>
         </div>
       )}
 
       {!loading && !error && (
-        <ResponsiveContainer width="100%" height={350}>
+        <ResponsiveContainer width="100%" height={260}>
           <ComposedChart data={displayData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }} barGap={2} barCategoryGap="30%">
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis
@@ -434,10 +434,10 @@ export function CashflowWidget() {
             <Bar dataKey="expenses" fill="#dc2626" fillOpacity={0.85} maxBarSize={22} radius={[3, 3, 0, 0]} />
             <Line
               dataKey="net"
-              stroke="#534AB7"
-              strokeWidth={2}
-              dot={{ r: 3, fill: '#534AB7', strokeWidth: 0 }}
-              activeDot={{ r: 5 }}
+              stroke="transparent"
+              strokeWidth={0}
+              dot={{ r: 4, fill: '#534AB7', strokeWidth: 0 }}
+              activeDot={{ r: 6, fill: '#534AB7', strokeWidth: 0 }}
               type="monotone"
             />
           </ComposedChart>

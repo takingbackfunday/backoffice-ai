@@ -414,7 +414,7 @@ export function ExpensesByCategoryWidget() {
       )}
 
       {loading && (
-        <div className="flex items-center justify-center h-[350px]">
+        <div className="flex items-center justify-center h-[260px]">
           <div className="text-xs text-muted-foreground flex items-center gap-2">
             <span className="inline-block w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" />
             Loading…
@@ -423,13 +423,13 @@ export function ExpensesByCategoryWidget() {
       )}
 
       {error && (
-        <div className="flex items-center justify-center h-[350px]">
+        <div className="flex items-center justify-center h-[260px]">
           <p className="text-xs text-red-500">{error}</p>
         </div>
       )}
 
       {!loading && !error && data.length === 0 && (
-        <div className="flex items-center justify-center h-[350px]">
+        <div className="flex items-center justify-center h-[260px]">
           <p className="text-xs text-muted-foreground">No expense data for this period.</p>
         </div>
       )}

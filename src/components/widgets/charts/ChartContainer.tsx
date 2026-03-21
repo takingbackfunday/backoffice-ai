@@ -8,7 +8,7 @@ interface ChartContainerProps {
   height?: number
 }
 
-export function ChartContainer({ children, height = 350 }: ChartContainerProps) {
+export function ChartContainer({ children, height = 260 }: ChartContainerProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       {children as React.ReactElement}

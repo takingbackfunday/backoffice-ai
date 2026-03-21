@@ -22,7 +22,7 @@ export function DonutChartWidget({ data, seriesKeys, config }: Props) {
   })).filter((s) => s.value > 0)
 
   return (
-    <ResponsiveContainer width="100%" height={350}>
+    <ResponsiveContainer width="100%" height={260}>
       <PieChart>
         <Pie
           data={slices}
