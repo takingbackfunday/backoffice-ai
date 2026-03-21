@@ -214,7 +214,7 @@ Instructions:
         // - Haiku 4.5  → rounds 2-N: fast bulk emission guided by the Sonnet plan
         // - Sonnet 4.6 → one final cleanup round if Haiku leaves unresolved rejections
         const STRATEGY_MODEL = 'anthropic/claude-sonnet-4.6'
-        const EXECUTION_MODEL = 'anthropic/claude-haiku-4-5-20251001'
+        const EXECUTION_MODEL = 'anthropic/claude-haiku-4.5'
 
         const t0 = Date.now()
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
