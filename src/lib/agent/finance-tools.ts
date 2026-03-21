@@ -27,16 +27,20 @@ function buildTransactionWhere(userId: string, p: {
   incomeOnly?: boolean
   expensesOnly?: boolean
 }) {
+  const hasCategoryFilter = !!p.categoryNames?.length
   return {
     account: {
       userId,
       ...(p.accountNames?.length ? { name: { in: p.accountNames } } : {}),
     },
     ...dateWhere(p.dateFrom, p.dateTo),
-    ...(p.categoryNames?.length ? {
+    // Exclude non-deductible groups (transfers, owner draws, etc.) unless
+    // the caller has explicitly filtered to specific categories
+    ...(!hasCategoryFilter ? { NOT: { categoryRef: { group: { taxType: 'non_deductible' } } } } : {}),
+    ...(hasCategoryFilter ? {
       OR: [
-        { categoryRef: { name: { in: p.categoryNames.filter(c => c !== '(uncategorised)') } } },
-        ...(p.categoryNames.includes('(uncategorised)') ? [{ categoryId: null }] : []),
+        { categoryRef: { name: { in: p.categoryNames!.filter(c => c !== '(uncategorised)') } } },
+        ...(p.categoryNames!.includes('(uncategorised)') ? [{ categoryId: null }] : []),
       ],
     } : {}),
     ...(p.payeeNames?.length ? { payee: { name: { in: p.payeeNames } } } : {}),

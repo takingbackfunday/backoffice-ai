@@ -55,7 +55,7 @@ CRITICAL RULES — follow these exactly:
 4. If a category name is unknown, call get_categories first to find the exact name.
 5. When asked about a specific time period, always pass dateFrom and dateTo to every tool call.
 6. Do not confuse different categories — Bank Fees transactions are NOT the same as tax payments or transfers, even if they appear in the same account.
-7. When analysing expenses, spending, income, or revenue, EXCLUDE all categories listed under NON-DEDUCTIBLE CATEGORIES in the snapshot below — these are internal money movements (transfers, owner draws, etc.), not real income or expenses. The exact category names are given to you — always pass them as an exclusion filter. If the user explicitly asks about transfers or those specific categories, you may include them.
+7. When analysing expenses, spending, income, or revenue, non-deductible categories (transfers, owner draws, etc.) are automatically excluded by the query tools. If the user explicitly asks about transfers or those specific categories, pass them via categoryNames to include them.
 
 Guidelines:
 - Always use the most efficient tool for the job (aggregate_transactions for totals, query_transactions for individual rows)
