@@ -73,9 +73,15 @@ export async function GET(request: Request) {
       cumulative.set(month, Math.round(running * 100) / 100)
     }
 
+    // If period is all-time, derive start from the earliest actual transaction
+    // rather than the hardcoded Jan 2000 fallback in resolveDateRange
+    const effectiveStart = (period === 'all-time' && !customStart && rows.length > 0)
+      ? new Date(rows[0].date)
+      : start
+
     // Pre-populate window months so there are no gaps in the returned range
     const windowMonths: string[] = []
-    let cursor = startOfMonth(start)
+    let cursor = startOfMonth(effectiveStart)
     while (cursor <= end) {
       windowMonths.push(format(cursor, 'yyyy-MM'))
       cursor = startOfMonth(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
