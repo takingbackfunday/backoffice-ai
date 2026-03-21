@@ -1,14 +1,11 @@
 import { prisma } from '@/lib/prisma'
 import type { ToolDefinition } from '@/lib/llm/openrouter'
 import { FINANCE_TOOLS, dispatchTool } from '@/lib/agent/finance-tools'
+import { matchesConditions, type ConditionDef } from '@/lib/rules/evaluate-condition'
+
+export type { ConditionDef }
 
 // ── Shared types ──────────────────────────────────────────────────────────────
-
-export interface ConditionDef {
-  field: string
-  operator: string
-  value: string | number | string[]
-}
 
 export interface TxSnapshot {
   id: string
@@ -24,7 +21,6 @@ export interface RulesContext {
   transactions: TxSnapshot[]
   categoryMap: Map<string, string>   // name.toLowerCase() → id
   payeeMap: Map<string, string>      // name.toLowerCase() → id
-  existingRuleConditions: ConditionDef[][]
   coveredByExisting: Set<string>
   coveredThisRun: Set<string>
   sourceEditIds?: Set<string>        // tx IDs that triggered this run — exempt from reclassification guard
@@ -56,6 +52,7 @@ export interface RulesSseEvent {
   reasoning?: string
   matchCount?: number
   totalAmount?: number
+  sampleTransactions?: { description: string; amount: number }[]
   error?: string
   uncategorised?: number
   noPayee?: number
@@ -64,46 +61,40 @@ export interface RulesSseEvent {
 // ── Match helper ──────────────────────────────────────────────────────────────
 
 function getMatchedIds(
-  defs: ConditionDef[],
+  conditions: { all?: ConditionDef[]; any?: ConditionDef[] },
   transactions: TxSnapshot[]
 ): Set<string> {
   const ids = new Set<string>()
   for (const tx of transactions) {
-    const matches = defs.every((def) => {
-      let txVal: string
-      if (def.field === 'payeeName') {
-        txVal = tx.payeeName ?? ''
-      } else if (def.field === 'description') {
-        txVal = tx.description
-      } else if (def.field === 'amount') {
-        txVal = String(tx.amount)
-      } else if (def.field === 'accountName') {
-        txVal = tx.accountName ?? ''
-      } else {
-        txVal = ''
-      }
-      const v = String(def.value).toLowerCase()
-      const t = txVal.toLowerCase()
-      if (def.operator === 'contains') return t.includes(v)
-      if (def.operator === 'not_contains') return !t.includes(v)
-      if (def.operator === 'equals') return t === v
-      if (def.operator === 'not_equals') return t !== v
-      if (def.operator === 'starts_with') return t.startsWith(v)
-      if (def.operator === 'ends_with') return t.endsWith(v)
-      if (def.operator === 'regex') {
-        try { return new RegExp(String(def.value), 'i').test(txVal) } catch { return false }
-      }
-      if (def.operator === 'gt') return Number(txVal) > Number(def.value)
-      if (def.operator === 'lt') return Number(txVal) < Number(def.value)
-      if (def.operator === 'gte') return Number(txVal) >= Number(def.value)
-      if (def.operator === 'lte') return Number(txVal) <= Number(def.value)
-      if (def.operator === 'oneOf')
-        return (def.value as string[]).some((ov) => t === ov.toLowerCase())
-      return false
-    })
-    if (matches) ids.add(tx.id)
+    if (matchesConditions(conditions, tx)) ids.add(tx.id)
   }
   return ids
+}
+
+// ── Grouping key helper ───────────────────────────────────────────────────────
+
+/** Common banking prefixes/terms that appear in many unrelated transactions */
+const BANKING_NOISE = /^(sepa|dd|ct|deb|crd|pos|ref|ach|chq|bgc|stp|bacs|swift|wire|transfer|payment)\b/i
+const REF_CODE = /\b[A-Z0-9]{6,}\b/  // alphanumeric reference codes
+
+function extractGroupingKey(tx: { description: string; payeeName: string | null }): { key: string; matchField: 'payeeName' | 'description' } | null {
+  if (tx.payeeName) {
+    return { key: tx.payeeName, matchField: 'payeeName' }
+  }
+  // Strip common banking noise and reference codes
+  let cleaned = tx.description.trim()
+    .replace(BANKING_NOISE, '')
+    .replace(REF_CODE, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned) cleaned = tx.description.trim()
+
+  const words = cleaned.split(/\s+/)
+  const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
+  const twoWords = words.slice(0, 2).join(' ')
+  const key = twoWords.length >= 6 ? twoWords : firstMeaningful
+  if (!key || key.length < 2) return null
+  return { key, matchField: 'description' }
 }
 
 // ── Tool implementations ──────────────────────────────────────────────────────
@@ -131,19 +122,9 @@ export async function get_uncategorised_transactions(
   const groups = new Map<string, Group>()
 
   for (const tx of uncategorised) {
-    let matchField: 'payeeName' | 'description'
-    let key: string
-    if (tx.payeeName) {
-      matchField = 'payeeName'
-      key = tx.payeeName
-    } else {
-      const words = tx.description.trim().split(/\s+/)
-      const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
-      const twoWords = words.slice(0, 2).join(' ')
-      key = twoWords.length >= 6 ? twoWords : firstMeaningful
-      matchField = 'description'
-    }
-    if (!key || key.length < 2) continue
+    const result = extractGroupingKey(tx)
+    if (!result) continue
+    const { key, matchField } = result
     const e = groups.get(key) ?? { count: 0, totalAmount: 0, samples: [], matchField, matchValue: key }
     e.count++
     e.totalAmount += tx.amount
@@ -164,16 +145,9 @@ export async function get_uncategorised_transactions(
   )
   const singletons: string[] = []
   for (const tx of uncategorised) {
-    let key: string
-    if (tx.payeeName) {
-      key = tx.payeeName
-    } else {
-      const words = tx.description.trim().split(/\s+/)
-      const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
-      const twoWords = words.slice(0, 2).join(' ')
-      key = twoWords.length >= 6 ? twoWords : firstMeaningful
-    }
-    if (!groupedKeys.has(key)) {
+    const result = extractGroupingKey(tx)
+    if (!result) continue
+    if (!groupedKeys.has(result.key)) {
       singletons.push(`  singleton | description:"${tx.description.slice(0, 70)}" | amount:${tx.amount.toFixed(2)}`)
     }
   }
@@ -188,16 +162,9 @@ export async function get_uncategorised_transactions(
   // can spot description variants and choose the right match condition
   const groupDescriptions = new Map<string, Set<string>>()
   for (const tx of uncategorised) {
-    let key: string
-    if (tx.payeeName) {
-      key = tx.payeeName
-    } else {
-      const words = tx.description.trim().split(/\s+/)
-      const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
-      const twoWords = words.slice(0, 2).join(' ')
-      key = twoWords.length >= 6 ? twoWords : firstMeaningful
-    }
-    if (!key || key.length < 2) continue
+    const result = extractGroupingKey(tx)
+    if (!result) continue
+    const { key } = result
     if (!groupDescriptions.has(key)) groupDescriptions.set(key, new Set())
     const set = groupDescriptions.get(key)!
     if (set.size < 8) set.add(tx.description.slice(0, 80))
@@ -237,11 +204,9 @@ export async function get_no_payee_transactions(
   const groups = new Map<string, Group>()
 
   for (const tx of noPayeeWithCategory) {
-    const words = tx.description.trim().split(/\s+/)
-    const firstMeaningful = words.find((w) => w.length >= 5) ?? words[0]
-    const twoWords = words.slice(0, 2).join(' ')
-    const key = twoWords.length >= 6 ? twoWords : firstMeaningful
-    if (!key || key.length < 3) continue
+    const result = extractGroupingKey(tx)
+    if (!result) continue
+    const { key } = result
     const catName = categoryIdToName.get(tx.categoryId!) ?? tx.categoryId ?? '(unknown)'
     const e = groups.get(key) ?? { count: 0, categoryName: catName, samples: [] }
     e.count++
@@ -352,7 +317,7 @@ export async function emit_rule_suggestion(
   }
 
   // Count matched transactions
-  const matchedIds = getMatchedIds(defs, ctx.transactions)
+  const matchedIds = getMatchedIds(args.conditions, ctx.transactions)
   const newIds = [...matchedIds].filter(
     (id) => !ctx.coveredByExisting.has(id) && !ctx.coveredThisRun.has(id)
   )
@@ -386,11 +351,14 @@ export async function emit_rule_suggestion(
 
   // Compute total absolute dollar amount of newly matched transactions
   const newIdSet = new Set(newIds)
-  const totalAbsAmount = ctx.transactions
-    .filter((t) => newIdSet.has(t.id))
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+  const matchedTxs = ctx.transactions.filter((t) => newIdSet.has(t.id))
+  const totalAbsAmount = matchedTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
   const impact = computeImpact(matchCount, totalAbsAmount)
+
+  const sampleTxs = matchedTxs
+    .slice(0, 5)
+    .map((t) => ({ description: t.description.slice(0, 80), amount: t.amount }))
 
   // Stream suggestion
   ctx.send({
@@ -408,6 +376,7 @@ export async function emit_rule_suggestion(
     reasoning: args.reasoning,
     matchCount,
     totalAmount: Math.round(totalAbsAmount * 100) / 100,
+    sampleTransactions: sampleTxs,
   })
 
   return `Emitted: ${matchCount} new transaction(s) matched.`
@@ -419,7 +388,6 @@ export async function loadRulesContext(userId: string): Promise<{
   transactions: TxSnapshot[]
   categoryMap: Map<string, string>
   payeeMap: Map<string, string>
-  existingRuleConditions: ConditionDef[][]
   coveredByExisting: Set<string>
 }> {
   const [transactions, categories, payees, existingRules] = await Promise.all([
@@ -454,17 +422,13 @@ export async function loadRulesContext(userId: string): Promise<{
   const categoryMap = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]))
   const payeeMap = new Map(payees.map((p) => [p.name.toLowerCase(), p.id]))
 
-  const existingRuleConditions: ConditionDef[][] = existingRules.map((r) => {
-    const conds = r.conditions as { all?: unknown[]; any?: unknown[] }
-    return ((conds.all ?? conds.any ?? []) as ConditionDef[])
-  })
-
   const coveredByExisting = new Set<string>()
-  for (const defs of existingRuleConditions) {
-    getMatchedIds(defs, txSnapshots).forEach((id) => coveredByExisting.add(id))
+  for (const r of existingRules) {
+    const conds = r.conditions as { all?: ConditionDef[]; any?: ConditionDef[] }
+    getMatchedIds(conds, txSnapshots).forEach((id) => coveredByExisting.add(id))
   }
 
-  return { transactions: txSnapshots, categoryMap, payeeMap, existingRuleConditions, coveredByExisting }
+  return { transactions: txSnapshots, categoryMap, payeeMap, coveredByExisting }
 }
 
 export async function record_plan(

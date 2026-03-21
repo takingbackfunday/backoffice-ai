@@ -20,6 +20,7 @@ export interface AgentSuggestion {
   reasoning: string
   matchCount: number
   totalAmount: number
+  sampleTransactions?: { description: string; amount: number }[]
   autoAccepted?: boolean
   savedRuleId?: string   // id of the already-saved rule (for auto-accepted entries)
 }
@@ -86,7 +87,19 @@ async function saveRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): Pr
 }
 
 function shouldAutoAccept(s: AgentSuggestion): boolean {
-  return s.confidence === 'high' && s.impact !== 'high'
+  if (s.confidence !== 'high' || s.impact === 'high') return false
+  // Require at least 3 matching transactions for auto-accept
+  if (s.matchCount < 3) return false
+  // Check that condition values are specific enough (not a stop word / too short)
+  const defs = s.conditions.all ?? s.conditions.any ?? []
+  const hasWeakCondition = defs.some((d) => {
+    if (d.field === 'description' && typeof d.value === 'string') {
+      return d.value.length < 4
+    }
+    return false
+  })
+  if (hasWeakCondition) return false
+  return true
 }
 
 // ── SuggestionCard ─────────────────────────────────────────────────────────────
@@ -117,22 +130,36 @@ export function SuggestionCard({
   const isPersisted = 'id' in suggestion
 
   const header = (
-    <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-black/[0.07]">
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-[13px] font-medium text-[#666]">Suggestion {index + 1}/{total}</span>
-        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-          suggestion.confidence === 'high'
-            ? 'bg-[#E1F5EE] text-[#0F6E56]'
-            : 'bg-yellow-100 text-yellow-700'
-        }`}>
-          {suggestion.confidence.toUpperCase()}
-        </span>
-        <span className="text-[12px] text-[#999]">~{suggestion.matchCount} txns</span>
-        {isPersisted && (
-          <span className="text-[10px] bg-[#EEEDFE] text-[#534AB7] px-1.5 py-px rounded-full">from edits</span>
-        )}
+    <div className="border-b border-black/[0.07]">
+      <div className="flex items-start justify-between gap-3 px-4 py-3">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[13px] font-medium text-[#666]">Suggestion {index + 1}/{total}</span>
+          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+            suggestion.confidence === 'high'
+              ? 'bg-[#E1F5EE] text-[#0F6E56]'
+              : 'bg-yellow-100 text-yellow-700'
+          }`}>
+            {suggestion.confidence.toUpperCase()}
+          </span>
+          <span className="text-[12px] text-[#999]">~{suggestion.matchCount} txns</span>
+          {isPersisted && (
+            <span className="text-[10px] bg-[#EEEDFE] text-[#534AB7] px-1.5 py-px rounded-full">from edits</span>
+          )}
+        </div>
+        <p className="text-[12px] text-[#666] text-right leading-snug">{suggestion.reasoning}</p>
       </div>
-      <p className="text-[12px] text-[#666] text-right leading-snug">{suggestion.reasoning}</p>
+      {'sampleTransactions' in suggestion && (suggestion as AgentSuggestion).sampleTransactions?.length ? (
+        <div className="px-4 pb-2">
+          <p className="text-[10px] font-medium text-[#999] mb-1">Sample matches:</p>
+          <div className="space-y-0.5">
+            {(suggestion as AgentSuggestion).sampleTransactions!.slice(0, 3).map((tx, ti) => (
+              <p key={ti} className="text-[11px] text-[#666] font-mono truncate">
+                {tx.amount < 0 ? '−' : '+'}{Math.abs(tx.amount).toFixed(2)} · {tx.description}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 
@@ -229,6 +256,15 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
     return () => { if (thinkingRef.current) clearInterval(thinkingRef.current) }
   }, [status])
 
+  useEffect(() => {
+    return () => {
+      if (esRef.current) {
+        esRef.current.close()
+        esRef.current = null
+      }
+    }
+  }, [])
+
   function engage() {
     if (esRef.current) esRef.current.close()
     setStatus('running')
@@ -240,22 +276,29 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
     esRef.current = es
 
     es.onmessage = (e) => {
-      const event = JSON.parse(e.data)
+      let event: Record<string, unknown>
+      try {
+        event = JSON.parse(e.data)
+      } catch {
+        console.warn('[rules-agent] failed to parse SSE event:', e.data)
+        return
+      }
       if (event.type === 'status') {
-        setStatusMessages((prev) => [...prev, event.message])
+        setStatusMessages((prev) => [...prev, event.message as string])
       } else if (event.type === 'suggestion') {
-        const rule = event.rule
+        const rule = event.rule as Record<string, unknown>
         const suggestion: AgentSuggestion = {
-          conditions: rule.conditions,
-          categoryName: rule.categoryName,
-          categoryId: rule.categoryId,
-          payeeName: rule.payeeName,
-          payeeId: rule.payeeId,
-          confidence: rule.confidence,
-          impact: rule.impact ?? 'low',
-          reasoning: rule.reasoning,
-          matchCount: event.matchCount ?? 0,
-          totalAmount: event.totalAmount ?? 0,
+          conditions: rule.conditions as AgentSuggestion['conditions'],
+          categoryName: rule.categoryName as string,
+          categoryId: rule.categoryId as string | null,
+          payeeName: rule.payeeName as string | null,
+          payeeId: rule.payeeId as string | null,
+          confidence: rule.confidence as 'high' | 'medium',
+          impact: (rule.impact ?? 'low') as 'low' | 'medium' | 'high',
+          reasoning: rule.reasoning as string,
+          matchCount: (event.matchCount as number) ?? 0,
+          totalAmount: (event.totalAmount as number) ?? 0,
+          sampleTransactions: event.sampleTransactions as AgentSuggestion['sampleTransactions'],
         }
         if (shouldAutoAccept(suggestion)) {
           saveRule(suggestion, categoryGroupsRef.current).then((saved) => {
@@ -273,11 +316,11 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
       } else if (event.type === 'done') {
         setStatus('done')
         if (event.uncategorised !== undefined && event.noPayee !== undefined) {
-          setDoneSummary({ uncategorised: event.uncategorised, noPayee: event.noPayee })
+          setDoneSummary({ uncategorised: event.uncategorised as number, noPayee: event.noPayee as number })
         }
         es.close()
       } else if (event.type === 'error') {
-        setStatusMessages((prev) => [...prev, `Error: ${event.error}`])
+        setStatusMessages((prev) => [...prev, `Error: ${event.error as string}`])
         setStatus('error')
         es.close()
       }

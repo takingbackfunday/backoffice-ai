@@ -35,7 +35,7 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `Transaction` — financial transactions; `amount` is signed (negative = expense, positive = income); duplicate detection via SHA-256 `duplicateHash` over `(accountId, date, amount, description)`; `rawData` preserves the original CSV row
 - `Category` / `CategoryGroup` — hierarchical; groups carry `scheduleRef` and `taxType` for tax schedule mapping
 - `Payee` — counterparties; unique per `(userId, name)`; have a `defaultCategoryId`
-- `CategorizationRule` — user-defined rules; `conditions` JSON stores `{ all?: ConditionDef[], any?: ConditionDef[] }`; `priority` 1–99 (lower = evaluated first, system rules are 100+); can set category, payee, project, notes, and tags on match
+- `CategorizationRule` — user-defined rules; `conditions` JSON stores `{ all?: ConditionDef[], any?: ConditionDef[] }`; `priority` 1–99 (lower = evaluated first); can set category, payee, project, notes, and tags on match
 - `RuleSuggestion` — AI-generated rule candidates derived from transaction edits; status `PENDING | ACCEPTED | IGNORED`
 - `ImportBatch` — tracks CSV import sessions; records `skippedCount` for duplicates
 - `InstitutionSchema` — global (non-user) CSV column mapping templates; `csvMapping` JSON: `{ dateCol, amountCol, descCol, dateFormat, amountSign }`
@@ -55,9 +55,8 @@ Agent routes (`api/agent/`) stream SSE responses using `ReadableStream` with `te
 
 - `engine.ts` — generic `evaluateRules<TFact, TResult>(fact, rules, strategy)` where `strategy` is `'first'` (stop on first match) or `'all'`
 - `categorization.ts` — defines `TransactionFact` and `CategorizationResult` types
-- `conditions.ts` — helpers: `containsAny`, `isExpense`, `isIncome`, `allOf`, `anyOf`
+- `evaluate-condition.ts` — shared condition evaluation used by both `user-rules.ts` and `rules-tools.ts`; exports `getFieldValue`, `evaluateOperator`, `matchesConditions`, and `ConditionDef`
 - `user-rules.ts` — `loadUserRules(userId)` loads `CategorizationRule` rows from DB and hydrates them into `Rule` objects; `buildCondition()` interprets the conditions JSON
-- `system-rules.ts` — built-in fallback rules at priority 100+
 - `categorize-batch.ts` — runs rules against an array of transactions during import
 
 Rule condition fields: `description`, `payeeName`, `rawDescription`, `amount`, `currency`, `accountName`, `notes`, `tag`, `date`, `month`, `dayOfWeek`. Operators include `contains`, `not_contains`, `equals`, `not_equals`, `starts_with`, `ends_with`, `regex`, `gt`, `lt`, `gte`, `lte`, `in`/`oneOf`, `between`.
@@ -72,7 +71,7 @@ Agent routes use a router model (`google/gemini-2.0-flash-lite-001`) to classify
 
 `src/lib/agent/finance-tools.ts` defines `FINANCE_TOOLS` (OpenAI-format tool definitions) and `dispatchTool(userId, toolName, args)`. Tools include `query_transactions`, `aggregate_transactions`, `get_categories`, etc.
 
-`src/lib/agent/rules-tools.ts` — similar tool set for the rules-generation agent.
+`src/lib/agent/rules-tools.ts` — similar tool set for the rules-generation agent. The SSE endpoint (`api/agent/rules`) has a 30-second per-user cooldown stored in `UserPreference.data.lastRulesAgentRun`. The `consecutiveRejections` counter is NOT reset per round — only a successful emit resets it, so persistent bad suggestions accumulate toward the cap across rounds.
 
 ### CSV Import Flow
 

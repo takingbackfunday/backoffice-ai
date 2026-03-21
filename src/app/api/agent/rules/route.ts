@@ -71,8 +71,27 @@ export async function GET() {
     return new Response('Unauthorized', { status: 401 })
   }
 
+  // Rate limit: one analysis per user per 30 seconds
+  const COOLDOWN_MS = 30_000
+  const pref = await prisma.userPreference.findUnique({ where: { userId } })
+  const lastRun = (pref?.data as Record<string, unknown>)?.lastRulesAgentRun as number | undefined
+  if (lastRun && Date.now() - lastRun < COOLDOWN_MS) {
+    return new Response(
+      `data: ${JSON.stringify({ type: 'error', error: 'Please wait 30 seconds between analyses.' })}\n\n`,
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+    )
+  }
+  // Update last run timestamp
+  await prisma.userPreference.upsert({
+    where: { userId },
+    update: { data: { ...(pref?.data as Record<string, unknown> ?? {}), lastRulesAgentRun: Date.now() } },
+    create: { userId, data: { lastRulesAgentRun: Date.now() } },
+  })
+
   const stream = new ReadableStream({
     async start(controller) {
+      const runId = Math.random().toString(36).slice(2, 10)
+
       function send(event: RulesSseEvent) {
         controller.enqueue(encode(event))
       }
@@ -136,7 +155,7 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
         ])
 
         // ── Step 3: single LLM round to emit suggestions ──────────────────
-        console.log('[rules-agent] context', JSON.stringify({
+        console.log(`[rules-agent:${runId}] context`, JSON.stringify({
           categoriesLen: catsData.length,
           uncategorisedLen: uncatData.length,
           payeesLen: payeesData.length,
@@ -187,6 +206,8 @@ Instructions:
         const MAX_QUERIES = 2  // hard cap on query_transactions / search_transactions calls
         let consecutiveRejections = 0
         const MAX_CONSECUTIVE_REJECTIONS = 5
+        let totalRejections = 0
+        const MAX_TOTAL_REJECTIONS = 12
 
         // Two-model strategy:
         // - Sonnet 4.6 → round 1 (record_plan only): deep reasoning on ambiguous merchants/categories
@@ -197,7 +218,6 @@ Instructions:
 
         const t0 = Date.now()
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          consecutiveRejections = 0  // reset per round — each new LLM response gets a fresh chance
 
           // Round 1: Sonnet reasons and plans. Escalation rounds (user message injected): Sonnet cleans up.
           // All other rounds: Haiku executes fast.
@@ -205,7 +225,7 @@ Instructions:
           const isStrategyRound = round === 0 || (lastMsg?.role === 'user' && round > 0)
           const model = isStrategyRound ? STRATEGY_MODEL : EXECUTION_MODEL
 
-          console.log('[rules-agent] round:start', JSON.stringify({ round: round + 1, model, messages: messages.length, emitCount, lastRole: messages.at(-1)?.role }))
+          console.log(`[rules-agent:${runId}] round:start`, JSON.stringify({ round: round + 1, model, messages: messages.length, emitCount, lastRole: messages.at(-1)?.role }))
           send({ type: 'status', message: round === 0 ? 'Sonnet reasoning…' : `Haiku emitting (round ${round + 1})…` })
           const response = await openrouterWithTools(messages, RULES_TOOLS, model)
 
@@ -293,9 +313,15 @@ Instructions:
                 if (emitCount >= MAX_EMITS) { finished = true; break }
               } else {
                 consecutiveRejections++
+                totalRejections++
                 roundOutcomes.push({ tool: 'emit', status: '✗', detail: `[${a.categoryName}] ${condStr} → ${result.slice(0, 120)}` })
                 if (consecutiveRejections >= MAX_CONSECUTIVE_REJECTIONS) {
-                  console.log('[rules-agent] stopping: too many consecutive rejections', JSON.stringify({ consecutiveRejections, emitCount }))
+                  console.log(`[rules-agent:${runId}] stopping: too many consecutive rejections`, JSON.stringify({ consecutiveRejections, emitCount }))
+                  finished = true
+                  break
+                }
+                if (totalRejections >= MAX_TOTAL_REJECTIONS) {
+                  console.log(`[rules-agent:${runId}] stopping: too many total rejections`, JSON.stringify({ totalRejections, emitCount }))
                   finished = true
                   break
                 }
@@ -318,7 +344,7 @@ Instructions:
           // Print full round summary — one log line per outcome
           const accepted = roundOutcomes.filter(o => o.status === '✓').length
           const rejected = roundOutcomes.filter(o => o.status === '✗').length
-          console.log(`[rules-agent] round:${round + 1} summary — ${accepted} accepted, ${rejected} rejected, ${roundOutcomes.length} total calls`)
+          console.log(`[rules-agent:${runId}] round:${round + 1} summary — ${accepted} accepted, ${rejected} rejected, ${roundOutcomes.length} total calls`)
           for (const o of roundOutcomes) {
             console.log(`  [${o.status}] ${o.tool}${o.detail ? ': ' + o.detail : ''}`)
           }
@@ -337,19 +363,19 @@ Instructions:
               role: 'user',
               content: `Some suggestions were rejected. Please resolve each one using the exact category names from the AVAILABLE CATEGORIES list, correct conditions, and call finish_analysis when done.\n\nRejected:\n${rejectedSummary}`,
             })
-            console.log('[rules-agent] escalating to Sonnet for cleanup', JSON.stringify({ consecutiveRejections, emitCount }))
+            console.log(`[rules-agent:${runId}] escalating to Sonnet for cleanup`, JSON.stringify({ consecutiveRejections, emitCount }))
             send({ type: 'status', message: 'Sonnet resolving rejections…' })
           }
         }
 
         // ── Step 4: done ──────────────────────────────────────────────────
-        console.log('[rules-agent] done', JSON.stringify({ emitCount, messages: messages.length, totalMs: Date.now() - t0 }))
+        console.log(`[rules-agent:${runId}] done`, JSON.stringify({ emitCount, messages: messages.length, totalMs: Date.now() - t0 }))
 
         send({ type: 'done', uncategorised: uncatCount, noPayee: noPayeeCount })
         // Small delay so the done event flushes before the stream closes
         await new Promise((r) => setTimeout(r, 200))
       } catch (err) {
-        console.error('[rules-agent] error:', err instanceof Error ? err.stack : err)
+        console.error(`[rules-agent:${runId}] error:`, err instanceof Error ? err.stack : err)
         send({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
       } finally {
         clearInterval(keepAlive)
