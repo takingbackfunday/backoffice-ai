@@ -23,12 +23,12 @@ export default async function DashboardPage() {
       <Sidebar />
       <div className="flex flex-1 flex-col">
         <Header title="Dashboard" />
-        <main className="flex-1 p-6 space-y-6" role="main">
+        <main className="flex-1 p-5 space-y-4 max-w-[1200px]" role="main">
           {/* KPI strip — last full month */}
           <KpiBar />
 
           {/* 2×2 widget grid: TL expenses bar, TR expenses donut, BL cashflow, BR net worth */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ExpensesByCategoryWidget />
             <ExpensesByDonutWidget />
             <CashflowWidget />

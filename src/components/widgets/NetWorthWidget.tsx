@@ -308,11 +308,11 @@ export function NetWorthWidget() {
   const yMax = allValues.length ? Math.ceil(Math.max(...allValues) * 1.1) : 1000
 
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="rounded-lg border bg-white p-3">
       {/* Header */}
       <div className="mb-3">
-        <h3 className="text-xs font-medium text-foreground">Net Worth</h3>
-        <p className="text-[10px] text-muted-foreground mt-0.5">Cumulative running total over time</p>
+        
+        <div className="flex items-center gap-1.5"><h3 className="text-xs font-medium text-foreground whitespace-nowrap">Net Worth</h3><span className="text-[10px] text-muted-foreground">· Cumulative running total</span></div>
         <div className="flex items-center gap-2 mt-2">
           {/* Period pills */}
           <div className="flex items-center gap-1 rounded-lg border border-black/10 p-0.5">
@@ -391,7 +391,7 @@ export function NetWorthWidget() {
       )}
 
       {loading && (
-        <div className="flex items-center justify-center h-[260px]">
+        <div className="flex items-center justify-center h-[210px]">
           <div className="text-xs text-muted-foreground flex items-center gap-2">
             <span className="inline-block w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" />
             Loading…
@@ -400,13 +400,13 @@ export function NetWorthWidget() {
       )}
 
       {error && (
-        <div className="flex items-center justify-center h-[260px]">
+        <div className="flex items-center justify-center h-[210px]">
           <p className="text-xs text-red-500">{error}</p>
         </div>
       )}
 
       {!loading && !error && (
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={210}>
           <AreaChart data={displayData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="nwGradient" x1="0" y1="0" x2="0" y2="1">

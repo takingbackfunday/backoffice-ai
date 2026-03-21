@@ -42,7 +42,7 @@ export function Sidebar() {
   return (
     <nav
       className={cn(
-        'flex-shrink-0 border-r bg-background flex flex-col py-6 transition-all duration-200',
+        'flex-shrink-0 border-r bg-background flex flex-col py-6 transition-all duration-200 h-screen sticky top-0 overflow-y-auto',
         collapsed ? 'w-14 px-2' : 'w-56 px-3'
       )}
       aria-label="Main navigation"
