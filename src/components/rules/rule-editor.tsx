@@ -153,22 +153,27 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
   projects: Project[]
 }) {
   const [results, setResults] = useState<PreviewTx[]>([])
+  const [matchCount, setMatchCount] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [loadingAll, setLoadingAll] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastDefsRef = useRef<string>('')
+
+  const buildDefs = useCallback((conds: ConditionDef[]) =>
+    conds.filter((c) => c.value.trim() !== '').map((c) => ({
+      field: c.field,
+      operator: c.operator,
+      value: c.operator === 'oneOf'
+        ? c.value.split(',').map((s) => s.trim()).filter(Boolean)
+        : c.field === 'amount' ? Number(c.value) : c.value,
+    })), [])
 
   const runPreview = useCallback(async () => {
-    const validDefs = conditions.filter((c) => c.value.trim() !== '')
-    if (validDefs.length === 0) { setResults([]); return }
+    const defs = buildDefs(conditions)
+    if (defs.length === 0) { setResults([]); setMatchCount(0); return }
     setLoading(true)
     try {
-      const defs = validDefs.map((c) => ({
-        field: c.field,
-        operator: c.operator,
-        value: c.operator === 'oneOf'
-          ? c.value.split(',').map((s) => s.trim()).filter(Boolean)
-          : c.field === 'amount' ? Number(c.value) : c.value,
-      }))
       const res = await fetch('/api/rules/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -176,13 +181,35 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
       })
       const json = await res.json()
       setResults(json.data ?? [])
+      setMatchCount(json.meta?.matchCount ?? json.data?.length ?? 0)
       setShowAll(false)
+      lastDefsRef.current = JSON.stringify({ op, defs })
     } catch {
       setResults([])
+      setMatchCount(0)
     } finally {
       setLoading(false)
     }
-  }, [conditions, op])
+  }, [conditions, op, buildDefs])
+
+  async function loadAll() {
+    setLoadingAll(true)
+    try {
+      const defs = buildDefs(conditions)
+      const res = await fetch('/api/rules/preview?all=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conditions: { op, defs } }),
+      })
+      const json = await res.json()
+      setResults(json.data ?? [])
+      setShowAll(true)
+    } catch {
+      setShowAll(true) // fall back to showing what we have
+    } finally {
+      setLoadingAll(false)
+    }
+  }
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -198,14 +225,14 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
   const newProjectName = newProjectId ? (projects.find((p) => p.id === newProjectId)?.name ?? null) : null
 
   const PREVIEW_ROWS = 2
-  const visible = showAll ? results : results.slice(0, PREVIEW_ROWS)
-  const hiddenCount = results.length - PREVIEW_ROWS
+  const visible = results.slice(0, showAll ? undefined : PREVIEW_ROWS)
+  const hiddenCount = matchCount - visible.length
 
   return (
     <div className="mx-0 rounded-lg bg-[#f7f7f6] px-3 py-2.5">
       <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#999] mb-1.5">
         {loading ? 'Checking…' : (
-          <>Live preview <span className="font-normal normal-case tracking-normal">· {results.length} matching</span></>
+          <>Live preview <span className="font-normal normal-case tracking-normal">· {matchCount} matching</span></>
         )}
       </p>
       {results.length > 0 && (
@@ -243,10 +270,11 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
           {hiddenCount > 0 && !showAll && (
             <button
               type="button"
-              onClick={() => setShowAll(true)}
-              className="w-full text-center text-[11px] text-[#999] hover:text-[#666] pt-1.5"
+              onClick={loadAll}
+              disabled={loadingAll}
+              className="w-full text-center text-[11px] text-[#999] hover:text-[#666] pt-1.5 disabled:opacity-50"
             >
-              + {hiddenCount} more
+              {loadingAll ? 'Loading…' : `+ ${hiddenCount} more`}
             </button>
           )}
         </>

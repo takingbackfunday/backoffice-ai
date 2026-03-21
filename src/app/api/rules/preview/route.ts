@@ -18,10 +18,15 @@ const PreviewBodySchema = z.object({
   }),
 })
 
+const PREVIEW_LIMIT = 10
+
 export async function POST(request: Request) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
+
+    const { searchParams } = new URL(request.url)
+    const all = searchParams.get('all') === '1'
 
     const body = await request.json()
     const parsed = PreviewBodySchema.safeParse(body)
@@ -43,7 +48,7 @@ export async function POST(request: Request) {
       include: { account: true, payee: true, project: true },
     })
 
-    const matches = transactions.filter((tx) => {
+    const allMatches = transactions.filter((tx) => {
       const fact: TransactionFact = {
         description: tx.description,
         payeeName: tx.payee?.name ?? null,
@@ -56,7 +61,10 @@ export async function POST(request: Request) {
         tags: tx.tags,
       }
       return testCondition(fact)
-    }).slice(0, 10)
+    })
+
+    const matchCount = allMatches.length
+    const matches = all ? allMatches : allMatches.slice(0, PREVIEW_LIMIT)
 
     return ok(
       matches.map((tx) => ({
@@ -69,7 +77,7 @@ export async function POST(request: Request) {
         payeeName: tx.payee?.name ?? null,
         projectName: tx.project?.name ?? null,
       })),
-      { matchCount: matches.length }
+      { matchCount }
     )
   } catch (err) {
     console.error('[/api/rules/preview]', err)
