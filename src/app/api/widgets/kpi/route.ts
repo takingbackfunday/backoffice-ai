@@ -32,16 +32,27 @@ export async function GET() {
     const prevStart = startOfMonth(prevMonth)
     const prevEnd = endOfMonth(prevMonth)
 
+    // Exclude transactions in non-deductible category groups (e.g. "Account transfer",
+    // "Transfers & other") — these inflate both revenue and expenses and are not real
+    // income or spending regardless of the user's business-type category config.
+    const excludeNonDeductible = {
+      NOT: {
+        categoryRef: {
+          group: { taxType: 'non_deductible' },
+        },
+      },
+    }
+
     const [thisRows, prevRows, allRows] = await Promise.all([
       prisma.transaction.findMany({
-        where: { account: { userId }, date: { gte: thisStart, lte: thisEnd } },
+        where: { account: { userId }, date: { gte: thisStart, lte: thisEnd }, ...excludeNonDeductible },
         select: { amount: true },
       }),
       prisma.transaction.findMany({
-        where: { account: { userId }, date: { gte: prevStart, lte: prevEnd } },
+        where: { account: { userId }, date: { gte: prevStart, lte: prevEnd }, ...excludeNonDeductible },
         select: { amount: true },
       }),
-      // All transactions for net worth (cumulative)
+      // Net worth uses ALL transactions — transfers still move money between accounts
       prisma.transaction.findMany({
         where: { account: { userId } },
         select: { amount: true },
