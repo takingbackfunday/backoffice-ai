@@ -1,0 +1,97 @@
+import { auth } from '@clerk/nextjs/server'
+import { prisma } from '@/lib/prisma'
+import { ok, unauthorized, serverError } from '@/lib/api-response'
+import { startOfMonth, endOfMonth, subMonths } from 'date-fns'
+
+export interface KpiData {
+  revenue: number
+  expenses: number
+  savingRate: number   // (revenue - expenses) / revenue, or null if revenue = 0
+  netWorth: number
+  // MoM deltas as percentage points (null if previous month has no data)
+  revenueDelta: number | null
+  expensesDelta: number | null
+  savingRateDelta: number | null
+  netWorthDelta: number | null
+  month: string  // 'YYYY-MM' of the reported month
+}
+
+export async function GET() {
+  try {
+    const { userId } = await auth()
+    if (!userId) return unauthorized()
+
+    const now = new Date()
+    // Last full completed month
+    const lastMonth = subMonths(now, 1)
+    const thisStart = startOfMonth(lastMonth)
+    const thisEnd = endOfMonth(lastMonth)
+
+    // Previous month (for MoM delta)
+    const prevMonth = subMonths(now, 2)
+    const prevStart = startOfMonth(prevMonth)
+    const prevEnd = endOfMonth(prevMonth)
+
+    const [thisRows, prevRows, allRows] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { account: { userId }, date: { gte: thisStart, lte: thisEnd } },
+        select: { amount: true },
+      }),
+      prisma.transaction.findMany({
+        where: { account: { userId }, date: { gte: prevStart, lte: prevEnd } },
+        select: { amount: true },
+      }),
+      // All transactions for net worth (cumulative)
+      prisma.transaction.findMany({
+        where: { account: { userId } },
+        select: { amount: true },
+      }),
+    ])
+
+    function calcMonthStats(rows: { amount: unknown }[]) {
+      let revenue = 0
+      let expenses = 0
+      for (const r of rows) {
+        const amt = Number(r.amount)
+        if (amt > 0) revenue += amt
+        else expenses += Math.abs(amt)
+      }
+      const savingRate = revenue > 0 ? (revenue - expenses) / revenue : 0
+      return { revenue, expenses, savingRate }
+    }
+
+    const thisStats = calcMonthStats(thisRows)
+    const prevStats = calcMonthStats(prevRows)
+
+    const netWorth = allRows.reduce((sum, r) => sum + Number(r.amount), 0)
+    // Net worth previous month = netWorth minus this month's net
+    const thisNet = thisStats.revenue - thisStats.expenses
+    const prevNetWorth = netWorth - thisNet
+
+    function pctDelta(curr: number, prev: number): number | null {
+      if (prev === 0) return null
+      return Math.round(((curr - prev) / Math.abs(prev)) * 1000) / 10  // 1dp
+    }
+
+    const month = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`
+
+    const result: KpiData = {
+      revenue: Math.round(thisStats.revenue * 100) / 100,
+      expenses: Math.round(thisStats.expenses * 100) / 100,
+      savingRate: Math.round(thisStats.savingRate * 1000) / 10,  // percentage
+      netWorth: Math.round(netWorth * 100) / 100,
+      revenueDelta: pctDelta(thisStats.revenue, prevStats.revenue),
+      expensesDelta: pctDelta(thisStats.expenses, prevStats.expenses),
+      savingRateDelta: prevStats.savingRate > 0
+        ? Math.round((thisStats.savingRate - prevStats.savingRate) * 1000) / 10
+        : null,
+      netWorthDelta: pctDelta(netWorth, prevNetWorth),
+      month,
+    }
+
+    return ok(result)
+  } catch (err) {
+    console.error('[GET /api/widgets/kpi]', err)
+    return serverError('Failed to fetch KPI data')
+  }
+}

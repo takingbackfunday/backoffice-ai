@@ -1,11 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
-} from 'recharts'
-import type { CashflowPoint } from '@/app/api/widgets/cashflow/route'
+import { ChartRouter } from './charts/ChartRouter'
+import { createDefaultWidgetConfig } from '@/lib/widgets/defaults'
+import type { ChartDataPoint, WidgetConfig } from '@/types/widgets'
 import { RelativeDateRangePicker, resolveExpr, toDateString } from './RelativeDateRangePicker'
 import type { RelativeDateRange } from './RelativeDateRangePicker'
 
@@ -20,11 +18,11 @@ interface CategoryGroup {
 type Period = 'last-3-months' | 'last-6-months' | 'last-12-months' | 'ytd' | 'custom'
 
 const PERIOD_OPTIONS: { value: Period; label: string }[] = [
-  { value: 'last-3-months',  label: '3M' },
-  { value: 'last-6-months',  label: '6M' },
+  { value: 'last-3-months', label: '3M' },
+  { value: 'last-6-months', label: '6M' },
   { value: 'last-12-months', label: '12M' },
-  { value: 'ytd',            label: 'YTD' },
-  { value: 'custom',         label: 'Custom' },
+  { value: 'ytd', label: 'YTD' },
+  { value: 'custom', label: 'Custom' },
 ]
 
 // ── Category filter dropdown ───────────────────────────────────────────────────
@@ -50,6 +48,7 @@ function CategoryFilterDropdown({
   }, [])
 
   const allCategories = groups.flatMap((g) => g.categories)
+  // Include "Uncategorized" as a selectable virtual category
   const allNames = [...allCategories.map((c) => c.name), 'Uncategorized']
 
   function toggleAll() {
@@ -127,6 +126,7 @@ function CategoryFilterDropdown({
                 ))}
               </div>
             ))}
+            {/* Uncategorized as a virtual selectable row */}
             <div className="border-t border-black/5 mt-1 pt-1">
               <button
                 onClick={() => toggle('Uncategorized')}
@@ -151,74 +151,43 @@ function CategoryFilterDropdown({
   )
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function fmt(value: number): string {
-  const abs = Math.abs(value)
-  if (abs >= 1000) return `$${(value / 1000).toFixed(1)}k`
-  return `$${value.toFixed(0)}`
-}
-
-function shortMonth(label: string): string {
-  const [year, month] = label.split('-')
-  const d = new Date(Number(year), Number(month) - 1)
-  return d.toLocaleString('default', { month: 'short' })
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  const income   = payload.find((p: { dataKey: string }) => p.dataKey === 'income')?.value ?? 0
-  const expenses = payload.find((p: { dataKey: string }) => p.dataKey === 'expenses')?.value ?? 0
-  const net      = payload.find((p: { dataKey: string }) => p.dataKey === 'net')?.value ?? 0
-  return (
-    <div className="rounded-lg border border-black/10 bg-white shadow-md px-3 py-2 text-xs space-y-1 min-w-[130px]">
-      <p className="font-medium text-[#333] mb-1">{label}</p>
-      <div className="flex justify-between gap-4">
-        <span className="text-[#16a34a]">Income</span>
-        <span className="font-medium text-[#16a34a]">{fmt(income)}</span>
-      </div>
-      <div className="flex justify-between gap-4">
-        <span className="text-[#dc2626]">Expenses</span>
-        <span className="font-medium text-[#dc2626]">{fmt(expenses)}</span>
-      </div>
-      <div className="flex justify-between gap-4 border-t border-black/[0.08] pt-1 mt-1">
-        <span className="text-[#534AB7]">Net</span>
-        <span className={`font-semibold ${net >= 0 ? 'text-[#16a34a]' : 'text-[#dc2626]'}`}>{net >= 0 ? '+' : ''}{fmt(net)}</span>
-      </div>
-    </div>
-  )
-}
-
 // ── Saved filter shape stored in preferences ──────────────────────────────────
 
-interface LockedCashflowFilters {
+interface LockedChartFilters {
   period: Period
   relativeDateRange?: RelativeDateRange
   selectedCategories: string[]
+  drillDown?: boolean
 }
 
-const PREF_KEY = 'cashflowFilters'
+const PREF_KEY = 'donutFilters'
 
 // ── Main widget ────────────────────────────────────────────────────────────────
 
-export function CashflowWidget() {
-  const [period, setPeriod] = useState<Period>('last-6-months')
+export function ExpensesByDonutWidget() {
+  const [config, setConfig] = useState<WidgetConfig>(() => ({
+    ...createDefaultWidgetConfig('donut'),
+    splitBy: 'group',
+  }))
+  const [data, setData] = useState<ChartDataPoint[]>([])
+  const [seriesKeys, setSeriesKeys] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
+  const [drillDown, setDrillDown] = useState(false)
+
+  const [activePeriod, setActivePeriod] = useState<Period>('last-6-months')
   const [relativeDateRange, setRelativeDateRange] = useState<RelativeDateRange>({
     start: { anchor: 'today', operator: 'minus', value: 7, unit: 'day' },
     end:   { anchor: 'today', operator: 'minus', value: 1, unit: 'day' },
   })
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
-  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
-  const [data, setData] = useState<CashflowPoint[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [locked, setLocked] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [appliedCustom, setAppliedCustom] = useState<{ start: string; end: string } | null>(null)
 
-  // appliedRange drives the fetch — only updated when Apply is clicked for custom
-  const [appliedRange, setAppliedRange] = useState<{ period: Period; start?: string; end?: string }>({ period: 'last-6-months' })
+  const [locked, setLocked] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   // Load categories + persisted preferences on mount
   useEffect(() => {
@@ -228,60 +197,93 @@ export function CashflowWidget() {
     ]).then(([catJson, prefJson]) => {
       if (!catJson.error) setCategoryGroups(catJson.data ?? [])
 
-      const saved = prefJson.data?.[PREF_KEY] as LockedCashflowFilters | undefined
+      const saved = prefJson.data?.[PREF_KEY] as LockedChartFilters | undefined
       if (saved) {
         setLocked(true)
-        const p = saved.period ?? 'last-6-months'
-        setPeriod(p)
+        const period = saved.period ?? 'last-6-months'
+        setActivePeriod(period)
         if (saved.relativeDateRange) setRelativeDateRange(saved.relativeDateRange)
-        setSelectedCategories(new Set(saved.selectedCategories ?? []))
-        if (p === 'custom' && saved.relativeDateRange) {
-          const start = toDateString(resolveExpr(saved.relativeDateRange.start))
-          const end   = toDateString(resolveExpr(saved.relativeDateRange.end))
-          setAppliedRange({ period: p, start, end })
-        } else {
-          setAppliedRange({ period: p })
-        }
+        const cats = new Set<string>(saved.selectedCategories ?? [])
+        setSelectedCategories(cats)
+        const dd = saved.drillDown ?? false
+        setDrillDown(dd)
+
+        // Apply to config immediately
+        setConfig((c) => {
+          let withPeriod: typeof c
+          if (period === 'custom' && saved.relativeDateRange) {
+            const start = toDateString(resolveExpr(saved.relativeDateRange.start))
+            const end   = toDateString(resolveExpr(saved.relativeDateRange.end))
+            setAppliedCustom({ start, end })
+            withPeriod = { ...c, dateRange: { type: 'static' as const, start, end } }
+          } else {
+            withPeriod = { ...c, dateRange: { type: 'live' as const, period: period as Exclude<Period, 'custom'> } }
+          }
+          const isAll = cats.size === 0
+          return {
+            ...withPeriod,
+            splitBy: dd ? 'category' : 'group',
+            filters: isAll
+              ? withPeriod.filters.filter((f) => f.field !== 'category')
+              : [
+                  ...withPeriod.filters.filter((f) => f.field !== 'category'),
+                  { field: 'category' as const, operator: 'include' as const, values: [...cats] },
+                ],
+          }
+        })
       }
     })
   }, [])
 
-  // Fetch cashflow data whenever appliedRange or selectedCategories changes
+  // Fetch chart data whenever config changes
   useEffect(() => {
-    if (appliedRange.period === 'custom' && (!appliedRange.start || !appliedRange.end)) return
     setLoading(true)
     setError(null)
-
-    const allCategories = [...categoryGroups.flatMap((g) => g.categories).map((c) => c.name), 'Uncategorized']
-    const isAll = selectedCategories.size === 0 || selectedCategories.size === allCategories.length
-    const categoriesParam = isAll ? '' : `&categories=${encodeURIComponent([...selectedCategories].join(','))}`
-
-    const url = appliedRange.period === 'custom'
-      ? `/api/widgets/cashflow?period=custom&start=${appliedRange.start}&end=${appliedRange.end}${categoriesParam}`
-      : `/api/widgets/cashflow?period=${appliedRange.period}${categoriesParam}`
-
-    fetch(url)
+    fetch('/api/widgets/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config }),
+    })
       .then((r) => r.json())
       .then((json) => {
         if (json.error) throw new Error(json.error)
         setData(json.data)
+        setSeriesKeys(json.seriesKeys)
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [appliedRange, selectedCategories, categoryGroups])
+  }, [config])
 
-  function handlePeriod(p: Period) {
-    setPeriod(p)
-    if (p !== 'custom') setAppliedRange({ period: p })
+  function setPeriod(period: Period) {
+    setActivePeriod(period)
+    if (period === 'custom') return
+    setConfig((c) => ({ ...c, dateRange: { type: 'live', period: period as Exclude<Period, 'custom'> } }))
+  }
+
+  function handleDrillDown(enabled: boolean) {
+    setDrillDown(enabled)
+    setConfig((c) => ({ ...c, splitBy: enabled ? 'category' : 'group' }))
   }
 
   function handleCategoryChange(next: Set<string>) {
     setSelectedCategories(next)
+    const allCategories = [...categoryGroups.flatMap((g) => g.categories).map((c) => c.name), 'Uncategorized']
+    const isAll = next.size === 0 || next.size === allCategories.length
+    setConfig((c) => ({
+      ...c,
+      filters: isAll
+        ? c.filters.filter((f) => f.field !== 'category')
+        : [
+            ...c.filters.filter((f) => f.field !== 'category'),
+            { field: 'category', operator: 'include', values: [...next] },
+          ],
+    }))
   }
 
   async function toggleLock() {
     setSaving(true)
     if (locked) {
+      // Unlock — clear saved filters
       await fetch('/api/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -289,10 +291,12 @@ export function CashflowWidget() {
       })
       setLocked(false)
     } else {
-      const payload: LockedCashflowFilters = {
-        period,
-        relativeDateRange: period === 'custom' ? relativeDateRange : undefined,
+      // Lock — save current filters
+      const payload: LockedChartFilters = {
+        period: activePeriod,
+        relativeDateRange: activePeriod === 'custom' ? relativeDateRange : undefined,
         selectedCategories: [...selectedCategories],
+        drillDown,
       }
       await fetch('/api/preferences', {
         method: 'POST',
@@ -304,23 +308,21 @@ export function CashflowWidget() {
     setSaving(false)
   }
 
-  const displayData = data.map((d) => ({ ...d, label: shortMonth(d.label) }))
-
   return (
     <div className="rounded-lg border bg-white p-4">
       {/* Header */}
       <div className="mb-3">
-        <h3 className="text-xs font-medium text-foreground">Cashflow</h3>
-        <p className="text-[10px] text-muted-foreground mt-0.5">Income, expenses &amp; net by month</p>
+        <h3 className="text-xs font-medium text-foreground">Expenses breakdown</h3>
+        <p className="text-[10px] text-muted-foreground mt-0.5">Spending share by {drillDown ? 'sub-category' : 'group'}</p>
         <div className="flex items-center gap-2 mt-2">
           {/* Period pills */}
           <div className="flex items-center gap-1 rounded-lg border border-black/10 p-0.5">
             {PERIOD_OPTIONS.map(({ value, label }) => (
               <button
                 key={value}
-                onClick={() => handlePeriod(value)}
+                onClick={() => setPeriod(value)}
                 className={`px-2 py-0.5 text-[11px] rounded-md font-medium transition-colors ${
-                  period === value
+                  activePeriod === value
                     ? 'bg-[#3C3489] text-[#EEEDFE]'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
@@ -346,7 +348,22 @@ export function CashflowWidget() {
       {/* Collapsible filters row */}
       {filtersOpen && (
         <div className="flex items-center gap-2 pt-2 pb-1 border-t border-black/5 flex-wrap w-full">
-          {categoryGroups.length > 0 && (
+          {/* Drill-down toggle */}
+          <button
+            onClick={() => handleDrillDown(!drillDown)}
+            className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border transition-colors ${
+              drillDown
+                ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489]'
+                : 'border-black/10 text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+            {drillDown ? 'Sub-categories' : 'Groups'}
+          </button>
+
+          {categoryGroups.length > 0 && drillDown && (
             <CategoryFilterDropdown
               groups={categoryGroups}
               selected={selectedCategories}
@@ -378,14 +395,21 @@ export function CashflowWidget() {
       )}
 
       {/* Custom relative date range picker */}
-      {period === 'custom' && (
+      {activePeriod === 'custom' && (
         <RelativeDateRangePicker
           value={relativeDateRange}
           onChange={setRelativeDateRange}
-          onApply={(start, end) => setAppliedRange({ period: 'custom', start, end })}
-          onCancel={() => handlePeriod('last-6-months')}
-          appliedStart={appliedRange.start}
-          appliedEnd={appliedRange.end}
+          onApply={(start, end) => {
+            setAppliedCustom({ start, end })
+            setConfig((c) => ({ ...c, dateRange: { type: 'static', start, end } }))
+          }}
+          onCancel={() => {
+            setActivePeriod('last-6-months')
+            setAppliedCustom(null)
+            setConfig((c) => ({ ...c, dateRange: { type: 'live', period: 'last-6-months' } }))
+          }}
+          appliedStart={appliedCustom?.start}
+          appliedEnd={appliedCustom?.end}
         />
       )}
 
@@ -404,44 +428,14 @@ export function CashflowWidget() {
         </div>
       )}
 
-      {!loading && !error && (
-        <ResponsiveContainer width="100%" height={350}>
-          <ComposedChart data={displayData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }} barGap={2} barCategoryGap="30%">
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis
-              dataKey="label"
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-              tick={{ fill: '#6b7280' }}
-            />
-            <YAxis
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={fmt}
-              tick={{ fill: '#6b7280' }}
-              width={64}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              wrapperStyle={{ fontSize: 12 }}
-              formatter={(value) =>
-                value === 'income' ? 'Income' : value === 'expenses' ? 'Expenses' : 'Net'
-              }
-            />
-            <Bar dataKey="income" fill="#16a34a" fillOpacity={0.85} maxBarSize={22} radius={[3, 3, 0, 0]} />
-            <Bar dataKey="expenses" fill="#dc2626" fillOpacity={0.85} maxBarSize={22} radius={[3, 3, 0, 0]} />
-            <Line
-              dataKey="net"
-              stroke="#534AB7"
-              strokeWidth={2}
-              dot={{ r: 3, fill: '#534AB7', strokeWidth: 0 }}
-              activeDot={{ r: 5 }}
-              type="monotone"
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
+      {!loading && !error && data.length === 0 && (
+        <div className="flex items-center justify-center h-[350px]">
+          <p className="text-xs text-muted-foreground">No expense data for this period.</p>
+        </div>
+      )}
+
+      {!loading && !error && data.length > 0 && (
+        <ChartRouter data={data} seriesKeys={seriesKeys} config={config} />
       )}
     </div>
   )

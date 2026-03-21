@@ -5,10 +5,10 @@ import { resolveDateRange } from '@/lib/widgets/date-utils'
 import { format, startOfMonth } from 'date-fns'
 
 export interface CashflowPoint {
-  label: string   // 'YYYY-MM'
-  income: number  // positive
-  expenses: number // negative (stored as negative for chart positioning)
-  net: number
+  label: string
+  income: number   // positive
+  expenses: number // positive (absolute value)
+  net: number      // income - expenses
 }
 
 export async function GET(request: Request) {
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
       if (!bucket) continue
       const amt = Number(row.amount)
       if (amt > 0) bucket.income += amt
-      else bucket.expenses += amt  // keep negative
+      else bucket.expenses += Math.abs(amt)  // store as positive
     }
 
     const data: CashflowPoint[] = [...buckets.entries()]
@@ -85,7 +85,7 @@ export async function GET(request: Request) {
         label,
         income: Math.round(income * 100) / 100,
         expenses: Math.round(expenses * 100) / 100,
-        net: Math.round((income + expenses) * 100) / 100,
+        net: Math.round((income - expenses) * 100) / 100,
       }))
 
     return ok(data)

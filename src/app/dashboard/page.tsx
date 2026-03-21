@@ -4,8 +4,10 @@ import { prisma } from '@/lib/prisma'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { ExpensesByCategoryWidget } from '@/components/widgets/ExpensesByCategoryWidget'
+import { ExpensesByDonutWidget } from '@/components/widgets/ExpensesByDonutWidget'
 import { CashflowWidget } from '@/components/widgets/CashflowWidget'
 import { NetWorthWidget } from '@/components/widgets/NetWorthWidget'
+import { KpiBar } from '@/components/widgets/KpiBar'
 import { FinanceQA } from '@/components/dashboard/finance-qa'
 
 export default async function DashboardPage() {
@@ -22,11 +24,17 @@ export default async function DashboardPage() {
       <div className="flex flex-1 flex-col">
         <Header title="Dashboard" />
         <main className="flex-1 p-6 space-y-6" role="main">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {/* KPI strip — last full month */}
+          <KpiBar />
+
+          {/* 2×2 widget grid: TL expenses bar, TR expenses donut, BL cashflow, BR net worth */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ExpensesByCategoryWidget />
+            <ExpensesByDonutWidget />
             <CashflowWidget />
             <NetWorthWidget />
           </div>
+
           <FinanceQA />
         </main>
       </div>
