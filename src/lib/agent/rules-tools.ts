@@ -281,6 +281,19 @@ export async function emit_rule_suggestion(
   const hasNonAmount = defs.some((d) => d.field !== 'amount')
   if (!hasNonAmount) return 'Rejected: must have at least one non-amount condition. Add a description or payeeName condition alongside the amount condition and resubmit.'
 
+  // Reject self-referential payee rules: condition "payeeName equals X" + action sets same payeeName X
+  // These are no-ops — the payee is already set, so the condition only matches transactions that
+  // already have payee X, and the rule would just "set" it again.
+  if (args.payeeName) {
+    const payeeCondition = defs.find(
+      (d) => d.field === 'payeeName' && (d.operator === 'equals' || d.operator === 'contains') &&
+        String(d.value).toLowerCase() === args.payeeName!.toLowerCase()
+    )
+    if (payeeCondition && defs.every((d) => d.field === 'payeeName' || d.field === 'amount')) {
+      return `Rejected: this rule uses "payeeName equals ${args.payeeName}" as its only meaningful condition, then sets payeeName to "${args.payeeName}" — that's a no-op (the payee is already set on those transactions). Use "description contains" as the primary condition instead, so the rule can assign the payee on future transactions that don't have it yet.`
+    }
+  }
+
   // Reject overly short/generic values for plain-string operators
   for (const def of defs) {
     if (def.field === 'description' && (def.operator === 'contains' || def.operator === 'starts_with' || def.operator === 'equals')) {

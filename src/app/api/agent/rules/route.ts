@@ -48,6 +48,7 @@ RULE CONDITIONS — CRITICAL:
 - Valid fields: description, payeeName, amount, accountName. Do NOT use "date" — it is not a valid field and will be rejected.
 - ALWAYS use description contains as the PRIMARY condition. It matches the raw transaction text and is the most reliable.
 - payeeName equals is SECONDARY — only add it if there is already a payee in the EXISTING PAYEES list. Do not use it as the sole condition because payees may not exist yet.
+- NEVER use "payeeName equals X" as the condition when you are also setting payeeName to X in the action — that is a no-op (the rule only matches transactions that already have payee X, so setting it again does nothing). Always use "description contains" as the primary condition so the rule fires on raw transactions before a payee is assigned.
 - Never add a date condition. Rules are not time-bound.
 - "all" means AND — every condition must match the SAME transaction. Do NOT put multiple description variants in "all" — a single transaction cannot contain "Zalando Payments" AND "Www Zalando De" at the same time.
 - For multiple description variants (different spellings of the same merchant), use "any" (OR logic): { "any": [{ "field": "description", "operator": "contains", "value": "Zalando" }] } — or better, pick the ONE keyword that appears in all variants (e.g. "Zalando" matches all of them).
