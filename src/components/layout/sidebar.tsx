@@ -6,9 +6,9 @@ import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', icon: '⬜' },
+  { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/upload', label: 'Import CSV', icon: '⬆' },
-  { href: '/transactions', label: 'Transactions', icon: '↕' },
+  { href: '/transactions', label: 'Transactions', icon: '💳' },
   { href: '/accounts', label: 'Accounts', icon: '🏦' },
   { href: '/projects', label: 'Projects', icon: '📁' },
   { href: '/categories', label: 'Categories', icon: '🏷' },
@@ -98,7 +98,7 @@ export function Sidebar() {
       <button
         onClick={toggleCollapsed}
         className={cn(
-          'mt-1 flex items-center rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors',
+          'mt-auto pt-4 border-t border-black/[0.06] flex items-center rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors',
           collapsed ? 'justify-center px-2' : 'gap-2'
         )}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
