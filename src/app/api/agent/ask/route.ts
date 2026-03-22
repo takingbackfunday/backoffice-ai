@@ -16,7 +16,7 @@ function encode(event: SseEvent): Uint8Array {
 
 const ROUTER_MODEL = 'google/gemini-2.0-flash-lite-001'
 const SIMPLE_MODEL = 'anthropic/claude-sonnet-4.6'
-const COMPLEX_MODEL = 'anthropic/claude-opus-4-6'
+const COMPLEX_MODEL = 'anthropic/claude-sonnet-4.6'
 
 const MAX_TOOL_ROUNDS_SIMPLE = 4
 const MAX_TOOL_ROUNDS_COMPLEX = 8
@@ -44,7 +44,11 @@ Question: ${question}`
   }
 }
 
-const SYSTEM_PROMPT = `You are a personal finance assistant with access to a set of database tools.
+function buildSystemPrompt(): string {
+  const today = new Date().toISOString().slice(0, 10)
+  return `You are a personal finance assistant with access to a set of database tools.
+
+Today's date is ${today}. Use this as your reference for relative date expressions like "this month", "last month", "this year", "last 30 days", etc.
 
 Use the tools to look up whatever data you need to answer the user's question accurately. You can call multiple tools in sequence — for example, call get_categories first to discover exact category names, then aggregate_transactions to get totals.
 
@@ -63,6 +67,7 @@ Guidelines:
 - Be specific and data-driven — cite only actual amounts from tool results
 - Keep answers concise but complete — bullet points are fine, no markdown headers
 - Plain text only, no markdown formatting`
+}
 
 export async function POST(request: Request) {
   const { userId } = await auth()
@@ -128,7 +133,7 @@ Use the tools to query any data you need.`
 
         // ── Agentic tool loop ──────────────────────────────────────────────
         const messages: ChatMessage[] = [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: buildSystemPrompt() },
           { role: 'user', content: `${snapshot}\n\nQuestion: ${question}` },
         ]
 
