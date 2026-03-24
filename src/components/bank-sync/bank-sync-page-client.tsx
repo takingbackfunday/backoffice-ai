@@ -135,6 +135,11 @@ export function BankSyncPageClient({ accounts }: BankSyncPageClientProps) {
         }),
       })
 
+      if (!response.ok && response.headers.get('content-type') !== 'text/event-stream') {
+        const text = await response.text()
+        addStreamMessage(accountId, `❌ Request failed (${response.status}): ${text}`)
+        return
+      }
       if (!response.body) throw new Error('No response stream')
 
       const reader = response.body.getReader()
@@ -190,6 +195,11 @@ export function BankSyncPageClient({ accounts }: BankSyncPageClientProps) {
         body: JSON.stringify({ accountId }),
       })
 
+      if (!response.ok && response.headers.get('content-type') !== 'text/event-stream') {
+        const text = await response.text()
+        addStreamMessage(accountId, `❌ Request failed (${response.status}): ${text}`)
+        return
+      }
       if (!response.body) throw new Error('No response stream')
 
       const reader = response.body.getReader()
@@ -214,7 +224,7 @@ export function BankSyncPageClient({ accounts }: BankSyncPageClientProps) {
                 if (event.liveUrl) setLiveUrl(event.liveUrl)
               } else if (event.type === 'complete') {
                 addStreamMessage(accountId, `✅ ${event.message || ''}`)
-                loadAccountStatus(accountId) // Refresh status
+                loadAccountStatus(accountId)
               } else if (event.type === 'error') {
                 addStreamMessage(accountId, `❌ ${event.error || 'Unknown error'}`)
               }
