@@ -10,7 +10,13 @@ import type { SyncJobEvent } from '@/types/bank-agent'
 
 const ConnectBodySchema = z.object({
   accountId: z.string().min(1),
-  loginUrl: z.string().url(),
+  loginUrl: z.string().min(1).transform(url => {
+    const trimmed = url.trim()
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      return `https://${trimmed}`
+    }
+    return trimmed
+  }),
   username: z.string().min(1),
   password: z.string().min(1),
 })
