@@ -100,22 +100,23 @@ ${history.length > 0 ? history.map((h, i) => `${i + 1}. ${h}`).join('\n') : '(no
 
 GOAL: ${goal}
 
-Respond with EXACTLY one JSON object (no markdown fences, no extra text):
-{
-  "action": "fill" | "click" | "wait" | "done" | "download" | "scroll" | "error",
-  "elementIndex": <number from element list — required for fill/click/download>,
-  "value": "<text to type — only for fill>",
-  "reason": "<one sentence>"
-}
+OUTPUT INSTRUCTIONS — CRITICAL:
+- Output ONLY a raw JSON object. No prose, no explanation, no markdown, no code fences.
+- First character of your response must be {
+- Last character of your response must be }
+- Nothing before or after the JSON.
+
+JSON schema:
+{"action":"fill"|"click"|"wait"|"done"|"download"|"scroll"|"error","elementIndex":<number>,"value":"<only for fill>","reason":"<one sentence>"}
 
 Rules:
-- "fill" = type into an input. Provide "value".
-- "click" = click a button, link, or element.
-- "download" = you found a CSV/export download button. Click it to trigger download.
-- "wait" = page is loading or transitioning.
-- "done" = goal accomplished.
-- "error" = stuck or page doesn't match expectations.
-- For login: fill username first, then password, then click submit.
+- "fill" = type into an input field. Must include "value".
+- "click" = click a button, link, or interactive element.
+- "download" = click a CSV/export download button to trigger file download.
+- "wait" = page is loading or transitioning, try again next step.
+- "done" = goal is fully accomplished.
+- "error" = genuinely stuck, cannot proceed.
+- For login: fill username first, then password, then click submit button.
 - For export: look for "export", "download", "CSV", "transactions", "statements", "activity".`
 
   const response = await openrouterChat(
@@ -123,11 +124,21 @@ Rules:
     NAV_MODEL
   )
 
+  // Try direct parse first
   try {
     const clean = response.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
     return JSON.parse(clean) as LLMAction
   } catch {
-    console.error('[bank-agent] LLM parse fail:', response.slice(0, 200))
+    // Fallback: extract the first {...} block from the response (handles prose wrapping)
+    const match = response.match(/\{[\s\S]*?\}/)
+    if (match) {
+      try {
+        const extracted = JSON.parse(match[0]) as LLMAction
+        console.log('[bank-agent] LLM JSON extracted from prose:', match[0].slice(0, 200))
+        return extracted
+      } catch {}
+    }
+    console.error('[bank-agent] LLM parse fail, full response:', response.slice(0, 400))
     return { action: 'error', reason: 'Failed to parse LLM response' }
   }
 }
