@@ -10,7 +10,9 @@ const TWO_FA_TIMEOUT_MS = 120_000
 function getBrowserlessUrl(): string {
   const token = process.env.BROWSERLESS_TOKEN
   if (!token) throw new Error('BROWSERLESS_TOKEN env var is required')
-  return `wss://production-sfo.browserless.io/chromium/stealth?token=${token}`
+  const url = `wss://production-sfo.browserless.io/chromium/stealth?token=${token}`
+  console.log('[bank-agent/worker] connecting to Browserless SFO (stealth)')
+  return url
 }
 
 async function extractPageElements(page: Page): Promise<PageElement[]> {
@@ -240,7 +242,9 @@ export async function connectBank(
   let browser
   try {
     onEvent({ type: 'status', message: 'Launching cloud browser…' })
+    console.log('[bank-agent/worker] connectBank start', { loginUrl: params.loginUrl, accountId: params.accountId })
     browser = await chromium.connectOverCDP(getBrowserlessUrl())
+    console.log('[bank-agent/worker] browser connected')
 
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },
@@ -254,58 +258,77 @@ export async function connectBank(
     let twoFaType = 'none'
 
     onEvent({ type: 'status', message: 'Opening bank website…' })
+    console.log('[bank-agent/worker] navigating to', params.loginUrl)
     await page.goto(params.loginUrl, { waitUntil: 'networkidle', timeout: 30_000 })
+    console.log('[bank-agent/worker] page loaded, url:', page.url(), 'title:', await page.title())
     recordedSteps.push({ action: 'goto', url: params.loginUrl, description: 'Navigate to login page' })
     history.push(`Navigated to ${params.loginUrl}`)
 
     onEvent({ type: 'status', message: 'Analyzing login page…' })
 
     let elements = await extractPageElements(page)
+    console.log('[bank-agent/worker] extracted', elements.length, 'elements, asking LLM for username field')
     let llmAction = await askLLMForAction(
       page.url(), await page.title(), elements,
       `Find the username/email input field and fill it with: ${params.username}`,
       history
     )
+    console.log('[bank-agent/worker] LLM username action:', JSON.stringify({ action: llmAction.action, elementIndex: llmAction.elementIndex, reason: llmAction.reason }))
     if (llmAction.action === 'fill' && llmAction.elementIndex !== undefined) {
       const el = elements[llmAction.elementIndex]
       onEvent({ type: 'status', message: 'Entering username…' })
+      console.log('[bank-agent/worker] filling username into:', el.selector)
       await page.locator(el.selector).fill(params.username)
       recordedSteps.push({ action: 'fill', selector: el.selector, description: 'Enter username', isCredentialField: 'username' })
       history.push(`Filled username into ${el.selector}`)
       await page.waitForTimeout(STEP_DELAY_MS)
+    } else {
+      console.warn('[bank-agent/worker] LLM did not return fill for username:', llmAction.action, llmAction.reason)
     }
 
     elements = await extractPageElements(page)
+    console.log('[bank-agent/worker] asking LLM for password field')
     llmAction = await askLLMForAction(
       page.url(), await page.title(), elements,
       'Find the password input field and fill it.',
       history
     )
+    console.log('[bank-agent/worker] LLM password action:', JSON.stringify({ action: llmAction.action, elementIndex: llmAction.elementIndex, reason: llmAction.reason }))
     if (llmAction.action === 'fill' && llmAction.elementIndex !== undefined) {
       const el = elements[llmAction.elementIndex]
       onEvent({ type: 'status', message: 'Entering password…' })
+      console.log('[bank-agent/worker] filling password into:', el.selector)
       await page.locator(el.selector).fill(params.password)
       recordedSteps.push({ action: 'fill', selector: el.selector, description: 'Enter password', isCredentialField: 'password' })
       history.push(`Filled password into ${el.selector}`)
       await page.waitForTimeout(STEP_DELAY_MS)
+    } else {
+      console.warn('[bank-agent/worker] LLM did not return fill for password:', llmAction.action, llmAction.reason)
     }
 
     elements = await extractPageElements(page)
+    console.log('[bank-agent/worker] asking LLM for submit button')
     llmAction = await askLLMForAction(
       page.url(), await page.title(), elements,
       'Find and click the sign-in / login / submit button.',
       history
     )
+    console.log('[bank-agent/worker] LLM submit action:', JSON.stringify({ action: llmAction.action, elementIndex: llmAction.elementIndex, reason: llmAction.reason }))
     if (llmAction.action === 'click' && llmAction.elementIndex !== undefined) {
       const el = elements[llmAction.elementIndex]
       onEvent({ type: 'status', message: 'Logging in…' })
+      console.log('[bank-agent/worker] clicking submit:', el.selector)
       await page.locator(el.selector).click()
       recordedSteps.push({ action: 'click', selector: el.selector, description: 'Click login button' })
       history.push(`Clicked login: ${el.selector}`)
       await page.waitForTimeout(3000)
+      console.log('[bank-agent/worker] post-login url:', page.url())
+    } else {
+      console.warn('[bank-agent/worker] LLM did not return click for submit:', llmAction.action, llmAction.reason)
     }
 
     const is2FA = await detect2FA(page)
+    console.log('[bank-agent/worker] 2FA detected:', is2FA, 'current url:', page.url())
     if (is2FA) {
       twoFaType = 'unknown'
       recordedSteps.push({ action: 'wait', waitMs: 0, description: 'Wait for user 2FA' })

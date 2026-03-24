@@ -44,14 +44,37 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       function send(event: SseEvent) {
-        controller.enqueue(encode(event))
+        try {
+          controller.enqueue(encode(event))
+        } catch (e) {
+          console.error('[bank-agent/connect] send() failed — stream may be closed:', e)
+        }
       }
 
       const keepAlive = setInterval(() => {
-        controller.enqueue(new TextEncoder().encode(': ping\n\n'))
+        try { controller.enqueue(new TextEncoder().encode(': ping\n\n')) } catch {}
       }, 5000)
 
+      // Send immediately so the client knows the stream is alive
+      send({ type: 'status', message: 'Received request, authenticating…' })
+      console.log('[bank-agent/connect] stream started', { accountId, userId })
+
       try {
+        // Check env vars up front — fail fast with a clear message
+        if (!process.env.BROWSERLESS_TOKEN) {
+          send({ type: 'error', error: 'BROWSERLESS_TOKEN is not set. Add it to Netlify environment variables.' })
+          console.error('[bank-agent/connect] BROWSERLESS_TOKEN missing')
+          return
+        }
+        if (!process.env.ENCRYPTION_SECRET) {
+          send({ type: 'error', error: 'ENCRYPTION_SECRET is not set. Add it to Netlify environment variables.' })
+          console.error('[bank-agent/connect] ENCRYPTION_SECRET missing')
+          return
+        }
+
+        send({ type: 'status', message: 'Looking up account…' })
+        console.log('[bank-agent/connect] looking up account', accountId)
+
         // Verify account belongs to user
         const account = await prisma.account.findFirst({
           where: { id: accountId, userId },
@@ -59,8 +82,10 @@ export async function POST(request: Request) {
         })
         if (!account) {
           send({ type: 'error', error: 'Account not found or does not belong to you' })
+          console.error('[bank-agent/connect] account not found', { accountId, userId })
           return
         }
+        console.log('[bank-agent/connect] account found:', account.name)
 
         // Check if already connected
         if (account.bankPlaybook) {
@@ -76,14 +101,20 @@ export async function POST(request: Request) {
             triggeredBy: 'connect',
           }
         })
+        console.log('[bank-agent/connect] sync job created:', syncJob.id)
 
-        send({ type: 'status', message: 'Starting bank connection...', jobId: syncJob.id })
+        send({ type: 'status', message: 'Starting bank connection…', jobId: syncJob.id })
 
         // Call worker
+        console.log('[bank-agent/connect] calling connectBank worker', { loginUrl, accountId })
         const result = await connectBank(
           { loginUrl, username, password, accountId },
-          (event) => send(event)
+          (event) => {
+            console.log('[bank-agent/connect] worker event:', JSON.stringify(event))
+            send(event)
+          }
         )
+        console.log('[bank-agent/connect] worker result:', { success: result.success, error: result.error, csvLen: result.csvText?.length, twoFaType: result.twoFaType, steps: result.discoveredSteps?.length })
 
         if (!result.success || !result.csvText) {
           await prisma.syncJob.update({
@@ -98,7 +129,8 @@ export async function POST(request: Request) {
           return
         }
 
-        send({ type: 'status', message: 'Processing downloaded transactions...' })
+        send({ type: 'status', message: 'Processing downloaded transactions…' })
+        console.log('[bank-agent/connect] processing CSV, length:', result.csvText.length)
 
         // Encrypt and save credentials
         const encrypted = encrypt(`${username}:${password}`, userId)
@@ -155,6 +187,8 @@ export async function POST(request: Request) {
             processed = processCSV(result.csvText, mapping, accountId)
           }
         }
+
+        console.log('[bank-agent/connect] CSV processed:', { rows: processed.rows.length, errors: processed.errors })
 
         if (processed.errors.length > 0 && processed.rows.length === 0) {
           await prisma.syncJob.update({
@@ -294,7 +328,7 @@ export async function POST(request: Request) {
 
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err)
-        console.error('[bank-agent/connect]', err)
+        console.error('[bank-agent/connect] unhandled error:', err)
         send({ type: 'error', error: errorMsg })
       } finally {
         clearInterval(keepAlive)
