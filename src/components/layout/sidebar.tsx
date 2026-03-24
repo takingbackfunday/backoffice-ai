@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/upload', label: 'Import CSV', icon: '⬆' },
+  { href: '/bank-sync', label: 'Bank Sync', icon: '🔄' },
   { href: '/transactions', label: 'Transactions', icon: '💳' },
   { href: '/accounts', label: 'Accounts', icon: '🏦' },
   { href: '/projects', label: 'Projects', icon: '📁' },

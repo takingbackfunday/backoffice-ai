@@ -22,6 +22,8 @@ Required in `.env.local`:
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` — Clerk auth
 - `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL`
 - `OPENROUTER_API_KEY` — for AI features
+- `BROWSERLESS_TOKEN` — Browserless.io API token for cloud browser sessions
+- `ENCRYPTION_SECRET` — derives AES-256 keys for encrypted bank credentials
 
 ## Architecture
 
@@ -41,6 +43,9 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `InstitutionSchema` — global (non-user) CSV column mapping templates; `csvMapping` JSON: `{ dateCol, amountCol, descCol, dateFormat, amountSign }`
 - `Project` — client/property/job entities for tagging transactions; `ProjectType`: `CLIENT | PROPERTY | JOB | OTHER`
 - `UserPreference` — one row per user, `data` JSON for arbitrary UI state
+- `BankPlaybook` — stores discovered browser automation steps for each connected bank account; `steps` JSON contains `PlaybookStep[]` array; `twoFaType` tracks 2FA method; `status` indicates verification state
+- `EncryptedCredential` — AES-256-GCM encrypted bank login credentials (username:password); scoped per account with unique IV and auth tag
+- `SyncJob` — tracks bank sync operations with status progression: `PENDING` → `CONNECTING` → `DOWNLOADING` → `IMPORTING` → `COMPLETE/FAILED`
 
 ### API Routes (`src/app/api/`)
 

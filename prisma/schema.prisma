@@ -32,6 +32,9 @@ model Account {
   lastImportAt        DateTime?
   transactions        Transaction[]
   importBatches       ImportBatch[]
+  bankPlaybook        BankPlaybook?
+  encryptedCredential EncryptedCredential?
+  syncJobs            SyncJob[]
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
@@ -216,4 +219,60 @@ enum RuleSuggestionStatus {
   PENDING
   ACCEPTED
   IGNORED
+}
+
+// ── Bank Agent Models ─────────────────────────────────────────────────────────
+
+model BankPlaybook {
+  id                  String    @id @default(cuid())
+  accountId           String    @unique
+  account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  loginUrl            String
+  steps               Json      // PlaybookStep[]
+  exportPagePath      String?
+  csvDownloadSelector String?
+  twoFaType           String    @default("unknown") // "sms" | "totp" | "push" | "email" | "none" | "unknown"
+  lastVerifiedAt      DateTime?
+  status              String    @default("draft") // "draft" | "verified" | "broken"
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model EncryptedCredential {
+  id          String   @id @default(cuid())
+  accountId   String   @unique
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  ciphertext  String
+  iv          String
+  authTag     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SyncJob {
+  id          String        @id @default(cuid())
+  accountId   String
+  account     Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  status      SyncJobStatus @default(PENDING)
+  triggeredBy String        @default("manual")
+  startedAt   DateTime      @default(now())
+  completedAt DateTime?
+  error       String?
+  imported    Int?
+  skipped     Int?
+  batchId     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([accountId])
+}
+
+enum SyncJobStatus {
+  PENDING
+  CONNECTING
+  AWAITING_2FA
+  DOWNLOADING
+  IMPORTING
+  COMPLETE
+  FAILED
 }
