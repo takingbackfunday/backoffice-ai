@@ -72,11 +72,31 @@ Rule condition fields: `description`, `payeeName`, `rawDescription`, `amount`, `
 - `openrouterChat(messages, model?)` — simple text completion; default model `mistralai/devstral-small`
 - `openrouterWithTools(messages, tools, model?)` — tool-calling with streaming SSE accumulation; default model `mistralai/mistral-small-2603`; streams to avoid serverless timeouts
 
-Agent routes use a router model (`google/gemini-2.0-flash-lite-001`) to classify questions as `simple` (→ Claude Sonnet 4.6) or `complex` (→ Claude Opus 4.6), then run an agentic tool loop (max 4 or 8 rounds respectively).
+Agent routes use a router model (`google/gemini-2.0-flash-lite-001`) to classify questions as `simple` or `complex` — both route to `anthropic/claude-sonnet-4.6` (complex previously used Opus; unified to Sonnet to match rules-agent). Tool loop max 4 rounds (simple) or 8 rounds (complex). System prompt is built dynamically via `buildSystemPrompt()` which stamps today's ISO date for accurate relative date resolution.
 
 `src/lib/agent/finance-tools.ts` defines `FINANCE_TOOLS` (OpenAI-format tool definitions) and `dispatchTool(userId, toolName, args)`. Tools include `query_transactions`, `aggregate_transactions`, `get_categories`, etc.
 
 `src/lib/agent/rules-tools.ts` — similar tool set for the rules-generation agent. The SSE endpoint (`api/agent/rules`) has a 30-second per-user cooldown stored in `UserPreference.data.lastRulesAgentRun`. The `consecutiveRejections` counter is NOT reset per round — only a successful emit resets it, so persistent bad suggestions accumulate toward the cap across rounds.
+
+### Bank Agent (`src/lib/bank-agent/`, `src/app/api/bank-agent/`)
+
+Cloud-browser automation for syncing bank transactions. Uses `playwright-core` (NOT `playwright` — no local browser) connecting to Browserless.io via WebSocket CDP.
+
+- `src/lib/bank-agent/worker.ts` — core automation: `connectBank()` for first-time LLM-guided login + CSV discovery, `syncBank()` for replaying saved playbooks. Uses `safeLocatorAction()` to handle Playwright strict mode violations (falls back to `.first()`). `captureDownload()` handles both file download events and navigation-based CSV responses.
+- `src/lib/bank-agent/crypto.ts` — AES-256-GCM encryption; key is derived per-user as `sha256(ENCRYPTION_SECRET + userId)` so one server secret yields unique per-user keys.
+- `src/types/bank-agent.ts` — `PlaybookStep`, `PageElement`, `SyncJobEvent` types.
+
+API routes (all SSE-streaming, same pattern as `api/agent/ask`):
+- `POST /api/bank-agent/connect` — first-time connection: runs LLM browser agent, saves `BankPlaybook` + `EncryptedCredential`, imports CSV
+- `POST /api/bank-agent/sync` — replay saved playbook, re-import
+- `GET /api/bank-agent/status?accountId=X` — playbook status + last 10 sync jobs
+- `POST /api/bank-agent/disconnect` — deletes playbook, credentials, sync jobs
+
+2FA: passive by default (agent waits for user to approve push/SMS on their device). OTP-input fallback uses Browserless `liveURL` (requires paid plan). Free tier covers normal 2FA flows.
+
+Nav model: `anthropic/claude-sonnet-4.6`. LLM prompt requires raw JSON output — fallback regex extracts `{...}` from prose if model wraps response. `STEP_DELAY_MS = 800ms`. Netlify timeout: 120s for both connect and sync routes.
+
+**Never log credentials** — username/password are passed as params but must never appear in `console.log`.
 
 ### CSV Import Flow
 
