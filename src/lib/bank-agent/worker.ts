@@ -4,7 +4,7 @@ import type { PlaybookStep, PageElement, SyncJobEvent } from '@/types/bank-agent
 
 const NAV_MODEL = 'anthropic/claude-sonnet-4.6'
 const MAX_NAV_STEPS = 20
-const STEP_DELAY_MS = 1500
+const STEP_DELAY_MS = 800
 const TWO_FA_TIMEOUT_MS = 120_000
 
 function getBrowserlessUrl(): string {
@@ -217,16 +217,44 @@ async function handle2FA(
 }
 
 async function captureDownload(page: Page, clickAction: () => Promise<void>): Promise<string> {
-  const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
-  await clickAction()
-  const download = await downloadPromise
+  const urlBefore = page.url()
 
-  const readable = await download.createReadStream()
-  const chunks: Buffer[] = []
-  for await (const chunk of readable) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  // Race between a file download event and a navigation to a CSV URL
+  const downloadPromise = page.waitForEvent('download', { timeout: 25_000 }).catch(() => null)
+  const navPromise = page.waitForNavigation({ timeout: 25_000 }).catch(() => null)
+
+  await clickAction()
+  console.log('[bank-agent/worker] captureDownload: click fired, waiting for download or nav…')
+
+  // Wait for whichever fires first
+  const [download] = await Promise.all([downloadPromise, navPromise])
+
+  // Case 1: file download event fired
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dl = download as any
+  if (dl && typeof dl.createReadStream === 'function') {
+    console.log('[bank-agent/worker] captureDownload: file download event received')
+    const readable = await dl.createReadStream()
+    const chunks: Buffer[] = []
+    for await (const chunk of readable) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer))
+    }
+    return Buffer.concat(chunks).toString('utf-8')
   }
-  return Buffer.concat(chunks).toString('utf-8')
+
+  // Case 2: page navigated — check if it's now serving CSV content
+  const newUrl = page.url()
+  console.log('[bank-agent/worker] captureDownload: nav detected, new url:', newUrl)
+  if (newUrl !== urlBefore) {
+    const content = await page.evaluate(() => document.body.innerText)
+    // Looks like CSV if it has commas and newlines and no HTML tags
+    if (content.includes(',') && content.includes('\n') && !content.includes('<html')) {
+      console.log('[bank-agent/worker] captureDownload: page content looks like CSV, length:', content.length)
+      return content
+    }
+  }
+
+  throw new Error('No download or CSV navigation detected after clicking export button')
 }
 
 // ── Safe locator helper ───────────────────────────────────────────────────────
@@ -382,10 +410,14 @@ export async function connectBank(
     let csvDownloadSelector: string | null = null
 
     for (let step = 0; step < MAX_NAV_STEPS; step++) {
+      const currentUrl = page.url()
+      const currentTitle = await page.title()
+      console.log(`[bank-agent] nav step ${step + 1} — url: ${currentUrl} title: ${currentTitle}`)
       elements = await extractPageElements(page)
+      console.log(`[bank-agent] nav step ${step + 1} — ${elements.filter(e => e.isVisible).length} visible elements`)
       llmAction = await askLLMForAction(
-        page.url(), await page.title(), elements,
-        'Find where to download/export transaction data as CSV. Look for "Download", "Export", "CSV", "Statements", "Activity", "Transaction history". Navigate menus if needed. Use "download" action when you find the export button.',
+        currentUrl, currentTitle, elements,
+        'Find where to download/export transaction data as CSV. Look for "Download", "Export", "CSV", "Statements", "Activity", "Transaction history". Navigate menus if needed. Use "download" action when you find the export/download button.',
         history
       )
 
