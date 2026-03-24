@@ -229,6 +229,30 @@ async function captureDownload(page: Page, clickAction: () => Promise<void>): Pr
   return Buffer.concat(chunks).toString('utf-8')
 }
 
+// ── Safe locator helper ───────────────────────────────────────────────────────
+// Playwright strict mode throws if a selector matches multiple elements.
+// Fall back to .first() so the agent can proceed rather than hard-crashing.
+
+import type { Locator } from 'playwright-core'
+
+async function safeLocatorAction(
+  page: Page,
+  selector: string,
+  action: (loc: Locator) => Promise<void>
+): Promise<void> {
+  try {
+    await action(page.locator(selector))
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('strict mode violation') || msg.includes('resolved to')) {
+      console.warn('[bank-agent/worker] strict mode violation on', selector, '— retrying with .first()')
+      await action(page.locator(selector).first())
+    } else {
+      throw err
+    }
+  }
+}
+
 export interface ConnectBankParams {
   loginUrl: string
   username: string
@@ -289,7 +313,7 @@ export async function connectBank(
       const el = elements[llmAction.elementIndex]
       onEvent({ type: 'status', message: 'Entering username…' })
       console.log('[bank-agent/worker] filling username into:', el.selector)
-      await page.locator(el.selector).fill(params.username)
+      await safeLocatorAction(page, el.selector, loc => loc.fill(params.username))
       recordedSteps.push({ action: 'fill', selector: el.selector, description: 'Enter username', isCredentialField: 'username' })
       history.push(`Filled username into ${el.selector}`)
       await page.waitForTimeout(STEP_DELAY_MS)
@@ -309,7 +333,7 @@ export async function connectBank(
       const el = elements[llmAction.elementIndex]
       onEvent({ type: 'status', message: 'Entering password…' })
       console.log('[bank-agent/worker] filling password into:', el.selector)
-      await page.locator(el.selector).fill(params.password)
+      await safeLocatorAction(page, el.selector, loc => loc.fill(params.password))
       recordedSteps.push({ action: 'fill', selector: el.selector, description: 'Enter password', isCredentialField: 'password' })
       history.push(`Filled password into ${el.selector}`)
       await page.waitForTimeout(STEP_DELAY_MS)
@@ -329,7 +353,7 @@ export async function connectBank(
       const el = elements[llmAction.elementIndex]
       onEvent({ type: 'status', message: 'Logging in…' })
       console.log('[bank-agent/worker] clicking submit:', el.selector)
-      await page.locator(el.selector).click()
+      await safeLocatorAction(page, el.selector, loc => loc.click())
       recordedSteps.push({ action: 'click', selector: el.selector, description: 'Click login button' })
       history.push(`Clicked login: ${el.selector}`)
       await page.waitForTimeout(3000)
@@ -376,14 +400,14 @@ export async function connectBank(
       const el = elements[llmAction.elementIndex]
 
       if (llmAction.action === 'click') {
-        await page.locator(el.selector).click()
+        await safeLocatorAction(page, el.selector, loc => loc.click())
         recordedSteps.push({ action: 'click', selector: el.selector, description: llmAction.reason })
         history.push(`Clicked: ${el.text || el.selector}`)
         await page.waitForTimeout(STEP_DELAY_MS)
       }
 
       if (llmAction.action === 'fill') {
-        await page.locator(el.selector).fill(llmAction.value ?? '')
+        await safeLocatorAction(page, el.selector, loc => loc.fill(llmAction.value ?? ''))
         recordedSteps.push({ action: 'fill', selector: el.selector, value: llmAction.value, description: llmAction.reason })
         history.push(`Filled "${llmAction.value}" into ${el.selector}`)
         await page.waitForTimeout(STEP_DELAY_MS)
@@ -395,7 +419,7 @@ export async function connectBank(
         csvDownloadSelector = el.selector
 
         try {
-          csvText = await captureDownload(page, () => page.locator(el.selector).click())
+          csvText = await captureDownload(page, () => safeLocatorAction(page, el.selector, loc => loc.click()))
           recordedSteps.push({ action: 'download', selector: el.selector, description: 'Download CSV' })
           history.push(`Downloaded CSV via ${el.selector}`)
         } catch (dlErr) {
@@ -510,10 +534,10 @@ export async function syncBank(
 
         if (llmAction.elementIndex !== undefined) {
           const el = elements[llmAction.elementIndex]
-          if (llmAction.action === 'click') await page.locator(el.selector).click()
-          if (llmAction.action === 'fill') await page.locator(el.selector).fill(llmAction.value ?? '')
+          if (llmAction.action === 'click') await safeLocatorAction(page, el.selector, loc => loc.click())
+          if (llmAction.action === 'fill') await safeLocatorAction(page, el.selector, loc => loc.fill(llmAction.value ?? ''))
           if (llmAction.action === 'download') {
-            csvText = await captureDownload(page, () => page.locator(el.selector).click())
+            csvText = await captureDownload(page, () => safeLocatorAction(page, el.selector, loc => loc.click()))
           }
         }
         await page.waitForTimeout(STEP_DELAY_MS)
