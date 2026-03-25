@@ -36,7 +36,7 @@ export function computePivot(
   for (const [key, values] of Object.entries(config.filterValues)) {
     if (values.length === 0) continue
     filtered = filtered.filter(row => {
-      const val = (row as Record<string, unknown>)[key]
+      const val = (row as unknown as Record<string, unknown>)[key]
       if (Array.isArray(val)) return val.some(v => values.includes(String(v)))
       return values.includes(String(val ?? ''))
     })
@@ -46,7 +46,7 @@ export function computePivot(
   // Step 2: Build unique col keys
   const colKeySet = new Set<string>()
   for (const row of filtered) {
-    const colKey = config.cols.map(f => String((row as Record<string, unknown>)[f] ?? '')).join(' · ')
+    const colKey = config.cols.map(f => String((row as unknown as Record<string, unknown>)[f] ?? '')).join(' · ')
     colKeySet.add(colKey)
   }
 
@@ -63,9 +63,9 @@ export function computePivot(
   const rowKeySet = new Set<string>()
 
   for (const row of filtered) {
-    const rowKey = config.rows.map(f => String((row as Record<string, unknown>)[f] ?? '')).join(' · ')
+    const rowKey = config.rows.map(f => String((row as unknown as Record<string, unknown>)[f] ?? '')).join(' · ')
     const colKey = config.cols.length > 0
-      ? config.cols.map(f => String((row as Record<string, unknown>)[f] ?? '')).join(' · ')
+      ? config.cols.map(f => String((row as unknown as Record<string, unknown>)[f] ?? '')).join(' · ')
       : '__total__'
     rowKeySet.add(rowKey)
 

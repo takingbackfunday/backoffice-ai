@@ -70,7 +70,7 @@ export function PivotPageClient() {
     for (const row of data) {
       for (const fd of FIELD_DEFINITIONS) {
         if (!map[fd.key]) map[fd.key] = new Set()
-        const val = (row as Record<string, unknown>)[fd.key]
+        const val = (row as unknown as Record<string, unknown>)[fd.key]
         if (Array.isArray(val)) val.forEach(v => map[fd.key].add(String(v)))
         else map[fd.key].add(String(val ?? ''))
       }
