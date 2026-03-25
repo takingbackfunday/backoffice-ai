@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/categories', label: 'Categories', icon: '🏷' },
   { href: '/payees', label: 'Payees', icon: '👤' },
   { href: '/rules', label: 'Rules', icon: '⚡' },
+  { href: '/pivot', label: 'Pivot Table', icon: '📊' },
 ]
 
 export function Sidebar() {

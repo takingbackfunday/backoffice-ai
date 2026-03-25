@@ -1,0 +1,267 @@
+'use client'
+
+import { useState } from 'react'
+import type { PivotResult, PivotConfig, AggregationType } from '@/lib/pivot/types'
+import { FIELD_DEFINITIONS } from '@/lib/pivot/field-definitions'
+import { formatValue } from '@/lib/pivot/engine'
+import { PivotFilterDropdown } from './pivot-filter-dropdown'
+
+interface PivotTableProps {
+  result: PivotResult
+  config: PivotConfig
+  uniqueValues: Record<string, string[]>
+  onSetFilter: (key: string, values: string[]) => void
+  onClearFilter: (key: string) => void
+}
+
+function getLabel(key: string) {
+  return FIELD_DEFINITIONS.find(f => f.key === key)?.label ?? key
+}
+
+function cellClass(value: number): string {
+  if (value > 0) return 'text-emerald-600'
+  if (value < 0) return 'text-red-600'
+  return 'text-muted-foreground'
+}
+
+export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearFilter }: PivotTableProps) {
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [openFilterField, setOpenFilterField] = useState<string | null>(null)
+
+  const { flatRows, groups, colKeys, colTotals, grandTotal } = result
+  const { rows, cols, viewMode, showSubtotals, showGrandTotals, aggregation, filterValues } = config
+
+  if (flatRows.length === 0 && colKeys.filter(k => k !== '__total__').length === 0) {
+    if (rows.length === 0 && cols.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-lg font-medium text-foreground mb-2">Build your pivot table</p>
+          <p className="text-sm text-muted-foreground">Drag fields into Rows and Columns to get started, or pick a preset above.</p>
+        </div>
+      )
+    }
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <p className="text-lg font-medium text-foreground mb-2">No data</p>
+        <p className="text-sm text-muted-foreground">No transactions match the current filters.</p>
+      </div>
+    )
+  }
+
+  const displayColKeys = colKeys.filter(k => k !== '__total__')
+  const hasColData = displayColKeys.length > 0
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function renderHeaderCells() {
+    return (
+      <tr>
+        {rows.map((rowField, i) => (
+          <th
+            key={rowField}
+            className="sticky left-0 bg-background z-10 px-3 py-2 text-left text-sm font-semibold border-b border-r whitespace-nowrap"
+            style={{ minWidth: 140 }}
+          >
+            <span>{getLabel(rowField)}</span>
+            {i === 0 && (
+              <PivotFilterDropdown
+                fieldKey={rowField}
+                fieldLabel={getLabel(rowField)}
+                uniqueValues={uniqueValues[rowField] ?? []}
+                activeValues={filterValues[rowField] ?? []}
+                onApply={v => onSetFilter(rowField, v)}
+                onClear={() => onClearFilter(rowField)}
+                isOpen={openFilterField === rowField}
+                onOpen={() => setOpenFilterField(rowField)}
+                onClose={() => setOpenFilterField(null)}
+              />
+            )}
+          </th>
+        ))}
+        {hasColData ? (
+          displayColKeys.map((ck, i) => (
+            <th key={ck} className="px-3 py-2 text-right text-sm font-semibold border-b whitespace-nowrap">
+              {ck}
+              {i === 0 && cols.length === 1 && (
+                <PivotFilterDropdown
+                  fieldKey={cols[0]}
+                  fieldLabel={getLabel(cols[0])}
+                  uniqueValues={uniqueValues[cols[0]] ?? []}
+                  activeValues={filterValues[cols[0]] ?? []}
+                  onApply={v => onSetFilter(cols[0], v)}
+                  onClear={() => onClearFilter(cols[0])}
+                  isOpen={openFilterField === `col-${cols[0]}`}
+                  onOpen={() => setOpenFilterField(`col-${cols[0]}`)}
+                  onClose={() => setOpenFilterField(null)}
+                />
+              )}
+            </th>
+          ))
+        ) : null}
+        {showGrandTotals && (
+          <th className="px-3 py-2 text-right text-sm font-semibold border-b border-l whitespace-nowrap">Row Total</th>
+        )}
+      </tr>
+    )
+  }
+
+  function renderGrandTotalRow() {
+    if (!showGrandTotals) return null
+    return (
+      <tr className="bg-muted font-bold border-t-2">
+        <td
+          colSpan={rows.length}
+          className="sticky left-0 bg-muted px-3 py-2 text-sm"
+        >
+          Grand Total
+        </td>
+        {hasColData && displayColKeys.map(ck => (
+          <td key={ck} className={`px-3 py-2 text-right font-mono text-sm ${cellClass(colTotals[ck] ?? 0)}`}>
+            {formatValue(colTotals[ck] ?? 0, aggregation as AggregationType)}
+          </td>
+        ))}
+        <td className={`px-3 py-2 text-right font-mono text-sm border-l ${cellClass(grandTotal)}`}>
+          {formatValue(grandTotal, aggregation as AggregationType)}
+        </td>
+      </tr>
+    )
+  }
+
+  // Tabular mode
+  if (viewMode === 'tabular' || rows.length <= 1) {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead className="bg-muted/50">{renderHeaderCells()}</thead>
+          <tbody>
+            {flatRows.map((fr, idx) => (
+              <tr
+                key={idx}
+                className={`hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-muted/20'}`}
+              >
+                {fr.rowValues.map((val, vi) => (
+                  <td
+                    key={vi}
+                    className="sticky left-0 bg-inherit px-3 py-2 text-sm border-b border-r whitespace-nowrap"
+                    style={{ minWidth: 140 }}
+                  >
+                    {val}
+                  </td>
+                ))}
+                {hasColData && displayColKeys.map(ck => (
+                  <td key={ck} className={`px-3 py-2 text-right font-mono text-sm border-b ${cellClass(fr.cells[ck] ?? 0)}`}>
+                    {fr.cells[ck] !== undefined ? formatValue(fr.cells[ck], aggregation as AggregationType) : '—'}
+                  </td>
+                ))}
+                {showGrandTotals && (
+                  <td className={`px-3 py-2 text-right font-mono text-sm border-b border-l ${cellClass(fr.rowTotal)}`}>
+                    {formatValue(fr.rowTotal, aggregation as AggregationType)}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>{renderGrandTotalRow()}</tfoot>
+        </table>
+      </div>
+    )
+  }
+
+  // Outline mode (rows.length >= 2)
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead className="bg-muted/50">{renderHeaderCells()}</thead>
+        <tbody>
+          {groups.map(group => {
+            const isCollapsed = collapsedGroups.has(group.key)
+            return (
+              <>
+                {/* Group header row */}
+                <tr key={`grp-${group.key}`} className="bg-muted font-semibold">
+                  <td
+                    colSpan={rows.length}
+                    className="sticky left-0 bg-muted px-3 py-2 text-sm"
+                  >
+                    <button
+                      onClick={() => toggleGroup(group.key)}
+                      className="mr-1.5 text-muted-foreground hover:text-foreground"
+                      aria-label={isCollapsed ? `Expand ${group.key}` : `Collapse ${group.key}`}
+                    >
+                      {isCollapsed ? '▸' : '▾'}
+                    </button>
+                    {group.key}
+                  </td>
+                  {hasColData && displayColKeys.map(ck => (
+                    <td key={ck} className="px-3 py-2" />
+                  ))}
+                  {showGrandTotals && <td className="px-3 py-2 border-l" />}
+                </tr>
+
+                {/* Children */}
+                {!isCollapsed && group.children.map((child, ci) => (
+                  <tr
+                    key={`child-${group.key}-${ci}`}
+                    className={`hover:bg-blue-50 transition-colors ${ci % 2 === 0 ? '' : 'bg-muted/20'}`}
+                  >
+                    {/* First col empty (parent shown in header) */}
+                    <td className="sticky left-0 bg-inherit px-3 py-2 text-sm border-b border-r" style={{ minWidth: 140 }} />
+                    {child.rowValues.slice(1).map((val, vi) => (
+                      <td
+                        key={vi}
+                        className="sticky left-0 bg-inherit px-3 py-2 text-sm border-b border-r pl-6 whitespace-nowrap"
+                        style={{ minWidth: 140 }}
+                      >
+                        {val}
+                      </td>
+                    ))}
+                    {hasColData && displayColKeys.map(ck => (
+                      <td key={ck} className={`px-3 py-2 text-right font-mono text-sm border-b ${cellClass(child.cells[ck] ?? 0)}`}>
+                        {child.cells[ck] !== undefined ? formatValue(child.cells[ck], aggregation as AggregationType) : '—'}
+                      </td>
+                    ))}
+                    {showGrandTotals && (
+                      <td className={`px-3 py-2 text-right font-mono text-sm border-b border-l ${cellClass(child.rowTotal)}`}>
+                        {formatValue(child.rowTotal, aggregation as AggregationType)}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+
+                {/* Subtotal row */}
+                {!isCollapsed && showSubtotals && (
+                  <tr key={`sub-${group.key}`} className="bg-muted/50 font-medium">
+                    <td
+                      colSpan={rows.length}
+                      className="sticky left-0 bg-muted/50 px-3 py-2 text-sm pl-6"
+                    >
+                      {group.key} Total
+                    </td>
+                    {hasColData && displayColKeys.map(ck => (
+                      <td key={ck} className={`px-3 py-2 text-right font-mono text-sm ${cellClass(group.subtotals[ck] ?? 0)}`}>
+                        {formatValue(group.subtotals[ck] ?? 0, aggregation as AggregationType)}
+                      </td>
+                    ))}
+                    {showGrandTotals && (
+                      <td className={`px-3 py-2 text-right font-mono text-sm border-l ${cellClass(group.rowTotal)}`}>
+                        {formatValue(group.rowTotal, aggregation as AggregationType)}
+                      </td>
+                    )}
+                  </tr>
+                )}
+              </>
+            )
+          })}
+        </tbody>
+        <tfoot>{renderGrandTotalRow()}</tfoot>
+      </table>
+    </div>
+  )
+}
