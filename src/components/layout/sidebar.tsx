@@ -154,7 +154,7 @@ export function Sidebar() {
         {/* Import Transactions accordion */}
         <AccordionToggle
           label="Import Transactions"
-          icon="⬇"
+          icon="🔗"
           isOpen={importOpen}
           onToggle={() => setImportOpen(v => !v)}
           isChildActive={importChildActive}

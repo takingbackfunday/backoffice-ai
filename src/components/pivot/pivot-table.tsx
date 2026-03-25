@@ -125,7 +125,7 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
       <tr className="bg-muted font-bold border-t-2">
         <td
           colSpan={rows.length}
-          className="sticky left-0 z-10 bg-muted px-3 py-2 text-sm"
+          className="sticky left-0 z-10 bg-background [box-shadow:inset_0_0_0_9999px_hsl(var(--muted))] px-3 py-2 text-sm"
         >
           Grand Total
         </td>
@@ -197,7 +197,7 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
                 <tr key={`grp-${group.key}`} className="bg-muted font-semibold">
                   <td
                     colSpan={rows.length}
-                    className="sticky left-0 z-10 bg-muted px-3 py-2 text-sm"
+                    className="sticky left-0 z-10 bg-background [box-shadow:inset_0_0_0_9999px_hsl(var(--muted))] px-3 py-2 text-sm"
                   >
                     <button
                       onClick={() => toggleGroup(group.key)}
@@ -252,7 +252,7 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
                   <tr key={`sub-${group.key}`} className="bg-muted/50 font-medium">
                     <td
                       colSpan={rows.length}
-                      className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-sm pl-6"
+                      className="sticky left-0 z-10 bg-background [box-shadow:inset_0_0_0_9999px_hsl(var(--muted)/0.5)] px-3 py-2 text-sm pl-6"
                     >
                       {group.key} Total
                     </td>
