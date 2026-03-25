@@ -60,14 +60,20 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
     })
   }
 
+  const COL_WIDTH = 140
+
+  function stickyStyle(index: number) {
+    return { minWidth: COL_WIDTH, left: index * COL_WIDTH }
+  }
+
   function renderHeaderCells() {
     return (
       <tr>
         {rows.map((rowField, i) => (
           <th
             key={rowField}
-            className="sticky left-0 bg-background z-10 px-3 py-2 text-left text-sm font-semibold border-b border-r whitespace-nowrap"
-            style={{ minWidth: 140 }}
+            className="sticky z-10 bg-muted/50 px-3 py-2 text-left text-sm font-semibold border-b border-r whitespace-nowrap"
+            style={stickyStyle(i)}
           >
             <span>{getLabel(rowField)}</span>
             {i === 0 && (
@@ -118,7 +124,7 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
       <tr className="bg-muted font-bold border-t-2">
         <td
           colSpan={rows.length}
-          className="sticky left-0 bg-muted px-3 py-2 text-sm"
+          className="sticky left-0 z-10 bg-muted px-3 py-2 text-sm"
         >
           Grand Total
         </td>
@@ -141,16 +147,18 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
         <table className="w-full text-sm border-collapse">
           <thead className="bg-muted/50">{renderHeaderCells()}</thead>
           <tbody>
-            {flatRows.map((fr, idx) => (
+            {flatRows.map((fr, idx) => {
+              const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-muted/20'
+              return (
               <tr
                 key={idx}
-                className={`hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-muted/20'}`}
+                className={`hover:bg-blue-50 transition-colors ${rowBg}`}
               >
                 {fr.rowValues.map((val, vi) => (
                   <td
                     key={vi}
-                    className="sticky left-0 bg-inherit px-3 py-2 text-sm border-b border-r whitespace-nowrap"
-                    style={{ minWidth: 140 }}
+                    className={`sticky z-10 px-3 py-2 text-sm border-b border-r whitespace-nowrap ${rowBg}`}
+                    style={stickyStyle(vi)}
                   >
                     {val}
                   </td>
@@ -166,7 +174,7 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
                   </td>
                 )}
               </tr>
-            ))}
+            )})}
           </tbody>
           <tfoot>{renderGrandTotalRow()}</tfoot>
         </table>
@@ -188,7 +196,7 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
                 <tr key={`grp-${group.key}`} className="bg-muted font-semibold">
                   <td
                     colSpan={rows.length}
-                    className="sticky left-0 bg-muted px-3 py-2 text-sm"
+                    className="sticky left-0 z-10 bg-muted px-3 py-2 text-sm"
                   >
                     <button
                       onClick={() => toggleGroup(group.key)}
@@ -206,18 +214,20 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
                 </tr>
 
                 {/* Children */}
-                {!isCollapsed && group.children.map((child, ci) => (
+                {!isCollapsed && group.children.map((child, ci) => {
+                  const childBg = ci % 2 === 0 ? 'bg-white' : 'bg-muted/20'
+                  return (
                   <tr
                     key={`child-${group.key}-${ci}`}
-                    className={`hover:bg-blue-50 transition-colors ${ci % 2 === 0 ? '' : 'bg-muted/20'}`}
+                    className={`hover:bg-blue-50 transition-colors ${childBg}`}
                   >
-                    {/* First col empty (parent shown in header) */}
-                    <td className="sticky left-0 bg-inherit px-3 py-2 text-sm border-b border-r" style={{ minWidth: 140 }} />
+                    {/* First col empty (parent shown in group header) */}
+                    <td className={`sticky z-10 px-3 py-2 text-sm border-b border-r ${childBg}`} style={stickyStyle(0)} />
                     {child.rowValues.slice(1).map((val, vi) => (
                       <td
                         key={vi}
-                        className="sticky left-0 bg-inherit px-3 py-2 text-sm border-b border-r pl-6 whitespace-nowrap"
-                        style={{ minWidth: 140 }}
+                        className={`sticky z-10 px-3 py-2 text-sm border-b border-r pl-6 whitespace-nowrap ${childBg}`}
+                        style={stickyStyle(vi + 1)}
                       >
                         {val}
                       </td>
@@ -233,14 +243,14 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
                       </td>
                     )}
                   </tr>
-                ))}
+                )})}
 
                 {/* Subtotal row */}
                 {!isCollapsed && showSubtotals && (
                   <tr key={`sub-${group.key}`} className="bg-muted/50 font-medium">
                     <td
                       colSpan={rows.length}
-                      className="sticky left-0 bg-muted/50 px-3 py-2 text-sm pl-6"
+                      className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-sm pl-6"
                     >
                       {group.key} Total
                     </td>
