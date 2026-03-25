@@ -140,11 +140,6 @@ export function PivotPageClient() {
     }))
   }, [])
 
-  const handleReportFilterChange = useCallback((key: string, value: string) => {
-    if (!value) clearFieldFilter(key)
-    else setFieldFilter(key, [value])
-  }, [setFieldFilter, clearFieldFilter])
-
   const handleDrop = useCallback((key: string, from: string, to: string) => {
     if (from === 'available') {
       moveField(key, 'available', to)
@@ -197,7 +192,8 @@ export function PivotPageClient() {
         filterValues={config.filterValues}
         onDrop={handleDrop}
         onRemove={removeField}
-        onReportFilterChange={handleReportFilterChange}
+        onSetFilter={setFieldFilter}
+        onClearFilter={clearFieldFilter}
         uniqueValues={uniqueValues}
       />
       <PivotTable
