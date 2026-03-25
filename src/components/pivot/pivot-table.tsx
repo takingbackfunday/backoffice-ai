@@ -148,16 +148,16 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
           <thead className="bg-muted/50">{renderHeaderCells()}</thead>
           <tbody>
             {flatRows.map((fr, idx) => {
-              const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-muted/20'
+              const isEven = idx % 2 === 0
               return (
               <tr
                 key={idx}
-                className={`hover:bg-blue-50 transition-colors ${rowBg}`}
+                className={`hover:bg-blue-50 transition-colors ${isEven ? '' : 'bg-muted/20'}`}
               >
                 {fr.rowValues.map((val, vi) => (
                   <td
                     key={vi}
-                    className={`sticky z-10 px-3 py-2 text-sm border-b border-r whitespace-nowrap ${rowBg}`}
+                    className={`sticky z-10 bg-background px-3 py-2 text-sm border-b border-r whitespace-nowrap ${!isEven ? '[box-shadow:inset_0_0_0_9999px_hsl(var(--muted)/0.2)]' : ''}`}
                     style={stickyStyle(vi)}
                   >
                     {val}
@@ -215,18 +215,19 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
 
                 {/* Children */}
                 {!isCollapsed && group.children.map((child, ci) => {
-                  const childBg = ci % 2 === 0 ? 'bg-white' : 'bg-muted/20'
+                  const isEven = ci % 2 === 0
+                  const stripeClass = !isEven ? '[box-shadow:inset_0_0_0_9999px_hsl(var(--muted)/0.2)]' : ''
                   return (
                   <tr
                     key={`child-${group.key}-${ci}`}
-                    className={`hover:bg-blue-50 transition-colors ${childBg}`}
+                    className={`hover:bg-blue-50 transition-colors ${isEven ? '' : 'bg-muted/20'}`}
                   >
                     {/* First col empty (parent shown in group header) */}
-                    <td className={`sticky z-10 px-3 py-2 text-sm border-b border-r ${childBg}`} style={stickyStyle(0)} />
+                    <td className={`sticky z-10 bg-background px-3 py-2 text-sm border-b border-r ${stripeClass}`} style={stickyStyle(0)} />
                     {child.rowValues.slice(1).map((val, vi) => (
                       <td
                         key={vi}
-                        className={`sticky z-10 px-3 py-2 text-sm border-b border-r pl-6 whitespace-nowrap ${childBg}`}
+                        className={`sticky z-10 bg-background px-3 py-2 text-sm border-b border-r pl-6 whitespace-nowrap ${stripeClass}`}
                         style={stickyStyle(vi + 1)}
                       >
                         {val}
