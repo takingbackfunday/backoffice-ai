@@ -9,15 +9,18 @@ datasource db {
 
 // Global shared library of institution CSV schemas (US banks, UK banks, etc.)
 model InstitutionSchema {
-  id              String    @id @default(cuid())
-  name            String
-  country         String    // "US" | "UK" | "DE"
-  isGlobal        Boolean   @default(true)
-  createdByUserId String?   // null = system seed, set = user-created
-  csvMapping      Json      // { dateCol, amountCol, descCol, dateFormat, amountSign }
-  accounts        Account[]
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                  String        @id @default(cuid())
+  name                String
+  country             String        // "US" | "UK" | "DE"
+  isGlobal            Boolean       @default(true)
+  createdByUserId     String?       // null = system seed, set = user-created
+  csvMapping          Json          // { dateCol, amountCol, descCol, dateFormat, amountSign }
+  accounts            Account[]
+  preferredProvider   BankProvider?
+  tellerInstitutionId String?
+  plaidInstitutionId  String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 }
 
 // A bank account or card belonging to a user
@@ -34,6 +37,7 @@ model Account {
   importBatches       ImportBatch[]
   bankPlaybook        BankPlaybook?
   encryptedCredential EncryptedCredential?
+  bankConnection      BankConnection?
   syncJobs            SyncJob[]
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
@@ -250,21 +254,73 @@ model EncryptedCredential {
 }
 
 model SyncJob {
-  id          String        @id @default(cuid())
-  accountId   String
-  account     Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  status      SyncJobStatus @default(PENDING)
-  triggeredBy String        @default("manual")
-  startedAt   DateTime      @default(now())
-  completedAt DateTime?
-  error       String?
-  imported    Int?
-  skipped     Int?
-  batchId     String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String          @id @default(cuid())
+  accountId        String
+  account          Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  status           SyncJobStatus   @default(PENDING)
+  triggeredBy      String          @default("manual")
+  startedAt        DateTime        @default(now())
+  completedAt      DateTime?
+  error            String?
+  imported         Int?
+  skipped          Int?
+  batchId          String?
+  provider         BankProvider?
+  bankConnectionId String?
+  bankConnection   BankConnection? @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@index([accountId])
+}
+
+enum BankProvider {
+  TELLER
+  PLAID
+  BROWSER_AGENT
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  DISCONNECTED
+  DEGRADED
+  REVOKED
+}
+
+model BankConnection {
+  id                   String           @id @default(cuid())
+  accountId            String           @unique
+  account              Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId               String
+  provider             BankProvider
+  status               ConnectionStatus @default(ACTIVE)
+
+  tellerEnrollmentId   String?
+  tellerAccountId      String?
+  tellerInstitutionId  String?
+
+  plaidItemId          String?
+  plaidAccountId       String?
+  plaidInstitutionId   String?
+
+  tokenCiphertext      String?
+  tokenIv              String?
+  tokenAuthTag         String?
+
+  lastSyncAt           DateTime?
+  lastSyncCursor       String?
+  errorCount           Int              @default(0)
+  disconnectReason     String?
+  metadata             Json             @default("{}")
+
+  syncJobs             SyncJob[]
+
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([tellerEnrollmentId])
+  @@index([plaidItemId])
 }
 
 enum SyncJobStatus {

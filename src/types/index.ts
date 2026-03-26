@@ -60,3 +60,6 @@ export type TransactionWithRelations = Transaction & {
   categoryRef: (Category & { group: CategoryGroup }) | null
   payee: Payee | null
 }
+
+export type { BankConnection } from '@prisma/client'
+export type { NormalizedTransaction, NormalizedAccount, BankProviderAdapter, ConnectionInitResponse } from './bank-providers'
