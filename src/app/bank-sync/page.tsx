@@ -46,7 +46,7 @@ export default async function BankSyncPage() {
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex flex-1 flex-col">
-        <Header title="Bank Sync" />
+        <Header title="Manual Sync" />
         <main className="flex-1 p-6" role="main">
           <BankSyncPageClient accounts={serializedAccounts} />
         </main>

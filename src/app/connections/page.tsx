@@ -38,7 +38,7 @@ export default async function ConnectionsPage() {
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex flex-1 flex-col">
-        <Header title="Connections" />
+        <Header title="Auto Sync" />
         <main className="flex-1 p-6" role="main">
           <ConnectionsClient accounts={serialized} />
         </main>

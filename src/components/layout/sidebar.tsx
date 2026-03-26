@@ -12,9 +12,9 @@ const TOP_ITEMS = [
 ]
 
 const IMPORT_ITEMS = [
-  { href: '/upload', label: 'Import CSV', icon: '⬆' },
-  { href: '/bank-sync', label: 'Bank Sync', icon: '🔄' },
-  { href: '/connections', label: 'Connections', icon: '🔗' },
+  { href: '/upload', label: 'Upload CSV', icon: '⬆' },
+  { href: '/connections', label: 'Auto Sync', icon: '🔗' },
+  { href: '/bank-sync', label: 'Manual Sync', icon: '🔄' },
 ]
 
 const MORE_ITEMS = [

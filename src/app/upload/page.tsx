@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { UploadPageClient } from '@/components/upload/upload-page-client'
 
-export const metadata = { title: 'Import — Backoffice AI' }
+export const metadata = { title: 'Upload CSV — Backoffice AI' }
 
 export default async function UploadPage({
   searchParams,
