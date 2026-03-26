@@ -32,7 +32,11 @@ export async function POST(request: Request) {
     }
 
     const inst = account.institution
-    if (inst.preferredProvider === 'TELLER' || (!inst.preferredProvider && process.env.TELLER_APP_ID)) {
+
+    // Teller only supports US banks. Route non-US institutions to Plaid.
+    const isUS = inst.country === 'US'
+
+    if (inst.preferredProvider === 'TELLER' || (!inst.preferredProvider && isUS && process.env.TELLER_APP_ID)) {
       return ok({
         provider: 'TELLER',
         tellerAppId: process.env.TELLER_APP_ID,
