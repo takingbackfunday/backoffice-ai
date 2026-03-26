@@ -698,4 +698,273 @@ export const STARTER_RULES: StarterRuleDef[] = [
       { field: 'description', operator: 'contains', value: 'service charge' },
     ]},
   },
+
+  // ── KEYWORD PATTERNS — DINING ─────────────────
+  {
+    id: 'kw-pizza',
+    name: 'Pizza keyword → Dining',
+    group: 'category',
+    tags: ['dining', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Dining & restaurants', business: 'Meals & entertainment' },
+    conditions: { all: [{ field: 'description', operator: 'contains', value: 'pizza' }] },
+  },
+  {
+    id: 'kw-burger',
+    name: 'Burger keyword → Dining',
+    group: 'category',
+    tags: ['dining', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Dining & restaurants', business: 'Meals & entertainment' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'burger' },
+      { field: 'description', operator: 'contains', value: 'burgers' },
+    ]},
+  },
+  {
+    id: 'kw-sushi',
+    name: 'Sushi keyword → Dining',
+    group: 'category',
+    tags: ['dining', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Dining & restaurants', business: 'Meals & entertainment' },
+    conditions: { all: [{ field: 'description', operator: 'contains', value: 'sushi' }] },
+  },
+  {
+    id: 'kw-cafe',
+    name: 'Cafe/coffee keyword → Dining',
+    group: 'category',
+    tags: ['dining', 'coffee', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Dining & restaurants', business: 'Meals & entertainment' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'cafe' },
+      { field: 'description', operator: 'contains', value: 'café' },
+      { field: 'description', operator: 'contains', value: 'coffee' },
+      { field: 'description', operator: 'contains', value: 'espresso' },
+      { field: 'description', operator: 'contains', value: 'roasters' },
+    ]},
+  },
+  {
+    id: 'kw-restaurant',
+    name: 'Restaurant keyword → Dining',
+    group: 'category',
+    tags: ['dining', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Dining & restaurants', business: 'Meals & entertainment' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'restaurant' },
+      { field: 'description', operator: 'contains', value: 'bistro' },
+      { field: 'description', operator: 'contains', value: 'grill' },
+      { field: 'description', operator: 'contains', value: 'tavern' },
+      { field: 'description', operator: 'contains', value: 'eatery' },
+      { field: 'description', operator: 'contains', value: 'diner' },
+      { field: 'description', operator: 'contains', value: 'brasserie' },
+    ]},
+  },
+  {
+    id: 'kw-takeaway',
+    name: 'Takeaway keyword → Dining',
+    group: 'category',
+    tags: ['dining', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Dining & restaurants', business: 'Meals & entertainment' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'takeaway' },
+      { field: 'description', operator: 'contains', value: 'take-away' },
+      { field: 'description', operator: 'contains', value: 'takeout' },
+    ]},
+  },
+
+  // ── KEYWORD PATTERNS — GROCERIES ──────────────
+  {
+    id: 'kw-supermarket',
+    name: 'Supermarket keyword → Groceries',
+    group: 'category',
+    tags: ['groceries', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Groceries', business: null },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'supermarket' },
+      { field: 'description', operator: 'contains', value: 'grocery' },
+      { field: 'description', operator: 'contains', value: 'groceries' },
+      { field: 'description', operator: 'contains', value: 'market' },
+      { field: 'description', operator: 'contains', value: 'food store' },
+    ]},
+  },
+
+  // ── KEYWORD PATTERNS — TRANSPORT ──────────────
+  {
+    id: 'kw-taxi',
+    name: 'Taxi/ride keyword → Transport',
+    group: 'category',
+    tags: ['transport', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Transport', business: 'Travel & transport' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'taxi' },
+      { field: 'description', operator: 'contains', value: 'cab ' },
+      { field: 'description', operator: 'contains', value: 'rideshare' },
+    ]},
+  },
+  {
+    id: 'kw-parking',
+    name: 'Parking keyword → Transport',
+    group: 'category',
+    tags: ['transport', 'parking', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Transport', business: 'Travel & transport' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'parking' },
+      { field: 'description', operator: 'contains', value: 'car park' },
+    ]},
+  },
+  {
+    id: 'kw-fuel',
+    name: 'Fuel/petrol keyword → Transport',
+    group: 'category',
+    tags: ['transport', 'fuel', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Transport', business: 'Travel & transport' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'petrol' },
+      { field: 'description', operator: 'contains', value: 'gasoline' },
+      { field: 'description', operator: 'contains', value: 'fuel' },
+      { field: 'description', operator: 'contains', value: 'gas station' },
+      { field: 'description', operator: 'contains', value: 'filling station' },
+    ]},
+  },
+
+  // ── KEYWORD PATTERNS — TRAVEL ─────────────────
+  {
+    id: 'kw-hotel',
+    name: 'Hotel keyword → Travel',
+    group: 'category',
+    tags: ['travel', 'hotel', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Travel', business: 'Travel & transport' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'hotel' },
+      { field: 'description', operator: 'contains', value: 'hostel' },
+      { field: 'description', operator: 'contains', value: 'inn ' },
+      { field: 'description', operator: 'contains', value: 'resort' },
+      { field: 'description', operator: 'contains', value: 'accommodation' },
+    ]},
+  },
+  {
+    id: 'kw-flight',
+    name: 'Flight keyword → Travel',
+    group: 'category',
+    tags: ['travel', 'flights', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Travel', business: 'Travel & transport' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'airline' },
+      { field: 'description', operator: 'contains', value: 'airways' },
+      { field: 'description', operator: 'contains', value: 'flight' },
+    ]},
+  },
+
+  // ── KEYWORD PATTERNS — HEALTH ─────────────────
+  {
+    id: 'kw-pharmacy',
+    name: 'Pharmacy keyword → Health',
+    group: 'category',
+    tags: ['health', 'pharmacy', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Health & medical', business: null },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'pharmacy' },
+      { field: 'description', operator: 'contains', value: 'chemist' },
+      { field: 'description', operator: 'contains', value: 'drugstore' },
+    ]},
+  },
+  {
+    id: 'kw-gym',
+    name: 'Gym keyword → Health',
+    group: 'category',
+    tags: ['health', 'gym', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Health & medical', business: null },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'gym' },
+      { field: 'description', operator: 'contains', value: 'fitness' },
+      { field: 'description', operator: 'contains', value: 'crossfit' },
+      { field: 'description', operator: 'contains', value: 'pilates' },
+      { field: 'description', operator: 'contains', value: 'yoga' },
+    ]},
+  },
+
+  // ── KEYWORD PATTERNS — SHOPPING ───────────────
+  {
+    id: 'kw-amazon',
+    name: 'Amazon keyword → Shopping',
+    group: 'category',
+    tags: ['shopping', 'amazon', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Shopping', business: 'Office supplies' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'amazon' },
+      { field: 'description', operator: 'contains', value: 'amzn' },
+    ]},
+  },
+
+  // ── KEYWORD PATTERNS — UTILITIES ──────────────
+  {
+    id: 'kw-electricity',
+    name: 'Electricity keyword → Utilities',
+    group: 'category',
+    tags: ['utilities', 'electricity', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Utilities', business: 'Utilities' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'electric' },
+      { field: 'description', operator: 'contains', value: 'electricity' },
+      { field: 'description', operator: 'contains', value: 'energy bill' },
+      { field: 'description', operator: 'contains', value: 'power bill' },
+    ]},
+  },
+  {
+    id: 'kw-water',
+    name: 'Water bill keyword → Utilities',
+    group: 'category',
+    tags: ['utilities', 'water', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Utilities', business: 'Utilities' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'water bill' },
+      { field: 'description', operator: 'contains', value: 'water rates' },
+      { field: 'description', operator: 'contains', value: 'water service' },
+    ]},
+  },
+  {
+    id: 'kw-internet',
+    name: 'Internet/broadband keyword → Utilities',
+    group: 'category',
+    tags: ['utilities', 'internet', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: 'Utilities', business: 'Internet & phone' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'broadband' },
+      { field: 'description', operator: 'contains', value: 'internet' },
+      { field: 'description', operator: 'contains', value: 'wifi' },
+    ]},
+  },
+
+  // ── KEYWORD PATTERNS — BANK FEES ──────────────
+  {
+    id: 'kw-bank-fee',
+    name: 'Bank fee keyword → Bank fees',
+    group: 'category',
+    tags: ['fees', 'bank', 'keyword'],
+    payeeName: null,
+    categoryTargets: { personal: null, business: 'Bank & wire fees' },
+    conditions: { any: [
+      { field: 'description', operator: 'contains', value: 'monthly fee' },
+      { field: 'description', operator: 'contains', value: 'account fee' },
+      { field: 'description', operator: 'contains', value: 'maintenance fee' },
+      { field: 'description', operator: 'contains', value: 'transaction fee' },
+      { field: 'description', operator: 'contains', value: 'bank charge' },
+    ]},
+  },
 ]

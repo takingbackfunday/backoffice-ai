@@ -47,10 +47,17 @@ export async function POST(request: Request) {
       orderBy: { priority: 'asc' },
       select: { priority: true },
     })
-    const basePriority = lowest ? Math.max(1, lowest.priority - toInstall.length) : 10
+    const totalSlots = toInstall.length
+    const basePriority = lowest ? Math.max(1, lowest.priority - totalSlots) : 10
+
+    // Payee rules (group: 'payee') get lower priority numbers than keyword rules
+    // so merchant-specific rules always beat broad keyword patterns
+    const payeeRules = toInstall.filter((s) => s.def.group === 'payee')
+    const keywordRules = toInstall.filter((s) => s.def.group === 'category')
+    const ordered = [...payeeRules, ...keywordRules]
 
     await prisma.categorizationRule.createMany({
-      data: toInstall.map((s, i) => ({
+      data: ordered.map((s, i) => ({
         userId,
         name: s.def.name,
         priority: basePriority + i,
