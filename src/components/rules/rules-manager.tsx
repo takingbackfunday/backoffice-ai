@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Project } from '@prisma/client'
 import { RuleEditor, Toast, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
 import { RulesAgent, SuggestionCard, type PersistedSuggestion } from './rules-agent'
+import { StarterRules } from './starter-rules'
 
 // ── Local helpers (only needed for RuleCard display) ──────────────────────────
 
@@ -172,6 +173,7 @@ export function RulesManager({
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<{ updated: number; total: number } | null>(null)
   const [showAgent, setShowAgent] = useState(false)
+  const [showStarter, setShowStarter] = useState(false)
   const [agentFinishedSummary, setAgentFinishedSummary] = useState<{ uncategorised: number; noPayee: number } | null>(null)
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
@@ -403,6 +405,12 @@ export function RulesManager({
         >
           {showAgent ? 'Hide agent' : 'Run rules agent'}
         </button>
+        <button
+          onClick={() => setShowStarter((v) => !v)}
+          className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${showStarter ? 'border-black/20 bg-muted text-foreground' : 'border-black/20 text-[#666] hover:bg-muted'}`}
+        >
+          {showStarter ? 'Hide starter rules' : 'Starter rules'}
+        </button>
         {!showEditor && (
           <button
             onClick={openNewEditor}
@@ -425,6 +433,18 @@ export function RulesManager({
           onClose={handleAgentClose}
           onApplyComplete={handleApplyComplete}
         />
+      )}
+
+      {/* Starter rules panel */}
+      {showStarter && (
+        <div className="rounded-xl border border-black/10 bg-[#FAFAFA] p-4">
+          <StarterRules
+            onInstalled={(count) => {
+              setShowStarter(false)
+              showToast(`${count} starter rule${count !== 1 ? 's' : ''} installed`)
+            }}
+          />
+        </div>
       )}
 
       {/* Editor */}
