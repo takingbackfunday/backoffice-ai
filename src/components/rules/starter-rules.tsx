@@ -144,8 +144,7 @@ export function StarterRules({ onInstalled }: { onInstalled?: (count: number) =>
                   {isInstalled && (
                     <span className="mr-1 text-[10px]">✓</span>
                   )}
-                  {s.def.name.replace(/ → .*/, '')}
-                  <span className="ml-1 text-[10px] opacity-60">→ {s.categoryName}</span>
+                  {s.def.name.replace(/ →.*/, '')}
                 </button>
               )
             })}
