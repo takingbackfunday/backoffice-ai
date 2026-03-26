@@ -48,7 +48,8 @@ export async function POST(request: Request) {
       select: { priority: true },
     })
     const totalSlots = toInstall.length
-    const basePriority = lowest ? Math.max(1, lowest.priority - totalSlots) : 10
+    // Starter rules sit AFTER user rules (which default to 50), so base at 51
+    const basePriority = lowest ? lowest.priority + 1 : 51
 
     // Payee rules (group: 'payee') get lower priority numbers than keyword rules
     // so merchant-specific rules always beat broad keyword patterns
