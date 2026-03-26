@@ -50,8 +50,13 @@ export function StarterRules({ onInstalled }: { onInstalled?: (count: number) =>
       })
       const json = await res.json()
       if (!res.ok || json.error) throw new Error(json.error ?? 'Install failed')
+      const installed: number = json.data?.installed ?? 0
+      if (installed === 0) {
+        setError('No rules were installed — the target categories may not exist in your category list yet.')
+        return
+      }
       setDone(true)
-      onInstalled?.(json.data?.installed ?? ids.length)
+      onInstalled?.(installed)
     } catch {
       setError('Failed to install rules')
     } finally {

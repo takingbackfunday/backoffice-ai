@@ -442,6 +442,10 @@ export function RulesManager({
             onInstalled={(count) => {
               setShowStarter(false)
               showToast(`${count} starter rule${count !== 1 ? 's' : ''} installed`)
+              // Refresh the rules list so newly installed rules appear immediately
+              fetch('/api/rules').then((r) => r.json()).then((json) => {
+                if (!json.error) setRules(json.data ?? [])
+              })
             }}
           />
         </div>
