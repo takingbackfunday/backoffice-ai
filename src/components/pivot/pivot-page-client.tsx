@@ -10,7 +10,7 @@ import { PivotTable } from './pivot-table'
 import Link from 'next/link'
 
 const DEFAULT_CONFIG: PivotConfig = {
-  rows: ['taxSchedule', 'category'],
+  rows: ['categoryGroup'],
   cols: ['quarter'],
   reportFilters: [],
   filterValues: {},
@@ -148,6 +148,44 @@ export function PivotPageClient() {
     }
   }, [moveField])
 
+  const exportCsv = useCallback(() => {
+    const { flatRows, colKeys, colTotals, grandTotal } = pivotResult
+    const { rows, aggregation, showGrandTotals } = config
+    const displayColKeys = colKeys.filter(k => k !== '__total__')
+
+    const rowLabels = rows.map(k => FIELD_DEFINITIONS.find(f => f.key === k)?.label ?? k)
+    const headers = [...rowLabels, ...displayColKeys, ...(showGrandTotals ? ['Row Total'] : [])]
+
+    const escape = (v: string | number) => {
+      const s = String(v)
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+
+    const lines: string[] = [headers.map(escape).join(',')]
+
+    for (const fr of flatRows) {
+      const cells = displayColKeys.map(ck => {
+        const v = fr.cells[ck]
+        return v !== undefined ? String(v.toFixed(aggregation === 'count' ? 0 : 2)) : ''
+      })
+      const rowTotal = showGrandTotals ? [String(fr.rowTotal.toFixed(aggregation === 'count' ? 0 : 2))] : []
+      lines.push([...fr.rowValues, ...cells, ...rowTotal].map(escape).join(','))
+    }
+
+    if (showGrandTotals && displayColKeys.length > 0) {
+      const totals = displayColKeys.map(ck => String((colTotals[ck] ?? 0).toFixed(aggregation === 'count' ? 0 : 2)))
+      lines.push([...Array(rows.length - 1).fill(''), 'Grand Total', ...totals, String(grandTotal.toFixed(aggregation === 'count' ? 0 : 2))].map(escape).join(','))
+    }
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `pivot-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [pivotResult, config])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -184,6 +222,7 @@ export function PivotPageClient() {
         onShowSubtotals={setShowSubtotals}
         onShowGrandTotals={setShowGrandTotals}
         onApplyPreset={applyPreset}
+        onExport={exportCsv}
       />
       <PivotFieldBar
         rows={config.rows}

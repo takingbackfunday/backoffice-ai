@@ -18,6 +18,7 @@ interface PivotToolbarProps {
   onShowSubtotals: (v: boolean) => void
   onShowGrandTotals: (v: boolean) => void
   onApplyPreset: (config: Partial<PivotConfig>) => void
+  onExport: () => void
 }
 
 export function PivotToolbar({
@@ -33,6 +34,7 @@ export function PivotToolbar({
   onShowSubtotals,
   onShowGrandTotals,
   onApplyPreset,
+  onExport,
 }: PivotToolbarProps) {
   const [presetsOpen, setPresetsOpen] = useState(false)
   const presetsRef = useRef<HTMLDivElement>(null)
@@ -134,8 +136,17 @@ export function PivotToolbar({
         )}
       </div>
 
+      {/* Export */}
+      <button
+        onClick={onExport}
+        className="flex items-center gap-1.5 px-3 h-9 text-sm border rounded-md hover:bg-muted transition-colors ml-auto"
+        title="Export current view to CSV"
+      >
+        ⬇ Export CSV
+      </button>
+
       {/* Record count */}
-      <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+      <span className="text-xs text-muted-foreground whitespace-nowrap">
         {filteredCount.toLocaleString()} of {totalCount.toLocaleString()} transactions
       </span>
     </div>
