@@ -212,8 +212,8 @@ export function PropertyProfileForm({ data, onChange }: Props) {
 
       {/* Units */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Units</h3>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-sm font-semibold">Units <span className="text-xs font-normal text-muted-foreground">(optional)</span></h3>
           <button
             type="button"
             onClick={addUnit}
@@ -223,9 +223,13 @@ export function PropertyProfileForm({ data, onChange }: Props) {
             Add unit
           </button>
         </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          For a single house, leave this empty — a &quot;Main&quot; unit will be created automatically.
+          For multi-unit properties (apartments, duplexes), add each unit here.
+        </p>
 
         {data.units.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No units added yet. Click &quot;Add unit&quot; to add one.</p>
+          <p className="text-xs text-muted-foreground italic">No units added — property will be treated as a single rental.</p>
         ) : (
           <div className="space-y-3">
             {data.units.map((unit, index) => (

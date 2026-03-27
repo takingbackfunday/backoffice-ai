@@ -131,17 +131,15 @@ export async function POST(request: Request) {
               purchaseDate: property.purchaseDate ? new Date(property.purchaseDate) : undefined,
               currentValue: property.currentValue,
               mortgageBalance: property.mortgageBalance,
-              ...(units && units.length > 0 ? {
-                units: {
-                  create: units.map(u => ({
-                    unitLabel: u.unitLabel,
-                    bedrooms: u.bedrooms,
-                    bathrooms: u.bathrooms,
-                    squareFootage: u.squareFootage,
-                    monthlyRent: u.monthlyRent,
-                  })),
-                },
-              } : {}),
+              units: {
+                create: (units && units.length > 0 ? units : [{ unitLabel: 'Main' }]).map(u => ({
+                  unitLabel: u.unitLabel,
+                  bedrooms: u.bedrooms,
+                  bathrooms: u.bathrooms,
+                  squareFootage: u.squareFootage,
+                  monthlyRent: u.monthlyRent,
+                })),
+              },
             },
           },
         } : {}),
