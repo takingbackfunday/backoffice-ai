@@ -4,7 +4,7 @@ import type { Account, Project, Transaction, ImportBatch, InstitutionSchema, Cat
 export type { Account, Project, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee }
 
 export type AccountType = 'CREDIT_CARD' | 'DEBIT_CARD' | 'CHECKING' | 'SAVINGS' | 'BUSINESS_CHECKING' | 'TRUST_ACCOUNT'
-export type ProjectType = 'CLIENT' | 'PROPERTY' | 'JOB' | 'OTHER'
+export type ProjectType = 'CLIENT' | 'PROPERTY' | 'OTHER'
 
 // CSV column mapping stored in InstitutionSchema.csvMapping
 export interface CsvMapping {
@@ -63,3 +63,104 @@ export type TransactionWithRelations = Transaction & {
 
 export type { BankConnection } from '@prisma/client'
 export type { NormalizedTransaction, NormalizedAccount, BankProviderAdapter, ConnectionInitResponse } from './bank-providers'
+
+// === Projects expansion types ===
+
+export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, RentPayment, MaintenanceRequest } from '@prisma/client'
+
+export type BillingType = 'HOURLY' | 'FIXED' | 'RETAINER' | 'MILESTONE'
+export type JobStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
+export type PropertyType = 'RESIDENTIAL' | 'MULTI_FAMILY' | 'COMMERCIAL' | 'MIXED_USE' | 'LAND'
+export type UnitStatus = 'VACANT' | 'LEASED' | 'NOTICE_GIVEN' | 'PREPARING' | 'MAINTENANCE' | 'LISTED'
+export type LeaseStatus = 'DRAFT' | 'ACTIVE' | 'EXPIRING_SOON' | 'MONTH_TO_MONTH' | 'TERMINATED' | 'EXPIRED'
+export type TenantFileType = 'LEASE_AGREEMENT' | 'ID_DOCUMENT' | 'PAY_STUB' | 'CREDIT_REPORT' | 'INSPECTION_REPORT' | 'MOVE_IN_PHOTOS' | 'MOVE_OUT_PHOTOS' | 'INSURANCE' | 'OTHER'
+export type PaymentStatus = 'PENDING' | 'PROCESSING' | 'PAID' | 'LATE' | 'PARTIAL' | 'FAILED' | 'WAIVED'
+export type MaintenancePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY'
+export type MaintenanceStatus = 'OPEN' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+
+export const PROJECT_TYPE_LABELS: Record<string, string> = {
+  CLIENT: 'Client',
+  PROPERTY: 'Property',
+  OTHER: 'Other',
+}
+
+export const UNIT_STATUS_LABELS: Record<string, string> = {
+  VACANT: 'Vacant',
+  LEASED: 'Leased',
+  NOTICE_GIVEN: 'Notice given',
+  PREPARING: 'Preparing',
+  MAINTENANCE: 'Maintenance',
+  LISTED: 'Listed',
+}
+
+export const UNIT_STATUS_COLORS: Record<string, string> = {
+  VACANT: 'bg-amber-100 text-amber-800',
+  LEASED: 'bg-green-100 text-green-800',
+  NOTICE_GIVEN: 'bg-orange-100 text-orange-800',
+  PREPARING: 'bg-blue-100 text-blue-800',
+  MAINTENANCE: 'bg-red-100 text-red-800',
+  LISTED: 'bg-purple-100 text-purple-800',
+}
+
+export const LEASE_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Draft',
+  ACTIVE: 'Active',
+  EXPIRING_SOON: 'Expiring soon',
+  MONTH_TO_MONTH: 'Month-to-month',
+  TERMINATED: 'Terminated',
+  EXPIRED: 'Expired',
+}
+
+export const LEASE_STATUS_COLORS: Record<string, string> = {
+  DRAFT: 'bg-gray-100 text-gray-800',
+  ACTIVE: 'bg-green-100 text-green-800',
+  EXPIRING_SOON: 'bg-amber-100 text-amber-800',
+  MONTH_TO_MONTH: 'bg-blue-100 text-blue-800',
+  TERMINATED: 'bg-red-100 text-red-800',
+  EXPIRED: 'bg-gray-100 text-gray-600',
+}
+
+export const MAINTENANCE_PRIORITY_LABELS: Record<string, string> = {
+  LOW: 'Low',
+  MEDIUM: 'Medium',
+  HIGH: 'High',
+  EMERGENCY: 'Emergency',
+}
+
+export const MAINTENANCE_PRIORITY_COLORS: Record<string, string> = {
+  LOW: 'bg-gray-100 text-gray-800',
+  MEDIUM: 'bg-blue-100 text-blue-800',
+  HIGH: 'bg-orange-100 text-orange-800',
+  EMERGENCY: 'bg-red-100 text-red-800',
+}
+
+export const MAINTENANCE_STATUS_LABELS: Record<string, string> = {
+  OPEN: 'Open',
+  SCHEDULED: 'Scheduled',
+  IN_PROGRESS: 'In progress',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+}
+
+export const JOB_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Draft',
+  ACTIVE: 'Active',
+  ON_HOLD: 'On hold',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+}
+
+export const BILLING_TYPE_LABELS: Record<string, string> = {
+  HOURLY: 'Hourly',
+  FIXED: 'Fixed price',
+  RETAINER: 'Retainer',
+  MILESTONE: 'Milestone',
+}
+
+export const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  RESIDENTIAL: 'Residential',
+  MULTI_FAMILY: 'Multi-family',
+  COMMERCIAL: 'Commercial',
+  MIXED_USE: 'Mixed use',
+  LAND: 'Land',
+}

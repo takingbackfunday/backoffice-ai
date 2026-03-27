@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 const TOP_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/transactions', label: 'Transactions', icon: '💳' },
+  { href: '/projects', label: 'Projects', icon: '📁' },
   { href: '/pivot', label: 'Pivot Table', icon: '📋' },
 ]
 
@@ -17,7 +18,6 @@ const IMPORT_ITEMS = [
 ]
 
 const MORE_ITEMS = [
-  { href: '/projects', label: 'Projects', icon: '📁' },
   { href: '/categories', label: 'Categories', icon: '🏷' },
   { href: '/payees', label: 'Payees', icon: '👤' },
   { href: '/rules', label: 'Rules', icon: '⚡' },

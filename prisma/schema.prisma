@@ -7,14 +7,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Global shared library of institution CSV schemas (US banks, UK banks, etc.)
+// ── Existing models (UNCHANGED) ─────────────────────────────────────────────
+
 model InstitutionSchema {
   id                  String        @id @default(cuid())
   name                String
-  country             String        // "US" | "UK" | "DE"
+  country             String
   isGlobal            Boolean       @default(true)
-  createdByUserId     String?       // null = system seed, set = user-created
-  csvMapping          Json          // { dateCol, amountCol, descCol, dateFormat, amountSign }
+  createdByUserId     String?
+  csvMapping          Json
   accounts            Account[]
   preferredProvider   BankProvider?
   tellerInstitutionId String?
@@ -23,13 +24,12 @@ model InstitutionSchema {
   updatedAt           DateTime      @updatedAt
 }
 
-// A bank account or card belonging to a user
 model Account {
   id                  String            @id @default(cuid())
-  userId              String            // Clerk user ID
+  userId              String
   institutionSchemaId String
   institution         InstitutionSchema @relation(fields: [institutionSchemaId], references: [id])
-  name                String            // e.g. "Chase Business Checking"
+  name                String
   type                AccountType
   currency            String            @default("USD")
   lastImportAt        DateTime?
@@ -45,29 +45,13 @@ model Account {
   @@index([userId])
 }
 
-// A project = client, property, job — the entity money flows to/from
-model Project {
-  id           String        @id @default(cuid())
-  userId       String        // Clerk user ID
-  name         String
-  type         ProjectType
-  description  String?
-  isActive              Boolean               @default(true)
-  transactions          Transaction[]
-  categorizationRules   CategorizationRule[]
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-
-  @@index([userId])
-}
-
 model CategoryGroup {
   id          String     @id @default(cuid())
   userId      String
   name        String
   sortOrder   Int        @default(0)
-  scheduleRef String?    // "C", "E", "C,E", or "none" — which tax schedule this maps to
-  taxType     String?    // "income", "expense", or "non_deductible"
+  scheduleRef String?
+  taxType     String?
   categories  Category[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
@@ -112,7 +96,7 @@ model Transaction {
   id            String       @id @default(cuid())
   accountId     String
   account       Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  projectId     String?      // optional link to a project
+  projectId     String?
   project       Project?     @relation(fields: [projectId], references: [id])
   importBatchId String?
   importBatch   ImportBatch? @relation(fields: [importBatchId], references: [id])
@@ -121,12 +105,12 @@ model Transaction {
   payeeId       String?
   payee         Payee?       @relation(fields: [payeeId], references: [id])
   date          DateTime
-  amount        Decimal      @db.Decimal(12, 2) // negative = expense, positive = income
+  amount        Decimal      @db.Decimal(12, 2)
   description   String
-  category      String?      // tax/business category (legacy free-text)
-  tags          String[]     // ["billable", "reimbursable", "tax-deductible"]
+  category      String?
+  tags          String[]
   notes         String?
-  rawData       Json         // original CSV row preserved
+  rawData       Json
   duplicateHash String       @unique
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
@@ -143,7 +127,7 @@ model ImportBatch {
   account      Account       @relation(fields: [accountId], references: [id])
   filename     String
   rowCount     Int
-  skippedCount Int           @default(0) // duplicates skipped
+  skippedCount Int           @default(0)
   transactions Transaction[]
   createdAt    DateTime      @default(now())
 }
@@ -157,29 +141,21 @@ enum AccountType {
   TRUST_ACCOUNT
 }
 
-enum ProjectType {
-  CLIENT    // freelance client
-  PROPERTY  // rental property or unit
-  JOB       // one-off project/job
-  OTHER
-}
-
-// A user-defined rule for auto-categorizing imported transactions
 model CategorizationRule {
   id           String    @id @default(cuid())
-  userId       String    // Clerk userId — rules are per-user
-  name         String    // e.g. "WeWork → Rent & Utilities"
-  priority     Int       @default(50) // 1-99; evaluated before system rules (100+)
-  conditions   Json      // { all?: ConditionDef[], any?: ConditionDef[] }
-  categoryName String    // free-text category to apply (legacy)
-  categoryId   String?   // FK to Category
+  userId       String
+  name         String
+  priority     Int       @default(50)
+  conditions   Json
+  categoryName String
+  categoryId   String?
   categoryRef  Category? @relation(fields: [categoryId], references: [id])
-  payeeId      String?   // optional: assign a specific payee
+  payeeId      String?
   payee        Payee?    @relation(fields: [payeeId], references: [id])
-  projectId    String?   // optional: also tag to a project
+  projectId    String?
   project      Project?  @relation(fields: [projectId], references: [id])
-  setNotes     String?   // optional: set notes on matched transactions
-  addTags      String[]  @default([]) // optional: append tags to matched transactions
+  setNotes     String?
+  addTags      String[]  @default([])
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -187,32 +163,29 @@ model CategorizationRule {
   @@index([userId])
 }
 
-
-// Per-user persisted preferences (chart filters, UI state, etc.)
 model UserPreference {
-  userId    String   @id  // Clerk userId — one row per user
+  userId    String   @id
   data      Json     @default("{}")
   updatedAt DateTime @updatedAt
 }
 
-// Persisted rule suggestions generated from transaction edits
 model RuleSuggestion {
   id           String           @id @default(cuid())
   userId       String
   status       RuleSuggestionStatus @default(PENDING)
-  conditions   Json             // { all?: ConditionDef[], any?: ConditionDef[] }
+  conditions   Json
   categoryName String
   categoryId   String?
   categoryRef  Category?        @relation(fields: [categoryId], references: [id])
   payeeName    String?
   payeeId      String?
   payee        Payee?           @relation(fields: [payeeId], references: [id])
-  confidence   String           // 'high' | 'medium'
-  impact       String           // 'low' | 'medium' | 'high'
+  confidence   String
+  impact       String
   reasoning    String
   matchCount   Int              @default(0)
   totalAmount  Decimal          @default(0) @db.Decimal(12, 2)
-  sourceEdits  Json             // Array of edit snapshots that triggered this
+  sourceEdits  Json
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
@@ -225,19 +198,17 @@ enum RuleSuggestionStatus {
   IGNORED
 }
 
-// ── Bank Agent Models ─────────────────────────────────────────────────────────
-
 model BankPlaybook {
   id                  String    @id @default(cuid())
   accountId           String    @unique
   account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   loginUrl            String
-  steps               Json      // PlaybookStep[]
+  steps               Json
   exportPagePath      String?
   csvDownloadSelector String?
-  twoFaType           String    @default("unknown") // "sms" | "totp" | "push" | "email" | "none" | "unknown"
+  twoFaType           String    @default("unknown")
   lastVerifiedAt      DateTime?
-  status              String    @default("draft") // "draft" | "verified" | "broken"
+  status              String    @default("draft")
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }
@@ -294,27 +265,21 @@ model BankConnection {
   userId               String
   provider             BankProvider
   status               ConnectionStatus @default(ACTIVE)
-
   tellerEnrollmentId   String?
   tellerAccountId      String?
   tellerInstitutionId  String?
-
   plaidItemId          String?
   plaidAccountId       String?
   plaidInstitutionId   String?
-
   tokenCiphertext      String?
   tokenIv              String?
   tokenAuthTag         String?
-
   lastSyncAt           DateTime?
   lastSyncCursor       String?
   errorCount           Int              @default(0)
   disconnectReason     String?
   metadata             Json             @default("{}")
-
   syncJobs             SyncJob[]
-
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -331,4 +296,307 @@ enum SyncJobStatus {
   IMPORTING
   COMPLETE
   FAILED
+}
+
+// ── Projects expansion (NEW) ────────────────────────────────────────────────
+
+model Project {
+  id                    String              @id @default(cuid())
+  userId                String
+  name                  String
+  slug                  String
+  type                  ProjectType
+  description           String?
+  isActive              Boolean             @default(true)
+  clientProfile         ClientProfile?
+  propertyProfile       PropertyProfile?
+  transactions          Transaction[]
+  categorizationRules   CategorizationRule[]
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@unique([userId, slug])
+  @@index([userId])
+}
+
+enum ProjectType {
+  CLIENT
+  PROPERTY
+  OTHER
+}
+
+// ── Client track ────────────────────────────────────────────────────────────
+
+model ClientProfile {
+  id              String      @id @default(cuid())
+  projectId       String      @unique
+  project         Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contactName     String?
+  email           String?
+  phone           String?
+  company         String?
+  address         String?
+  billingType     BillingType @default(HOURLY)
+  defaultRate     Decimal?    @db.Decimal(10, 2)
+  currency        String      @default("USD")
+  paymentTermDays Int         @default(30)
+  jobs            Job[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+enum BillingType {
+  HOURLY
+  FIXED
+  RETAINER
+  MILESTONE
+}
+
+model Job {
+  id              String        @id @default(cuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  status          JobStatus     @default(ACTIVE)
+  budgetAmount    Decimal?      @db.Decimal(12, 2)
+  startDate       DateTime?
+  endDate         DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([clientProfileId])
+}
+
+enum JobStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+// ── Property track ──────────────────────────────────────────────────────────
+
+model PropertyProfile {
+  id              String       @id @default(cuid())
+  projectId       String       @unique
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  address         String
+  city            String?
+  state           String?
+  zipCode         String?
+  country         String       @default("US")
+  propertyType    PropertyType @default(RESIDENTIAL)
+  yearBuilt       Int?
+  squareFootage   Int?
+  lotSize         String?
+  purchasePrice   Decimal?     @db.Decimal(12, 2)
+  purchaseDate    DateTime?
+  currentValue    Decimal?     @db.Decimal(12, 2)
+  mortgageBalance Decimal?     @db.Decimal(12, 2)
+  units           Unit[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  MULTI_FAMILY
+  COMMERCIAL
+  MIXED_USE
+  LAND
+}
+
+model Unit {
+  id                  String               @id @default(cuid())
+  propertyProfileId   String
+  propertyProfile     PropertyProfile      @relation(fields: [propertyProfileId], references: [id], onDelete: Cascade)
+  unitLabel           String
+  status              UnitStatus           @default(VACANT)
+  bedrooms            Int?
+  bathrooms           Decimal?             @db.Decimal(3, 1)
+  squareFootage       Int?
+  monthlyRent         Decimal?             @db.Decimal(10, 2)
+  leases              Lease[]
+  maintenanceRequests MaintenanceRequest[]
+  messages            Message[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([propertyProfileId])
+}
+
+enum UnitStatus {
+  VACANT
+  LEASED
+  NOTICE_GIVEN
+  PREPARING
+  MAINTENANCE
+  LISTED
+}
+
+model Lease {
+  id               String      @id @default(cuid())
+  unitId           String
+  unit             Unit        @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenantId         String
+  tenant           Tenant      @relation(fields: [tenantId], references: [id])
+  status           LeaseStatus @default(DRAFT)
+  startDate        DateTime
+  endDate          DateTime
+  monthlyRent      Decimal     @db.Decimal(10, 2)
+  securityDeposit  Decimal?    @db.Decimal(10, 2)
+  paymentDueDay    Int         @default(1)
+  lateFeeAmount    Decimal?    @db.Decimal(10, 2)
+  lateFeeGraceDays Int         @default(5)
+  rentPayments     RentPayment[]
+  tenantFiles      TenantFile[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([unitId])
+  @@index([tenantId])
+}
+
+enum LeaseStatus {
+  DRAFT
+  ACTIVE
+  EXPIRING_SOON
+  MONTH_TO_MONTH
+  TERMINATED
+  EXPIRED
+}
+
+model Tenant {
+  id                  String               @id @default(cuid())
+  userId              String
+  clerkUserId         String?
+  name                String
+  email               String
+  phone               String?
+  emergencyName       String?
+  emergencyPhone      String?
+  leases              Lease[]
+  tenantFiles         TenantFile[]
+  messages            Message[]
+  rentPayments        RentPayment[]
+  maintenanceRequests MaintenanceRequest[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([userId])
+  @@unique([userId, email])
+}
+
+model TenantFile {
+  id          String         @id @default(cuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leaseId     String?
+  lease       Lease?         @relation(fields: [leaseId], references: [id])
+  fileType    TenantFileType
+  fileName    String
+  fileUrl     String
+  fileSize    Int?
+  notes       String?
+  uploadedBy  String
+  createdAt   DateTime       @default(now())
+}
+
+enum TenantFileType {
+  LEASE_AGREEMENT
+  ID_DOCUMENT
+  PAY_STUB
+  CREDIT_REPORT
+  INSPECTION_REPORT
+  MOVE_IN_PHOTOS
+  MOVE_OUT_PHOTOS
+  INSURANCE
+  OTHER
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  unitId         String
+  unit           Unit     @relation(fields: [unitId], references: [id])
+  senderRole     String
+  body           String
+  isRead         Boolean  @default(false)
+  attachmentUrl  String?
+  attachmentName String?
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, unitId])
+}
+
+model RentPayment {
+  id                    String        @id @default(cuid())
+  leaseId               String
+  lease                 Lease         @relation(fields: [leaseId], references: [id])
+  tenantId              String
+  tenant                Tenant        @relation(fields: [tenantId], references: [id])
+  amount                Decimal       @db.Decimal(10, 2)
+  dueDate               DateTime
+  paidDate              DateTime?
+  status                PaymentStatus @default(PENDING)
+  stripePaymentIntentId String?
+  stripeInvoiceId       String?
+  paymentMethod         String?
+  transactionId         String?
+  lateFeeApplied        Decimal?      @db.Decimal(10, 2)
+  notes                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([leaseId])
+  @@index([tenantId])
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  LATE
+  PARTIAL
+  FAILED
+  WAIVED
+}
+
+model MaintenanceRequest {
+  id            String              @id @default(cuid())
+  unitId        String
+  unit          Unit                @relation(fields: [unitId], references: [id])
+  tenantId      String?
+  tenant        Tenant?             @relation(fields: [tenantId], references: [id])
+  title         String
+  description   String
+  priority      MaintenancePriority @default(MEDIUM)
+  status        MaintenanceStatus   @default(OPEN)
+  scheduledDate DateTime?
+  completedDate DateTime?
+  cost          Decimal?            @db.Decimal(10, 2)
+  vendorName    String?
+  transactionId String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([unitId])
+}
+
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  EMERGENCY
+}
+
+enum MaintenanceStatus {
+  OPEN
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
 }
