@@ -371,46 +371,22 @@ export function RulesManager({
         </div>
       )}
 
-      {/* Search + buttons toolbar */}
-      <div className="flex items-center gap-2">
-        {rules.length > 0 && (
-          <div className="relative max-w-xs flex-shrink-0 w-52">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
-            </svg>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search rules…"
-              className="w-full pl-8 pr-3 py-1.5 text-[13px] border border-black/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-            />
-          </div>
-        )}
-        {applyResult && (
-          <span className="text-xs text-muted-foreground">
-            Updated {applyResult.updated} of {applyResult.total} transactions
-          </span>
-        )}
-        <button
-          onClick={applyAllRules}
-          disabled={applying || rules.filter((r) => r.isActive).length === 0}
-          className="rounded-md border border-black/20 px-3 py-1.5 text-sm text-[#666] hover:bg-muted disabled:opacity-50 transition-colors whitespace-nowrap"
-        >
-          {applying ? 'Applying…' : 'Apply all rules'}
-        </button>
-        <button
-          onClick={() => setShowAgent((v) => !v)}
-          className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${showAgent ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489] hover:bg-[#e5e3fd]' : 'border-[#534AB7]/40 text-[#534AB7] hover:bg-[#EEEDFE]'}`}
-        >
-          {showAgent ? 'Hide agent' : 'Run rules agent'}
-        </button>
-        <button
-          onClick={() => setShowStarter((v) => !v)}
-          className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${showStarter ? 'border-black/20 bg-muted text-foreground' : 'border-black/20 text-[#666] hover:bg-muted'}`}
-        >
-          {showStarter ? 'Hide starter rules' : 'Starter rules'}
-        </button>
+      {/* Primary toolbar: secondary actions left, new rule right */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowStarter((v) => !v)}
+            className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${showStarter ? 'border-black/20 bg-muted text-foreground' : 'border-black/20 text-[#666] hover:bg-muted'}`}
+          >
+            {showStarter ? 'Hide starter rules' : 'Starter rules'}
+          </button>
+          <button
+            onClick={() => setShowAgent((v) => !v)}
+            className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${showAgent ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489] hover:bg-[#e5e3fd]' : 'border-[#534AB7]/40 text-[#534AB7] hover:bg-[#EEEDFE]'}`}
+          >
+            {showAgent ? 'Hide agent' : 'Run rules agent'}
+          </button>
+        </div>
         {!showEditor && (
           <button
             onClick={openNewEditor}
@@ -541,6 +517,34 @@ export function RulesManager({
       {/* Rule cards */}
       {rules.length > 0 && (
         <div className="flex flex-col gap-1">
+          {/* Search + apply row */}
+          <div className="flex items-center gap-2 mb-1">
+            <div className="relative flex-1 max-w-xs">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
+              </svg>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search rules…"
+                className="w-full pl-8 pr-3 py-1.5 text-[13px] border border-black/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+              />
+            </div>
+            <button
+              onClick={applyAllRules}
+              disabled={applying || rules.filter((r) => r.isActive).length === 0}
+              className="rounded-md border border-black/20 px-3 py-1.5 text-sm text-[#666] hover:bg-muted disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              {applying ? 'Applying…' : 'Apply all rules'}
+            </button>
+            {applyResult && (
+              <span className="text-xs text-muted-foreground">
+                {applyResult.updated} of {applyResult.total} updated
+              </span>
+            )}
+          </div>
+
           {/* Select-all + bulk toolbar */}
           <div className="flex items-center gap-3 px-1 text-xs">
             <input

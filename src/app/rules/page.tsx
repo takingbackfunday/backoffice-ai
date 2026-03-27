@@ -66,9 +66,9 @@ export default async function RulesPage() {
         <Header title="Rules" />
         <main className="flex-1 p-6 max-w-4xl" role="main">
           <div className="mb-6">
-            <h1 className="text-2xl font-bold">Auto-categorization Rules</h1>
+            <h1 className="text-2xl font-bold">Rules</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Rules run on every CSV import and pre-fill the category field. Your rules run first; system rules are the fallback.
+              Rules automatically categorize transactions on import. Define conditions and the category, payee, or project to apply when they match.
             </p>
           </div>
           <RulesManager
