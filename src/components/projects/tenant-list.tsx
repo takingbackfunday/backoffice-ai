@@ -11,7 +11,19 @@ interface Lease {
 }
 interface Tenant {
   id: string; name: string; email: string; phone: string | null;
+  portalInviteStatus: string;
   leases: Lease[]
+}
+
+const PORTAL_STATUS_COLORS: Record<string, string> = {
+  NONE: 'bg-gray-100 text-gray-500',
+  INVITED: 'bg-amber-100 text-amber-700',
+  ACTIVE: 'bg-green-100 text-green-700',
+}
+const PORTAL_STATUS_LABELS: Record<string, string> = {
+  NONE: 'Not invited',
+  INVITED: 'Invited',
+  ACTIVE: 'Active',
 }
 
 interface Props {
@@ -39,6 +51,7 @@ export function TenantList({ tenants }: Props) {
             <th className="text-left px-4 py-2 font-medium">Email</th>
             <th className="text-left px-4 py-2 font-medium">Unit</th>
             <th className="text-left px-4 py-2 font-medium">Lease status</th>
+            <th className="text-left px-4 py-2 font-medium">Portal</th>
           </tr>
         </thead>
         <tbody className="divide-y">
@@ -65,6 +78,11 @@ export function TenantList({ tenants }: Props) {
                       {LEASE_STATUS_LABELS[activeLease.status] ?? activeLease.status}
                     </span>
                   ) : '—'}
+                </td>
+                <td className="px-4 py-2">
+                  <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', PORTAL_STATUS_COLORS[tenant.portalInviteStatus] ?? 'bg-muted')}>
+                    {PORTAL_STATUS_LABELS[tenant.portalInviteStatus] ?? tenant.portalInviteStatus}
+                  </span>
                 </td>
               </tr>
             )
