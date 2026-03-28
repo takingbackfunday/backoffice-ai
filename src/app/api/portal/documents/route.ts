@@ -1,20 +1,14 @@
-import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
-
-function getTenantId(sessionClaims: Record<string, unknown> | null) {
-  return (sessionClaims?.metadata as Record<string, string> | undefined)?.tenantId ?? null
-}
+import { getPortalSession } from '@/lib/portal-auth'
 
 export async function GET() {
   try {
-    const { userId, sessionClaims } = await auth()
-    if (!userId) return unauthorized()
-    const tenantId = getTenantId(sessionClaims as Record<string, unknown>)
-    if (!tenantId) return unauthorized('Not a tenant account')
+    const session = await getPortalSession()
+    if (!session) return unauthorized('Not a tenant account')
 
     const files = await prisma.tenantFile.findMany({
-      where: { tenantId },
+      where: { tenantId: session.tenantId },
       orderBy: { createdAt: 'desc' },
     })
 

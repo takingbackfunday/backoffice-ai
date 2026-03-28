@@ -1,20 +1,14 @@
-import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, created, unauthorized, badRequest, serverError } from '@/lib/api-response'
-
-function getTenantId(sessionClaims: Record<string, unknown> | null) {
-  return (sessionClaims?.metadata as Record<string, string> | undefined)?.tenantId ?? null
-}
+import { getPortalSession } from '@/lib/portal-auth'
 
 export async function GET() {
   try {
-    const { userId, sessionClaims } = await auth()
-    if (!userId) return unauthorized()
-    const tenantId = getTenantId(sessionClaims as Record<string, unknown>)
-    if (!tenantId) return unauthorized('Not a tenant account')
+    const session = await getPortalSession()
+    if (!session) return unauthorized('Not a tenant account')
 
     const requests = await prisma.maintenanceRequest.findMany({
-      where: { tenantId },
+      where: { tenantId: session.tenantId },
       include: { unit: true },
       orderBy: { createdAt: 'desc' },
     })
@@ -27,17 +21,15 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { userId, sessionClaims } = await auth()
-    if (!userId) return unauthorized()
-    const tenantId = getTenantId(sessionClaims as Record<string, unknown>)
-    if (!tenantId) return unauthorized('Not a tenant account')
+    const session = await getPortalSession()
+    if (!session) return unauthorized('Not a tenant account')
 
     const { unitId, title, description, priority } = await req.json()
     if (!unitId || !title?.trim()) return badRequest('unitId and title are required')
 
     const request = await prisma.maintenanceRequest.create({
       data: {
-        tenantId,
+        tenantId: session.tenantId,
         unitId,
         title: title.trim(),
         description: description?.trim() ?? '',
