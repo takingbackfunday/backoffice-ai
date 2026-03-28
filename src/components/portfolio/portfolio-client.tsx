@@ -906,28 +906,40 @@ function ExpandedPanel({ unit, property, onCreateMaintenance, onSendMessage, onM
                   onClick={onSendMessage}
                   className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
-                  <Send className="h-3 w-3" /> Reply
+                  <Send className="h-3 w-3" /> New
                 </button>
               )}
             </div>
-            {unit.recentMessages.length > 0 ? (
-              <div className="space-y-1.5">
-                {unit.recentMessages.slice(0, 2).map(msg => (
-                  <div key={msg.id} className="text-xs">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-medium truncate">{msg.tenant?.name ?? 'Tenant'}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">{fmtRelativeTime(msg.createdAt)}</span>
-                    </div>
-                    <p className="text-muted-foreground truncate">{msg.body}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">{unit.tenant ? 'No unread messages' : 'No tenant'}</p>
+            {unit.recentMessages.length > 0 ? (() => {
+              const threadMap = new Map<string, RecentMessage[]>()
+              for (const msg of unit.recentMessages) {
+                const key = (msg.subject ?? '').trim() || '(no subject)'
+                if (!threadMap.has(key)) threadMap.set(key, [])
+                threadMap.get(key)!.push(msg)
+              }
+              const threads = Array.from(threadMap.entries())
+                .map(([subject, msgs]) => ({ subject, count: msgs.length, lastAt: msgs[msgs.length - 1].createdAt, unread: msgs.filter(m => !m.isRead && m.senderRole !== 'owner').length }))
+                .sort((a, b) => b.lastAt.localeCompare(a.lastAt))
+                .slice(0, 3)
+              return (
+                <div className="space-y-1">
+                  {threads.map(t => (
+                    <Link key={t.subject} href={`/projects/${property.slug}/messages/${unit.tenant!.id}`} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40 transition-colors group">
+                      <span className={cn('text-xs truncate flex-1', t.unread > 0 ? 'font-semibold' : 'text-muted-foreground')}>{t.subject}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {t.unread > 0 && <span className="rounded-full bg-blue-100 text-blue-700 px-1 text-[10px] font-semibold">{t.unread}</span>}
+                        <span className="text-[10px] text-muted-foreground">{fmtRelativeTime(t.lastAt)}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )
+            })() : (
+              <p className="text-xs text-muted-foreground">{unit.tenant ? 'No messages yet' : 'No tenant'}</p>
             )}
             {unit.tenant && (
-              <Link href={`/projects/${property.slug}/messages`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1">
-                <ExternalLink className="h-3 w-3" /> All messages
+              <Link href={`/projects/${property.slug}/messages/${unit.tenant.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1">
+                <ExternalLink className="h-3 w-3" /> All threads
               </Link>
             )}
           </div>
