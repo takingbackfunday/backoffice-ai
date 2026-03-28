@@ -1,35 +1,29 @@
 import { auth, clerkClient } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+
+const BASE = process.env.NEXT_PUBLIC_APP_URL ?? 'https://backoffice.cv'
 
 export async function GET() {
   const { userId, sessionClaims } = await auth()
-  console.log('[callback] userId:', userId)
-  if (!userId) redirect('/sign-in')
+  if (!userId) return NextResponse.redirect(`${BASE}/sign-in`)
 
   // 1. Check session claims first (works for returning users)
   const sessionRole = (sessionClaims?.metadata as Record<string, string> | undefined)?.role
-  console.log('[callback] sessionRole:', sessionRole, 'sessionClaims.metadata:', sessionClaims?.metadata)
-  if (sessionRole === 'tenant') redirect('/portal')
-  if (sessionRole && sessionRole !== 'tenant') redirect('/dashboard')
+  if (sessionRole === 'tenant') return NextResponse.redirect(`${BASE}/portal`)
+  if (sessionRole && sessionRole !== 'tenant') return NextResponse.redirect(`${BASE}/dashboard`)
 
-  // 2. Read from Clerk API (metadata may be set but session token not yet refreshed)
+  // 2. Read from Clerk API (session token may not have metadata yet)
   const clerk = await clerkClient()
   const user = await clerk.users.getUser(userId)
   const apiRole = (user.publicMetadata as Record<string, string>)?.role
-  console.log('[callback] apiRole:', apiRole, 'publicMetadata:', user.publicMetadata)
-  if (apiRole === 'tenant') redirect('/portal')
-  if (apiRole && apiRole !== 'tenant') redirect('/dashboard')
+  if (apiRole === 'tenant') return NextResponse.redirect(`${BASE}/portal`)
+  if (apiRole && apiRole !== 'tenant') return NextResponse.redirect(`${BASE}/dashboard`)
 
-  // 3. New sign-up via invite — metadata not yet written (webhook is async).
-  //    Look up by email to detect if this is a tenant account.
+  // 3. Fresh sign-up — look up by email
   const primaryEmail = user.emailAddresses.find(e => e.id === user.primaryEmailAddressId)?.emailAddress
-  console.log('[callback] primaryEmail:', primaryEmail)
   if (primaryEmail) {
-    const tenant = await prisma.tenant.findFirst({
-      where: { email: primaryEmail },
-    })
-    console.log('[callback] tenant found by email:', tenant?.id ?? null)
+    const tenant = await prisma.tenant.findFirst({ where: { email: primaryEmail } })
     if (tenant) {
       await clerk.users.updateUserMetadata(userId, {
         publicMetadata: { role: 'tenant', tenantId: tenant.id },
@@ -40,10 +34,9 @@ export async function GET() {
           data: { clerkUserId: userId, portalInviteStatus: 'ACTIVE' },
         })
       }
-      redirect('/portal')
+      return NextResponse.redirect(`${BASE}/portal`)
     }
   }
 
-  console.log('[callback] no match — redirecting to /dashboard')
-  redirect('/dashboard')
+  return NextResponse.redirect(`${BASE}/dashboard`)
 }
