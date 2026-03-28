@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import type { Project } from '../../../prisma/generated/prisma'
+import type { Project } from '@/generated/prisma'
 import { RuleEditor, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
 
 // ── Types ──────────────────────────────────────────────────────────────────────

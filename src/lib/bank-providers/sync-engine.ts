@@ -4,7 +4,7 @@ import { loadUserRules } from '@/lib/rules/user-rules'
 import { categorizeRows, type CategorizableRow } from '@/lib/rules/categorize-batch'
 import { mapProviderCategory } from './category-map'
 import type { NormalizedTransaction } from '@/types/bank-providers'
-import type { BankProvider } from '../../../prisma/generated/prisma'
+import type { BankProvider } from '@/generated/prisma'
 
 export interface SyncResult {
   imported: number
@@ -142,7 +142,7 @@ export async function importNormalizedTransactions(params: {
         categoryId: row.categoryId,
         payeeId: row.payeeId,
         duplicateHash: row.duplicateHash,
-        rawData: row.rawData as import('../../../prisma/generated/prisma').Prisma.InputJsonValue,
+        rawData: row.rawData as import('@/generated/prisma').Prisma.InputJsonValue,
         tags: [],
       })),
       skipDuplicates: true,

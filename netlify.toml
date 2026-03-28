@@ -1,5 +1,5 @@
 [build]
-  command = "pnpm prisma generate && pnpm run build"
+  command = "pnpm prisma generate && echo \"export * from './client'\" > src/generated/prisma/index.ts && pnpm run build"
   publish = ".next"
 
 [functions]

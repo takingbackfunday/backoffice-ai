@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { Project } from '../../../prisma/generated/prisma'
+import type { Project } from '@/generated/prisma'
 import { RuleEditor, Toast, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
 import { RulesAgent, SuggestionCard, type PersistedSuggestion } from './rules-agent'
 import { StarterRules } from './starter-rules'

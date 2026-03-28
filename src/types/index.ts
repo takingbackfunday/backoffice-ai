@@ -1,4 +1,4 @@
-import type { Account, Project, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee } from '../../prisma/generated/prisma'
+import type { Account, Project, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee } from '@/generated/prisma'
 
 // Re-export Prisma types for convenience
 export type { Account, Project, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee }
@@ -61,12 +61,12 @@ export type TransactionWithRelations = Transaction & {
   payee: Payee | null
 }
 
-export type { BankConnection } from '../../prisma/generated/prisma'
+export type { BankConnection } from '@/generated/prisma'
 export type { NormalizedTransaction, NormalizedAccount, BankProviderAdapter, ConnectionInitResponse } from './bank-providers'
 
 // === Projects expansion types ===
 
-export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, TenantCharge, TenantPayment, TenantPaymentSuggestion, MaintenanceRequest } from '../../prisma/generated/prisma'
+export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, TenantCharge, TenantPayment, TenantPaymentSuggestion, MaintenanceRequest } from '@/generated/prisma'
 
 export type BillingType = 'HOURLY' | 'FIXED' | 'RETAINER' | 'MILESTONE'
 export type JobStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
