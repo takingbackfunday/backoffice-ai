@@ -1,15 +1,13 @@
-import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { LEASE_STATUS_LABELS, LEASE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
+import { getPortalSession } from '@/lib/portal-auth'
 
 export default async function PortalDashboardPage() {
-  const { userId, sessionClaims } = await auth()
-  if (!userId) redirect('/sign-in')
-
-  const tenantId = (sessionClaims?.metadata as Record<string, string> | undefined)?.tenantId
-  if (!tenantId) redirect('/dashboard')
+  const session = await getPortalSession()
+  if (!session) redirect('/dashboard')
+  const { tenantId } = session
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },

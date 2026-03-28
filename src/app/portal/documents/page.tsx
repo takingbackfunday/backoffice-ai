@@ -1,7 +1,7 @@
-import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { FileText } from 'lucide-react'
+import { getPortalSession } from '@/lib/portal-auth'
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   LEASE_AGREEMENT:   'Lease agreement',
@@ -16,9 +16,9 @@ const FILE_TYPE_LABELS: Record<string, string> = {
 }
 
 export default async function PortalDocumentsPage() {
-  const { sessionClaims } = await auth()
-  const tenantId = (sessionClaims?.metadata as Record<string, string> | undefined)?.tenantId
-  if (!tenantId) redirect('/dashboard')
+  const session = await getPortalSession()
+  if (!session) redirect('/dashboard')
+  const { tenantId } = session
 
   const files = await prisma.tenantFile.findMany({
     where: { tenantId },

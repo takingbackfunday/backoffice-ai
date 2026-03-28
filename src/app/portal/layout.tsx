@@ -1,20 +1,17 @@
-import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import { prisma } from '@/lib/prisma'
 import { PortalNav } from '@/components/portal/portal-nav'
+import { getPortalSession } from '@/lib/portal-auth'
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
-  const { userId, sessionClaims } = await auth()
-  if (!userId) redirect('/sign-in')
+  const session = await getPortalSession()
+  if (!session) redirect('/dashboard')
 
-  const role = (sessionClaims?.metadata as Record<string, string> | undefined)?.role
-  if (role !== 'tenant') redirect('/dashboard')
-
-  const tenantId = (sessionClaims?.metadata as Record<string, string> | undefined)?.tenantId
-  const tenant = tenantId
-    ? await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
-    : null
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: session.tenantId },
+    select: { name: true },
+  })
 
   return (
     <div className="min-h-screen bg-background">

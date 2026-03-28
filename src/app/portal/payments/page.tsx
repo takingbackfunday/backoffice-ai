@@ -1,7 +1,7 @@
-import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { cn } from '@/lib/utils'
+import { getPortalSession } from '@/lib/portal-auth'
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING:    'bg-amber-100 text-amber-800',
@@ -14,9 +14,9 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default async function PortalPaymentsPage() {
-  const { sessionClaims } = await auth()
-  const tenantId = (sessionClaims?.metadata as Record<string, string> | undefined)?.tenantId
-  if (!tenantId) redirect('/dashboard')
+  const session = await getPortalSession()
+  if (!session) redirect('/dashboard')
+  const { tenantId } = session
 
   const payments = await prisma.rentPayment.findMany({
     where: { tenantId },

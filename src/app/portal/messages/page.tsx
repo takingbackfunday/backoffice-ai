@@ -1,12 +1,12 @@
-import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { PortalMessageThread } from '@/components/portal/portal-message-thread'
+import { getPortalSession } from '@/lib/portal-auth'
 
 export default async function PortalMessagesPage() {
-  const { sessionClaims } = await auth()
-  const tenantId = (sessionClaims?.metadata as Record<string, string> | undefined)?.tenantId
-  if (!tenantId) redirect('/dashboard')
+  const session = await getPortalSession()
+  if (!session) redirect('/dashboard')
+  const { tenantId } = session
 
   // Get active lease to determine unitId for messaging
   const tenant = await prisma.tenant.findUnique({
