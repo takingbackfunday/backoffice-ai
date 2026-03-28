@@ -101,9 +101,16 @@ export async function matchTenantPayments(userId: string, newTxIds: string[]): P
     reasoning: string
   }[] = []
 
+  console.log(`[rent-matching] called with ${newTxIds.length} txId(s), found ${txs.length} matching PROPERTY transaction(s) for userId=${userId}`)
+  if (txs.length === 0) {
+    console.log(`[rent-matching] reasons txs may be empty: not positive, not tagged to PROPERTY project, already linked, or pending suggestion exists`)
+  }
+
   for (const tx of txs) {
     const txAmount = Number(tx.amount)
     const units = tx.project?.propertyProfile?.units ?? []
+
+    console.log(`[rent-matching] tx=${tx.id} amount=${txAmount} desc="${tx.description}" payee="${tx.payee?.name ?? 'none'}" project=${tx.project?.id ?? 'none'} units=${units.length}`)
 
     // Collect all candidate leases for this transaction
     type Candidate = {
@@ -126,11 +133,21 @@ export async function matchTenantPayments(userId: string, newTxIds: string[]): P
         const totalCharged = lease.tenantCharges.reduce((s, c) => s + Number(c.amount), 0)
         const totalPaid = lease.tenantPayments.reduce((s, p) => s + Number(p.amount), 0)
         const balance = totalCharged - totalPaid
-        if (balance <= 0) continue
+
+        console.log(`[rent-matching]   lease=${lease.id} tenant="${lease.tenant.name}" rent=${monthlyRent} charged=${totalCharged} paid=${totalPaid} balance=${balance}`)
+
+        if (balance <= 0) {
+          console.log(`[rent-matching]   → skip: balance <= 0`)
+          continue
+        }
 
         // Amount must be within tolerance
         const deviation = Math.abs(txAmount - monthlyRent) / monthlyRent
-        if (deviation > AMOUNT_TOLERANCE) continue
+        console.log(`[rent-matching]   → deviation=${(deviation * 100).toFixed(1)}% (tolerance=${AMOUNT_TOLERANCE * 100}%)`)
+        if (deviation > AMOUNT_TOLERANCE) {
+          console.log(`[rent-matching]   → skip: amount out of tolerance`)
+          continue
+        }
 
         const nameScore = nameMatchScore(
           lease.tenant.name,
@@ -150,7 +167,10 @@ export async function matchTenantPayments(userId: string, newTxIds: string[]): P
       }
     }
 
-    if (candidates.length === 0) continue
+    if (candidates.length === 0) {
+      console.log(`[rent-matching]   → no candidates after filtering`)
+      continue
+    }
 
     // Pick best candidate: highest nameScore first, then lowest deviation
     candidates.sort((a, b) =>
