@@ -1,9 +1,12 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 const FROM = process.env.RESEND_FROM ?? 'Backoffice <noreply@backoffice.cv>'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://backoffice.cv'
+
+function getResend() {
+  if (!process.env.RESEND_API_KEY) return null
+  return new Resend(process.env.RESEND_API_KEY)
+}
 
 export async function sendTenantMessageNotification({
   toEmail,
@@ -18,7 +21,8 @@ export async function sendTenantMessageNotification({
   body: string
   senderName: string
 }) {
-  if (!process.env.RESEND_API_KEY) return // silently skip if not configured
+  const resend = getResend()
+  if (!resend) return
 
   await resend.emails.send({
     from: FROM,
@@ -55,7 +59,8 @@ export async function sendOwnerMessageNotification({
   tenantName: string
   portalUrl: string
 }) {
-  if (!process.env.RESEND_API_KEY) return
+  const resend = getResend()
+  if (!resend) return
 
   await resend.emails.send({
     from: FROM,
