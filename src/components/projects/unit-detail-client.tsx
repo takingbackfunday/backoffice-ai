@@ -9,9 +9,12 @@ import {
 } from '@/types'
 import { cn } from '@/lib/utils'
 import { MessageThread } from './message-thread'
-import { CheckCircle2, Clock, MinusCircle, Plus, X } from 'lucide-react'
+import { CheckCircle2, CheckCircle, Clock, Plus, X, Mail } from 'lucide-react'
 
-interface Tenant { id: string; name: string; email: string; phone: string | null }
+interface Tenant {
+  id: string; name: string; email: string; phone: string | null
+  portalInviteStatus: string; clerkUserId: string | null
+}
 interface TenantCharge {
   id: string; type: string; description: string | null; amount: number;
   dueDate: string; forgivenAt: string | null; forgivenReason: string | null;
@@ -45,6 +48,15 @@ interface UnitDetail {
 }
 
 interface Props { projectId: string; unit: UnitDetail }
+
+const UNIT_STATUSES = ['VACANT', 'LEASED', 'NOTICE_GIVEN', 'PREPARING', 'MAINTENANCE', 'LISTED'] as const
+
+const INVITE_LABELS: Record<string, string> = { NONE: 'Not invited', INVITED: 'Invite sent', ACTIVE: 'Portal active' }
+const INVITE_COLORS: Record<string, string> = {
+  NONE: 'bg-gray-100 text-gray-600',
+  INVITED: 'bg-amber-100 text-amber-700',
+  ACTIVE: 'bg-green-100 text-green-700',
+}
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -271,10 +283,45 @@ export function UnitDetailClient({ projectId, unit }: Props) {
   const router = useRouter()
   const [levyOpen, setLevyOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [unitStatus, setUnitStatus] = useState(unit.status)
+  const [statusUpdating, setStatusUpdating] = useState(false)
+  const [inviteStatus, setInviteStatus] = useState(
+    unit.leases.find(l => ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'].includes(l.status))?.tenant.portalInviteStatus ?? 'NONE'
+  )
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
 
   const activeLease = unit.leases.find(l => ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'].includes(l.status))
 
   function refresh() { router.refresh() }
+
+  async function updateStatus(newStatus: string) {
+    setStatusUpdating(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/units/${unit.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (res.ok) setUnitStatus(newStatus)
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
+  async function handleInvite() {
+    if (!activeLease) return
+    setInviting(true)
+    setInviteError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tenants/${activeLease.tenant.id}/invite`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || json.error) { setInviteError(json.error ?? 'Failed to send invite'); return }
+      setInviteStatus('INVITED')
+    } finally {
+      setInviting(false)
+    }
+  }
 
   // Ledger totals
   const activeCharges = activeLease?.tenantCharges.filter(c => !c.forgivenAt) ?? []
@@ -285,7 +332,7 @@ export function UnitDetailClient({ projectId, unit }: Props) {
   return (
     <div className="space-y-6">
       {/* Unit header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold">{unit.unitLabel}</h2>
           <div className="flex items-center gap-2 mt-1">
@@ -294,9 +341,44 @@ export function UnitDetailClient({ projectId, unit }: Props) {
             {unit.squareFootage && <span className="text-sm text-muted-foreground">{unit.squareFootage} sq ft</span>}
           </div>
         </div>
-        <span className={cn('rounded-full px-3 py-1 text-sm font-medium', UNIT_STATUS_COLORS[unit.status] ?? 'bg-muted text-muted-foreground')}>
-          {UNIT_STATUS_LABELS[unit.status] ?? unit.status}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Portal invite */}
+          {activeLease && (
+            <div className="flex items-center gap-2">
+              <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium flex items-center gap-1', INVITE_COLORS[inviteStatus] ?? 'bg-muted')}>
+                {inviteStatus === 'ACTIVE' && <CheckCircle className="h-3 w-3" />}
+                {inviteStatus === 'INVITED' && <Clock className="h-3 w-3" />}
+                {INVITE_LABELS[inviteStatus] ?? inviteStatus}
+              </span>
+              {inviteStatus !== 'ACTIVE' && (
+                <button
+                  type="button"
+                  onClick={handleInvite}
+                  disabled={inviting}
+                  className="flex items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  {inviting ? 'Sending…' : inviteStatus === 'INVITED' ? 'Resend invite' : 'Invite to portal'}
+                </button>
+              )}
+            </div>
+          )}
+          {inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
+          {/* Status select */}
+          <select
+            value={unitStatus}
+            onChange={e => updateStatus(e.target.value)}
+            disabled={statusUpdating}
+            className={cn(
+              'rounded-full px-3 py-1 text-sm font-medium border-0 cursor-pointer appearance-none text-center transition-opacity',
+              UNIT_STATUS_COLORS[unitStatus] ?? 'bg-muted text-muted-foreground',
+              statusUpdating && 'opacity-50'
+            )}
+            style={{ backgroundImage: 'none' }}
+          >
+            {UNIT_STATUSES.map(s => <option key={s} value={s}>{UNIT_STATUS_LABELS[s]}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* Active lease */}

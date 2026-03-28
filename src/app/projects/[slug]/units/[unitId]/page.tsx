@@ -26,7 +26,7 @@ export default async function UnitDetailPage({ params }: PageParams) {
     include: {
       leases: {
         include: {
-          tenant: true,
+          tenant: { select: { id: true, name: true, email: true, phone: true, emergencyName: true, emergencyPhone: true, portalInviteStatus: true, clerkUserId: true } },
           tenantCharges: { orderBy: { dueDate: 'desc' }, take: 12 },
           tenantPayments: { orderBy: { paidDate: 'desc' }, take: 12 },
         },
