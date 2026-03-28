@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import type { Project } from '@prisma/client'
+import type { Project } from '../../../prisma/generated/prisma'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 

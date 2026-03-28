@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient } from '../../prisma/generated/prisma'
 
 export type BusinessType = 'freelance' | 'property' | 'both' | 'personal'
 
