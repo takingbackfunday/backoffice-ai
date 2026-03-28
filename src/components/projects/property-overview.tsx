@@ -371,18 +371,15 @@ export function PropertyOverview({ projectId, slug, address, city, state, proper
                                   </div>
                                 ))}
                               </div>
-                              {unit.paymentDueDay && (
-                                <p className="text-[11px] text-muted-foreground">Due day {unit.paymentDueDay} of each month</p>
-                              )}
-                              <Link href={`/projects/${slug}/financials`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                                <ExternalLink className="h-3 w-3" /> Financials
+                              <Link href={`/projects/${slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                                <ExternalLink className="h-3 w-3" /> Apply levy / full ledger
                               </Link>
                             </div>
                           ) : (
                             <div className="space-y-1.5">
                               <p className="text-xs text-muted-foreground">No ledger records</p>
-                              <Link href={`/projects/${slug}/financials`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                                <ExternalLink className="h-3 w-3" /> Financials
+                              <Link href={`/projects/${slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                                <ExternalLink className="h-3 w-3" /> Apply levy / full ledger
                               </Link>
                             </div>
                           )}

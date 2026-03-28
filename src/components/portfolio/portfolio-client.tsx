@@ -4,10 +4,9 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Wrench, Building2, Search, ChevronDown, ChevronRight,
+  Wrench, Building2, Search, ChevronDown, ChevronUp, ChevronRight,
   AlertTriangle, MapPin, Plus, X, ExternalLink,
-  User, Calendar, DollarSign,
-  MessageSquare, Send, Mail,
+  Calendar, DollarSign, MessageSquare, Send, Mail, ArrowUpDown,
 } from 'lucide-react'
 import {
   UNIT_STATUS_COLORS, UNIT_STATUS_LABELS,
@@ -70,6 +69,16 @@ interface Kpis {
   unreadMessages: number; overduePayments: number
 }
 
+/* Flat row for the table */
+interface UnitRow {
+  unit: Unit
+  property: Property
+  /** index of this unit within its property's filtered units */
+  indexInProperty: number
+  /** total filtered units in this property */
+  totalInProperty: number
+}
+
 type StatusFilter = 'ALL' | 'LEASED' | 'VACANT' | 'NOTICE_GIVEN' | 'PREPARING' | 'LISTED'
   | 'EXPIRING' | 'MAINTENANCE_OPEN' | 'RENT_OVERDUE' | 'UNREAD_MESSAGES'
 const STATUS_FILTERS: StatusFilter[] = [
@@ -77,21 +86,12 @@ const STATUS_FILTERS: StatusFilter[] = [
   'EXPIRING', 'MAINTENANCE_OPEN', 'RENT_OVERDUE', 'UNREAD_MESSAGES',
 ]
 
-const UNIT_STATUSES = ['VACANT', 'LEASED', 'NOTICE_GIVEN', 'PREPARING', 'MAINTENANCE', 'LISTED'] as const
+type SortCol = 'property' | 'status' | 'tenant' | 'leaseEnd' | 'rent' | 'balance' | 'paymentStatus' | 'maintenance'
+type SortDir = 'asc' | 'desc'
 
-const CHARGE_TYPE_COLORS: Record<string, string> = {
-  RENT: 'bg-blue-100 text-blue-800',
-  LATE_FEE: 'bg-red-100 text-red-800',
-  MAINTENANCE: 'bg-orange-100 text-orange-800',
-  UTILITY: 'bg-cyan-100 text-cyan-800',
-  DEPOSIT: 'bg-purple-100 text-purple-800',
-  OTHER: 'bg-gray-100 text-gray-700',
-}
-
-const CHARGE_TYPE_LABELS: Record<string, string> = {
-  RENT: 'Rent', LATE_FEE: 'Late fee', MAINTENANCE: 'Maint.',
-  UTILITY: 'Utility', DEPOSIT: 'Deposit', OTHER: 'Other',
-}
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -120,9 +120,9 @@ const fmtRelativeTime = (d: string) => {
   return fmtDate(d)
 }
 
-/* ------------------------------------------------------------------ */
-/*  Lease urgency helpers                                              */
-/* ------------------------------------------------------------------ */
+function daysUntil(endDate: string): number {
+  return Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+}
 
 function getLeaseUrgency(endDate: string | null): 'critical' | 'warning' | 'soon' | null {
   if (!endDate) return null
@@ -134,37 +134,83 @@ function getLeaseUrgency(endDate: string | null): 'critical' | 'warning' | 'soon
   return null
 }
 
-function daysUntil(endDate: string): number {
-  return Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-}
-
 const URGENCY_STYLES = {
   critical: 'bg-red-50 border-red-200 text-red-700',
   warning: 'bg-amber-50 border-amber-200 text-amber-700',
   soon: 'bg-yellow-50 border-yellow-200 text-yellow-700',
 }
 
-const URGENCY_DOT = {
-  critical: 'bg-red-500',
-  warning: 'bg-amber-500',
-  soon: 'bg-yellow-500',
+const CHARGE_TYPE_COLORS: Record<string, string> = {
+  RENT: 'bg-blue-100 text-blue-800',
+  LATE_FEE: 'bg-red-100 text-red-800',
+  MAINTENANCE: 'bg-orange-100 text-orange-800',
+  UTILITY: 'bg-cyan-100 text-cyan-800',
+  DEPOSIT: 'bg-purple-100 text-purple-800',
+  OTHER: 'bg-gray-100 text-gray-700',
 }
 
-/* ------------------------------------------------------------------ */
-/*  Rent payment helpers                                               */
-/* ------------------------------------------------------------------ */
+const CHARGE_TYPE_LABELS: Record<string, string> = {
+  RENT: 'Rent', LATE_FEE: 'Late fee', MAINTENANCE: 'Maint.',
+  UTILITY: 'Utility', DEPOSIT: 'Deposit', OTHER: 'Other',
+}
+
+const MAINTENANCE_STATUSES = ['OPEN', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const
 
 function hasOverdueRent(unit: Unit): boolean {
-  const charged = unit.tenantCharges
-    .filter(c => !c.forgivenAt)
-    .reduce((sum, c) => sum + c.amount, 0)
+  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((sum, c) => sum + c.amount, 0)
   const paid = unit.tenantPayments.reduce((sum, p) => sum + p.amount, 0)
   return charged - paid > 0
 }
 
-/* ------------------------------------------------------------------ */
-/*  Filter helpers                                                     */
-/* ------------------------------------------------------------------ */
+function getBalance(unit: Unit): number {
+  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((sum, c) => sum + c.amount, 0)
+  const paid = unit.tenantPayments.reduce((sum, p) => sum + p.amount, 0)
+  return charged - paid
+}
+
+/** Returns a sortable numeric score for payment status: 0=vacant/none, 1=current, 2=partial, 3=late<30, 4=30+, 5=60+ */
+function paymentStatusScore(unit: Unit): number {
+  if (!unit.tenant) return 0
+  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((sum, c) => sum + c.amount, 0)
+  const paid = unit.tenantPayments.reduce((sum, p) => sum + p.amount, 0)
+  if (charged === 0) return 0
+  const balance = charged - paid
+  if (balance <= 0) return 1 // current
+  // check oldest unpaid charge date for lateness
+  const latestCharge = unit.tenantCharges
+    .filter(c => !c.forgivenAt)
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0]
+  if (!latestCharge) return 2
+  const daysSinceDue = Math.floor((Date.now() - new Date(latestCharge.dueDate).getTime()) / (1000 * 60 * 60 * 24))
+  if (paid > 0 && paid < charged) return 2 // partial
+  if (daysSinceDue >= 60) return 5
+  if (daysSinceDue >= 30) return 4
+  if (daysSinceDue > 0) return 3
+  return 1
+}
+
+function PaymentStatusBadge({ unit }: { unit: Unit }) {
+  if (!unit.tenant) return <span className="text-muted-foreground/30 text-xs">—</span>
+  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((sum, c) => sum + c.amount, 0)
+  const paid = unit.tenantPayments.reduce((sum, p) => sum + p.amount, 0)
+  if (charged === 0) return <span className="text-muted-foreground/30 text-xs">—</span>
+
+  const score = paymentStatusScore(unit)
+  const configs: Record<number, { label: string; cls: string }> = {
+    1: { label: 'Current', cls: 'bg-green-100 text-green-800' },
+    2: { label: 'Partial', cls: 'border border-amber-300 text-amber-700 bg-transparent' },
+    3: { label: 'Late', cls: 'bg-amber-100 text-amber-800' },
+    4: { label: '30+', cls: 'bg-red-100 text-red-800' },
+    5: { label: '60+', cls: 'bg-red-200 text-red-900 font-semibold' },
+  }
+  const cfg = configs[score]
+  if (!cfg) return null
+  return (
+    <span className={cn('inline-block rounded-full px-2 py-0.5 text-[11px] font-medium', cfg.cls)}>
+      {cfg.label}
+    </span>
+  )
+}
 
 function filterLabel(f: StatusFilter): string {
   switch (f) {
@@ -197,59 +243,86 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
   const router = useRouter()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
-  const [expandedProperties, setExpandedProperties] = useState<Set<string>>(
-    () => new Set(properties.map(p => p.id))
-  )
-  const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set())
+  const [expandedUnit, setExpandedUnit] = useState<string | null>(null)
   const [maintenanceModal, setMaintenanceModal] = useState<{ propertyId: string; unitId: string; unitLabel: string } | null>(null)
   const [messageModal, setMessageModal] = useState<{ propertyId: string; unitId: string; tenantId: string; tenantName: string; unitLabel: string } | null>(null)
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null)
+  const [sortCol, setSortCol] = useState<SortCol | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   const occupancyPct = kpis.totalUnits > 0 ? Math.round((kpis.leasedUnits / kpis.totalUnits) * 100) : 0
 
-  const applyFilters = useCallback((units: Unit[]) => {
-    let result = units
-    if (statusFilter === 'EXPIRING') result = result.filter(u => getLeaseUrgency(u.leaseEndDate) !== null)
-    else if (statusFilter === 'MAINTENANCE_OPEN') result = result.filter(u => u.openMaintenance > 0)
-    else if (statusFilter === 'RENT_OVERDUE') result = result.filter(u => hasOverdueRent(u))
-    else if (statusFilter === 'UNREAD_MESSAGES') result = result.filter(u => u.unreadMessages > 0)
-    else if (statusFilter !== 'ALL') result = result.filter(u => u.status === statusFilter)
+  const matchesFilter = useCallback((unit: Unit): boolean => {
+    if (statusFilter === 'EXPIRING') return getLeaseUrgency(unit.leaseEndDate) !== null
+    if (statusFilter === 'MAINTENANCE_OPEN') return unit.openMaintenance > 0
+    if (statusFilter === 'RENT_OVERDUE') return hasOverdueRent(unit)
+    if (statusFilter === 'UNREAD_MESSAGES') return unit.unreadMessages > 0
+    if (statusFilter !== 'ALL') return unit.status === statusFilter
+    return true
+  }, [statusFilter])
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      result = result.filter(u =>
-        u.unitLabel.toLowerCase().includes(q) ||
-        u.tenant?.name.toLowerCase().includes(q) ||
-        u.tenant?.email.toLowerCase().includes(q)
-      )
+  const matchesSearch = useCallback((unit: Unit, property: Property): boolean => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return unit.unitLabel.toLowerCase().includes(q) ||
+      unit.tenant?.name.toLowerCase().includes(q) ||
+      unit.tenant?.email.toLowerCase().includes(q) ||
+      property.name.toLowerCase().includes(q) ||
+      (property.address ?? '').toLowerCase().includes(q)
+  }, [searchQuery])
+
+  // Build flat rows grouped by property (default sort), then apply sorting
+  const flatRows: UnitRow[] = (() => {
+    // First collect rows per property in natural order
+    const grouped: UnitRow[][] = []
+    for (const property of properties) {
+      const filteredUnits = property.units.filter(u => matchesFilter(u) && matchesSearch(u, property))
+      if (filteredUnits.length === 0) continue
+      grouped.push(filteredUnits.map((unit, idx) => ({
+        unit,
+        property,
+        indexInProperty: idx,
+        totalInProperty: filteredUnits.length,
+      })))
     }
-    return result
-  }, [statusFilter, searchQuery])
 
-  const filteredProperties = properties
-    .map(p => ({ ...p, units: applyFilters(p.units) }))
-    .filter(p => {
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        return p.units.length > 0 || p.name.toLowerCase().includes(q) || p.address?.toLowerCase().includes(q)
-      }
-      return p.units.length > 0
-    })
+    // Flatten
+    let rows = grouped.flat()
 
-  function toggleProperty(id: string) {
-    setExpandedProperties(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }
+    // Apply sort
+    if (sortCol) {
+      rows = [...rows].sort((a, b) => {
+        let cmp = 0
+        switch (sortCol) {
+          case 'property': cmp = a.property.name.localeCompare(b.property.name) || a.unit.unitLabel.localeCompare(b.unit.unitLabel); break
+          case 'status': cmp = (a.unit.status ?? '').localeCompare(b.unit.status ?? ''); break
+          case 'tenant': cmp = (a.unit.tenant?.name ?? '').localeCompare(b.unit.tenant?.name ?? ''); break
+          case 'leaseEnd': {
+            const aE = a.unit.leaseEndDate ? new Date(a.unit.leaseEndDate).getTime() : Infinity
+            const bE = b.unit.leaseEndDate ? new Date(b.unit.leaseEndDate).getTime() : Infinity
+            cmp = aE - bE; break
+          }
+          case 'rent': cmp = (a.unit.monthlyRent ?? 0) - (b.unit.monthlyRent ?? 0); break
+          case 'balance': cmp = getBalance(a.unit) - getBalance(b.unit); break
+          case 'paymentStatus': cmp = paymentStatusScore(a.unit) - paymentStatusScore(b.unit); break
+          case 'maintenance': cmp = a.unit.openMaintenance - b.unit.openMaintenance; break
+        }
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+      // when sorted by non-property col, update indexInProperty so all show full property name
+      rows = rows.map(r => ({ ...r, indexInProperty: sortCol === 'property' ? r.indexInProperty : 0 }))
+    }
 
-  function toggleUnit(id: string) {
-    setExpandedUnits(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
+    return rows
+  })()
+
+  function handleSort(col: SortCol) {
+    if (sortCol === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortCol(col)
+      setSortDir('asc')
+    }
   }
 
   async function updateUnitStatus(propertyId: string, unitId: string, newStatus: string) {
@@ -264,6 +337,15 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
     } finally {
       setStatusUpdating(null)
     }
+  }
+
+  async function updateMaintenanceStatus(propertyId: string, requestId: string, newStatus: string) {
+    await fetch(`/api/projects/${propertyId}/maintenance/${requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    router.refresh()
   }
 
   /* ---------------------------------------------------------------- */
@@ -301,26 +383,35 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <KpiCard label="Units" value={kpis.totalUnits} />
         <KpiCard label="Occupancy" value={`${occupancyPct}%`} sub={<OccupancyRing pct={occupancyPct} />} />
-        <KpiCard label="Leased" value={kpis.leasedUnits} accent="green" />
-        <KpiCard label="Vacant" value={kpis.vacantUnits} accent={kpis.vacantUnits > 0 ? 'amber' : undefined} />
+        <KpiCard label="Leased" value={kpis.leasedUnits} accent="green"
+          onClick={kpis.leasedUnits > 0 ? () => setStatusFilter(statusFilter === 'LEASED' ? 'ALL' : 'LEASED') : undefined}
+          active={statusFilter === 'LEASED'}
+        />
+        <KpiCard label="Vacant" value={kpis.vacantUnits} accent={kpis.vacantUnits > 0 ? 'amber' : undefined}
+          onClick={kpis.vacantUnits > 0 ? () => setStatusFilter(statusFilter === 'VACANT' ? 'ALL' : 'VACANT') : undefined}
+          active={statusFilter === 'VACANT'}
+        />
         <KpiCard label="Revenue/mo" value={fmt(kpis.monthlyRevenue)} />
         <KpiCard
           label="Expiring ≤90d"
           value={kpis.expiringLeases}
           accent={kpis.expiringLeases > 0 ? 'red' : undefined}
-          onClick={kpis.expiringLeases > 0 ? () => setStatusFilter('EXPIRING') : undefined}
+          active={statusFilter === 'EXPIRING'}
+          onClick={kpis.expiringLeases > 0 ? () => setStatusFilter(statusFilter === 'EXPIRING' ? 'ALL' : 'EXPIRING') : undefined}
         />
         <KpiCard
           label="Rent overdue"
           value={kpis.overduePayments}
           accent={kpis.overduePayments > 0 ? 'red' : undefined}
-          onClick={kpis.overduePayments > 0 ? () => setStatusFilter('RENT_OVERDUE') : undefined}
+          active={statusFilter === 'RENT_OVERDUE'}
+          onClick={kpis.overduePayments > 0 ? () => setStatusFilter(statusFilter === 'RENT_OVERDUE' ? 'ALL' : 'RENT_OVERDUE') : undefined}
         />
         <KpiCard
           label="Unread msgs"
           value={kpis.unreadMessages}
           accent={kpis.unreadMessages > 0 ? 'amber' : undefined}
-          onClick={kpis.unreadMessages > 0 ? () => setStatusFilter('UNREAD_MESSAGES') : undefined}
+          active={statusFilter === 'UNREAD_MESSAGES'}
+          onClick={kpis.unreadMessages > 0 ? () => setStatusFilter(statusFilter === 'UNREAD_MESSAGES' ? 'ALL' : 'UNREAD_MESSAGES') : undefined}
         />
       </div>
 
@@ -378,10 +469,10 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
       </div>
 
       {/* ============================================================= */}
-      {/*  PROPERTY CARDS                                                */}
+      {/*  FLAT TABLE                                                    */}
       {/* ============================================================= */}
 
-      {filteredProperties.length === 0 ? (
+      {flatRows.length === 0 ? (
         <div className="rounded-lg border border-dashed py-12 text-center">
           <p className="text-sm text-muted-foreground">No units match your filters.</p>
           <button type="button" onClick={() => { setStatusFilter('ALL'); setSearchQuery('') }} className="text-xs text-primary hover:underline mt-1">
@@ -389,103 +480,171 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
           </button>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filteredProperties.map(property => {
-            const leased = property.units.filter(u => u.status === 'LEASED').length
-            const total = property.units.length
-            const isExpanded = expandedProperties.has(property.id)
-            const propertyRevenue = property.units
-              .filter(u => u.monthlyRent && u.status === 'LEASED')
-              .reduce((s, u) => s + (u.monthlyRent ?? 0), 0)
+        <div className="rounded-xl border overflow-hidden">
+          {/* Sticky header */}
+          <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm border-b">
+            <div className="grid grid-cols-[minmax(160px,2fr)_80px_100px_90px_75px_90px_80px_36px_60px] gap-0 px-3 py-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              <ColHeader label="Property / Unit" col="property" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <ColHeader label="Status" col="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <ColHeader label="Tenant" col="tenant" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <ColHeader label="Lease ends" col="leaseEnd" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <ColHeader label="Rent" col="rent" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
+              <ColHeader label="Balance" col="balance" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
+              <ColHeader label="Payment" col="paymentStatus" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="hidden md:block" />
+              <ColHeader label="" col="maintenance" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center hidden md:block" icon={<Wrench className="h-3 w-3 mx-auto" />} />
+              <span className="text-center">
+                <Mail className="h-3 w-3 mx-auto opacity-60" />
+              </span>
+            </div>
+          </div>
 
-            return (
-              <div key={property.id} className="rounded-xl border bg-background overflow-hidden">
-                {/* Property header */}
-                <button
-                  type="button"
-                  onClick={() => toggleProperty(property.id)}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
-                >
-                  <span className="text-muted-foreground">
-                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold truncate">{property.name}</span>
-                      {property.propertyType && (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground font-medium shrink-0">
-                          {property.propertyType}
-                        </span>
+          {/* Rows */}
+          <div>
+            {flatRows.map(({ unit, property, indexInProperty, totalInProperty }, rowIdx) => {
+              const isFirstInGroup = indexInProperty === 0
+              const isMultiUnit = totalInProperty > 1
+              const isExpanded = expandedUnit === unit.id
+              const urgency = getLeaseUrgency(unit.leaseEndDate)
+              const days = unit.leaseEndDate ? daysUntil(unit.leaseEndDate) : null
+              const balance = getBalance(unit)
+              const hasLedger = unit.tenantCharges.length > 0 || unit.tenantPayments.length > 0
+
+              // Group separation: add top margin before first row of a new property group
+              const prevRow = rowIdx > 0 ? flatRows[rowIdx - 1] : null
+              const isNewGroup = !sortCol && prevRow && prevRow.property.id !== property.id
+
+              return (
+                <div key={unit.id} className={cn(isNewGroup && 'mt-1')}>
+                  {/* Main row */}
+                  <div
+                    className={cn(
+                      'grid grid-cols-[minmax(160px,2fr)_80px_100px_90px_75px_90px_80px_36px_60px] gap-0 px-3 py-0 items-stretch border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer group',
+                      isMultiUnit && !sortCol && 'border-l-2 border-l-muted',
+                      isExpanded && 'bg-muted/10 border-l-2 border-l-primary/40',
+                      urgency === 'critical' && 'bg-red-50/30',
+                    )}
+                    onClick={() => setExpandedUnit(isExpanded ? null : unit.id)}
+                  >
+                    {/* Property / Unit cell */}
+                    <div className="flex items-center gap-2 py-3 pr-2 min-w-0">
+                      <span className="text-muted-foreground/40 shrink-0">
+                        {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                      </span>
+                      {isFirstInGroup || !!sortCol ? (
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate leading-tight">{property.name}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {[property.address, property.city].filter(Boolean).join(' · ')}
+                            {isMultiUnit && !sortCol && <span className="ml-1">· {unit.unitLabel}</span>}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="min-w-0 pl-4">
+                          <p className="text-[13px] font-medium truncate">{unit.unitLabel}</p>
+                          {property.address && <p className="text-[11px] text-muted-foreground truncate">{property.address}</p>}
+                        </div>
                       )}
                     </div>
-                    {property.address && (
-                      <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        {[property.address, property.city, property.state].filter(Boolean).join(', ')}
-                      </p>
-                    )}
-                  </div>
-                  <div className="hidden sm:flex items-center gap-4 shrink-0">
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Units</p>
-                      <p className="text-sm font-medium">{leased}/{total}</p>
-                    </div>
-                    {propertyRevenue > 0 && (
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Revenue</p>
-                        <p className="text-sm font-medium">{fmt(propertyRevenue)}</p>
-                      </div>
-                    )}
-                  </div>
-                  <Link
-                    href={`/projects/${property.slug}`}
-                    onClick={e => e.stopPropagation()}
-                    className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                    title="Open property"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </Link>
-                </button>
 
-                {/* Units */}
-                {isExpanded && (
-                  <div className="border-t">
-                    <div className="hidden sm:grid grid-cols-[minmax(90px,1fr)_90px_minmax(100px,1.2fr)_90px_70px_70px_44px_44px] gap-2 px-4 py-2 bg-muted/30 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                      <span>Unit</span>
-                      <span>Status</span>
-                      <span>Tenant</span>
-                      <span>Lease ends</span>
-                      <span className="text-right">Rent</span>
-                      <span className="text-right">Balance</span>
-                      <span className="text-center" title="Maintenance"><Wrench className="h-3 w-3 mx-auto" /></span>
-                      <span className="text-center" title="Messages"><Mail className="h-3 w-3 mx-auto" /></span>
+                    {/* Status */}
+                    <div className="flex items-center py-3" onClick={e => e.stopPropagation()}>
+                      <span className={cn('inline-block rounded-full px-2 py-0.5 text-[11px] font-medium', UNIT_STATUS_COLORS[unit.status] ?? 'bg-muted text-muted-foreground')}>
+                        {UNIT_STATUS_LABELS[unit.status] ?? unit.status}
+                      </span>
                     </div>
 
-                    <div className="divide-y">
-                      {property.units.map(unit => (
-                        <UnitRow
-                          key={unit.id}
-                          unit={unit}
-                          property={property}
-                          isExpanded={expandedUnits.has(unit.id)}
-                          onToggle={() => toggleUnit(unit.id)}
-                          onStatusChange={(s) => updateUnitStatus(property.id, unit.id, s)}
-                          onCreateMaintenance={() => setMaintenanceModal({ propertyId: property.id, unitId: unit.id, unitLabel: unit.unitLabel })}
-                          onSendMessage={() => {
-                            if (unit.tenant) {
-                              setMessageModal({ propertyId: property.id, unitId: unit.id, tenantId: unit.tenant.id, tenantName: unit.tenant.name, unitLabel: unit.unitLabel })
-                            }
-                          }}
-                          isUpdating={statusUpdating === unit.id}
-                        />
-                      ))}
+                    {/* Tenant */}
+                    <div className="flex items-center py-3 pr-2 min-w-0">
+                      <span className="text-sm text-muted-foreground truncate">
+                        {unit.tenant?.name ?? <span className="text-muted-foreground/30">—</span>}
+                      </span>
                     </div>
 
+                    {/* Lease end */}
+                    <div className="flex items-center py-3">
+                      {unit.leaseEndDate ? (
+                        <div>
+                          <p className={cn('text-xs', urgency && 'font-medium')}>
+                            {urgency && <span className={cn('inline-block h-1.5 w-1.5 rounded-full mr-1 translate-y-[-1px]',
+                              urgency === 'critical' ? 'bg-red-500' : urgency === 'warning' ? 'bg-amber-500' : 'bg-yellow-500'
+                            )} />}
+                            {fmtShortDate(unit.leaseEndDate)}
+                          </p>
+                          {urgency && days !== null && (
+                            <p className={cn('text-[10px]', urgency === 'critical' ? 'text-red-600' : 'text-amber-600')}>{days}d</p>
+                          )}
+                        </div>
+                      ) : <span className="text-xs text-muted-foreground/30">—</span>}
+                    </div>
+
+                    {/* Rent */}
+                    <div className="flex items-center justify-end py-3 pr-2">
+                      <span className="text-xs font-medium tabular-nums">
+                        {unit.monthlyRent ? fmt(unit.monthlyRent) : <span className="text-muted-foreground/30">—</span>}
+                      </span>
+                    </div>
+
+                    {/* Balance */}
+                    <div className="flex items-center justify-end py-3 pr-2">
+                      {hasLedger ? (
+                        <span className={cn('text-xs font-medium tabular-nums', balance > 0 ? 'text-red-600' : 'text-green-600')}>
+                          {balance > 0 ? `+${fmt(balance)}` : balance < 0 ? `-${fmt(Math.abs(balance))}` : 'Clear'}
+                        </span>
+                      ) : <span className="text-xs text-muted-foreground/30">—</span>}
+                    </div>
+
+                    {/* Payment status */}
+                    <div className="hidden md:flex items-center py-3">
+                      <PaymentStatusBadge unit={unit} />
+                    </div>
+
+                    {/* Maintenance */}
+                    <div className="hidden md:flex items-center justify-center py-3">
+                      {unit.openMaintenance > 0 ? (
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-semibold">
+                          {unit.openMaintenance}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-center gap-1 py-3" onClick={e => e.stopPropagation()}>
+                      <Link
+                        href={`/projects/${property.slug}`}
+                        className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        title="Open property"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Link>
+                      {unit.tenant && (
+                        <button
+                          type="button"
+                          onClick={() => setMessageModal({ propertyId: property.id, unitId: unit.id, tenantId: unit.tenant!.id, tenantName: unit.tenant!.name, unitLabel: unit.unitLabel })}
+                          className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          title="Send message"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            )
-          })}
+
+                  {/* Expanded detail panel */}
+                  {isExpanded && (
+                    <ExpandedPanel
+                      unit={unit}
+                      property={property}
+                      onCreateMaintenance={() => setMaintenanceModal({ propertyId: property.id, unitId: unit.id, unitLabel: unit.unitLabel })}
+                      onSendMessage={() => {
+                        if (unit.tenant) setMessageModal({ propertyId: property.id, unitId: unit.id, tenantId: unit.tenant.id, tenantName: unit.tenant.name, unitLabel: unit.unitLabel })
+                      }}
+                      onMaintenanceStatusChange={(reqId, s) => updateMaintenanceStatus(property.id, reqId, s)}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -515,12 +674,35 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
 }
 
 /* ==================================================================== */
+/*  Column header with sort                                              */
+/* ==================================================================== */
+
+function ColHeader({ label, col, sortCol, sortDir, onSort, className, icon }: {
+  label: string; col: SortCol; sortCol: SortCol | null; sortDir: SortDir
+  onSort: (col: SortCol) => void; className?: string; icon?: React.ReactNode
+}) {
+  const active = sortCol === col
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(col)}
+      className={cn('flex items-center gap-1 text-left hover:text-foreground transition-colors', active && 'text-foreground', className)}
+    >
+      {icon ?? label}
+      {active
+        ? (sortDir === 'asc' ? <ChevronUp className="h-3 w-3 shrink-0" /> : <ChevronDown className="h-3 w-3 shrink-0" />)
+        : <ArrowUpDown className="h-3 w-3 shrink-0 opacity-30" />}
+    </button>
+  )
+}
+
+/* ==================================================================== */
 /*  KPI Card                                                             */
 /* ==================================================================== */
 
-function KpiCard({ label, value, accent, sub, onClick }: {
+function KpiCard({ label, value, accent, sub, onClick, active }: {
   label: string; value: string | number; accent?: 'green' | 'amber' | 'red'
-  sub?: React.ReactNode; onClick?: () => void
+  sub?: React.ReactNode; onClick?: () => void; active?: boolean
 }) {
   const accentClasses = { green: 'border-green-200 bg-green-50/50', amber: 'border-amber-200 bg-amber-50/50', red: 'border-red-200 bg-red-50/50' }
   const Comp = onClick ? 'button' : 'div'
@@ -531,7 +713,8 @@ function KpiCard({ label, value, accent, sub, onClick }: {
       className={cn(
         'rounded-lg border px-3 py-2.5 text-left transition-colors',
         accent && accentClasses[accent],
-        onClick && 'hover:bg-muted/40 cursor-pointer'
+        onClick && 'hover:bg-muted/40 cursor-pointer',
+        active && 'ring-2 ring-primary/30',
       )}
     >
       <div className="flex items-start justify-between">
@@ -565,318 +748,192 @@ function OccupancyRing({ pct }: { pct: number }) {
 }
 
 /* ==================================================================== */
-/*  Unit Row                                                             */
+/*  Expanded detail panel                                                */
 /* ==================================================================== */
 
-const MAINTENANCE_STATUSES = ['OPEN', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const
-
-function UnitRow({ unit, property, isExpanded, onToggle, onStatusChange, onCreateMaintenance, onSendMessage, isUpdating }: {
-  unit: Unit; property: Property; isExpanded: boolean
-  onToggle: () => void; onStatusChange: (status: string) => void
-  onCreateMaintenance: () => void; onSendMessage: () => void; isUpdating: boolean
+function ExpandedPanel({ unit, property, onCreateMaintenance, onSendMessage, onMaintenanceStatusChange }: {
+  unit: Unit; property: Property
+  onCreateMaintenance: () => void; onSendMessage: () => void
+  onMaintenanceStatusChange: (reqId: string, status: string) => void
 }) {
-  const router = useRouter()
   const urgency = getLeaseUrgency(unit.leaseEndDate)
   const days = unit.leaseEndDate ? daysUntil(unit.leaseEndDate) : null
-  const overdue = hasOverdueRent(unit)
-
-  async function updateMaintenanceStatus(requestId: string, newStatus: string) {
-    await fetch(`/api/projects/${property.id}/maintenance/${requestId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    })
-    router.refresh()
-  }
+  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + c.amount, 0)
+  const paid = unit.tenantPayments.reduce((s, p) => s + p.amount, 0)
+  const balance = charged - paid
 
   return (
-    <div className={cn(isExpanded && 'bg-muted/10')}>
-      {/* Main row */}
-      <div
-        className={cn(
-          'grid grid-cols-1 sm:grid-cols-[minmax(90px,1fr)_90px_minmax(100px,1.2fr)_90px_70px_70px_44px_44px] gap-2 px-4 py-2.5 items-center hover:bg-muted/20 transition-colors cursor-pointer',
-          urgency === 'critical' && 'bg-red-50/40',
-          overdue && !urgency && 'bg-red-50/20',
-        )}
-        onClick={onToggle}
-      >
-        {/* Unit label */}
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground/50">
-            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          </span>
-          <span className="text-sm font-medium">{unit.unitLabel}</span>
-          {unit.bedrooms !== null && <span className="text-[11px] text-muted-foreground">{unit.bedrooms}bd</span>}
-        </div>
+    <div className="border-b bg-muted/5 border-l-2 border-l-primary/30 px-4 py-4">
+      <div className="grid gap-4 sm:grid-cols-3">
 
-        {/* Status dropdown */}
-        <div onClick={e => e.stopPropagation()}>
-          <select
-            value={unit.status}
-            onChange={e => onStatusChange(e.target.value)}
-            disabled={isUpdating}
-            className={cn(
-              'rounded-full px-2 py-0.5 text-xs font-medium border-0 cursor-pointer appearance-none text-center w-full',
-              UNIT_STATUS_COLORS[unit.status] ?? 'bg-muted text-muted-foreground',
-              isUpdating && 'opacity-50'
-            )}
-            style={{ backgroundImage: 'none' }}
-          >
-            {UNIT_STATUSES.map(s => <option key={s} value={s}>{UNIT_STATUS_LABELS[s]}</option>)}
-          </select>
-        </div>
-
-        {/* Tenant */}
-        <span className="text-sm text-muted-foreground truncate hidden sm:block">
+        {/* ---- LEASE INFO ---- */}
+        <div className="rounded-lg border bg-background p-3 space-y-2">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+            <Calendar className="h-3 w-3" /> Lease
+          </h4>
           {unit.tenant ? (
-            <span className="flex items-center gap-1">
-              <User className="h-3 w-3 shrink-0 opacity-50" />
-              {unit.tenant.name}
-            </span>
-          ) : <span className="text-muted-foreground/40">—</span>}
-        </span>
-
-        {/* Lease end */}
-        <div className="hidden sm:block">
-          {unit.leaseEndDate ? (
-            <span className={cn('inline-flex items-center gap-1 text-xs', urgency ? 'font-medium' : 'text-muted-foreground')}>
-              {urgency && <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', URGENCY_DOT[urgency])} />}
-              {fmtShortDate(unit.leaseEndDate)}
-              {urgency && days !== null && <span className="text-[10px] opacity-70">({days}d)</span>}
-            </span>
-          ) : <span className="text-xs text-muted-foreground/40">—</span>}
-        </div>
-
-        {/* Rent */}
-        <span className="text-xs font-medium text-right tabular-nums hidden sm:block">
-          {unit.monthlyRent ? fmt(unit.monthlyRent) : <span className="text-muted-foreground/40">—</span>}
-        </span>
-
-        {/* Balance */}
-        <div className="hidden sm:block text-right">
-          {(() => {
-            const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + c.amount, 0)
-            const paid = unit.tenantPayments.reduce((s, p) => s + p.amount, 0)
-            const bal = charged - paid
-            if (charged === 0 && paid === 0) return <span className="text-xs text-muted-foreground/40">—</span>
-            return <span className={cn('text-xs font-medium tabular-nums', bal > 0 ? 'text-red-600' : 'text-green-600')}>
-              {bal > 0 ? `+${fmt(bal)}` : bal < 0 ? `-${fmt(Math.abs(bal))}` : 'Clear'}
-            </span>
-          })()}
-        </div>
-
-        {/* Maintenance badge */}
-        <div className="text-center hidden sm:block">
-          {unit.openMaintenance > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-xs text-orange-600 font-medium">
-              <Wrench className="h-3 w-3" />{unit.openMaintenance}
-            </span>
-          ) : <span className="text-xs text-muted-foreground/30">—</span>}
-        </div>
-
-        {/* Message badge */}
-        <div className="text-center hidden sm:block">
-          {unit.unreadMessages > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-xs text-blue-600 font-medium">
-              <MessageSquare className="h-3 w-3" />{unit.unreadMessages}
-            </span>
-          ) : <span className="text-xs text-muted-foreground/30">—</span>}
-        </div>
-      </div>
-
-      {/* Expanded detail */}
-      {isExpanded && (
-        <div className="px-4 pb-4 pt-1 ml-6 border-l-2 border-muted">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-            {/* ---- LEASE INFO ---- */}
-            <div className="rounded-lg border p-3 space-y-2">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <Calendar className="h-3 w-3" /> Lease
-              </h4>
-              {unit.tenant ? (
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Tenant</span><span className="font-medium">{unit.tenant.name}</span></div>
-                  {unit.tenant.email && <div className="flex justify-between"><span className="text-muted-foreground">Email</span><a href={`mailto:${unit.tenant.email}`} className="text-primary hover:underline text-xs">{unit.tenant.email}</a></div>}
-                  {unit.tenant.phone && <div className="flex justify-between"><span className="text-muted-foreground">Phone</span><a href={`tel:${unit.tenant.phone}`} className="text-primary hover:underline text-xs">{unit.tenant.phone}</a></div>}
-                  {unit.leaseStartDate && unit.leaseEndDate && <div className="flex justify-between"><span className="text-muted-foreground">Period</span><span className="text-xs">{fmtDate(unit.leaseStartDate)} — {fmtDate(unit.leaseEndDate)}</span></div>}
-                  {unit.leaseStatus && <div className="flex justify-between items-center"><span className="text-muted-foreground">Status</span><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', LEASE_STATUS_COLORS[unit.leaseStatus] ?? 'bg-muted')}>{LEASE_STATUS_LABELS[unit.leaseStatus] ?? unit.leaseStatus}</span></div>}
-                  {unit.leaseMonthlyRent && <div className="flex justify-between"><span className="text-muted-foreground">Rent</span><span className="font-medium">{fmt(unit.leaseMonthlyRent)}/mo</span></div>}
-                  {urgency && unit.leaseEndDate && (
-                    <div className={cn('mt-2 rounded-md border px-2.5 py-1.5 text-xs flex items-center gap-1.5', URGENCY_STYLES[urgency])}>
-                      <AlertTriangle className="h-3 w-3 shrink-0" />
-                      Lease expires in {days} day{days !== 1 ? 's' : ''}
-                    </div>
-                  )}
-                  <Link href={`/projects/${property.slug}/tenants/${unit.tenant.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1">
-                    <ExternalLink className="h-3 w-3" /> Tenant detail
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">No active lease</p>
-                  <Link href={`/projects/${property.slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                    <ExternalLink className="h-3 w-3" /> Unit settings
-                  </Link>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Tenant</span><span className="font-medium">{unit.tenant.name}</span></div>
+              {unit.tenant.email && <div className="flex justify-between"><span className="text-muted-foreground">Email</span><a href={`mailto:${unit.tenant.email}`} className="text-primary hover:underline text-xs truncate max-w-[140px]">{unit.tenant.email}</a></div>}
+              {unit.tenant.phone && <div className="flex justify-between"><span className="text-muted-foreground">Phone</span><a href={`tel:${unit.tenant.phone}`} className="text-primary hover:underline text-xs">{unit.tenant.phone}</a></div>}
+              {unit.leaseStartDate && unit.leaseEndDate && <div className="flex justify-between"><span className="text-muted-foreground">Period</span><span className="text-xs">{fmtDate(unit.leaseStartDate)} — {fmtDate(unit.leaseEndDate)}</span></div>}
+              {unit.leaseStatus && <div className="flex justify-between items-center"><span className="text-muted-foreground">Status</span><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', LEASE_STATUS_COLORS[unit.leaseStatus] ?? 'bg-muted')}>{LEASE_STATUS_LABELS[unit.leaseStatus] ?? unit.leaseStatus}</span></div>}
+              {unit.leaseMonthlyRent && <div className="flex justify-between"><span className="text-muted-foreground">Rent</span><span className="font-medium">{fmt(unit.leaseMonthlyRent)}/mo</span></div>}
+              {urgency && unit.leaseEndDate && (
+                <div className={cn('mt-1 rounded-md border px-2.5 py-1.5 text-xs flex items-center gap-1.5', URGENCY_STYLES[urgency])}>
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  Expires in {days} day{days !== 1 ? 's' : ''}
                 </div>
               )}
+              <Link href={`/projects/${property.slug}/tenants/${unit.tenant.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1">
+                <ExternalLink className="h-3 w-3" /> Tenant detail
+              </Link>
             </div>
+          ) : (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">No active lease</p>
+              <Link href={`/projects/${property.slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                <ExternalLink className="h-3 w-3" /> Unit settings
+              </Link>
+            </div>
+          )}
+        </div>
 
-            {/* ---- LEDGER SUMMARY ---- */}
-            <div className="rounded-lg border p-3 space-y-2">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <DollarSign className="h-3 w-3" /> Ledger
-              </h4>
-              {unit.tenantCharges.length > 0 || unit.tenantPayments.length > 0 ? (() => {
-                const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + c.amount, 0)
-                const paid = unit.tenantPayments.reduce((s, p) => s + p.amount, 0)
-                const balance = charged - paid
-                return (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-1 text-center">
-                      <div className="rounded-md bg-muted/40 px-1.5 py-1">
-                        <p className="text-[10px] text-muted-foreground">Charged</p>
-                        <p className="text-xs font-semibold tabular-nums">{fmtFull(charged)}</p>
-                      </div>
-                      <div className="rounded-md bg-muted/40 px-1.5 py-1">
-                        <p className="text-[10px] text-muted-foreground">Paid</p>
-                        <p className="text-xs font-semibold text-green-700 tabular-nums">{fmtFull(paid)}</p>
-                      </div>
-                      <div className={cn('rounded-md px-1.5 py-1', balance > 0 ? 'bg-red-50' : 'bg-green-50')}>
-                        <p className="text-[10px] text-muted-foreground">Balance</p>
-                        <p className={cn('text-xs font-semibold tabular-nums', balance > 0 ? 'text-red-700' : 'text-green-700')}>
-                          {balance > 0 ? `+${fmtFull(balance)}` : balance < 0 ? `-${fmtFull(Math.abs(balance))}` : 'Clear'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      {unit.tenantCharges.slice(0, 3).map(c => (
-                        <div key={c.id} className={cn('flex items-center gap-2 text-xs', c.forgivenAt && 'opacity-40 line-through')}>
-                          <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0', CHARGE_TYPE_COLORS[c.type] ?? 'bg-muted')}>
-                            {CHARGE_TYPE_LABELS[c.type] ?? c.type}
-                          </span>
-                          <span className="text-muted-foreground shrink-0">{fmtMonthYear(c.dueDate)}</span>
-                          <span className="font-medium tabular-nums ml-auto">{fmtFull(c.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {unit.paymentDueDay && (
-                      <p className="text-[11px] text-muted-foreground">Due day {unit.paymentDueDay} of each month</p>
-                    )}
-                    <Link href={`/projects/${property.slug}/financials`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                      <ExternalLink className="h-3 w-3" /> Financials
-                    </Link>
+        {/* ---- LEDGER SUMMARY ---- */}
+        <div className="rounded-lg border bg-background p-3 space-y-2">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+            <DollarSign className="h-3 w-3" /> Ledger
+          </h4>
+          {charged > 0 || paid > 0 ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-1 text-center">
+                <div className="rounded-md bg-muted/40 px-1.5 py-1">
+                  <p className="text-[10px] text-muted-foreground">Charged</p>
+                  <p className="text-xs font-semibold tabular-nums">{fmtFull(charged)}</p>
+                </div>
+                <div className="rounded-md bg-muted/40 px-1.5 py-1">
+                  <p className="text-[10px] text-muted-foreground">Paid</p>
+                  <p className="text-xs font-semibold text-green-700 tabular-nums">{fmtFull(paid)}</p>
+                </div>
+                <div className={cn('rounded-md px-1.5 py-1', balance > 0 ? 'bg-red-50' : 'bg-green-50')}>
+                  <p className="text-[10px] text-muted-foreground">Balance</p>
+                  <p className={cn('text-xs font-semibold tabular-nums', balance > 0 ? 'text-red-700' : 'text-green-700')}>
+                    {balance > 0 ? `+${fmtFull(balance)}` : balance < 0 ? `-${fmtFull(Math.abs(balance))}` : 'Clear'}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-1">
+                {unit.tenantCharges.slice(0, 3).map(c => (
+                  <div key={c.id} className={cn('flex items-center gap-2 text-xs', c.forgivenAt && 'opacity-40 line-through')}>
+                    <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0', CHARGE_TYPE_COLORS[c.type] ?? 'bg-muted')}>
+                      {CHARGE_TYPE_LABELS[c.type] ?? c.type}
+                    </span>
+                    <span className="text-muted-foreground shrink-0">{fmtMonthYear(c.dueDate)}</span>
+                    <span className="font-medium tabular-nums ml-auto">{fmtFull(c.amount)}</span>
                   </div>
-                )
-              })() : (
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">No ledger records</p>
-                  <Link href={`/projects/${property.slug}/financials`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                    <ExternalLink className="h-3 w-3" /> Financials
-                  </Link>
-                </div>
-              )}
+                ))}
+              </div>
+              <Link href={`/projects/${property.slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                <ExternalLink className="h-3 w-3" /> Apply levy / full ledger
+              </Link>
             </div>
+          ) : (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">No ledger records</p>
+              <Link href={`/projects/${property.slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                <ExternalLink className="h-3 w-3" /> Apply levy / full ledger
+              </Link>
+            </div>
+          )}
+        </div>
 
-            {/* ---- MAINTENANCE ---- */}
-            <div className="rounded-lg border p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                  <Wrench className="h-3 w-3" /> Maintenance
-                </h4>
+        {/* ---- MAINTENANCE + MESSAGES ---- */}
+        <div className="space-y-3">
+          <div className="rounded-lg border bg-background p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Wrench className="h-3 w-3" /> Maintenance
+              </h4>
+              <button
+                type="button"
+                onClick={onCreateMaintenance}
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="h-3 w-3" /> New
+              </button>
+            </div>
+            {unit.maintenanceRequests.length > 0 ? (
+              <div className="space-y-1.5">
+                {unit.maintenanceRequests.slice(0, 3).map(req => (
+                  <div key={req.id} className="flex items-start justify-between gap-2 text-xs">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{req.title}</p>
+                      {req.tenant && <p className="text-muted-foreground truncate">{req.tenant.name}</p>}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                      <select
+                        value={req.status}
+                        onChange={e => onMaintenanceStatusChange(req.id, e.target.value)}
+                        className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border-0 cursor-pointer appearance-none bg-muted text-muted-foreground"
+                        style={{ backgroundImage: 'none' }}
+                      >
+                        {MAINTENANCE_STATUSES.map(s => <option key={s} value={s}>{MAINTENANCE_STATUS_LABELS[s]}</option>)}
+                      </select>
+                      <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', MAINTENANCE_PRIORITY_COLORS[req.priority] ?? 'bg-muted')}>
+                        {(MAINTENANCE_PRIORITY_LABELS[req.priority] ?? req.priority).charAt(0)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <Link href={`/projects/${property.slug}/maintenance`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                  <ExternalLink className="h-3 w-3" /> All requests
+                </Link>
+              </div>
+            ) : <p className="text-xs text-muted-foreground">No open requests</p>}
+          </div>
+
+          <div className="rounded-lg border bg-background p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <MessageSquare className="h-3 w-3" /> Messages
+                {unit.unreadMessages > 0 && (
+                  <span className="rounded-full bg-blue-100 text-blue-700 px-1.5 py-0 text-[10px] font-medium">{unit.unreadMessages}</span>
+                )}
+              </h4>
+              {unit.tenant && (
                 <button
                   type="button"
-                  onClick={onCreateMaintenance}
+                  onClick={onSendMessage}
                   className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
-                  <Plus className="h-3 w-3" /> New
+                  <Send className="h-3 w-3" /> Reply
                 </button>
-              </div>
-              {unit.maintenanceRequests.length > 0 ? (
-                <div className="space-y-1.5">
-                  {unit.maintenanceRequests.slice(0, 3).map(req => (
-                    <div key={req.id} className="flex items-start justify-between gap-2 text-xs">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium truncate">{req.title}</p>
-                        {req.tenant && <p className="text-muted-foreground truncate">{req.tenant.name}</p>}
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
-                        <select
-                          value={req.status}
-                          onChange={e => updateMaintenanceStatus(req.id, e.target.value)}
-                          className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border-0 cursor-pointer appearance-none bg-muted text-muted-foreground"
-                          style={{ backgroundImage: 'none' }}
-                        >
-                          {MAINTENANCE_STATUSES.map(s => <option key={s} value={s}>{MAINTENANCE_STATUS_LABELS[s]}</option>)}
-                        </select>
-                        <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', MAINTENANCE_PRIORITY_COLORS[req.priority] ?? 'bg-muted')}>
-                          {(MAINTENANCE_PRIORITY_LABELS[req.priority] ?? req.priority).charAt(0)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  {unit.maintenanceRequests.length > 3 && (
-                    <p className="text-[11px] text-muted-foreground">+{unit.maintenanceRequests.length - 3} more</p>
-                  )}
-                  <Link href={`/projects/${property.slug}/maintenance`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                    <ExternalLink className="h-3 w-3" /> All requests
-                  </Link>
-                </div>
-              ) : <p className="text-xs text-muted-foreground">No open requests</p>}
-            </div>
-
-            {/* ---- MESSAGES ---- */}
-            <div className="rounded-lg border p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                  <MessageSquare className="h-3 w-3" /> Messages
-                  {unit.unreadMessages > 0 && (
-                    <span className="rounded-full bg-blue-100 text-blue-700 px-1.5 py-0 text-[10px] font-medium">{unit.unreadMessages}</span>
-                  )}
-                </h4>
-                {unit.tenant && (
-                  <button
-                    type="button"
-                    onClick={onSendMessage}
-                    className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-                  >
-                    <Send className="h-3 w-3" /> Reply
-                  </button>
-                )}
-              </div>
-              {unit.recentMessages.length > 0 ? (
-                <div className="space-y-1.5">
-                  {unit.recentMessages.slice(0, 3).map(msg => (
-                    <div key={msg.id} className="text-xs">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="font-medium truncate">{msg.tenant?.name ?? 'Tenant'}</span>
-                        <span className="text-[10px] text-muted-foreground shrink-0">{fmtRelativeTime(msg.createdAt)}</span>
-                      </div>
-                      {msg.subject && <p className="text-muted-foreground font-medium truncate">{msg.subject}</p>}
-                      <p className="text-muted-foreground truncate">{msg.body}</p>
-                    </div>
-                  ))}
-                  {unit.recentMessages.length > 3 && (
-                    <Link href={`/projects/${property.slug}/messages`} className="text-[11px] text-primary hover:underline">
-                      View all messages
-                    </Link>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">{unit.tenant ? 'No unread messages' : 'No tenant'}</p>
-              )}
-              {unit.tenant && (
-                <Link
-                  href={`/projects/${property.slug}/units/${unit.id}`}
-                  className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1"
-                >
-                  <ExternalLink className="h-3 w-3" /> Full thread
-                </Link>
               )}
             </div>
+            {unit.recentMessages.length > 0 ? (
+              <div className="space-y-1.5">
+                {unit.recentMessages.slice(0, 2).map(msg => (
+                  <div key={msg.id} className="text-xs">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-medium truncate">{msg.tenant?.name ?? 'Tenant'}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">{fmtRelativeTime(msg.createdAt)}</span>
+                    </div>
+                    <p className="text-muted-foreground truncate">{msg.body}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">{unit.tenant ? 'No unread messages' : 'No tenant'}</p>
+            )}
+            {unit.tenant && (
+              <Link href={`/projects/${property.slug}/messages`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1">
+                <ExternalLink className="h-3 w-3" /> All messages
+              </Link>
+            )}
           </div>
         </div>
-      )}
+
+      </div>
     </div>
   )
 }
