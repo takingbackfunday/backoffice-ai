@@ -86,7 +86,18 @@ export async function DELETE(
     })
     if (!existing) return notFound('Transaction not found')
 
-    await prisma.transaction.delete({ where: { id } })
+    await prisma.$transaction([
+      // Remove attribution from any tenant payment linked to this transaction
+      prisma.tenantPayment.updateMany({
+        where: { transactionId: id },
+        data: { transactionId: null },
+      }),
+      // Delete any pending/accepted payment suggestions referencing this transaction
+      prisma.tenantPaymentSuggestion.deleteMany({
+        where: { transactionId: id },
+      }),
+      prisma.transaction.delete({ where: { id } }),
+    ])
     return ok({ deleted: true })
   } catch {
     return serverError('Failed to delete transaction')
