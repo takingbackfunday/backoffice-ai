@@ -69,17 +69,15 @@ export function TenantDetailClient({ projectId, tenant }: Props) {
               {inviteStatus === 'INVITED' && <Clock className="h-3 w-3" />}
               {INVITE_LABELS[inviteStatus] ?? inviteStatus}
             </span>
-            {inviteStatus !== 'ACTIVE' && (
-              <button
-                type="button"
-                onClick={handleInvite}
-                disabled={inviting}
-                className="flex items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted/50 disabled:opacity-50 transition-colors"
-              >
-                <Mail className="h-3.5 w-3.5" />
-                {inviting ? 'Sending…' : inviteStatus === 'INVITED' ? 'Resend invite' : 'Invite to portal'}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleInvite}
+              disabled={inviting}
+              className="flex items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted/50 disabled:opacity-50 transition-colors"
+            >
+              <Mail className="h-3.5 w-3.5" />
+              {inviting ? 'Sending…' : inviteStatus === 'NONE' ? 'Invite to portal' : 'Resend invite'}
+            </button>
           </div>
         </div>
         {inviteError && <p className="text-xs text-destructive mb-2">{inviteError}</p>}
