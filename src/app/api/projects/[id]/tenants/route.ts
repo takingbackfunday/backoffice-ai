@@ -76,6 +76,39 @@ export async function POST(request: Request, { params }: RouteParams) {
       data: { userId, ...parsed.data },
     })
 
+    // Auto-create a categorization rule: description contains tenant name → payee + project
+    try {
+      // Upsert payee for tenant name
+      const payee = await prisma.payee.upsert({
+        where: { userId_name: { userId, name: tenant.name } },
+        create: { userId, name: tenant.name },
+        update: {},
+      })
+
+      // Find lowest existing priority to slot this rule at the end
+      const lowestPriority = await prisma.categorizationRule.findFirst({
+        where: { userId },
+        orderBy: { priority: 'desc' },
+        select: { priority: true },
+      })
+      const priority = (lowestPriority?.priority ?? 50) + 1
+
+      await prisma.categorizationRule.create({
+        data: {
+          userId,
+          name: `${tenant.name} — rent payment`,
+          priority,
+          conditions: { any: [{ field: 'description', operator: 'contains', value: tenant.name.toLowerCase() }] },
+          categoryName: 'Income',
+          payeeId: payee.id,
+          projectId: project.id,
+          isActive: true,
+        },
+      })
+    } catch {
+      // Rule creation is best-effort — don't fail tenant creation if it errors
+    }
+
     return created(tenant)
   } catch {
     return serverError('Failed to create tenant')
