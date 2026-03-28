@@ -144,14 +144,34 @@ export async function matchTenantPayments(userId: string, newTxIds: string[]): P
 
     console.log(`[rent-matching]   → matched to "${best.tenantName}" (confidence=${confidence})`)
 
-    suggestionsToCreate.push({
-      userId,
-      transactionId: tx.id,
-      tenantId: best.tenantId,
-      leaseId: best.leaseId,
-      confidence,
-      reasoning,
-    })
+    if (confidence === 'high') {
+      // Auto-attribute — no manager review needed
+      try {
+        await prisma.tenantPayment.create({
+          data: {
+            tenantId: best.tenantId,
+            leaseId: best.leaseId,
+            amount: tx.amount,
+            paidDate: tx.date,
+            transactionId: tx.id,
+            notes: `Auto-attributed via name match (${confidence} confidence): ${reasoning}`,
+          },
+        })
+        // Mark any pending suggestions for this tx as accepted
+        await prisma.tenantPaymentSuggestion.updateMany({
+          where: { transactionId: tx.id, status: 'PENDING' },
+          data: { status: 'ACCEPTED' },
+        })
+        console.log(`[rent-matching]   → auto-attributed to "${best.tenantName}"`)
+      } catch {
+        // If auto-attribution fails (e.g. duplicate), fall back to suggestion
+        suggestionsToCreate.push({ userId, transactionId: tx.id, tenantId: best.tenantId, leaseId: best.leaseId, confidence, reasoning })
+        console.log(`[rent-matching]   → auto-attribution failed, falling back to suggestion`)
+      }
+    } else {
+      // Medium confidence — queue for manager review
+      suggestionsToCreate.push({ userId, transactionId: tx.id, tenantId: best.tenantId, leaseId: best.leaseId, confidence, reasoning })
+    }
   }
 
   if (suggestionsToCreate.length > 0) {
@@ -159,6 +179,6 @@ export async function matchTenantPayments(userId: string, newTxIds: string[]): P
       data: suggestionsToCreate,
       skipDuplicates: true,
     })
-    console.log(`[rent-matching] created ${suggestionsToCreate.length} suggestion(s)`)
+    console.log(`[rent-matching] created ${suggestionsToCreate.length} suggestion(s) for manual review`)
   }
 }
