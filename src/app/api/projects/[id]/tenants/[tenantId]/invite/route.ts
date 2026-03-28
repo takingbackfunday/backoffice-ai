@@ -33,7 +33,6 @@ export async function POST(_req: Request, { params }: RouteParams) {
         role: 'tenant',
         tenantId: tenant.id,
       },
-      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/auth/callback`,
       ignoreExisting: true,
     })
 
