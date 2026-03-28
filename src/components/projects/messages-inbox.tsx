@@ -10,6 +10,7 @@ interface Thread {
   tenantName: string
   unitLabel: string
   unitId: string
+  subject: string | null
   lastMessage: string
   lastAt: string
   unread: number
@@ -64,9 +65,12 @@ export function MessagesInbox({ slug, threads }: Props) {
                 <span className="text-xs text-muted-foreground shrink-0">{fmtDate(t.lastAt)}</span>
               </div>
               <p className="text-xs text-muted-foreground mb-0.5">{t.unitLabel}</p>
-              <p className={cn('text-sm truncate', t.unread > 0 ? 'text-foreground' : 'text-muted-foreground')}>
-                {t.lastMessage}
-              </p>
+              {t.subject && (
+                <p className={cn('text-sm font-medium truncate', t.unread > 0 ? 'text-foreground' : 'text-muted-foreground')}>
+                  {t.subject}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground truncate">{t.lastMessage}</p>
             </div>
             {t.unread > 0 && (
               <span className="mt-1 shrink-0 rounded-full bg-primary w-2 h-2" />

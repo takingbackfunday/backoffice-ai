@@ -51,18 +51,21 @@ export default async function ProjectMessageThreadPage({ params }: PageParams) {
   })
   const threadMap = new Map<string, {
     tenantId: string; tenantName: string; unitLabel: string; unitId: string;
-    lastMessage: string; lastAt: string; unread: number
+    subject: string | null; lastMessage: string; lastAt: string; unread: number
   }>()
   for (const msg of allMessages) {
     if (!threadMap.has(msg.tenantId)) {
       threadMap.set(msg.tenantId, {
         tenantId: msg.tenantId, tenantName: msg.tenant.name,
         unitLabel: msg.unit.unitLabel, unitId: msg.unitId,
-        lastMessage: msg.body, lastAt: msg.createdAt.toISOString(),
+        subject: msg.subject, lastMessage: msg.body,
+        lastAt: msg.createdAt.toISOString(),
         unread: !msg.isRead && msg.senderRole === 'tenant' ? 1 : 0,
       })
-    } else if (!msg.isRead && msg.senderRole === 'tenant') {
-      threadMap.get(msg.tenantId)!.unread += 1
+    } else {
+      const t = threadMap.get(msg.tenantId)!
+      if (!t.subject && msg.subject) t.subject = msg.subject
+      if (!msg.isRead && msg.senderRole === 'tenant') t.unread += 1
     }
   }
   const threads = Array.from(threadMap.values())

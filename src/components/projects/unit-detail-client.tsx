@@ -17,7 +17,7 @@ interface MaintenanceRequest {
   tenant: Tenant | null
 }
 interface Message {
-  id: string; senderRole: string; body: string; createdAt: string; isRead: boolean;
+  id: string; senderRole: string; subject: string | null; body: string; createdAt: string; isRead: boolean;
   tenant: Tenant
 }
 interface UnitDetail {

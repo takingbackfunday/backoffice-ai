@@ -32,13 +32,8 @@ export default async function ProjectMessagesPage({ params }: PageParams) {
 
   // Build thread list: one entry per tenant, showing last message
   const threadMap = new Map<string, {
-    tenantId: string
-    tenantName: string
-    unitLabel: string
-    unitId: string
-    lastMessage: string
-    lastAt: string
-    unread: number
+    tenantId: string; tenantName: string; unitLabel: string; unitId: string
+    subject: string | null; lastMessage: string; lastAt: string; unread: number
   }>()
 
   for (const msg of messages) {
@@ -48,13 +43,15 @@ export default async function ProjectMessagesPage({ params }: PageParams) {
         tenantName: msg.tenant.name,
         unitLabel: msg.unit.unitLabel,
         unitId: msg.unitId,
+        subject: msg.subject,
         lastMessage: msg.body,
         lastAt: msg.createdAt.toISOString(),
         unread: !msg.isRead && msg.senderRole === 'tenant' ? 1 : 0,
       })
-    } else if (!msg.isRead && msg.senderRole === 'tenant') {
+    } else {
       const t = threadMap.get(msg.tenantId)!
-      t.unread += 1
+      if (!t.subject && msg.subject) t.subject = msg.subject
+      if (!msg.isRead && msg.senderRole === 'tenant') t.unread += 1
     }
   }
 
