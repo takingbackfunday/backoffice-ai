@@ -1,5 +1,5 @@
 [build]
-  command = "pnpm prisma generate && pnpm prisma db push --accept-data-loss && pnpm run build"
+  command = "pnpm prisma generate && pnpm run build"
   publish = ".next"
 
 [functions]
