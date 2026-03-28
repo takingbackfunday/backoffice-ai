@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation'
 import {
   Wrench, Building2, Search, ChevronDown, ChevronRight,
   AlertTriangle, MapPin, Plus, X, ExternalLink,
-  User, Calendar, DollarSign, Home, ArrowUpRight,
-  MessageSquare, Send, CircleAlert, Mail,
+  User, Calendar, DollarSign,
+  MessageSquare, Send, Mail,
 } from 'lucide-react'
 import {
   UNIT_STATUS_COLORS, UNIT_STATUS_LABELS,
@@ -324,43 +324,6 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
         />
       </div>
 
-      {/* Alerts row */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        {kpis.openMaintenance > 0 && (
-          <button
-            type="button"
-            onClick={() => setStatusFilter('MAINTENANCE_OPEN')}
-            className="flex-1 flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2 text-sm text-orange-800 hover:bg-orange-100 transition-colors text-left"
-          >
-            <Wrench className="h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1">{kpis.openMaintenance} open maintenance</span>
-            <ArrowUpRight className="h-3 w-3 opacity-50" />
-          </button>
-        )}
-        {kpis.overduePayments > 0 && (
-          <button
-            type="button"
-            onClick={() => setStatusFilter('RENT_OVERDUE')}
-            className="flex-1 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 hover:bg-red-100 transition-colors text-left"
-          >
-            <CircleAlert className="h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1">{kpis.overduePayments} overdue rent payment{kpis.overduePayments !== 1 ? 's' : ''}</span>
-            <ArrowUpRight className="h-3 w-3 opacity-50" />
-          </button>
-        )}
-        {kpis.unreadMessages > 0 && (
-          <button
-            type="button"
-            onClick={() => setStatusFilter('UNREAD_MESSAGES')}
-            className="flex-1 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 hover:bg-blue-100 transition-colors text-left"
-          >
-            <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1">{kpis.unreadMessages} unread message{kpis.unreadMessages !== 1 ? 's' : ''}</span>
-            <ArrowUpRight className="h-3 w-3 opacity-50" />
-          </button>
-        )}
-      </div>
-
       {/* ============================================================= */}
       {/*  SEARCH + FILTER BAR                                           */}
       {/* ============================================================= */}
@@ -426,7 +389,7 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {filteredProperties.map(property => {
             const leased = property.units.filter(u => u.status === 'LEASED').length
             const total = property.units.length
@@ -487,12 +450,13 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
                 {/* Units */}
                 {isExpanded && (
                   <div className="border-t">
-                    <div className="hidden sm:grid grid-cols-[minmax(90px,1fr)_90px_minmax(100px,1.2fr)_90px_80px_44px_44px] gap-2 px-4 py-2 bg-muted/30 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    <div className="hidden sm:grid grid-cols-[minmax(90px,1fr)_90px_minmax(100px,1.2fr)_90px_70px_70px_44px_44px] gap-2 px-4 py-2 bg-muted/30 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                       <span>Unit</span>
                       <span>Status</span>
                       <span>Tenant</span>
                       <span>Lease ends</span>
                       <span className="text-right">Rent</span>
+                      <span className="text-right">Balance</span>
                       <span className="text-center" title="Maintenance"><Wrench className="h-3 w-3 mx-auto" /></span>
                       <span className="text-center" title="Messages"><Mail className="h-3 w-3 mx-auto" /></span>
                     </div>
@@ -517,28 +481,6 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
                       ))}
                     </div>
 
-                    {/* Property footer */}
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/20 border-t text-xs">
-                      <Link href={`/projects/${property.slug}/units`} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                        <Home className="h-3 w-3" /> Units
-                      </Link>
-                      <span className="text-muted-foreground/30">·</span>
-                      <Link href={`/projects/${property.slug}/leases`} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                        <Calendar className="h-3 w-3" /> Leases
-                      </Link>
-                      <span className="text-muted-foreground/30">·</span>
-                      <Link href={`/projects/${property.slug}/maintenance`} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                        <Wrench className="h-3 w-3" /> Maintenance
-                      </Link>
-                      <span className="text-muted-foreground/30">·</span>
-                      <Link href={`/projects/${property.slug}/messages`} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                        <MessageSquare className="h-3 w-3" /> Messages
-                      </Link>
-                      <span className="text-muted-foreground/30">·</span>
-                      <Link href={`/projects/${property.slug}/financials`} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                        <DollarSign className="h-3 w-3" /> Financials
-                      </Link>
-                    </div>
                   </div>
                 )}
               </div>
@@ -626,21 +568,33 @@ function OccupancyRing({ pct }: { pct: number }) {
 /*  Unit Row                                                             */
 /* ==================================================================== */
 
+const MAINTENANCE_STATUSES = ['OPEN', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const
+
 function UnitRow({ unit, property, isExpanded, onToggle, onStatusChange, onCreateMaintenance, onSendMessage, isUpdating }: {
   unit: Unit; property: Property; isExpanded: boolean
   onToggle: () => void; onStatusChange: (status: string) => void
   onCreateMaintenance: () => void; onSendMessage: () => void; isUpdating: boolean
 }) {
+  const router = useRouter()
   const urgency = getLeaseUrgency(unit.leaseEndDate)
   const days = unit.leaseEndDate ? daysUntil(unit.leaseEndDate) : null
   const overdue = hasOverdueRent(unit)
+
+  async function updateMaintenanceStatus(requestId: string, newStatus: string) {
+    await fetch(`/api/projects/${property.id}/maintenance/${requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    router.refresh()
+  }
 
   return (
     <div className={cn(isExpanded && 'bg-muted/10')}>
       {/* Main row */}
       <div
         className={cn(
-          'grid grid-cols-1 sm:grid-cols-[minmax(90px,1fr)_90px_minmax(100px,1.2fr)_90px_80px_44px_44px] gap-2 px-4 py-2.5 items-center hover:bg-muted/20 transition-colors cursor-pointer',
+          'grid grid-cols-1 sm:grid-cols-[minmax(90px,1fr)_90px_minmax(100px,1.2fr)_90px_70px_70px_44px_44px] gap-2 px-4 py-2.5 items-center hover:bg-muted/20 transition-colors cursor-pointer',
           urgency === 'critical' && 'bg-red-50/40',
           overdue && !urgency && 'bg-red-50/20',
         )}
@@ -698,6 +652,19 @@ function UnitRow({ unit, property, isExpanded, onToggle, onStatusChange, onCreat
           {unit.monthlyRent ? fmt(unit.monthlyRent) : <span className="text-muted-foreground/40">—</span>}
         </span>
 
+        {/* Balance */}
+        <div className="hidden sm:block text-right">
+          {(() => {
+            const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + c.amount, 0)
+            const paid = unit.tenantPayments.reduce((s, p) => s + p.amount, 0)
+            const bal = charged - paid
+            if (charged === 0 && paid === 0) return <span className="text-xs text-muted-foreground/40">—</span>
+            return <span className={cn('text-xs font-medium tabular-nums', bal > 0 ? 'text-red-600' : 'text-green-600')}>
+              {bal > 0 ? `+${fmt(bal)}` : bal < 0 ? `-${fmt(Math.abs(bal))}` : 'Clear'}
+            </span>
+          })()}
+        </div>
+
         {/* Maintenance badge */}
         <div className="text-center hidden sm:block">
           {unit.openMaintenance > 0 ? (
@@ -741,8 +708,18 @@ function UnitRow({ unit, property, isExpanded, onToggle, onStatusChange, onCreat
                       Lease expires in {days} day{days !== 1 ? 's' : ''}
                     </div>
                   )}
+                  <Link href={`/projects/${property.slug}/tenants/${unit.tenant.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1">
+                    <ExternalLink className="h-3 w-3" /> Tenant detail
+                  </Link>
                 </div>
-              ) : <p className="text-xs text-muted-foreground">No active lease</p>}
+              ) : (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">No active lease</p>
+                  <Link href={`/projects/${property.slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                    <ExternalLink className="h-3 w-3" /> Unit settings
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* ---- LEDGER SUMMARY ---- */}
@@ -786,10 +763,18 @@ function UnitRow({ unit, property, isExpanded, onToggle, onStatusChange, onCreat
                     {unit.paymentDueDay && (
                       <p className="text-[11px] text-muted-foreground">Due day {unit.paymentDueDay} of each month</p>
                     )}
+                    <Link href={`/projects/${property.slug}/financials`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                      <ExternalLink className="h-3 w-3" /> Financials
+                    </Link>
                   </div>
                 )
               })() : (
-                <p className="text-xs text-muted-foreground">No ledger records</p>
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">No ledger records</p>
+                  <Link href={`/projects/${property.slug}/financials`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                    <ExternalLink className="h-3 w-3" /> Financials
+                  </Link>
+                </div>
               )}
             </div>
 
@@ -811,20 +796,31 @@ function UnitRow({ unit, property, isExpanded, onToggle, onStatusChange, onCreat
                 <div className="space-y-1.5">
                   {unit.maintenanceRequests.slice(0, 3).map(req => (
                     <div key={req.id} className="flex items-start justify-between gap-2 text-xs">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium truncate">{req.title}</p>
-                        <p className="text-muted-foreground">{MAINTENANCE_STATUS_LABELS[req.status] ?? req.status}{req.tenant && ` · ${req.tenant.name}`}</p>
+                        {req.tenant && <p className="text-muted-foreground truncate">{req.tenant.name}</p>}
                       </div>
-                      <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0', MAINTENANCE_PRIORITY_COLORS[req.priority] ?? 'bg-muted')}>
-                        {(MAINTENANCE_PRIORITY_LABELS[req.priority] ?? req.priority).charAt(0)}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                        <select
+                          value={req.status}
+                          onChange={e => updateMaintenanceStatus(req.id, e.target.value)}
+                          className="rounded-full px-1.5 py-0.5 text-[10px] font-medium border-0 cursor-pointer appearance-none bg-muted text-muted-foreground"
+                          style={{ backgroundImage: 'none' }}
+                        >
+                          {MAINTENANCE_STATUSES.map(s => <option key={s} value={s}>{MAINTENANCE_STATUS_LABELS[s]}</option>)}
+                        </select>
+                        <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', MAINTENANCE_PRIORITY_COLORS[req.priority] ?? 'bg-muted')}>
+                          {(MAINTENANCE_PRIORITY_LABELS[req.priority] ?? req.priority).charAt(0)}
+                        </span>
+                      </div>
                     </div>
                   ))}
                   {unit.maintenanceRequests.length > 3 && (
-                    <Link href={`/projects/${property.slug}/maintenance`} className="text-[11px] text-primary hover:underline">
-                      +{unit.maintenanceRequests.length - 3} more
-                    </Link>
+                    <p className="text-[11px] text-muted-foreground">+{unit.maintenanceRequests.length - 3} more</p>
                   )}
+                  <Link href={`/projects/${property.slug}/maintenance`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                    <ExternalLink className="h-3 w-3" /> All requests
+                  </Link>
                 </div>
               ) : <p className="text-xs text-muted-foreground">No open requests</p>}
             </div>

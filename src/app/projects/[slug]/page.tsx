@@ -5,8 +5,8 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
-import { JOB_STATUS_LABELS, UNIT_STATUS_LABELS, UNIT_STATUS_COLORS } from '@/types'
-import { cn } from '@/lib/utils'
+import { PropertyOverview } from '@/components/projects/property-overview'
+import { JOB_STATUS_LABELS } from '@/types'
 import Link from 'next/link'
 
 interface PageParams { params: Promise<{ slug: string }> }
@@ -29,11 +29,31 @@ export default async function ProjectDetailPage({ params }: PageParams) {
             include: {
               leases: {
                 where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
-                include: { tenant: true },
+                include: {
+                  tenant: { select: { id: true, name: true, email: true, phone: true } },
+                  tenantCharges: { orderBy: { dueDate: 'desc' }, take: 12 },
+                  tenantPayments: { orderBy: { paidDate: 'desc' }, take: 12 },
+                },
                 orderBy: { startDate: 'desc' },
                 take: 1,
               },
-              _count: { select: { maintenanceRequests: true } },
+              maintenanceRequests: {
+                where: { status: { in: ['OPEN', 'SCHEDULED', 'IN_PROGRESS'] } },
+                include: { tenant: { select: { id: true, name: true } } },
+                orderBy: { createdAt: 'desc' },
+              },
+              messages: {
+                where: { isRead: false, senderRole: 'tenant' },
+                orderBy: { createdAt: 'desc' },
+                take: 5,
+                include: { tenant: { select: { id: true, name: true } } },
+              },
+              _count: {
+                select: {
+                  maintenanceRequests: { where: { status: { in: ['OPEN', 'SCHEDULED', 'IN_PROGRESS'] } } },
+                  messages: { where: { isRead: false, senderRole: 'tenant' } },
+                },
+              },
             },
             orderBy: { unitLabel: 'asc' },
           },
@@ -128,87 +148,64 @@ export default async function ProjectDetailPage({ params }: PageParams) {
 
           {/* PROPERTY overview */}
           {project.type === 'PROPERTY' && project.propertyProfile && (
-            <div className="space-y-6">
-              {/* Property info */}
-              <div className="rounded-lg border p-4">
-                <h2 className="text-sm font-semibold mb-3">Property info</h2>
-                <dl className="grid grid-cols-2 gap-2 text-sm">
-                  <dt className="text-muted-foreground">Address</dt>
-                  <dd>{project.propertyProfile.address}</dd>
-                  {project.propertyProfile.city && (
-                    <>
-                      <dt className="text-muted-foreground">City</dt>
-                      <dd>{project.propertyProfile.city}</dd>
-                    </>
-                  )}
-                  {project.propertyProfile.state && (
-                    <>
-                      <dt className="text-muted-foreground">State</dt>
-                      <dd>{project.propertyProfile.state}</dd>
-                    </>
-                  )}
-                  <dt className="text-muted-foreground">Type</dt>
-                  <dd>{project.propertyProfile.propertyType}</dd>
-                </dl>
-              </div>
-
-              {/* KPI row */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Total units</p>
-                  <p className="text-2xl font-semibold">{project.propertyProfile.units.length}</p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Leased</p>
-                  <p className="text-2xl font-semibold">
-                    {project.propertyProfile.units.filter(u => u.status === 'LEASED').length}
-                  </p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Transactions</p>
-                  <p className="text-2xl font-semibold">{project._count.transactions}</p>
-                </div>
-              </div>
-
-              {/* Units preview */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold">Units</h2>
-                  <Link href={`/projects/${slug}/units`} className="text-xs text-primary hover:underline">
-                    View all
-                  </Link>
-                </div>
-                {serialized.propertyProfile.units.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No units yet.</p>
-                ) : (
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {serialized.propertyProfile.units.slice(0, 6).map((unit: {
-                      id: string; unitLabel: string; status: string; monthlyRent: number | null;
-                      leases: Array<{ tenant: { name: string } }>
-                    }) => (
-                      <Link
-                        key={unit.id}
-                        href={`/projects/${slug}/units/${unit.id}`}
-                        className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm hover:bg-muted/20 transition-colors"
-                      >
-                        <div>
-                          <p className="font-medium">{unit.unitLabel}</p>
-                          {unit.leases[0]?.tenant && (
-                            <p className="text-xs text-muted-foreground">{unit.leases[0].tenant.name}</p>
-                          )}
-                        </div>
-                        <span className={cn(
-                          'rounded-full px-2 py-0.5 text-xs font-medium',
-                          UNIT_STATUS_COLORS[unit.status] ?? 'bg-muted text-muted-foreground'
-                        )}>
-                          {UNIT_STATUS_LABELS[unit.status] ?? unit.status}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <PropertyOverview
+              projectId={project.id}
+              slug={slug}
+              address={project.propertyProfile.address ?? null}
+              city={project.propertyProfile.city ?? null}
+              state={project.propertyProfile.state ?? null}
+              propertyType={project.propertyProfile.propertyType ?? null}
+              totalTransactions={project._count.transactions}
+              units={(project.propertyProfile.units ?? []).map(u => ({
+                id: u.id,
+                unitLabel: u.unitLabel,
+                status: u.status,
+                monthlyRent: u.monthlyRent ? Number(u.monthlyRent) : null,
+                bedrooms: u.bedrooms,
+                tenant: u.leases[0]?.tenant ?? null,
+                leaseId: u.leases[0]?.id ?? null,
+                leaseEndDate: u.leases[0]?.endDate?.toISOString() ?? null,
+                leaseStartDate: u.leases[0]?.startDate?.toISOString() ?? null,
+                leaseStatus: u.leases[0]?.status ?? null,
+                leaseMonthlyRent: u.leases[0]?.monthlyRent ? Number(u.leases[0].monthlyRent) : null,
+                paymentDueDay: u.leases[0]?.paymentDueDay ?? null,
+                openMaintenance: u._count.maintenanceRequests,
+                unreadMessages: u._count.messages,
+                maintenanceRequests: u.maintenanceRequests.map(m => ({
+                  id: m.id,
+                  title: m.title,
+                  description: m.description,
+                  priority: m.priority,
+                  status: m.status,
+                  createdAt: m.createdAt.toISOString(),
+                  tenant: m.tenant ? { id: m.tenant.id, name: m.tenant.name } : null,
+                })),
+                tenantCharges: (u.leases[0]?.tenantCharges ?? []).map(c => ({
+                  id: c.id,
+                  type: c.type,
+                  description: c.description ?? null,
+                  amount: Number(c.amount),
+                  dueDate: c.dueDate.toISOString(),
+                  forgivenAt: c.forgivenAt?.toISOString() ?? null,
+                })),
+                tenantPayments: (u.leases[0]?.tenantPayments ?? []).map(p => ({
+                  id: p.id,
+                  amount: Number(p.amount),
+                  paidDate: p.paidDate.toISOString(),
+                  paymentMethod: p.paymentMethod ?? null,
+                  notes: p.notes ?? null,
+                })),
+                recentMessages: u.messages.map(m => ({
+                  id: m.id,
+                  subject: m.subject,
+                  body: m.body,
+                  createdAt: m.createdAt.toISOString(),
+                  isRead: m.isRead,
+                  senderRole: m.senderRole,
+                  tenant: m.tenant ? { id: m.tenant.id, name: m.tenant.name } : null,
+                })),
+              }))}
+            />
           )}
 
           {/* OTHER overview */}
