@@ -25,6 +25,7 @@ function getTabsForType(slug: string, type: string): Tab[] {
       { label: 'Tenants', href: `${base}/tenants` },
       { label: 'Leases', href: `${base}/leases` },
       { label: 'Maintenance', href: `${base}/maintenance` },
+      { label: 'Messages', href: `${base}/messages` },
       { label: 'Financials', href: `${base}/financials` },
     ]
   }

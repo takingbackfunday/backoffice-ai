@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Send } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
 interface Message {
@@ -20,18 +19,21 @@ interface Props {
   initialMessages: Message[]
 }
 
+function fmtDate(d: string) {
+  const date = new Date(d)
+  const now = new Date()
+  const isToday = date.toDateString() === now.toDateString()
+  if (isToday) return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' · ' +
+    date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
 export function MessageThread({ projectId, unitId, tenantId, tenantName, initialMessages }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  // Poll every 5 seconds for new messages
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -40,90 +42,73 @@ export function MessageThread({ projectId, unitId, tenantId, tenantName, initial
           const json = await res.json()
           if (!json.error) setMessages(json.data)
         }
-      } catch {
-        // Ignore polling errors silently
-      }
+      } catch { /* ignore */ }
     }, 5000)
     return () => clearInterval(interval)
   }, [projectId, tenantId, unitId])
 
-  async function handleSend() {
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault()
     if (!body.trim()) return
     setSending(true)
+    setError(null)
     try {
       const res = await fetch(`/api/projects/${projectId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId, unitId, body }),
+        body: JSON.stringify({ tenantId, unitId, body: body.trim() }),
       })
       const json = await res.json()
-      if (res.ok && !json.error) {
-        setMessages(prev => [...prev, json.data])
-        setBody('')
-      }
+      if (!res.ok || json.error) { setError(json.error ?? 'Failed to send'); return }
+      setMessages(prev => [...prev, json.data])
+      setBody('')
     } finally {
       setSending(false)
     }
   }
 
   return (
-    <div className="rounded-lg border flex flex-col" style={{ height: '400px' }}>
-      <div className="border-b px-4 py-2">
-        <p className="text-xs text-muted-foreground">Conversation with <span className="font-medium text-foreground">{tenantName}</span></p>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">No messages yet. Start the conversation.</p>
-        ) : (
-          messages.map(msg => (
-            <div
-              key={msg.id}
-              className={cn(
-                'flex',
-                msg.senderRole === 'owner' ? 'justify-end' : 'justify-start'
-              )}
-            >
-              <div className={cn(
-                'max-w-[75%] rounded-lg px-3 py-2 text-sm',
-                msg.senderRole === 'owner'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-foreground'
-              )}>
-                <p>{msg.body}</p>
-                <p className={cn(
-                  'text-xs mt-1 opacity-70',
-                  msg.senderRole === 'owner' ? 'text-right' : 'text-left'
-                )}>
-                  {new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                </p>
+    <div className="space-y-1">
+      {messages.length === 0 ? (
+        <div className="rounded-lg border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
+          No messages yet. Send a message to start the conversation with {tenantName}.
+        </div>
+      ) : (
+        <div className="rounded-lg border divide-y">
+          {messages.map(msg => (
+            <div key={msg.id} className={cn('px-5 py-4', msg.senderRole === 'owner' && 'bg-muted/20')}>
+              <div className="flex items-baseline justify-between mb-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {msg.senderRole === 'owner' ? 'You' : tenantName}
+                </span>
+                <span className="text-xs text-muted-foreground">{fmtDate(msg.createdAt)}</span>
               </div>
+              <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
             </div>
-          ))
-        )}
-        <div ref={bottomRef} />
-      </div>
+          ))}
+        </div>
+      )}
 
-      <div className="border-t p-3 flex items-center gap-2">
-        <input
-          type="text"
+      <form onSubmit={handleSend} className="pt-4 space-y-2">
+        <textarea
           value={body}
           onChange={e => setBody(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-          placeholder="Type a message…"
-          className="flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          placeholder={`Reply to ${tenantName}…`}
+          rows={4}
+          className="w-full rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
           disabled={sending}
         />
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={sending || !body.trim()}
-          className="rounded-md bg-primary p-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          aria-label="Send message"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </div>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={sending || !body.trim()}
+            className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            {sending ? 'Sending…' : 'Send message'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
