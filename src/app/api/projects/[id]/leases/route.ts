@@ -37,7 +37,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       include: {
         unit: true,
         tenant: true,
-        _count: { select: { rentPayments: true } },
+        _count: { select: { tenantCharges: true, tenantPayments: true } },
       },
       orderBy: { startDate: 'desc' },
     })

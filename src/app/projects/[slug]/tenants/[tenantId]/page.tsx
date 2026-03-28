@@ -26,7 +26,8 @@ export default async function TenantDetailPage({ params }: PageParams) {
       leases: {
         include: {
           unit: true,
-          rentPayments: { orderBy: { dueDate: 'desc' } },
+          tenantCharges: { orderBy: { dueDate: 'desc' } },
+          tenantPayments: { orderBy: { paidDate: 'desc' } },
         },
         orderBy: { startDate: 'desc' },
       },

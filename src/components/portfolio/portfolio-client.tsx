@@ -7,8 +7,7 @@ import {
   Wrench, Building2, Search, ChevronDown, ChevronRight,
   AlertTriangle, MapPin, Plus, X, ExternalLink,
   User, Calendar, DollarSign, Home, ArrowUpRight,
-  MessageSquare, Send, CheckCircle2, Clock, CircleAlert,
-  CircleDollarSign, Mail,
+  MessageSquare, Send, CircleAlert, Mail,
 } from 'lucide-react'
 import {
   UNIT_STATUS_COLORS, UNIT_STATUS_LABELS,
@@ -27,10 +26,14 @@ interface MaintenanceRequest {
   tenant: { id: string; name: string } | null
 }
 
-interface RentPayment {
-  id: string; amount: number; dueDate: string;
-  paidDate: string | null; status: string;
-  lateFeeApplied: number | null; notes: string | null
+interface TenantCharge {
+  id: string; type: string; description: string | null;
+  amount: number; dueDate: string; forgivenAt: string | null
+}
+
+interface TenantPayment {
+  id: string; amount: number; paidDate: string;
+  paymentMethod: string | null; notes: string | null
 }
 
 interface RecentMessage {
@@ -50,7 +53,8 @@ interface Unit {
   paymentDueDay: number | null;
   openMaintenance: number; unreadMessages: number;
   maintenanceRequests: MaintenanceRequest[]
-  rentPayments: RentPayment[]
+  tenantCharges: TenantCharge[]
+  tenantPayments: TenantPayment[]
   recentMessages: RecentMessage[]
 }
 
@@ -75,21 +79,18 @@ const STATUS_FILTERS: StatusFilter[] = [
 
 const UNIT_STATUSES = ['VACANT', 'LEASED', 'NOTICE_GIVEN', 'PREPARING', 'MAINTENANCE', 'LISTED'] as const
 
-const PAYMENT_STATUS_COLORS: Record<string, string> = {
-  PAID: 'bg-green-100 text-green-800',
-  PENDING: 'bg-amber-100 text-amber-800',
-  PROCESSING: 'bg-blue-100 text-blue-800',
-  LATE: 'bg-red-100 text-red-800',
-  PARTIAL: 'bg-orange-100 text-orange-800',
-  FAILED: 'bg-red-100 text-red-800',
-  WAIVED: 'bg-gray-100 text-gray-600',
+const CHARGE_TYPE_COLORS: Record<string, string> = {
+  RENT: 'bg-blue-100 text-blue-800',
+  LATE_FEE: 'bg-red-100 text-red-800',
+  MAINTENANCE: 'bg-orange-100 text-orange-800',
+  UTILITY: 'bg-cyan-100 text-cyan-800',
+  DEPOSIT: 'bg-purple-100 text-purple-800',
+  OTHER: 'bg-gray-100 text-gray-700',
 }
 
-const PAYMENT_STATUS_ICONS: Record<string, typeof CheckCircle2> = {
-  PAID: CheckCircle2,
-  PENDING: Clock,
-  LATE: CircleAlert,
-  PARTIAL: CircleDollarSign,
+const CHARGE_TYPE_LABELS: Record<string, string> = {
+  RENT: 'Rent', LATE_FEE: 'Late fee', MAINTENANCE: 'Maint.',
+  UTILITY: 'Utility', DEPOSIT: 'Deposit', OTHER: 'Other',
 }
 
 const fmt = (n: number) =>
@@ -154,10 +155,11 @@ const URGENCY_DOT = {
 /* ------------------------------------------------------------------ */
 
 function hasOverdueRent(unit: Unit): boolean {
-  const now = new Date()
-  return unit.rentPayments.some(p =>
-    p.status === 'LATE' || (p.status === 'PENDING' && new Date(p.dueDate) < now)
-  )
+  const charged = unit.tenantCharges
+    .filter(c => !c.forgivenAt)
+    .reduce((sum, c) => sum + c.amount, 0)
+  const paid = unit.tenantPayments.reduce((sum, p) => sum + p.amount, 0)
+  return charged - paid > 0
 }
 
 /* ------------------------------------------------------------------ */
@@ -743,40 +745,51 @@ function UnitRow({ unit, property, isExpanded, onToggle, onStatusChange, onCreat
               ) : <p className="text-xs text-muted-foreground">No active lease</p>}
             </div>
 
-            {/* ---- RENT PAYMENTS ---- */}
+            {/* ---- LEDGER SUMMARY ---- */}
             <div className="rounded-lg border p-3 space-y-2">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <DollarSign className="h-3 w-3" /> Rent payments
+                <DollarSign className="h-3 w-3" /> Ledger
               </h4>
-              {unit.rentPayments.length > 0 ? (
-                <div className="space-y-1">
-                  {unit.rentPayments.map(payment => {
-                    const Icon = PAYMENT_STATUS_ICONS[payment.status] ?? Clock
-                    const isOverdue = payment.status === 'LATE' || (payment.status === 'PENDING' && new Date(payment.dueDate) < new Date())
-                    return (
-                      <div key={payment.id} className={cn(
-                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs',
-                        isOverdue ? 'bg-red-50 border border-red-200' : 'hover:bg-muted/30'
-                      )}>
-                        <Icon className={cn('h-3.5 w-3.5 shrink-0',
-                          payment.status === 'PAID' ? 'text-green-600' :
-                          isOverdue ? 'text-red-600' :
-                          'text-muted-foreground'
-                        )} />
-                        <span className="text-muted-foreground w-16 shrink-0">{fmtMonthYear(payment.dueDate)}</span>
-                        <span className="font-medium tabular-nums flex-1">{fmtFull(payment.amount)}</span>
-                        <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', PAYMENT_STATUS_COLORS[payment.status] ?? 'bg-muted')}>
-                          {payment.status}
-                        </span>
+              {unit.tenantCharges.length > 0 || unit.tenantPayments.length > 0 ? (() => {
+                const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + c.amount, 0)
+                const paid = unit.tenantPayments.reduce((s, p) => s + p.amount, 0)
+                const balance = charged - paid
+                return (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-1 text-center">
+                      <div className="rounded-md bg-muted/40 px-1.5 py-1">
+                        <p className="text-[10px] text-muted-foreground">Charged</p>
+                        <p className="text-xs font-semibold tabular-nums">{fmtFull(charged)}</p>
                       </div>
-                    )
-                  })}
-                  {unit.paymentDueDay && (
-                    <p className="text-[11px] text-muted-foreground mt-1.5">Due day {unit.paymentDueDay} of each month</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">No payment records</p>
+                      <div className="rounded-md bg-muted/40 px-1.5 py-1">
+                        <p className="text-[10px] text-muted-foreground">Paid</p>
+                        <p className="text-xs font-semibold text-green-700 tabular-nums">{fmtFull(paid)}</p>
+                      </div>
+                      <div className={cn('rounded-md px-1.5 py-1', balance > 0 ? 'bg-red-50' : 'bg-green-50')}>
+                        <p className="text-[10px] text-muted-foreground">Balance</p>
+                        <p className={cn('text-xs font-semibold tabular-nums', balance > 0 ? 'text-red-700' : 'text-green-700')}>
+                          {balance > 0 ? `+${fmtFull(balance)}` : balance < 0 ? `-${fmtFull(Math.abs(balance))}` : 'Clear'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      {unit.tenantCharges.slice(0, 3).map(c => (
+                        <div key={c.id} className={cn('flex items-center gap-2 text-xs', c.forgivenAt && 'opacity-40 line-through')}>
+                          <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0', CHARGE_TYPE_COLORS[c.type] ?? 'bg-muted')}>
+                            {CHARGE_TYPE_LABELS[c.type] ?? c.type}
+                          </span>
+                          <span className="text-muted-foreground shrink-0">{fmtMonthYear(c.dueDate)}</span>
+                          <span className="font-medium tabular-nums ml-auto">{fmtFull(c.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {unit.paymentDueDay && (
+                      <p className="text-[11px] text-muted-foreground">Due day {unit.paymentDueDay} of each month</p>
+                    )}
+                  </div>
+                )
+              })() : (
+                <p className="text-xs text-muted-foreground">No ledger records</p>
               )}
             </div>
 

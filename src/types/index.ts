@@ -66,7 +66,7 @@ export type { NormalizedTransaction, NormalizedAccount, BankProviderAdapter, Con
 
 // === Projects expansion types ===
 
-export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, RentPayment, MaintenanceRequest } from '@prisma/client'
+export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, TenantCharge, TenantPayment, TenantPaymentSuggestion, MaintenanceRequest } from '@prisma/client'
 
 export type BillingType = 'HOURLY' | 'FIXED' | 'RETAINER' | 'MILESTONE'
 export type JobStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
@@ -74,7 +74,8 @@ export type PropertyType = 'RESIDENTIAL' | 'MULTI_FAMILY' | 'COMMERCIAL' | 'MIXE
 export type UnitStatus = 'VACANT' | 'LEASED' | 'NOTICE_GIVEN' | 'PREPARING' | 'MAINTENANCE' | 'LISTED'
 export type LeaseStatus = 'DRAFT' | 'ACTIVE' | 'EXPIRING_SOON' | 'MONTH_TO_MONTH' | 'TERMINATED' | 'EXPIRED'
 export type TenantFileType = 'LEASE_AGREEMENT' | 'ID_DOCUMENT' | 'PAY_STUB' | 'CREDIT_REPORT' | 'INSPECTION_REPORT' | 'MOVE_IN_PHOTOS' | 'MOVE_OUT_PHOTOS' | 'INSURANCE' | 'OTHER'
-export type PaymentStatus = 'PENDING' | 'PROCESSING' | 'PAID' | 'LATE' | 'PARTIAL' | 'FAILED' | 'WAIVED'
+export type ChargeType = 'RENT' | 'LATE_FEE' | 'MAINTENANCE' | 'UTILITY' | 'DEPOSIT' | 'OTHER'
+export type TenantPaymentSuggestionStatus = 'PENDING' | 'ACCEPTED' | 'DISMISSED'
 export type MaintenancePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY'
 export type MaintenanceStatus = 'OPEN' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
 
@@ -163,4 +164,22 @@ export const PROPERTY_TYPE_LABELS: Record<string, string> = {
   COMMERCIAL: 'Commercial',
   MIXED_USE: 'Mixed use',
   LAND: 'Land',
+}
+
+export const CHARGE_TYPE_LABELS: Record<string, string> = {
+  RENT: 'Rent',
+  LATE_FEE: 'Late fee',
+  MAINTENANCE: 'Maintenance',
+  UTILITY: 'Utility',
+  DEPOSIT: 'Deposit',
+  OTHER: 'Other',
+}
+
+export const CHARGE_TYPE_COLORS: Record<string, string> = {
+  RENT: 'bg-blue-100 text-blue-800',
+  LATE_FEE: 'bg-red-100 text-red-800',
+  MAINTENANCE: 'bg-orange-100 text-orange-800',
+  UTILITY: 'bg-cyan-100 text-cyan-800',
+  DEPOSIT: 'bg-purple-100 text-purple-800',
+  OTHER: 'bg-gray-100 text-gray-700',
 }

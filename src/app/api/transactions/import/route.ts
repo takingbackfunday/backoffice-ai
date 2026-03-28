@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { matchTenantPayments } from '@/lib/rent-matching'
 
 const nullableString = z.union([z.string(), z.null()]).transform((v) => v ?? '')
 const optionalNullableString = z.union([z.string(), z.null()]).transform((v) => (v && v.trim()) ? v.trim() : null).optional()
@@ -88,6 +89,15 @@ export async function POST(request: Request) {
 
       return importBatch
     })
+
+    // Fire-and-forget rent matching — never block the import response
+    prisma.transaction.findMany({
+      where: { importBatchId: batch.id },
+      select: { id: true },
+    }).then(txs => {
+      const ids = txs.map(t => t.id)
+      return matchTenantPayments(userId, ids)
+    }).catch(() => { /* silent — matching failure never blocks import */ })
 
     return ok({
       imported: newRows.length,

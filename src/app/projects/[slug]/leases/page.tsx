@@ -31,7 +31,7 @@ export default async function ProjectLeasesPage({ params }: PageParams) {
     include: {
       unit: true,
       tenant: true,
-      _count: { select: { rentPayments: true } },
+      _count: { select: { tenantCharges: true, tenantPayments: true } },
     },
     orderBy: { startDate: 'desc' },
   })

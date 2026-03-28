@@ -111,9 +111,11 @@ model Transaction {
   tags          String[]
   notes         String?
   rawData       Json
-  duplicateHash String       @unique
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  duplicateHash            String                    @unique
+  tenantPayment            TenantPayment?
+  tenantPaymentSuggestions TenantPaymentSuggestion[]
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
 
   @@index([accountId, date])
   @@index([categoryId])
@@ -437,23 +439,24 @@ enum UnitStatus {
 }
 
 model Lease {
-  id               String      @id @default(cuid())
+  id               String         @id @default(cuid())
   unitId           String
-  unit             Unit        @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unit             Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
   tenantId         String
-  tenant           Tenant      @relation(fields: [tenantId], references: [id])
-  status           LeaseStatus @default(DRAFT)
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  status           LeaseStatus    @default(DRAFT)
   startDate        DateTime
   endDate          DateTime
-  monthlyRent      Decimal     @db.Decimal(10, 2)
-  securityDeposit  Decimal?    @db.Decimal(10, 2)
-  paymentDueDay    Int         @default(1)
-  lateFeeAmount    Decimal?    @db.Decimal(10, 2)
-  lateFeeGraceDays Int         @default(5)
-  rentPayments     RentPayment[]
+  monthlyRent      Decimal        @db.Decimal(10, 2)
+  securityDeposit  Decimal?       @db.Decimal(10, 2)
+  paymentDueDay    Int            @default(1)
+  lateFeeAmount    Decimal?       @db.Decimal(10, 2)
+  lateFeeGraceDays Int            @default(5)
+  tenantCharges    TenantCharge[]
+  tenantPayments   TenantPayment[]
   tenantFiles      TenantFile[]
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([unitId])
   @@index([tenantId])
@@ -469,22 +472,24 @@ enum LeaseStatus {
 }
 
 model Tenant {
-  id                  String              @id @default(cuid())
-  userId              String
-  clerkUserId         String?
-  name                String
-  email               String
-  phone               String?
-  emergencyName       String?
-  emergencyPhone      String?
-  portalInviteStatus  PortalInviteStatus  @default(NONE)
-  leases              Lease[]
-  tenantFiles         TenantFile[]
-  messages            Message[]
-  rentPayments        RentPayment[]
-  maintenanceRequests MaintenanceRequest[]
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id                       String                   @id @default(cuid())
+  userId                   String
+  clerkUserId              String?
+  name                     String
+  email                    String
+  phone                    String?
+  emergencyName            String?
+  emergencyPhone           String?
+  portalInviteStatus       PortalInviteStatus       @default(NONE)
+  leases                   Lease[]
+  tenantFiles              TenantFile[]
+  messages                 Message[]
+  tenantCharges            TenantCharge[]
+  tenantPayments           TenantPayment[]
+  tenantPaymentSuggestions TenantPaymentSuggestion[]
+  maintenanceRequests      MaintenanceRequest[]
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
 
   @@index([userId])
   @@unique([userId, email])
@@ -540,37 +545,89 @@ model Message {
   @@index([tenantId, unitId])
 }
 
-model RentPayment {
-  id                    String        @id @default(cuid())
-  leaseId               String
-  lease                 Lease         @relation(fields: [leaseId], references: [id])
-  tenantId              String
-  tenant                Tenant        @relation(fields: [tenantId], references: [id])
-  amount                Decimal       @db.Decimal(10, 2)
-  dueDate               DateTime
-  paidDate              DateTime?
-  status                PaymentStatus @default(PENDING)
-  stripePaymentIntentId String?
-  stripeInvoiceId       String?
-  paymentMethod         String?
-  transactionId         String?
-  lateFeeApplied        Decimal?      @db.Decimal(10, 2)
-  notes                 String?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+// ── Tenant ledger ────────────────────────────────────────────────────────────
+// balance = SUM(active TenantCharge.amount) - SUM(TenantPayment.amount)
+// Forgiven charges are excluded from the balance (forgivenAt IS NOT NULL).
+// Payments are attributed to a tenant, not to a specific charge.
+
+model TenantCharge {
+  id                   String      @id @default(cuid())
+  leaseId              String
+  lease                Lease       @relation(fields: [leaseId], references: [id])
+  tenantId             String
+  tenant               Tenant      @relation(fields: [tenantId], references: [id])
+  type                 ChargeType
+  description          String?     // required for MAINTENANCE/OTHER; optional for RENT/LATE_FEE
+  amount               Decimal     @db.Decimal(10, 2)
+  dueDate              DateTime
+  // Forgiveness — soft nullability, not deletion, preserves audit trail
+  forgivenAt           DateTime?
+  forgivenBy           String?     // userId of manager who forgave
+  forgivenReason       String?
+  // Optional back-link to source maintenance job
+  maintenanceRequestId String?
+  maintenanceRequest   MaintenanceRequest? @relation(fields: [maintenanceRequestId], references: [id])
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   @@index([leaseId])
   @@index([tenantId])
+  @@index([tenantId, forgivenAt]) // fast active-charge queries
 }
 
-enum PaymentStatus {
+enum ChargeType {
+  RENT
+  LATE_FEE
+  MAINTENANCE
+  UTILITY
+  DEPOSIT
+  OTHER
+}
+
+model TenantPayment {
+  id            String       @id @default(cuid())
+  leaseId       String
+  lease         Lease        @relation(fields: [leaseId], references: [id])
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id])
+  amount        Decimal      @db.Decimal(10, 2)
+  paidDate      DateTime
+  // Optional — null when recorded manually without a matched bank transaction
+  transactionId String?      @unique  // one transaction can only be attributed once
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  paymentMethod String?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([leaseId])
+  @@index([tenantId])
+  @@index([transactionId])
+}
+
+// Suggested payment attribution — created post-import, reviewed by manager
+model TenantPaymentSuggestion {
+  id            String                      @id @default(cuid())
+  userId        String                      // property owner — for auth scoping
+  transactionId String                      // the incoming bank transaction
+  transaction   Transaction                 @relation(fields: [transactionId], references: [id])
+  tenantId      String
+  tenant        Tenant                      @relation(fields: [tenantId], references: [id])
+  leaseId       String
+  confidence    String                      // 'high' | 'medium'
+  reasoning     String                      // human-readable explanation
+  status        TenantPaymentSuggestionStatus @default(PENDING)
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  @@index([userId, status])
+  @@index([transactionId])
+}
+
+enum TenantPaymentSuggestionStatus {
   PENDING
-  PROCESSING
-  PAID
-  LATE
-  PARTIAL
-  FAILED
-  WAIVED
+  ACCEPTED
+  DISMISSED
 }
 
 model MaintenanceRequest {
@@ -585,11 +642,12 @@ model MaintenanceRequest {
   status        MaintenanceStatus   @default(OPEN)
   scheduledDate DateTime?
   completedDate DateTime?
-  cost          Decimal?            @db.Decimal(10, 2)
-  vendorName    String?
-  transactionId String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  cost           Decimal?            @db.Decimal(10, 2)
+  vendorName     String?
+  transactionId  String?
+  tenantCharges  TenantCharge[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
   @@index([unitId])
 }

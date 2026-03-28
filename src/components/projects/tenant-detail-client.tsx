@@ -5,11 +5,13 @@ import { Mail, CheckCircle, Clock } from 'lucide-react'
 import { LEASE_STATUS_LABELS, LEASE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
 
-interface RentPayment { id: string; amount: number; dueDate: string; paidDate: string | null; status: string }
+interface TenantCharge { id: string; type: string; amount: number; dueDate: string; forgivenAt: string | null }
+interface TenantPayment { id: string; amount: number; paidDate: string }
 interface Lease {
   id: string; status: string; startDate: string; endDate: string;
   monthlyRent: number; unit: { id: string; unitLabel: string };
-  rentPayments: RentPayment[]
+  tenantCharges: TenantCharge[]
+  tenantPayments: TenantPayment[]
 }
 interface MaintenanceRequest { id: string; title: string; status: string; priority: string; createdAt: string }
 interface TenantFile { id: string; fileType: string; fileName: string; createdAt: string; fileUrl: string }
@@ -123,19 +125,20 @@ export function TenantDetailClient({ projectId, tenant }: Props) {
                 <div className="text-xs text-muted-foreground">
                   {fmtDate(lease.startDate)} — {fmtDate(lease.endDate)} · {fmt(Number(lease.monthlyRent))}/mo
                 </div>
-                {lease.rentPayments.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {lease.rentPayments.slice(0, 3).map(p => (
-                      <div key={p.id} className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">{fmtDate(p.dueDate)}</span>
-                        <span>{fmt(Number(p.amount))}</span>
-                        <span className={cn('rounded-full px-1.5 py-0.5', p.status === 'PAID' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}>
-                          {p.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {(lease.tenantCharges.length > 0 || lease.tenantPayments.length > 0) && (() => {
+                  const charged = lease.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + Number(c.amount), 0)
+                  const paid = lease.tenantPayments.reduce((s, p) => s + Number(p.amount), 0)
+                  const balance = charged - paid
+                  return (
+                    <div className="mt-2 flex gap-3 text-xs">
+                      <span className="text-muted-foreground">Charged: {fmt(charged)}</span>
+                      <span className="text-green-700">Paid: {fmt(paid)}</span>
+                      <span className={balance > 0 ? 'text-red-700' : 'text-green-700'}>
+                        Balance: {balance > 0 ? `+${fmt(balance)}` : fmt(balance)}
+                      </span>
+                    </div>
+                  )
+                })()}
               </div>
             ))}
           </div>

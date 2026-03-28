@@ -14,7 +14,7 @@ interface Lease {
   monthlyRent: number; securityDeposit: number | null;
   unit: { id: string; unitLabel: string };
   tenant: { id: string; name: string; email: string };
-  _count: { rentPayments: number }
+  _count: { tenantCharges: number; tenantPayments: number }
 }
 
 interface Props {

@@ -19,10 +19,13 @@ export default async function PortalDashboardPage() {
               propertyProfile: { include: { project: true } },
             },
           },
-          rentPayments: {
-            where: { status: { in: ['PENDING', 'LATE'] } },
+          tenantCharges: {
             orderBy: { dueDate: 'asc' },
-            take: 3,
+            take: 6,
+          },
+          tenantPayments: {
+            orderBy: { paidDate: 'desc' },
+            take: 6,
           },
         },
         orderBy: { startDate: 'desc' },
@@ -86,28 +89,33 @@ export default async function PortalDashboardPage() {
         </div>
       )}
 
-      {/* Upcoming payments */}
-      {activeLease?.rentPayments && activeLease.rentPayments.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold mb-3">Upcoming payments</h2>
-          <div className="space-y-2">
-            {activeLease.rentPayments.map(p => (
-              <div key={p.id} className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm">
-                <div>
-                  <p className="font-medium">{fmt(Number(p.amount))}</p>
-                  <p className="text-xs text-muted-foreground">Due {fmtDate(p.dueDate)}</p>
-                </div>
-                <span className={cn(
-                  'rounded-full px-2 py-0.5 text-xs font-medium',
-                  p.status === 'LATE' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                )}>
-                  {p.status}
-                </span>
+      {/* Balance summary */}
+      {activeLease && (activeLease.tenantCharges.length > 0 || activeLease.tenantPayments.length > 0) && (() => {
+        const charged = activeLease.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + Number(c.amount), 0)
+        const paid = activeLease.tenantPayments.reduce((s, p) => s + Number(p.amount), 0)
+        const balance = charged - paid
+        return (
+          <div>
+            <h2 className="text-sm font-semibold mb-3">Balance</h2>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border px-4 py-3">
+                <p className="text-xs text-muted-foreground mb-0.5">Total charged</p>
+                <p className="text-lg font-semibold">{fmt(charged)}</p>
               </div>
-            ))}
+              <div className="rounded-lg border px-4 py-3">
+                <p className="text-xs text-muted-foreground mb-0.5">Total paid</p>
+                <p className="text-lg font-semibold text-green-700">{fmt(paid)}</p>
+              </div>
+              <div className={cn('rounded-lg border px-4 py-3', balance > 0 ? 'border-amber-200 bg-amber-50' : 'border-green-200 bg-green-50')}>
+                <p className="text-xs text-muted-foreground mb-0.5">Balance</p>
+                <p className={cn('text-lg font-semibold', balance > 0 ? 'text-amber-800' : 'text-green-800')}>
+                  {balance > 0 ? `${fmt(balance)} owed` : balance < 0 ? `${fmt(Math.abs(balance))} credit` : 'Current'}
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Open maintenance requests */}
       {tenant.maintenanceRequests.length > 0 && (
