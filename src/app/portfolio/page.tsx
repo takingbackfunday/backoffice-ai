@@ -18,14 +18,34 @@ export default async function PortfolioPage() {
             include: {
               leases: {
                 where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
-                include: { tenant: { select: { id: true, name: true } } },
+                include: {
+                  tenant: { select: { id: true, name: true, email: true, phone: true } },
+                  rentPayments: {
+                    orderBy: { dueDate: 'desc' },
+                    take: 6,
+                  },
+                },
                 orderBy: { startDate: 'desc' },
                 take: 1,
+              },
+              maintenanceRequests: {
+                where: { status: { in: ['OPEN', 'SCHEDULED', 'IN_PROGRESS'] } },
+                include: { tenant: { select: { id: true, name: true } } },
+                orderBy: { createdAt: 'desc' },
+              },
+              messages: {
+                where: { isRead: false, senderRole: 'tenant' },
+                orderBy: { createdAt: 'desc' },
+                take: 5,
+                include: { tenant: { select: { id: true, name: true } } },
               },
               _count: {
                 select: {
                   maintenanceRequests: {
                     where: { status: { in: ['OPEN', 'SCHEDULED', 'IN_PROGRESS'] } },
+                  },
+                  messages: {
+                    where: { isRead: false, senderRole: 'tenant' },
                   },
                 },
               },
@@ -44,16 +64,40 @@ export default async function PortfolioPage() {
   const leasedUnits = allUnits.filter(u => u.status === 'LEASED').length
   const vacantUnits = allUnits.filter(u => u.status === 'VACANT').length
   const openMaintenance = allUnits.reduce((sum, u) => sum + u._count.maintenanceRequests, 0)
+  const unreadMessages = allUnits.reduce((sum, u) => sum + u._count.messages, 0)
   const monthlyRevenue = allUnits
     .filter(u => u.status === 'LEASED' && u.monthlyRent)
     .reduce((sum, u) => sum + Number(u.monthlyRent), 0)
 
-  const kpis = { totalUnits, leasedUnits, vacantUnits, openMaintenance, monthlyRevenue }
+  // Lease expiring within 90 days
+  const now = new Date()
+  const in90Days = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
+  const expiringLeases = allUnits.filter(u => {
+    const lease = u.leases[0]
+    if (!lease?.endDate) return false
+    const end = new Date(lease.endDate)
+    return end >= now && end <= in90Days
+  }).length
+
+  // Rent collection: count overdue (PENDING past due date, or LATE status)
+  const allPayments = allUnits.flatMap(u => u.leases[0]?.rentPayments ?? [])
+  const overduePayments = allPayments.filter(p =>
+    p.status === 'LATE' || (p.status === 'PENDING' && new Date(p.dueDate) < now)
+  ).length
+
+  const kpis = {
+    totalUnits, leasedUnits, vacantUnits, openMaintenance,
+    monthlyRevenue, expiringLeases, unreadMessages, overduePayments,
+  }
 
   const serialized = properties.map(p => ({
     id: p.id,
     name: p.name,
     slug: p.slug,
+    address: p.propertyProfile?.address ?? null,
+    city: p.propertyProfile?.city ?? null,
+    state: p.propertyProfile?.state ?? null,
+    propertyType: p.propertyProfile?.propertyType ?? null,
     units: (p.propertyProfile?.units ?? []).map(u => ({
       id: u.id,
       unitLabel: u.unitLabel,
@@ -61,9 +105,43 @@ export default async function PortfolioPage() {
       monthlyRent: u.monthlyRent ? Number(u.monthlyRent) : null,
       bedrooms: u.bedrooms,
       bathrooms: u.bathrooms ? Number(u.bathrooms) : null,
+      squareFootage: u.squareFootage,
       tenant: u.leases[0]?.tenant ?? null,
+      leaseId: u.leases[0]?.id ?? null,
       leaseEndDate: u.leases[0]?.endDate?.toISOString() ?? null,
+      leaseStartDate: u.leases[0]?.startDate?.toISOString() ?? null,
+      leaseStatus: u.leases[0]?.status ?? null,
+      leaseMonthlyRent: u.leases[0]?.monthlyRent ? Number(u.leases[0].monthlyRent) : null,
+      paymentDueDay: u.leases[0]?.paymentDueDay ?? null,
       openMaintenance: u._count.maintenanceRequests,
+      unreadMessages: u._count.messages,
+      maintenanceRequests: u.maintenanceRequests.map(m => ({
+        id: m.id,
+        title: m.title,
+        description: m.description,
+        priority: m.priority,
+        status: m.status,
+        createdAt: m.createdAt.toISOString(),
+        tenant: m.tenant ? { id: m.tenant.id, name: m.tenant.name } : null,
+      })),
+      rentPayments: (u.leases[0]?.rentPayments ?? []).map(rp => ({
+        id: rp.id,
+        amount: Number(rp.amount),
+        dueDate: rp.dueDate.toISOString(),
+        paidDate: rp.paidDate?.toISOString() ?? null,
+        status: rp.status,
+        lateFeeApplied: rp.lateFeeApplied ? Number(rp.lateFeeApplied) : null,
+        notes: rp.notes,
+      })),
+      recentMessages: u.messages.map(m => ({
+        id: m.id,
+        subject: m.subject,
+        body: m.body,
+        createdAt: m.createdAt.toISOString(),
+        isRead: m.isRead,
+        senderRole: m.senderRole,
+        tenant: m.tenant ? { id: m.tenant.id, name: m.tenant.name } : null,
+      })),
     })),
   }))
 
