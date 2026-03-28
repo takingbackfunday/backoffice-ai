@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     await prisma.$transaction(async tx => {
       await tx.tenantPayment.create({
         data: {
-          leaseId: suggestion.leaseId,
+          leaseId: suggestion.leaseId ?? undefined,
           tenantId: suggestion.tenantId,
           amount: suggestion.transaction.amount,
           paidDate: suggestion.transaction.date,

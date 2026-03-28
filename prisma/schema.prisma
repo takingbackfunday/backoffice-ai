@@ -586,8 +586,8 @@ enum ChargeType {
 
 model TenantPayment {
   id            String       @id @default(cuid())
-  leaseId       String
-  lease         Lease        @relation(fields: [leaseId], references: [id])
+  leaseId       String?
+  lease         Lease?       @relation(fields: [leaseId], references: [id])
   tenantId      String
   tenant        Tenant       @relation(fields: [tenantId], references: [id])
   amount        Decimal      @db.Decimal(10, 2)
@@ -613,7 +613,7 @@ model TenantPaymentSuggestion {
   transaction   Transaction                 @relation(fields: [transactionId], references: [id])
   tenantId      String
   tenant        Tenant                      @relation(fields: [tenantId], references: [id])
-  leaseId       String
+  leaseId       String?
   confidence    String                      // 'high' | 'medium'
   reasoning     String                      // human-readable explanation
   status        TenantPaymentSuggestionStatus @default(PENDING)
