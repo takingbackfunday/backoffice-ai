@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { useChatStore } from '@/stores/chat-store'
 import { FinanceQA } from '@/components/dashboard/finance-qa'
 
 export function ChatOverlay() {
+  const pathname = usePathname()
+  if (pathname.startsWith('/portal')) return null
   const { open, toggle, close } = useChatStore()
 
   // Close on Escape
