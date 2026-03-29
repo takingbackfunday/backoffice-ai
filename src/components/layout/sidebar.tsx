@@ -5,18 +5,10 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
-const TOP_ITEMS = [
+const FINANCE_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/transactions', label: 'Transactions', icon: '💳' },
-  { href: '/projects', label: 'Projects', icon: '📁' },
-  { href: '/portfolio', label: 'Portfolio', icon: '🏘️' },
-  { href: '/studio', label: 'Studio', icon: '🎬' },
   { href: '/pivot', label: 'Pivot Table', icon: '📋' },
-]
-
-const IMPORT_ITEMS = [
-  { href: '/upload', label: 'Upload CSV', icon: '⬆' },
-  { href: '/bank-accounts', label: 'Bank Accounts', icon: '🏦' },
 ]
 
 const MORE_ITEMS = [
@@ -25,39 +17,50 @@ const MORE_ITEMS = [
   { href: '/rules', label: 'Rules', icon: '⚡' },
 ]
 
+const IMPORT_ITEMS = [
+  { href: '/upload', label: 'Upload CSV', icon: '⬆' },
+  { href: '/bank-accounts', label: 'Bank Accounts', icon: '🏦' },
+]
+
+const PROJECTS_ITEMS = [
+  { href: '/projects', label: 'Add Project', icon: '📁' },
+  { href: '/portfolio', label: 'Portfolio', icon: '🏘️' },
+  { href: '/studio', label: 'Studio', icon: '🎬' },
+]
+
 export function Sidebar() {
   const pathname = usePathname()
   const [pending, setPending] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
+  const [financeOpen, setFinanceOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [projectsOpen, setProjectsOpen] = useState(false)
 
-  // Persist collapsed state
   useEffect(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
     if (stored === 'true') setCollapsed(true)
   }, [])
 
-  // Auto-open accordion if active route is inside it
+  // Auto-open parent accordion when child route is active
   useEffect(() => {
-    if (IMPORT_ITEMS.some(i => i.href === pathname)) setImportOpen(true)
+    if (FINANCE_ITEMS.some(i => pathname.startsWith(i.href)) || MORE_ITEMS.some(i => i.href === pathname)) setFinanceOpen(true)
     if (MORE_ITEMS.some(i => i.href === pathname)) setMoreOpen(true)
+    if (IMPORT_ITEMS.some(i => i.href === pathname)) setImportOpen(true)
+    if (PROJECTS_ITEMS.some(i => pathname.startsWith(i.href))) setProjectsOpen(true)
   }, [pathname])
 
+  useEffect(() => { setPending(null) }, [pathname])
+
   function toggleCollapsed() {
-    setCollapsed((c) => {
+    setCollapsed(c => {
       localStorage.setItem('sidebar-collapsed', String(!c))
       return !c
     })
   }
 
-  // Clear pending state once navigation completes
-  useEffect(() => {
-    setPending(null)
-  }, [pathname])
-
   function NavLink({ href, label, icon, indent = false }: { href: string; label: string; icon: string; indent?: boolean }) {
-    const isActive = pathname === href
+    const isActive = href === '/projects' ? pathname === href || pathname.startsWith('/projects/') : pathname === href
     const isPending = pending === href && !isActive
     return (
       <li>
@@ -88,8 +91,8 @@ export function Sidebar() {
     )
   }
 
-  function AccordionToggle({ label, icon, isOpen, onToggle, isChildActive }: {
-    label: string; icon: string; isOpen: boolean; onToggle: () => void; isChildActive: boolean
+  function AccordionToggle({ label, icon, isOpen, onToggle, isChildActive, indent = false }: {
+    label: string; icon: string; isOpen: boolean; onToggle: () => void; isChildActive: boolean; indent?: boolean
   }) {
     return (
       <li>
@@ -99,7 +102,7 @@ export function Sidebar() {
           aria-expanded={isOpen}
           className={cn(
             'w-full flex items-center rounded-md text-sm font-medium transition-colors',
-            collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2',
+            collapsed ? 'justify-center px-2 py-2' : cn('gap-3 py-2', indent ? 'pl-7 pr-3' : 'px-3'),
             isChildActive && !isOpen
               ? 'text-[#534AB7] font-semibold'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -122,8 +125,10 @@ export function Sidebar() {
     )
   }
 
-  const importChildActive = IMPORT_ITEMS.some(i => i.href === pathname)
+  const financeChildActive = FINANCE_ITEMS.some(i => pathname.startsWith(i.href))
   const moreChildActive = MORE_ITEMS.some(i => i.href === pathname)
+  const importChildActive = IMPORT_ITEMS.some(i => i.href === pathname)
+  const projectsChildActive = PROJECTS_ITEMS.some(i => pathname.startsWith(i.href))
 
   return (
     <nav
@@ -134,7 +139,7 @@ export function Sidebar() {
       aria-label="Main navigation"
       data-testid="sidebar"
     >
-      {/* Logo / title */}
+      {/* Logo */}
       <div className={cn('mb-8', collapsed ? 'px-1' : 'px-3')}>
         {collapsed ? (
           <span className="text-lg font-bold">B</span>
@@ -147,10 +152,36 @@ export function Sidebar() {
       </div>
 
       <ul className="flex flex-col gap-1">
-        {/* Top-level items */}
-        {TOP_ITEMS.map(item => (
-          <NavLink key={item.href} {...item} />
-        ))}
+
+        {/* View Finances accordion */}
+        <AccordionToggle
+          label="View Finances"
+          icon="💰"
+          isOpen={financeOpen}
+          onToggle={() => setFinanceOpen(v => !v)}
+          isChildActive={financeChildActive || moreChildActive}
+        />
+        {(financeOpen || collapsed) && (
+          <>
+            {FINANCE_ITEMS.map(item => (
+              <NavLink key={item.href} {...item} indent={!collapsed} />
+            ))}
+            {/* More Options nested accordion */}
+            <AccordionToggle
+              label="More Options"
+              icon="⋯"
+              isOpen={moreOpen}
+              onToggle={() => setMoreOpen(v => !v)}
+              isChildActive={moreChildActive}
+              indent={!collapsed}
+            />
+            {(moreOpen || collapsed) && MORE_ITEMS.map(item => (
+              <NavLink key={item.href} {...item} indent={!collapsed} />
+            ))}
+          </>
+        )}
+
+        {!collapsed && <li className="my-1 border-t border-black/[0.06]" />}
 
         {/* Import Transactions accordion */}
         <AccordionToggle
@@ -164,20 +195,20 @@ export function Sidebar() {
           <NavLink key={item.href} {...item} indent={!collapsed} />
         ))}
 
-        {/* Divider */}
         {!collapsed && <li className="my-1 border-t border-black/[0.06]" />}
 
-        {/* More Options accordion */}
+        {/* Projects accordion */}
         <AccordionToggle
-          label="More Options"
-          icon="⋯"
-          isOpen={moreOpen}
-          onToggle={() => setMoreOpen(v => !v)}
-          isChildActive={moreChildActive}
+          label="Projects"
+          icon="📁"
+          isOpen={projectsOpen}
+          onToggle={() => setProjectsOpen(v => !v)}
+          isChildActive={projectsChildActive}
         />
-        {(moreOpen || collapsed) && MORE_ITEMS.map(item => (
+        {(projectsOpen || collapsed) && PROJECTS_ITEMS.map(item => (
           <NavLink key={item.href} {...item} indent={!collapsed} />
         ))}
+
       </ul>
 
       {/* Collapse toggle */}

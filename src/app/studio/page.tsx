@@ -16,6 +16,7 @@ export default async function StudioPage() {
         include: {
           invoices: {
             include: {
+              job: { select: { id: true, name: true } },
               lineItems: true,
               payments: true,
             },
@@ -55,17 +56,16 @@ export default async function StudioPage() {
         company: profile.company ?? null,
         outstanding,
         currency: profile.currency,
-        invoiceCount: invoices.filter(i => i.status !== 'VOID').length,
-        lastInvoiceDate: invoices[0]?.createdAt?.toISOString() ?? null,
-        lastInvoiceNumber: invoices[0]?.invoiceNumber ?? null,
-        recentInvoices: invoicesWithTotals.slice(0, 5).map(({ inv, total, paid }) => ({
+        invoices: invoicesWithTotals.map(({ inv, total, paid }) => ({
           id: inv.id,
           invoiceNumber: inv.invoiceNumber,
           status: inv.status,
+          issueDate: inv.issueDate.toISOString(),
           dueDate: inv.dueDate.toISOString(),
           currency: inv.currency,
           total,
           paid,
+          jobName: inv.job?.name ?? null,
         })),
       }
     })
