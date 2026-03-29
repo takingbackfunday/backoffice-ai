@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { useChatStore } from '@/stores/chat-store'
-import { FinanceQA } from '@/components/dashboard/finance-qa'
+import { AgentQA } from '@/components/dashboard/agent-qa'
 
 export function ChatOverlay() {
   const pathname = usePathname()
@@ -53,7 +53,7 @@ export function ChatOverlay() {
             </button>
           </div>
           <div className="overflow-y-auto flex-1 p-4">
-            <FinanceQA />
+            <AgentQA />
           </div>
         </div>
       )}

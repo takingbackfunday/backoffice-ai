@@ -8,7 +8,7 @@ import { ExpensesByDonutWidget } from '@/components/widgets/ExpensesByDonutWidge
 import { CashflowWidget } from '@/components/widgets/CashflowWidget'
 import { NetWorthWidget } from '@/components/widgets/NetWorthWidget'
 import { KpiBar } from '@/components/widgets/KpiBar'
-import { FinanceQA } from '@/components/dashboard/finance-qa'
+import { AgentQA } from '@/components/dashboard/agent-qa'
 
 export default async function DashboardPage() {
   const { userId } = await auth()
@@ -37,7 +37,7 @@ export default async function DashboardPage() {
             <NetWorthWidget />
           </div>
 
-          <FinanceQA />
+          <AgentQA />
         </main>
       </div>
     </div>

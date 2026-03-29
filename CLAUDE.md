@@ -72,7 +72,24 @@ Rule condition fields: `description`, `payeeName`, `rawDescription`, `amount`, `
 - `openrouterChat(messages, model?)` — simple text completion; default model `mistralai/devstral-small`
 - `openrouterWithTools(messages, tools, model?)` — tool-calling with streaming SSE accumulation; default model `mistralai/mistral-small-2603`; streams to avoid serverless timeouts
 
-Agent routes use a router model (`google/gemini-2.0-flash-lite-001`) to classify questions as `simple` or `complex` — both route to `anthropic/claude-sonnet-4.6` (complex previously used Opus; unified to Sonnet to match rules-agent). Tool loop max 4 rounds (simple) or 8 rounds (complex). System prompt is built dynamically via `buildSystemPrompt()` which stamps today's ISO date for accurate relative date resolution.
+### Multi-Agent System (`src/lib/agent/`)
+
+The ask route (`POST /api/agent/ask`) uses a multi-agent orchestration pattern:
+
+1. **Orchestrator** (`orchestrator.ts`) — entry point; calls domain classifier, routes to primary agent, handles handoffs
+2. **Domain Classifier** (`domain-classifier.ts`) — uses `google/gemini-2.0-flash-lite-001` to classify questions as `finance`, `property`, or both; returns `{ primary, secondary, reasoning }`
+3. **Finance Agent** (`finance-agent.ts`) — wraps the existing finance tool loop; first routes question to `simple`/`complex` via a second Gemini call; uses 4 or 8 tool rounds accordingly; signals handoff via `[NEEDS_PROPERTY_AGENT]` marker
+4. **Property Agent** (`property-agent.ts`) — queries properties, units, leases, tenants, payments, maintenance via 13 property tools (max 6 rounds); signals handoff via `[NEEDS_FINANCE_AGENT]`
+5. **Shared utilities**:
+   - `tool-loop.ts` — reusable `runToolLoop({ messages, tools, dispatchTool, model, maxRounds, onStatus })` → `{ answer, toolsUsed }`
+   - `format-history.ts` — `formatHistory(turns)` formats `ConversationTurn[]` as a readable string for system prompts
+   - `types.ts` — `AgentDomain`, `Agent`, `AgentContext`, `AgentResult`, `ConversationTurn`, `SseEvent`, `MAX_TURNS=3`
+
+**Property tools** (`property-tools.ts`): `list_properties`, `get_property`, `list_units`, `get_occupancy_summary`, `list_leases`, `get_tenant`, `get_rent_roll`, `get_tenant_balance`, `list_tenant_payments`, `list_overdue_tenants`, `list_maintenance_requests`, `get_property_revenue`, `get_vacancy_cost`.
+
+**Conversation memory**: client-side Zustand store (`chat-store.ts`) holds `sessionId` + `turns: ConversationTurn[]` (max `MAX_TURNS*2` items = 3 pairs). History is sent as `conversationHistory` in each request body; the route passes it to the orchestrator, which includes it in system prompts via `formatHistory()`. The `AgentQA` component (`src/components/dashboard/agent-qa.tsx`) renders conversation as a chat thread and calls `addTurn()` on each completed exchange.
+
+Agent models: all agents use `anthropic/claude-sonnet-4.6`; domain classifier and finance router use `google/gemini-2.0-flash-lite-001`.
 
 `src/lib/agent/finance-tools.ts` defines `FINANCE_TOOLS` (OpenAI-format tool definitions) and `dispatchTool(userId, toolName, args)`. Tools include `query_transactions`, `aggregate_transactions`, `get_categories`, etc.
 
@@ -115,6 +132,6 @@ Widget data pipeline: `src/lib/widgets/data-fetcher.ts` → `data-transformer.ts
 
 Zustand stores in `src/stores/`:
 - `upload-store.ts` — CSV import multi-step flow state
-- `chat-store.ts` — AI chat overlay state
+- `chat-store.ts` — AI chat overlay state + conversation memory (`sessionId`, `turns`, `addTurn`, `clearHistory`)
 
 Server data fetching uses standard Next.js patterns (server components + `fetch` in client components). Shared types live in `src/types/index.ts` and `src/types/widgets.ts`.
