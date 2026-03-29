@@ -195,6 +195,7 @@ export default async function ProjectDetailPage({ params }: PageParams) {
                   paymentMethod: p.paymentMethod ?? null,
                   notes: p.notes ?? null,
                   sourceDeleted: p.sourceDeleted,
+                voidedAt: p.voidedAt?.toISOString() ?? null,
                 })),
                 recentMessages: u.messages.map(m => ({
                   id: m.id,

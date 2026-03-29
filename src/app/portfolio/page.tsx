@@ -90,7 +90,7 @@ export default async function PortfolioPage() {
     const charged = lease.tenantCharges
       .filter(c => !c.forgivenAt)
       .reduce((sum, c) => sum + Number(c.amount), 0)
-    const paid = lease.tenantPayments.reduce((sum, p) => sum + Number(p.amount), 0)
+    const paid = lease.tenantPayments.filter(p => !p.voidedAt).reduce((sum, p) => sum + Number(p.amount), 0)
     return charged - paid > 0
   }).length
 
@@ -148,6 +148,7 @@ export default async function PortfolioPage() {
         paymentMethod: p.paymentMethod ?? null,
         notes: p.notes ?? null,
         sourceDeleted: p.sourceDeleted,
+        voidedAt: p.voidedAt?.toISOString() ?? null,
       })),
       recentMessages: u.messages.map(m => ({
         id: m.id,

@@ -23,6 +23,8 @@ interface TenantCharge {
 interface TenantPayment {
   id: string; amount: number; paidDate: string; paymentMethod: string | null; notes: string | null;
   sourceDeleted: boolean;
+  voidedAt: string | null;
+  voidReason?: string | null;
   transaction: { id: string; description: string; date: string; amount: number } | null
 }
 interface Lease {
@@ -120,6 +122,74 @@ function ForgivePill({ projectId, unitId, charge, onDone }: {
         onKeyDown={e => { if (e.key === 'Enter') submit('forgive'); if (e.key === 'Escape') setOpen(false) }}
       />
       <button onClick={() => submit('forgive')} disabled={loading} className="text-[10px] text-amber-700 hover:text-amber-900 font-medium">
+        {loading ? '…' : 'Confirm'}
+      </button>
+      <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Void payment pill                                                   */
+/* ------------------------------------------------------------------ */
+function VoidPaymentPill({ projectId, unitId, payment, onDone }: {
+  projectId: string; unitId: string; payment: TenantPayment; onDone: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function submit(action: 'void' | 'restore') {
+    setLoading(true)
+    await fetch(`/api/projects/${projectId}/units/${unitId}/payments/${payment.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(action === 'void' ? { action: 'void', reason } : { action: 'restore' }),
+    })
+    setLoading(false)
+    setOpen(false)
+    setReason('')
+    onDone()
+  }
+
+  if (payment.voidedAt) {
+    return (
+      <button
+        onClick={() => submit('restore')}
+        disabled={loading}
+        className="text-[10px] text-muted-foreground hover:text-foreground underline"
+        title={`Voided: ${payment.voidReason ?? 'no reason'}`}
+      >
+        {loading ? '…' : 'Restore'}
+      </button>
+    )
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-[10px] text-red-600 hover:text-red-800 underline"
+      >
+        Void
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-1 flex items-center gap-1" onClick={e => e.stopPropagation()}>
+      <input
+        autoFocus
+        type="text"
+        value={reason}
+        onChange={e => setReason(e.target.value)}
+        placeholder="Reason (optional)"
+        className="rounded border px-2 py-0.5 text-xs w-36 focus:outline-none focus:ring-1 focus:ring-primary/30"
+        onKeyDown={e => { if (e.key === 'Enter') submit('void'); if (e.key === 'Escape') setOpen(false) }}
+      />
+      <button onClick={() => submit('void')} disabled={loading} className="text-[10px] text-red-600 hover:text-red-800 font-medium">
         {loading ? '…' : 'Confirm'}
       </button>
       <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
@@ -327,7 +397,7 @@ export function UnitDetailClient({ projectId, unit }: Props) {
   // Ledger totals
   const activeCharges = activeLease?.tenantCharges.filter(c => !c.forgivenAt) ?? []
   const totalCharged = activeCharges.reduce((s, c) => s + Number(c.amount), 0)
-  const totalPaid = activeLease?.tenantPayments.reduce((s, p) => s + Number(p.amount), 0) ?? 0
+  const totalPaid = activeLease?.tenantPayments.filter(p => !p.voidedAt).reduce((s, p) => s + Number(p.amount), 0) ?? 0
   const balance = totalCharged - totalPaid
 
   return (
@@ -477,24 +547,37 @@ export function UnitDetailClient({ projectId, unit }: Props) {
                 <p className="text-[11px] font-medium text-muted-foreground mb-1.5">Payments received</p>
                 <div className="rounded-md border divide-y text-xs">
                   {activeLease.tenantPayments.map(p => (
-                    <div key={p.id} className={cn('flex items-center gap-3 px-3 py-2', p.sourceDeleted && 'bg-amber-50/60')}>
-                      <CheckCircle2 className={cn('h-3.5 w-3.5 shrink-0', p.sourceDeleted ? 'text-amber-500' : 'text-green-600')} />
+                    <div key={p.id} className={cn(
+                      'flex flex-wrap items-center gap-3 px-3 py-2',
+                      p.voidedAt ? 'bg-red-50/40' : p.sourceDeleted ? 'bg-amber-50/60' : ''
+                    )}>
+                      <CheckCircle2 className={cn('h-3.5 w-3.5 shrink-0', p.voidedAt ? 'text-red-400' : p.sourceDeleted ? 'text-amber-500' : 'text-green-600')} />
                       <span className="text-muted-foreground w-20 shrink-0">{fmtDate(p.paidDate)}</span>
-                      <span className="flex-1 text-muted-foreground truncate">
+                      <span className={cn('flex-1 text-muted-foreground truncate', p.voidedAt && 'line-through')}>
                         {p.transaction ? p.transaction.description : (p.paymentMethod ?? 'Manual entry')}
                         {p.notes && <span className="ml-1 italic">· {p.notes}</span>}
                       </span>
-                      {p.sourceDeleted && (
-                        <span className="text-[10px] text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5 shrink-0" title="The bank transaction linked to this payment was deleted. Verify and remove if incorrect.">
+                      {p.voidedAt && (
+                        <span className="text-[10px] text-red-700 bg-red-100 rounded-full px-1.5 py-0.5 shrink-0" title={`Voided${p.voidReason ? `: ${p.voidReason}` : ''}`}>
+                          voided
+                        </span>
+                      )}
+                      {!p.voidedAt && p.sourceDeleted && (
+                        <span className="text-[10px] text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5 shrink-0" title="The bank transaction linked to this payment was deleted. Verify and void if incorrect.">
                           source deleted
                         </span>
                       )}
-                      {p.transaction && !p.sourceDeleted && (
+                      {!p.voidedAt && p.transaction && !p.sourceDeleted && (
                         <span className="text-[10px] text-blue-600 bg-blue-50 rounded-full px-1.5 py-0.5 shrink-0">
                           linked tx
                         </span>
                       )}
-                      <span className={cn('tabular-nums font-medium shrink-0', p.sourceDeleted ? 'text-amber-700' : 'text-green-700')}>{fmt(Number(p.amount))}</span>
+                      <span className={cn('tabular-nums font-medium shrink-0', p.voidedAt ? 'text-red-400 line-through' : p.sourceDeleted ? 'text-amber-700' : 'text-green-700')}>
+                        {fmt(Number(p.amount))}
+                      </span>
+                      <div className="shrink-0">
+                        <VoidPaymentPill projectId={projectId} unitId={unit.id} payment={p} onDone={refresh} />
+                      </div>
                     </div>
                   ))}
                 </div>

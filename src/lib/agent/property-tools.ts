@@ -438,7 +438,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
           _sum: { amount: true },
         }),
         prisma.tenantPayment.aggregate({
-          where: { tenantId: { in: tenantIds } },
+          where: { tenantId: { in: tenantIds }, voidedAt: null },
           _sum: { amount: true },
         }),
       ])
@@ -490,7 +490,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         include: {
           tenant: { select: { name: true, email: true } },
           tenantCharges: { where: { forgivenAt: null }, select: { amount: true } },
-          tenantPayments: { select: { amount: true } },
+          tenantPayments: { where: { voidedAt: null }, select: { amount: true } },
           unit: { include: { propertyProfile: { include: { project: { select: { name: true } } } } } },
         },
       })
@@ -531,6 +531,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
     case 'get_property_revenue': {
       const where: Record<string, unknown> = {
         tenant: { userId },
+        voidedAt: null,
       }
       if (a.propertyName) {
         where.lease = {

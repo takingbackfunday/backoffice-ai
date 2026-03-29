@@ -41,10 +41,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
       }),
     ])
 
-    // Balance: only active (not forgiven) charges count
+    // Balance: only active (not forgiven) charges and non-voided payments count
     const activeCharges = charges.filter(c => !c.forgivenAt)
     const totalCharged = activeCharges.reduce((sum, c) => sum + Number(c.amount), 0)
-    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0)
+    const totalPaid = payments.filter(p => !p.voidedAt).reduce((sum, p) => sum + Number(p.amount), 0)
     const balance = totalCharged - totalPaid  // positive = tenant owes, negative = overpaid
 
     return ok({
@@ -76,6 +76,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
         paidDate: p.paidDate.toISOString(),
         paymentMethod: p.paymentMethod,
         notes: p.notes,
+        sourceDeleted: p.sourceDeleted,
+        voidedAt: p.voidedAt?.toISOString() ?? null,
+        voidReason: p.voidReason ?? null,
         transaction: p.transaction ? {
           id: p.transaction.id,
           description: p.transaction.description,

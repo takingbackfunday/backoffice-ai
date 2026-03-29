@@ -598,6 +598,9 @@ model TenantPayment {
   paymentMethod String?
   notes         String?
   sourceDeleted Boolean      @default(false)  // true when the linked transaction was deleted
+  voidedAt      DateTime?                     // set when manager voids this payment
+  voidedBy      String?                       // userId of manager who voided
+  voidReason    String?                       // optional reason
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 

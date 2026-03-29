@@ -28,6 +28,7 @@ export async function GET() {
           select: {
             id: true, amount: true, paidDate: true,
             paymentMethod: true, notes: true, createdAt: true,
+            voidedAt: true,
           },
         },
       },
@@ -38,7 +39,7 @@ export async function GET() {
 
     const activeCharges = lease.tenantCharges.filter(c => !c.forgivenAt)
     const totalCharged = activeCharges.reduce((s, c) => s + Number(c.amount), 0)
-    const totalPaid = lease.tenantPayments.reduce((s, p) => s + Number(p.amount), 0)
+    const totalPaid = lease.tenantPayments.filter(p => !p.voidedAt).reduce((s, p) => s + Number(p.amount), 0)
     const balance = totalCharged - totalPaid
 
     return ok({
