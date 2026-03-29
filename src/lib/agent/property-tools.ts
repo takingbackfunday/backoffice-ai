@@ -207,6 +207,23 @@ export const PROPERTY_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'list_unit_messages',
+      description: 'List message/communication history between owner and tenants. Use this when asked about communication, correspondence, notes, or messages with a tenant.',
+      parameters: {
+        type: 'object',
+        properties: {
+          tenantName: { type: 'string', description: 'Filter by tenant name (partial match, optional)' },
+          propertyName: { type: 'string', description: 'Filter by property name (optional)' },
+          isRead: { type: 'boolean', description: 'Filter by read status (optional)' },
+          limit: { type: 'number', description: 'Max messages to return (default 20)' },
+        },
+        required: [],
+      },
+    },
+  },
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -552,6 +569,35 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       const monthlyLost = units.filter(u => u.monthlyRent).reduce((s, u) => s + Number(u.monthlyRent), 0)
       const rows = units.map(u => `${u.propertyProfile.project.name} / ${u.unitLabel} | $${u.monthlyRent ? Number(u.monthlyRent) : 0}/mo`)
       return `${rows.join('\n')}\n\nTotal monthly revenue lost to vacancies: $${monthlyLost.toLocaleString()}`
+    }
+
+    case 'list_unit_messages': {
+      const limit = typeof a.limit === 'number' ? a.limit : 20
+      const tenantIds = a.tenantName ? await findTenantIdsByName(userId, String(a.tenantName)) : undefined
+      const messages = await prisma.message.findMany({
+        where: {
+          tenant: { userId },
+          ...(tenantIds ? { tenantId: { in: tenantIds } } : {}),
+          ...(a.isRead !== undefined ? { isRead: Boolean(a.isRead) } : {}),
+          ...(a.propertyName ? {
+            unit: {
+              propertyProfile: {
+                project: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
+              },
+            },
+          } : {}),
+        },
+        include: {
+          tenant: { select: { name: true } },
+          unit: { include: { propertyProfile: { include: { project: { select: { name: true } } } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      })
+      if (!messages.length) return 'No messages found.'
+      return messages.map(m =>
+        `${m.createdAt.toISOString().slice(0, 10)} | ${m.senderRole === 'tenant' ? `Tenant: ${m.tenant.name}` : 'Owner'} → ${m.senderRole === 'tenant' ? 'Owner' : `Tenant: ${m.tenant.name}`} | Subject: ${m.subject ?? '(none)'} | ${m.isRead ? 'read' : 'UNREAD'}\n  ${m.body.slice(0, 300)}`
+      ).join('\n\n')
     }
 
     default:
