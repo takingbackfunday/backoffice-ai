@@ -10,6 +10,7 @@ const TOP_ITEMS = [
   { href: '/transactions', label: 'Transactions', icon: '💳' },
   { href: '/projects', label: 'Projects', icon: '📁' },
   { href: '/portfolio', label: 'Portfolio', icon: '🏘️' },
+  { href: '/studio', label: 'Studio', icon: '🎬' },
   { href: '/pivot', label: 'Pivot Table', icon: '📋' },
 ]
 

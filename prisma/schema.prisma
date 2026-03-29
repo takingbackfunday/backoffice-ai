@@ -343,6 +343,7 @@ model ClientProfile {
   currency        String      @default("USD")
   paymentTermDays Int         @default(30)
   jobs            Job[]
+  invoices        Invoice[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 }
@@ -364,6 +365,7 @@ model Job {
   budgetAmount    Decimal?      @db.Decimal(12, 2)
   startDate       DateTime?
   endDate         DateTime?
+  invoices        Invoice[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -376,6 +378,62 @@ enum JobStatus {
   ON_HOLD
   COMPLETED
   CANCELLED
+}
+
+// ── Invoice track ────────────────────────────────────────────────────────────
+
+model Invoice {
+  id              String            @id @default(cuid())
+  clientProfileId String
+  clientProfile   ClientProfile     @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  jobId           String?
+  job             Job?              @relation(fields: [jobId], references: [id])
+  invoiceNumber   String            // e.g. "INV-0042", auto-generated
+  status          InvoiceStatus     @default(DRAFT)
+  issueDate       DateTime          @default(now())
+  dueDate         DateTime
+  currency        String            @default("USD")
+  notes           String?
+  lineItems       InvoiceLineItem[]
+  payments        InvoicePayment[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([clientProfileId])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  OVERDUE
+  VOID
+}
+
+model InvoiceLineItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Decimal  @db.Decimal(10, 3)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+model InvoicePayment {
+  id            String   @id @default(cuid())
+  invoiceId     String
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount        Decimal  @db.Decimal(10, 2)
+  paidDate      DateTime
+  paymentMethod String?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([invoiceId])
 }
 
 // ── Property track ──────────────────────────────────────────────────────────

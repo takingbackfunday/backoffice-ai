@@ -66,7 +66,7 @@ export type { NormalizedTransaction, NormalizedAccount, BankProviderAdapter, Con
 
 // === Projects expansion types ===
 
-export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, TenantCharge, TenantPayment, TenantPaymentSuggestion, MaintenanceRequest } from '@/generated/prisma'
+export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, TenantCharge, TenantPayment, TenantPaymentSuggestion, MaintenanceRequest, Invoice, InvoiceLineItem, InvoicePayment } from '@/generated/prisma'
 
 export type BillingType = 'HOURLY' | 'FIXED' | 'RETAINER' | 'MILESTONE'
 export type JobStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
@@ -182,4 +182,26 @@ export const CHARGE_TYPE_COLORS: Record<string, string> = {
   UTILITY: 'bg-cyan-100 text-cyan-800',
   DEPOSIT: 'bg-purple-100 text-purple-800',
   OTHER: 'bg-gray-100 text-gray-700',
+}
+
+// === Invoice types ===
+
+export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'VOID'
+
+export const INVOICE_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Draft',
+  SENT: 'Sent',
+  PARTIAL: 'Partial',
+  PAID: 'Paid',
+  OVERDUE: 'Overdue',
+  VOID: 'Void',
+}
+
+export const INVOICE_STATUS_COLORS: Record<string, string> = {
+  DRAFT: 'bg-gray-100 text-gray-700',
+  SENT: 'bg-blue-100 text-blue-800',
+  PARTIAL: 'bg-amber-100 text-amber-800',
+  PAID: 'bg-green-100 text-green-800',
+  OVERDUE: 'bg-red-100 text-red-800',
+  VOID: 'bg-gray-100 text-gray-400',
 }
