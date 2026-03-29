@@ -147,6 +147,7 @@ export default async function PortfolioPage() {
         paidDate: p.paidDate.toISOString(),
         paymentMethod: p.paymentMethod ?? null,
         notes: p.notes ?? null,
+        sourceDeleted: p.sourceDeleted,
       })),
       recentMessages: u.messages.map(m => ({
         id: m.id,

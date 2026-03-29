@@ -87,10 +87,10 @@ export async function DELETE(
     if (!existing) return notFound('Transaction not found')
 
     await prisma.$transaction([
-      // Remove attribution from any tenant payment linked to this transaction
+      // Flag any attributed tenant payment — keep the record but mark source as deleted
       prisma.tenantPayment.updateMany({
         where: { transactionId: id },
-        data: { transactionId: null },
+        data: { transactionId: null, sourceDeleted: true },
       }),
       // Delete any pending/accepted payment suggestions referencing this transaction
       prisma.tenantPaymentSuggestion.deleteMany({

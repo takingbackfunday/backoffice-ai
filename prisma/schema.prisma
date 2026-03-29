@@ -597,6 +597,7 @@ model TenantPayment {
   transaction   Transaction? @relation(fields: [transactionId], references: [id])
   paymentMethod String?
   notes         String?
+  sourceDeleted Boolean      @default(false)  // true when the linked transaction was deleted
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 

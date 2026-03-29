@@ -22,6 +22,7 @@ interface TenantCharge {
 }
 interface TenantPayment {
   id: string; amount: number; paidDate: string; paymentMethod: string | null; notes: string | null;
+  sourceDeleted: boolean;
   transaction: { id: string; description: string; date: string; amount: number } | null
 }
 interface Lease {
@@ -476,19 +477,24 @@ export function UnitDetailClient({ projectId, unit }: Props) {
                 <p className="text-[11px] font-medium text-muted-foreground mb-1.5">Payments received</p>
                 <div className="rounded-md border divide-y text-xs">
                   {activeLease.tenantPayments.map(p => (
-                    <div key={p.id} className="flex items-center gap-3 px-3 py-2">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                    <div key={p.id} className={cn('flex items-center gap-3 px-3 py-2', p.sourceDeleted && 'bg-amber-50/60')}>
+                      <CheckCircle2 className={cn('h-3.5 w-3.5 shrink-0', p.sourceDeleted ? 'text-amber-500' : 'text-green-600')} />
                       <span className="text-muted-foreground w-20 shrink-0">{fmtDate(p.paidDate)}</span>
                       <span className="flex-1 text-muted-foreground truncate">
                         {p.transaction ? p.transaction.description : (p.paymentMethod ?? 'Manual entry')}
                         {p.notes && <span className="ml-1 italic">· {p.notes}</span>}
                       </span>
-                      {p.transaction && (
+                      {p.sourceDeleted && (
+                        <span className="text-[10px] text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5 shrink-0" title="The bank transaction linked to this payment was deleted. Verify and remove if incorrect.">
+                          source deleted
+                        </span>
+                      )}
+                      {p.transaction && !p.sourceDeleted && (
                         <span className="text-[10px] text-blue-600 bg-blue-50 rounded-full px-1.5 py-0.5 shrink-0">
                           linked tx
                         </span>
                       )}
-                      <span className="tabular-nums font-medium text-green-700 shrink-0">{fmt(Number(p.amount))}</span>
+                      <span className={cn('tabular-nums font-medium shrink-0', p.sourceDeleted ? 'text-amber-700' : 'text-green-700')}>{fmt(Number(p.amount))}</span>
                     </div>
                   ))}
                 </div>

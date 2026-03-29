@@ -33,7 +33,7 @@ interface TenantCharge {
 
 interface TenantPayment {
   id: string; amount: number; paidDate: string;
-  paymentMethod: string | null; notes: string | null
+  paymentMethod: string | null; notes: string | null; sourceDeleted: boolean
 }
 
 interface RecentMessage {
