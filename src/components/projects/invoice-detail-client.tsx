@@ -29,6 +29,7 @@ interface Invoice {
   currency: string
   notes: string | null
   job: { id: string; name: string } | null
+  clientEmail: string | null
   lineItems: LineItem[]
   payments: InvoicePayment[]
 }
@@ -51,6 +52,8 @@ export function InvoiceDetailClient({ projectId, invoice: initial }: Props) {
   const [payNotes, setPayNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailStatus, setEmailStatus] = useState<string | null>(null)
 
   const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
   const paid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
@@ -67,6 +70,28 @@ export function InvoiceDetailClient({ projectId, invoice: initial }: Props) {
     if (res.ok) {
       const json = await res.json()
       setInvoice(prev => ({ ...prev, ...json.data }))
+    }
+  }
+
+  async function handleSendEmail(action: 'send' | 'remind') {
+    setSendingEmail(true)
+    setEmailStatus(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}/${action}`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || json.error) {
+        setEmailStatus(json.error ?? 'Failed to send email')
+        return
+      }
+      if (action === 'send') {
+        setInvoice(prev => ({ ...prev, status: json.data.status }))
+        setEmailStatus('Invoice sent!')
+      } else {
+        setEmailStatus('Reminder sent!')
+      }
+    } finally {
+      setSendingEmail(false)
+      setTimeout(() => setEmailStatus(null), 4000)
     }
   }
 
@@ -124,7 +149,34 @@ export function InvoiceDetailClient({ projectId, invoice: initial }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {invoice.status === 'DRAFT' && (
+          {emailStatus && (
+            <span className="text-xs text-muted-foreground">{emailStatus}</span>
+          )}
+          {invoice.clientEmail && invoice.status !== 'VOID' && invoice.status !== 'PAID' && (
+            <>
+              {(invoice.status === 'DRAFT') && (
+                <button
+                  type="button"
+                  disabled={sendingEmail}
+                  onClick={() => handleSendEmail('send')}
+                  className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {sendingEmail ? 'Sending…' : 'Send invoice'}
+                </button>
+              )}
+              {(invoice.status === 'SENT' || invoice.status === 'PARTIAL') && (
+                <button
+                  type="button"
+                  disabled={sendingEmail}
+                  onClick={() => handleSendEmail('remind')}
+                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                >
+                  {sendingEmail ? 'Sending…' : 'Send reminder'}
+                </button>
+              )}
+            </>
+          )}
+          {invoice.status === 'DRAFT' && !invoice.clientEmail && (
             <button
               type="button"
               onClick={() => updateStatus('SENT')}

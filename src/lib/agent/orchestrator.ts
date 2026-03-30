@@ -1,9 +1,16 @@
 import { classifyDomain } from '@/lib/agent/domain-classifier'
 import { financeAgent } from '@/lib/agent/finance-agent'
 import { propertyAgent } from '@/lib/agent/property-agent'
-import type { AgentContext, AgentResult, ConversationTurn, SseEvent } from '@/lib/agent/types'
+import { studioAgent } from '@/lib/agent/studio-agent'
+import type { Agent, AgentContext, AgentResult, AgentDomain, ConversationTurn, SseEvent } from '@/lib/agent/types'
 
 type SendFn = (event: SseEvent) => void
+
+const agentMap: Record<AgentDomain, Agent> = {
+  finance: financeAgent,
+  property: propertyAgent,
+  studio: studioAgent,
+}
 
 export async function orchestrate(opts: {
   userId: string
@@ -25,12 +32,12 @@ export async function orchestrate(opts: {
   }
 
   // Primary agent run
-  const primaryAgent = classification.primary === 'property' ? propertyAgent : financeAgent
+  const primaryAgent = agentMap[classification.primary] ?? financeAgent
   const primaryResult: AgentResult = await primaryAgent.run(ctx)
 
   // If primary agent signals handoff, run secondary
   if (primaryResult.needsHandoff && classification.secondary) {
-    const secondaryAgent = classification.secondary === 'property' ? propertyAgent : financeAgent
+    const secondaryAgent = agentMap[classification.secondary] ?? financeAgent
     send({ type: 'status', message: `Handing off to ${classification.secondary} agent…` })
 
     const secondaryCtx: AgentContext = {
@@ -46,9 +53,9 @@ export async function orchestrate(opts: {
     }
   }
 
-  // If primary needs handoff but no secondary was predicted, try the other agent
+  // If primary needs handoff but no secondary was predicted, try finance as fallback
   if (primaryResult.needsHandoff) {
-    const fallbackAgent = classification.primary === 'property' ? financeAgent : propertyAgent
+    const fallbackAgent = classification.primary === 'finance' ? propertyAgent : financeAgent
     send({ type: 'status', message: 'Routing to alternative agent…' })
     const fallbackResult: AgentResult = await fallbackAgent.run(ctx)
     return {

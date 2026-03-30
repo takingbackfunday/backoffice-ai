@@ -9,11 +9,12 @@ export async function classifyDomain(question: string): Promise<DomainClassifica
 Classify the following question into one or two domains:
 - "finance": questions about bank transactions, income, expenses, categories, budgets, cash flow, payees, tax, rules
 - "property": questions about properties, units, tenants, leases, rent, maintenance, occupancy, vacancies, tenant payments
+- "studio": questions about invoices, clients, billing, sending invoices, payment reminders, creating invoices, outstanding balances for clients, jobs, freelance work, client payments
 
 Respond with ONLY valid JSON in this exact format:
 {
-  "primary": "finance" | "property",
-  "secondary": "finance" | "property" | null,
+  "primary": "finance" | "property" | "studio",
+  "secondary": "finance" | "property" | "studio" | null,
   "reasoning": "one sentence explanation"
 }
 
@@ -24,7 +25,7 @@ Question: ${question}`
     const match = raw.match(/\{[\s\S]*\}/)
     if (!match) throw new Error('No JSON in response')
     const parsed = JSON.parse(match[0]) as DomainClassification
-    if (parsed.primary !== 'finance' && parsed.primary !== 'property') throw new Error('Invalid domain')
+    if (!['finance', 'property', 'studio'].includes(parsed.primary)) throw new Error('Invalid domain')
     return parsed
   } catch {
     // Default: finance for anything ambiguous

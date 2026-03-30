@@ -2,7 +2,7 @@ import type { ChatMessage, ToolDefinition } from '@/lib/llm/openrouter'
 
 // ── Domain & Routing ─────────────────────────────────────────────
 
-export type AgentDomain = 'finance' | 'property'
+export type AgentDomain = 'finance' | 'property' | 'studio'
 
 export interface DomainClassification {
   primary: AgentDomain
