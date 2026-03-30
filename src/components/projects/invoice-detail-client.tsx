@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { Pencil, Printer } from 'lucide-react'
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
+import { SendInvoiceModal } from '@/components/projects/send-invoice-modal'
+import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 interface LineItem {
   id: string
@@ -40,22 +42,24 @@ interface Props {
   projectId: string
   projectSlug: string
   invoice: Invoice
+  paymentMethods: PaymentMethods
 }
 
 const fmt = (n: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 
-export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial }: Props) {
+export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, paymentMethods }: Props) {
   const router = useRouter()
   const [invoice, setInvoice] = useState<Invoice>(initial)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [showSendModal, setShowSendModal] = useState(false)
+  const [sendModalIsReminder, setSendModalIsReminder] = useState(false)
   const [payAmount, setPayAmount] = useState('')
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0])
   const [payMethod, setPayMethod] = useState('')
   const [payNotes, setPayNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [sendingEmail, setSendingEmail] = useState(false)
   const [emailStatus, setEmailStatus] = useState<string | null>(null)
 
   const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
@@ -76,26 +80,9 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial }
     }
   }
 
-  async function handleSendEmail(action: 'send' | 'remind') {
-    setSendingEmail(true)
-    setEmailStatus(null)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}/${action}`, { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok || json.error) {
-        setEmailStatus(json.error ?? 'Failed to send email')
-        return
-      }
-      if (action === 'send') {
-        setInvoice(prev => ({ ...prev, status: json.data.status }))
-        setEmailStatus('Invoice sent!')
-      } else {
-        setEmailStatus('Reminder sent!')
-      }
-    } finally {
-      setSendingEmail(false)
-      setTimeout(() => setEmailStatus(null), 4000)
-    }
+  function openSend(isReminder: boolean) {
+    setSendModalIsReminder(isReminder)
+    setShowSendModal(true)
   }
 
   async function handleRecordPayment(e: React.FormEvent) {
@@ -137,6 +124,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial }
   }
 
   return (
+    <>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -170,28 +158,26 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial }
             <Printer className="h-3 w-3" /> Print
           </button>
           {emailStatus && (
-            <span className="text-xs text-muted-foreground">{emailStatus}</span>
+            <span className="text-xs text-green-600">{emailStatus}</span>
           )}
           {invoice.clientEmail && invoice.status !== 'VOID' && invoice.status !== 'PAID' && (
             <>
-              {(invoice.status === 'DRAFT') && (
+              {invoice.status === 'DRAFT' && (
                 <button
                   type="button"
-                  disabled={sendingEmail}
-                  onClick={() => handleSendEmail('send')}
-                  className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  onClick={() => openSend(false)}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
                 >
-                  {sendingEmail ? 'Sending…' : 'Send invoice'}
+                  Send invoice
                 </button>
               )}
               {(invoice.status === 'SENT' || invoice.status === 'PARTIAL') && (
                 <button
                   type="button"
-                  disabled={sendingEmail}
-                  onClick={() => handleSendEmail('remind')}
-                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  onClick={() => openSend(true)}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors"
                 >
-                  {sendingEmail ? 'Sending…' : 'Send reminder'}
+                  Send reminder
                 </button>
               )}
             </>
@@ -200,7 +186,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial }
             <button
               type="button"
               onClick={() => updateStatus('SENT')}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
             >
               Mark as Sent
             </button>
@@ -415,5 +401,27 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial }
         )}
       </div>
     </div>
+
+    {showSendModal && invoice.clientEmail && (
+      <SendInvoiceModal
+        projectId={projectId}
+        invoiceId={invoice.id}
+        invoiceNumber={invoice.invoiceNumber}
+        clientName={invoice.clientEmail}
+        clientEmail={invoice.clientEmail}
+        total={total}
+        currency={invoice.currency}
+        dueDate={invoice.dueDate}
+        paymentMethods={paymentMethods}
+        isReminder={sendModalIsReminder}
+        onClose={() => setShowSendModal(false)}
+        onSent={(newStatus) => {
+          setInvoice(prev => ({ ...prev, status: newStatus }))
+          setEmailStatus(sendModalIsReminder ? 'Reminder sent!' : 'Invoice sent!')
+          setTimeout(() => setEmailStatus(null), 4000)
+        }}
+      />
+    )}
+    </>
   )
 }

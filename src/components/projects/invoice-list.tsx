@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { Plus, Search, X, Send, Bell, Eye, Pencil } from 'lucide-react'
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
+import { SendInvoiceModal } from '@/components/projects/send-invoice-modal'
+import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 interface LineItem {
   id: string
@@ -39,6 +41,7 @@ interface Props {
   projectSlug: string
   jobs: { id: string; name: string }[]
   invoices: Invoice[]
+  paymentMethods: PaymentMethods
 }
 
 const fmt = (n: number, currency = 'USD') =>
@@ -113,14 +116,15 @@ function InvoicePreviewModal({
   projectSlug,
   onClose,
   onUpdate,
+  onOpenSend,
 }: {
   inv: Invoice
   projectId: string
   projectSlug: string
   onClose: () => void
   onUpdate: (updated: Invoice) => void
+  onOpenSend: (inv: Invoice, isReminder: boolean) => void
 }) {
-  const [sending, setSending] = useState(false)
   const [emailStatus, setEmailStatus] = useState<string | null>(null)
 
   const total = invoiceTotal(inv.lineItems)
@@ -128,21 +132,6 @@ function InvoicePreviewModal({
   const balance = total - paid
   const displayStatus = getDisplayStatus(inv)
   const isOverdue = displayStatus === 'OVERDUE'
-
-  async function handleEmail(action: 'send' | 'remind') {
-    setSending(true)
-    setEmailStatus(null)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/invoices/${inv.id}/${action}`, { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok || json.error) { setEmailStatus(json.error ?? 'Failed'); return }
-      setEmailStatus(action === 'send' ? 'Invoice sent!' : 'Reminder sent!')
-      if (action === 'send') onUpdate({ ...inv, status: json.data.status })
-      setTimeout(() => setEmailStatus(null), 3000)
-    } finally {
-      setSending(false)
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
@@ -203,7 +192,7 @@ function InvoicePreviewModal({
 
         {/* Footer actions */}
         <div className="flex items-center gap-2 px-5 py-3 border-t bg-muted/10">
-          {emailStatus && <span className="text-xs text-muted-foreground flex-1">{emailStatus}</span>}
+          {emailStatus && <span className="text-xs text-green-600 flex-1">{emailStatus}</span>}
           {!emailStatus && <div className="flex-1" />}
           {inv.status === 'DRAFT' && (
             <Link
@@ -216,18 +205,16 @@ function InvoicePreviewModal({
           )}
           {(inv.status === 'SENT' || inv.status === 'PARTIAL') && (
             <button
-              disabled={sending}
-              onClick={() => handleEmail('remind')}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+              onClick={() => onOpenSend(inv, true)}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 transition-colors"
             >
               <Bell className="h-3 w-3" /> Nudge
             </button>
           )}
           {inv.status === 'DRAFT' && (
             <button
-              disabled={sending}
-              onClick={() => handleEmail('send')}
-              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              onClick={() => onOpenSend(inv, false)}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
             >
               <Send className="h-3 w-3" /> Send
             </button>
@@ -248,12 +235,13 @@ function InvoicePreviewModal({
 /* ── Main component ────────────────────────────────────────────────── */
 type Tab = 'open' | 'paid' | 'all'
 
-export function InvoiceList({ projectId, projectSlug, invoices: initial }: Props) {
+export function InvoiceList({ projectId, projectSlug, invoices: initial, paymentMethods }: Props) {
   const router = useRouter()
   const [invoices, setInvoices] = useState<Invoice[]>(initial)
   const [tab, setTab] = useState<Tab>('open')
   const [search, setSearch] = useState('')
   const [preview, setPreview] = useState<Invoice | null>(null)
+  const [sendModal, setSendModal] = useState<{ inv: Invoice; isReminder: boolean } | null>(null)
 
   const filtered = useMemo(() => {
     let list = invoices
@@ -388,13 +376,7 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial }: Props
                   {canSend && (
                     <button
                       title="Send invoice"
-                      onClick={async () => {
-                        const res = await fetch(`/api/projects/${projectId}/invoices/${inv.id}/send`, { method: 'POST' })
-                        if (res.ok) {
-                          const json = await res.json()
-                          handleUpdate({ ...inv, status: json.data.status })
-                        }
-                      }}
+                      onClick={() => setSendModal({ inv, isReminder: false })}
                       className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
                     >
                       <Send className="h-3.5 w-3.5" />
@@ -403,9 +385,7 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial }: Props
                   {canNudge && (
                     <button
                       title="Send reminder"
-                      onClick={async () => {
-                        await fetch(`/api/projects/${projectId}/invoices/${inv.id}/remind`, { method: 'POST' })
-                      }}
+                      onClick={() => setSendModal({ inv, isReminder: true })}
                       className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors"
                     >
                       <Bell className="h-3.5 w-3.5" />
@@ -433,6 +413,28 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial }: Props
           projectSlug={projectSlug}
           onClose={() => setPreview(null)}
           onUpdate={handleUpdate}
+          onOpenSend={(inv, isReminder) => { setPreview(null); setSendModal({ inv, isReminder }) }}
+        />
+      )}
+
+      {/* Send modal */}
+      {sendModal && (
+        <SendInvoiceModal
+          projectId={projectId}
+          invoiceId={sendModal.inv.id}
+          invoiceNumber={sendModal.inv.invoiceNumber}
+          clientName={sendModal.inv.invoiceNumber}
+          clientEmail={''}
+          total={invoiceTotal(sendModal.inv.lineItems)}
+          currency={sendModal.inv.currency}
+          dueDate={sendModal.inv.dueDate}
+          paymentMethods={paymentMethods}
+          isReminder={sendModal.isReminder}
+          onClose={() => setSendModal(null)}
+          onSent={(newStatus) => {
+            handleUpdate({ ...sendModal.inv, status: newStatus })
+            setSendModal(null)
+          }}
         />
       )}
     </div>

@@ -7,6 +7,7 @@ import { ProjectDetailHeader } from '@/components/projects/project-detail-header
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceDetailClient } from '@/components/projects/invoice-detail-client'
 import Link from 'next/link'
+import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
 
@@ -31,6 +32,9 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     },
   })
   if (!invoice) notFound()
+
+  const prefs = await prisma.userPreference.findUnique({ where: { userId } })
+  const paymentMethods = ((prefs?.data as Record<string, unknown>)?.paymentMethods ?? {}) as PaymentMethods
 
   const serialized = {
     id: invoice.id,
@@ -83,7 +87,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
               All invoices
             </Link>
           </div>
-          <InvoiceDetailClient projectId={project.id} projectSlug={slug} invoice={serialized} />
+          <InvoiceDetailClient projectId={project.id} projectSlug={slug} invoice={serialized} paymentMethods={paymentMethods} />
         </main>
       </div>
     </div>

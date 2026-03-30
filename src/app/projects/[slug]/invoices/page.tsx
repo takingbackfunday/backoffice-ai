@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceList } from '@/components/projects/invoice-list'
+import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 interface PageParams { params: Promise<{ slug: string }> }
 
@@ -35,6 +36,9 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
   })
 
   if (!project || !project.clientProfile) notFound()
+
+  const prefs = await prisma.userPreference.findUnique({ where: { userId } })
+  const paymentMethods = ((prefs?.data as Record<string, unknown>)?.paymentMethods ?? {}) as PaymentMethods
 
   const serializedInvoices = project.clientProfile.invoices.map(inv => ({
     id: inv.id,
@@ -83,6 +87,7 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
             projectSlug={slug}
             jobs={serializedJobs}
             invoices={serializedInvoices}
+            paymentMethods={paymentMethods}
           />
         </main>
       </div>

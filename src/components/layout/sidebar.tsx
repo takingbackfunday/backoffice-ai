@@ -209,6 +209,9 @@ export function Sidebar() {
           <NavLink key={item.href} {...item} indent={!collapsed} />
         ))}
 
+        {!collapsed && <li className="my-1 border-t border-black/[0.06]" />}
+        <NavLink href="/settings" label="Settings" icon="⚙️" />
+
       </ul>
 
       {/* Collapse toggle */}
