@@ -6,11 +6,11 @@ Import CSVs from bank accounts, tag transactions to projects, and automate categ
 
 ## Stack
 
-- **Framework**: Next.js 14, App Router, TypeScript
+- **Framework**: Next.js 16, App Router, TypeScript
 - **Auth**: Clerk
-- **Database**: PostgreSQL (Neon) via Prisma
-- **Styling**: Tailwind CSS + shadcn/ui
-- **AI**: OpenRouter
+- **Database**: PostgreSQL (Neon) via Prisma 7
+- **Styling**: Tailwind CSS 4 + shadcn/ui (base-nova)
+- **AI**: OpenRouter (`anthropic/claude-sonnet-4.6` for reasoning tasks, Gemini Flash for classification)
 
 ## Development
 
@@ -33,3 +33,32 @@ Message notifications are implemented but disabled until Resend is set up.
    - `RESEND_FROM` — `Backoffice <noreply@backoffice.cv>`
 
 Without these vars the app works fine — email sending is silently skipped.
+
+## Known gotchas
+
+### Prisma generated client (v7)
+
+Prisma 7 uses the `prisma-client` generator which outputs to `src/generated/prisma/` **without** an `index.ts` — the entry point is `client.ts`. All imports must use:
+
+```ts
+import { PrismaClient } from '@/generated/prisma/client'
+```
+
+Not `@/generated/prisma` (that worked in older generator versions but breaks in v7).
+
+When you run `pnpm db:push` or `prisma generate`, you must prefix with the DATABASE_URL:
+
+```bash
+DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm db:push
+DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm prisma generate
+```
+
+`src/generated/` is gitignored — it is rebuilt at deploy time on Netlify automatically.
+
+### Environment variables in local dev
+
+`.env.local` is required for `pnpm dev`. For one-off CLI commands (db push, prisma generate) the DATABASE_URL must be passed explicitly since Prisma's config loader doesn't read `.env.local`.
+
+### Invoice AI models
+
+Invoice AI routes (`/api/projects/[id]/invoices/ai-assist` and `ai-finalize`) call `anthropic/claude-sonnet-4.6` via OpenRouter. Responses are expected as JSON — the routes strip markdown code fences and extract the first `{...}` block as fallback.

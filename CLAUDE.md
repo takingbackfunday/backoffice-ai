@@ -13,6 +13,15 @@ pnpm db:seed      # Seed database with initial data
 pnpm db:studio    # Open Prisma Studio (DB browser)
 ```
 
+**IMPORTANT — always prefix DB commands with DATABASE_URL:**
+
+```bash
+DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm db:push
+DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm prisma generate
+```
+
+Prisma's config loader does not read `.env.local` for CLI commands.
+
 There are no automated tests in this project.
 
 ## Environment Variables
@@ -135,3 +144,32 @@ Zustand stores in `src/stores/`:
 - `chat-store.ts` — AI chat overlay state + conversation memory (`sessionId`, `turns`, `addTurn`, `clearHistory`)
 
 Server data fetching uses standard Next.js patterns (server components + `fetch` in client components). Shared types live in `src/types/index.ts` and `src/types/widgets.ts`.
+
+## Known Gotchas
+
+### Prisma v7 generated client path
+
+Prisma 7 (`prisma-client` generator) outputs to `src/generated/prisma/` **without** an `index.ts`. The entry point is `client.ts`. All imports must use:
+
+```ts
+import { PrismaClient } from '@/generated/prisma/client'
+// NOT: '@/generated/prisma'  ← breaks in v7
+```
+
+`src/generated/` is gitignored. On deploy Netlify runs `prisma generate` automatically. Locally, run it manually with `DATABASE_URL` prefixed (see Commands above).
+
+### Job model has no `isActive` field
+
+`Job` uses a `status` enum (`JobStatus`: `ACTIVE`, `COMPLETED`, `CANCELLED`). Filter active jobs with `{ status: 'ACTIVE' }`, not `{ isActive: true }`.
+
+### Invoice AI routes expect JSON from the model
+
+`ai-assist` and `ai-finalize` routes call `anthropic/claude-sonnet-4.6` via `openrouterChat()` and parse the response as JSON. The routes strip markdown code fences and fall back to extracting the first `{...}` block — so a plain JSON response and a fenced code block both work. If the model returns unparseable output, the routes return an empty actions array gracefully rather than erroring.
+
+### `isTaxLine` on `InvoiceLineItem`
+
+Tax is stored as a regular line item with `isTaxLine: true`. This avoids a separate model. When serializing invoices from server components, always include `isTaxLine` in the mapped output so client components can distinguish tax lines from regular ones.
+
+### React Rules of Hooks in client components
+
+All `useState` and `useReducer` calls must be declared at the top level of the component function — never inside helper functions, shims, or conditional branches. The linter enforces `react-hooks/rules-of-hooks`.
