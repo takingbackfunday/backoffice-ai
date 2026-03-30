@@ -449,9 +449,6 @@ export function InvoiceEditor({
         if (!res.ok || json.error) { setSaveError(json.error ?? 'Failed to create invoice'); return }
         invoiceId = json.data.id
 
-        if (sendAfter && clientEmail) {
-          await fetch(`/api/projects/${projectId}/invoices/${invoiceId}/send`, { method: 'POST' })
-        }
       } else {
         const res = await fetch(`/api/projects/${projectId}/invoices/${existingInvoice!.id}`, {
           method: 'PATCH',
@@ -469,7 +466,7 @@ export function InvoiceEditor({
         invoiceId = existingInvoice!.id
       }
 
-      router.push(`/projects/${projectSlug}/invoices/${invoiceId}`)
+      router.push(`/projects/${projectSlug}/invoices/${invoiceId}${sendAfter ? '?send=1' : ''}`)
     } finally {
       setSaving(false)
     }

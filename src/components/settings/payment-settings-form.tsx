@@ -5,6 +5,8 @@ import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 interface Props {
   initial: PaymentMethods
+  initialBusinessName?: string
+  initialYourName?: string
 }
 
 function Field({ label, value, onChange, placeholder, mono = false }: {
@@ -37,7 +39,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-export function PaymentSettingsForm({ initial }: Props) {
+export function PaymentSettingsForm({ initial, initialBusinessName = '', initialYourName = '' }: Props) {
+  const [businessName, setBusinessName] = useState(initialBusinessName)
+  const [yourName, setYourName] = useState(initialYourName)
   const bt = initial.bankTransfer ?? {}
   const [accountName, setAccountName] = useState(bt.accountName ?? '')
   const [bankName, setBankName] = useState(bt.bankName ?? '')
@@ -76,7 +80,7 @@ export function PaymentSettingsForm({ initial }: Props) {
       const res = await fetch('/api/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentMethods }),
+        body: JSON.stringify({ paymentMethods, businessName: businessName || undefined, yourName: yourName || undefined }),
       })
       if (!res.ok) { setError('Failed to save'); return }
       setSaved(true)
@@ -88,6 +92,14 @@ export function PaymentSettingsForm({ initial }: Props) {
 
   return (
     <div className="space-y-5">
+
+      <Section title="Business profile">
+        <p className="text-xs text-muted-foreground -mt-1">Appears as the sender on all invoices and emails.</p>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Business / trading name" value={businessName} onChange={setBusinessName} placeholder="Acme Studio" />
+          <Field label="Your name" value={yourName} onChange={setYourName} placeholder="Jane Smith" />
+        </div>
+      </Section>
 
       <Section title="Bank transfer">
         <div className="grid grid-cols-2 gap-4">
@@ -134,7 +146,7 @@ export function PaymentSettingsForm({ initial }: Props) {
           disabled={saving}
           className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
         >
-          {saving ? 'Saving…' : 'Save payment methods'}
+          {saving ? 'Saving…' : 'Save settings'}
         </button>
         {saved && <span className="text-sm text-green-600">Saved ✓</span>}
       </div>

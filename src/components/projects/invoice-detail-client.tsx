@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Pencil, Printer } from 'lucide-react'
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
@@ -34,6 +34,7 @@ interface Invoice {
   notes: string | null
   job: { id: string; name: string } | null
   clientEmail: string | null
+  clientName: string
   lineItems: LineItem[]
   payments: InvoicePayment[]
 }
@@ -50,10 +51,20 @@ const fmt = (n: number, currency = 'USD') =>
 
 export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, paymentMethods }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [invoice, setInvoice] = useState<Invoice>(initial)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [showSendModal, setShowSendModal] = useState(false)
   const [sendModalIsReminder, setSendModalIsReminder] = useState(false)
+
+  // Auto-open send modal when redirected from "Create & Send"
+  useEffect(() => {
+    if (searchParams.get('send') === '1') {
+      setShowSendModal(true)
+      // Clean up the query param without a full navigation
+      router.replace(`/projects/${projectSlug}/invoices/${initial.id}`)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [payAmount, setPayAmount] = useState('')
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0])
   const [payMethod, setPayMethod] = useState('')
@@ -160,7 +171,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           {emailStatus && (
             <span className="text-xs text-green-600">{emailStatus}</span>
           )}
-          {invoice.clientEmail && invoice.status !== 'VOID' && invoice.status !== 'PAID' && (
+          {invoice.status !== 'VOID' && invoice.status !== 'PAID' && (
             <>
               {invoice.status === 'DRAFT' && (
                 <button
@@ -181,15 +192,6 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                 </button>
               )}
             </>
-          )}
-          {invoice.status === 'DRAFT' && !invoice.clientEmail && (
-            <button
-              type="button"
-              onClick={() => updateStatus('SENT')}
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-            >
-              Mark as Sent
-            </button>
           )}
           {invoice.status !== 'VOID' && invoice.status !== 'PAID' && (
             <button
@@ -402,13 +404,13 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
       </div>
     </div>
 
-    {showSendModal && invoice.clientEmail && (
+    {showSendModal && (
       <SendInvoiceModal
         projectId={projectId}
         invoiceId={invoice.id}
         invoiceNumber={invoice.invoiceNumber}
-        clientName={invoice.clientEmail}
-        clientEmail={invoice.clientEmail}
+        clientName={invoice.clientName}
+        clientEmail={invoice.clientEmail || ''}
         total={total}
         currency={invoice.currency}
         dueDate={invoice.dueDate}

@@ -123,14 +123,14 @@ export async function sendInvoiceEmail({
     html: `
       <div style="font-family:sans-serif;max-width:580px;margin:0 auto;color:#111;padding:0 0 40px">
         <div style="border-bottom:2px solid #111;padding-bottom:16px;margin-bottom:24px">
-          <p style="color:#666;font-size:13px;margin:0 0 4px">Invoice from ${fromName}</p>
-          <h2 style="margin:0;font-size:22px">${invoiceNumber}</h2>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px">
-          <div>
-            <p style="font-size:32px;font-weight:700;margin:0;color:#111">${fmtAmt(total)}</p>
-            <p style="color:#666;font-size:13px;margin:4px 0 0">Due ${due}</p>
-          </div>
+          <p style="color:#666;font-size:13px;margin:0 0 6px">Invoice from ${fromName}</p>
+          <table style="width:100%;border-collapse:collapse"><tr>
+            <td style="vertical-align:bottom"><h2 style="margin:0;font-size:22px">${invoiceNumber}</h2></td>
+            <td style="vertical-align:bottom;text-align:right">
+              <p style="font-size:26px;font-weight:700;margin:0;color:#111">${fmtAmt(total)}</p>
+              <p style="color:#666;font-size:13px;margin:2px 0 0">Due ${due}</p>
+            </td>
+          </tr></table>
         </div>
         ${messageHtml}
         ${paymentHtml}
@@ -187,11 +187,15 @@ export async function sendReminderEmail({
       <div style="font-family:sans-serif;max-width:580px;margin:0 auto;color:#111;padding:0 0 40px">
         ${overdueHtml}
         <div style="border-bottom:2px solid #111;padding-bottom:16px;margin-bottom:24px">
-          <p style="color:#666;font-size:13px;margin:0 0 4px">Payment reminder from ${fromName}</p>
-          <h2 style="margin:0;font-size:22px">${invoiceNumber}</h2>
+          <p style="color:#666;font-size:13px;margin:0 0 6px">Payment reminder from ${fromName}</p>
+          <table style="width:100%;border-collapse:collapse"><tr>
+            <td style="vertical-align:bottom"><h2 style="margin:0;font-size:22px">${invoiceNumber}</h2></td>
+            <td style="vertical-align:bottom;text-align:right">
+              <p style="font-size:26px;font-weight:700;margin:0;color:${isOverdue ? '#991b1b' : '#111'}">${fmtAmt(balance)}</p>
+              <p style="color:#666;font-size:13px;margin:2px 0 0">${isOverdue ? `Was due ${due}` : `Due ${due}`}</p>
+            </td>
+          </tr></table>
         </div>
-        <p style="font-size:32px;font-weight:700;margin:0 0 4px;color:${isOverdue ? '#991b1b' : '#111'}">${fmtAmt(balance)}</p>
-        <p style="color:#666;font-size:13px;margin:4px 0 24px">${isOverdue ? `Was due ${due}` : `Due ${due}`}</p>
         ${messageHtml}
         ${paymentHtml}
         <p style="color:#999;font-size:11px;margin-top:32px">Invoice PDF attached. Sent via Backoffice AI.</p>

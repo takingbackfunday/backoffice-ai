@@ -28,7 +28,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       job: { select: { id: true, name: true } },
       lineItems: true,
       payments: true,
-      clientProfile: { select: { email: true } },
+      clientProfile: { select: { email: true, contactName: true } },
     },
   })
   if (!invoice) notFound()
@@ -46,6 +46,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     notes: invoice.notes ?? null,
     job: invoice.job,
     clientEmail: invoice.clientProfile.email ?? null,
+    clientName: invoice.clientProfile.contactName ?? project.name,
     lineItems: invoice.lineItems.map(i => ({
       id: i.id,
       description: i.description,

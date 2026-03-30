@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, Send, Paperclip } from 'lucide-react'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
@@ -86,6 +86,8 @@ export function SendInvoiceModal({
   )
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const readyRef = useRef(false)
+  useEffect(() => { readyRef.current = true }, [])
 
   async function handleSend() {
     setSending(true)
@@ -113,8 +115,11 @@ export function SendInvoiceModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-lg bg-background rounded-2xl shadow-2xl border overflow-hidden" onClick={e => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget && readyRef.current) onClose() }}
+    >
+      <div className="w-full max-w-lg bg-background rounded-2xl shadow-2xl border overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b bg-muted/20">
@@ -142,6 +147,13 @@ export function SendInvoiceModal({
               className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
             />
           </div>
+
+          {/* No email warning */}
+          {!clientEmail && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              No email address on file for this client. Add one on the project settings page before sending.
+            </div>
+          )}
 
           {/* Attachment notice */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

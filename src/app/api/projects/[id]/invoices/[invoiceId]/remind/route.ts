@@ -33,16 +33,17 @@ export async function POST(request: Request, { params }: RouteParams) {
     const email = invoice.clientProfile.email
     if (!email) return badRequest('Client has no email address on file')
 
-    // Load user payment methods
+    // Load user payment methods + business profile
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-    const paymentMethods = ((prefs?.data as Record<string, unknown>)?.paymentMethods ?? {}) as PaymentMethods
+    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
+    const paymentMethods = (prefsData.paymentMethods ?? {}) as PaymentMethods
+    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || invoice.clientProfile.project.name
 
     const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
     const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
     const balance = total - totalPaid
     const isOverdue = new Date(invoice.dueDate) < new Date()
     const clientName = invoice.clientProfile.contactName ?? invoice.clientProfile.project.name
-    const projectName = invoice.clientProfile.project.name
 
     // Attach a fresh PDF with the reminder
     const pdfBuffer = await generateInvoicePdf({
@@ -54,7 +55,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       notes: invoice.notes,
       clientName,
       clientEmail: email,
-      fromName: projectName,
+      fromName,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: Number(i.quantity),
@@ -66,7 +67,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     await sendReminderEmail({
       toEmail: email,
       toName: clientName,
-      fromName: projectName,
+      fromName,
       invoiceNumber: invoice.invoiceNumber,
       invoiceId: invoice.id,
       projectSlug: invoice.clientProfile.project.slug,

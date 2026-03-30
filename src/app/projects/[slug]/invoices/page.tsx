@@ -88,6 +88,8 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
             jobs={serializedJobs}
             invoices={serializedInvoices}
             paymentMethods={paymentMethods}
+            clientEmail={project.clientProfile.email ?? ''}
+            clientName={project.clientProfile.contactName ?? project.name}
           />
         </main>
       </div>

@@ -13,6 +13,8 @@ export default async function SettingsPage() {
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
   const data = (prefs?.data ?? {}) as Record<string, unknown>
   const paymentMethods = (data.paymentMethods ?? {}) as PaymentMethods
+  const businessName = (data.businessName as string) ?? ''
+  const yourName = (data.yourName as string) ?? ''
 
   return (
     <div className="flex min-h-screen">
@@ -20,11 +22,11 @@ export default async function SettingsPage() {
       <div className="flex flex-1 flex-col">
         <Header title="Settings" />
         <main className="flex-1 p-6 max-w-2xl" role="main">
-          <h2 className="text-lg font-semibold mb-1">Payment methods</h2>
+          <h2 className="text-lg font-semibold mb-1">Settings</h2>
           <p className="text-sm text-muted-foreground mb-6">
-            These details appear on every invoice PDF and email you send to clients. Fill in whichever payment methods you accept.
+            Your business profile and payment details appear on every invoice you send.
           </p>
-          <PaymentSettingsForm initial={paymentMethods} />
+          <PaymentSettingsForm initial={paymentMethods} initialBusinessName={businessName} initialYourName={yourName} />
         </main>
       </div>
     </div>

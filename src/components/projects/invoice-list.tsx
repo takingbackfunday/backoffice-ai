@@ -42,6 +42,8 @@ interface Props {
   jobs: { id: string; name: string }[]
   invoices: Invoice[]
   paymentMethods: PaymentMethods
+  clientEmail?: string
+  clientName?: string
 }
 
 const fmt = (n: number, currency = 'USD') =>
@@ -235,7 +237,7 @@ function InvoicePreviewModal({
 /* ── Main component ────────────────────────────────────────────────── */
 type Tab = 'open' | 'paid' | 'all'
 
-export function InvoiceList({ projectId, projectSlug, invoices: initial, paymentMethods }: Props) {
+export function InvoiceList({ projectId, projectSlug, invoices: initial, paymentMethods, clientEmail = '', clientName = 'Client' }: Props) {
   const router = useRouter()
   const [invoices, setInvoices] = useState<Invoice[]>(initial)
   const [tab, setTab] = useState<Tab>('open')
@@ -423,8 +425,8 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
           projectId={projectId}
           invoiceId={sendModal.inv.id}
           invoiceNumber={sendModal.inv.invoiceNumber}
-          clientName={sendModal.inv.invoiceNumber}
-          clientEmail={''}
+          clientName={clientName}
+          clientEmail={clientEmail}
           total={invoiceTotal(sendModal.inv.lineItems)}
           currency={sendModal.inv.currency}
           dueDate={sendModal.inv.dueDate}
