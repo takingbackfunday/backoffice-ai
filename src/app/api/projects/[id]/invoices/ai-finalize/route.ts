@@ -39,10 +39,15 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!project) return notFound('Project not found')
 
     const body = await request.json()
+    console.log('[ai-finalize] body keys:', Object.keys(body))
     const parsed = RequestSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.errors.map(e => e.message).join(', '))
+    if (!parsed.success) {
+      console.error('[ai-finalize] validation failed:', parsed.error.errors)
+      return badRequest(parsed.error.errors.map(e => e.message).join(', '))
+    }
 
     const { currentInvoice, clientName, company, paymentTermDays, billingType } = parsed.data
+    console.log('[ai-finalize] calling LLM for project', id, '| total:', currentInvoice.total)
 
     const systemPrompt = `Review this invoice for a ${billingType ?? 'freelance'} professional.
 
@@ -65,6 +70,7 @@ Questions: ask only if something seems genuinely unclear or missing (e.g. no due
       [{ role: 'user', content: systemPrompt }],
       'anthropic/claude-sonnet-4.6'
     )
+    console.log('[ai-finalize] raw LLM response (first 300):', raw.slice(0, 300))
 
     let jsonStr = raw.trim()
     const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -75,7 +81,9 @@ Questions: ask only if something seems genuinely unclear or missing (e.g. no due
     let result: { suggestedNotes: string | null; questions: string[] }
     try {
       result = JSON.parse(jsonStr)
-    } catch {
+      console.log('[ai-finalize] parsed ok — suggestedNotes:', !!result.suggestedNotes, '| questions:', result.questions?.length ?? 0)
+    } catch (parseErr) {
+      console.error('[ai-finalize] JSON parse failed:', parseErr, '| jsonStr:', jsonStr.slice(0, 200))
       return ok({ suggestedNotes: null, questions: [] })
     }
 

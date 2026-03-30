@@ -339,12 +339,16 @@ export function InvoiceEditor({
 
   async function handleFinalize() {
     setFinalizing(true)
+    setSaveError(null)
     try {
+      const snapshot = buildCurrentInvoiceSnapshot()
+      console.log('[ai-finalize] sending snapshot — lineItems:', snapshot.lineItems.length, '| total:', snapshot.total)
+
       const res = await fetch(`/api/projects/${projectId}/invoices/ai-finalize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          currentInvoice: buildCurrentInvoiceSnapshot(),
+          currentInvoice: snapshot,
           clientName,
           company,
           paymentTermDays,
@@ -352,7 +356,12 @@ export function InvoiceEditor({
         }),
       })
       const json = await res.json()
-      if (!res.ok || json.error) return
+      console.log('[ai-finalize] response status:', res.status, '| json.error:', json.error, '| data keys:', json.data ? Object.keys(json.data) : null)
+
+      if (!res.ok || json.error) {
+        setSaveError(json.error ?? `AI Finalize failed (${res.status})`)
+        return
+      }
 
       const { suggestedNotes, questions } = json.data as { suggestedNotes: string | null; questions: string[] }
 
@@ -360,16 +369,21 @@ export function InvoiceEditor({
         dispatch({ type: 'SET_NOTES', value: suggestedNotes, aiSuggested: true })
       }
 
+      // Always open chat after finalize so the user can see what happened
+      setChatVisible(true)
       if (questions.length > 0) {
-        setChatVisible(true)
         setChatMessages(prev => [
           ...prev,
           ...questions.map(q => ({ role: 'assistant' as const, text: q })),
         ])
       } else if (suggestedNotes) {
-        setChatVisible(true)
         setChatMessages(prev => [...prev, { role: 'assistant', text: 'I\'ve filled in payment terms and notes based on your setup. Feel free to edit them.' }])
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', text: 'Your invoice looks good — notes are already thorough. Nothing to add.' }])
       }
+    } catch (err) {
+      console.error('[ai-finalize] client error:', err)
+      setSaveError('AI Finalize failed — check console for details')
     } finally {
       setFinalizing(false)
     }
@@ -709,7 +723,7 @@ export function InvoiceEditor({
             <button
               type="button"
               onClick={handleFinalize}
-              disabled={finalizing || total === 0}
+              disabled={finalizing}
               className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-40 transition-colors"
             >
               <Sparkles className="h-3.5 w-3.5" />
