@@ -7,6 +7,7 @@ const LineItemSchema = z.object({
   description: z.string().min(1),
   quantity: z.number().positive(),
   unitPrice: z.number().min(0),
+  isTaxLine: z.boolean().default(false),
 })
 
 const PatchInvoiceSchema = z.object({
@@ -72,6 +73,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
             description: item.description,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
+            isTaxLine: item.isTaxLine,
           })),
         })
       }

@@ -1,33 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, X, Trash2 } from 'lucide-react'
+import { Plus, Search, X, Send, Bell, Eye, Pencil } from 'lucide-react'
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
-
-interface LineItemInput {
-  description: string
-  quantity: string
-  unitPrice: string
-}
 
 interface LineItem {
   id: string
   description: string
   quantity: number
   unitPrice: number
+  isTaxLine?: boolean
 }
 
 interface InvoicePayment {
   id: string
   amount: number
   paidDate: string
-}
-
-interface Job {
-  id: string
-  name: string
 }
 
 interface Invoice {
@@ -46,7 +37,7 @@ interface Invoice {
 interface Props {
   projectId: string
   projectSlug: string
-  jobs: Job[]
+  jobs: { id: string; name: string }[]
   invoices: Invoice[]
 }
 
@@ -61,351 +52,388 @@ function invoicePaid(payments: InvoicePayment[]) {
   return payments.reduce((s, p) => s + Number(p.amount), 0)
 }
 
-const DEFAULT_LINE_ITEM: LineItemInput = { description: '', quantity: '1', unitPrice: '' }
+function daysUntil(dateStr: string): number {
+  return Math.round((new Date(dateStr).getTime() - Date.now()) / 86400000)
+}
 
-export function InvoiceList({ projectId, projectSlug, jobs, invoices: initial }: Props) {
-  const [invoices, setInvoices] = useState<Invoice[]>(initial)
-  const [showForm, setShowForm] = useState(false)
-  const [jobId, setJobId] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [currency, setCurrency] = useState('USD')
-  const [notes, setNotes] = useState('')
-  const [lineItems, setLineItems] = useState<LineItemInput[]>([{ ...DEFAULT_LINE_ITEM }])
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+function getDisplayStatus(inv: Invoice): string {
+  if (inv.status === 'SENT' && daysUntil(inv.dueDate) < 0) return 'OVERDUE'
+  return inv.status
+}
 
-  function addLineItem() {
-    setLineItems(prev => [...prev, { ...DEFAULT_LINE_ITEM }])
-  }
+/* ── Aging bar ─────────────────────────────────────────────────────── */
+function AgingBar({ invoices }: { invoices: Invoice[] }) {
+  const open = invoices.filter(i => ['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'].includes(getDisplayStatus(i)))
+  if (open.length === 0) return null
 
-  function updateLineItem(i: number, key: keyof LineItemInput, value: string) {
-    setLineItems(prev => prev.map((item, idx) => idx === i ? { ...item, [key]: value } : item))
-  }
+  const current = open.filter(i => daysUntil(i.dueDate) >= 0)
+  const due1_30 = open.filter(i => daysUntil(i.dueDate) < 0 && daysUntil(i.dueDate) >= -30)
+  const due31_60 = open.filter(i => daysUntil(i.dueDate) < -30 && daysUntil(i.dueDate) >= -60)
+  const due60plus = open.filter(i => daysUntil(i.dueDate) < -60)
 
-  function removeLineItem(i: number) {
-    setLineItems(prev => prev.filter((_, idx) => idx !== i))
-  }
+  const sumAmt = (arr: Invoice[]) => arr.reduce((s, i) => s + invoiceTotal(i.lineItems) - invoicePaid(i.payments), 0)
+  const currency = invoices[0]?.currency ?? 'USD'
 
-  function resetForm() {
-    setJobId('')
-    setDueDate('')
-    setCurrency('USD')
-    setNotes('')
-    setLineItems([{ ...DEFAULT_LINE_ITEM }])
-    setError(null)
-    setShowForm(false)
-  }
+  const bands = [
+    { label: 'Current', amount: sumAmt(current), color: '#22c55e' },
+    { label: '1–30 days', amount: sumAmt(due1_30), color: '#f59e0b' },
+    { label: '31–60 days', amount: sumAmt(due31_60), color: '#f97316' },
+    { label: '60+ days', amount: sumAmt(due60plus), color: '#ef4444' },
+  ].filter(b => b.amount > 0)
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault()
-    if (!dueDate) { setError('Due date is required'); return }
+  if (bands.length === 0) return null
 
-    const parsedItems = lineItems
-      .filter(i => i.description.trim())
-      .map(i => ({
-        description: i.description.trim(),
-        quantity: parseFloat(i.quantity) || 1,
-        unitPrice: parseFloat(i.unitPrice) || 0,
-      }))
+  const grandTotal = bands.reduce((s, b) => s + b.amount, 0)
 
-    if (parsedItems.length === 0) { setError('At least one line item is required'); return }
+  return (
+    <div className="mb-5 rounded-xl border p-4 bg-muted/20">
+      <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">AR Aging — {fmt(grandTotal, currency)} outstanding</p>
+      <div className="flex h-2 rounded-full overflow-hidden gap-0.5 mb-3">
+        {bands.map(b => (
+          <div key={b.label} style={{ flex: b.amount / grandTotal, background: b.color }} />
+        ))}
+      </div>
+      <div className="flex gap-4 flex-wrap">
+        {bands.map(b => (
+          <div key={b.label} className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-sm" style={{ background: b.color }} />
+            <span className="text-xs text-muted-foreground">{b.label}</span>
+            <span className="text-xs font-semibold tabular-nums">{fmt(b.amount, currency)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
-    setSaving(true)
-    setError(null)
+/* ── Preview modal ─────────────────────────────────────────────────── */
+function InvoicePreviewModal({
+  inv,
+  projectId,
+  projectSlug,
+  onClose,
+  onUpdate,
+}: {
+  inv: Invoice
+  projectId: string
+  projectSlug: string
+  onClose: () => void
+  onUpdate: (updated: Invoice) => void
+}) {
+  const [sending, setSending] = useState(false)
+  const [emailStatus, setEmailStatus] = useState<string | null>(null)
 
+  const total = invoiceTotal(inv.lineItems)
+  const paid = invoicePaid(inv.payments)
+  const balance = total - paid
+  const displayStatus = getDisplayStatus(inv)
+  const isOverdue = displayStatus === 'OVERDUE'
+
+  async function handleEmail(action: 'send' | 'remind') {
+    setSending(true)
+    setEmailStatus(null)
     try {
-      const res = await fetch(`/api/projects/${projectId}/invoices`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobId: jobId || undefined,
-          dueDate,
-          currency,
-          notes: notes || undefined,
-          lineItems: parsedItems,
-        }),
-      })
+      const res = await fetch(`/api/projects/${projectId}/invoices/${inv.id}/${action}`, { method: 'POST' })
       const json = await res.json()
-      if (!res.ok || json.error) { setError(json.error ?? 'Failed to create invoice'); return }
-      setInvoices(prev => [json.data, ...prev])
-      resetForm()
+      if (!res.ok || json.error) { setEmailStatus(json.error ?? 'Failed'); return }
+      setEmailStatus(action === 'send' ? 'Invoice sent!' : 'Reminder sent!')
+      if (action === 'send') onUpdate({ ...inv, status: json.data.status })
+      setTimeout(() => setEmailStatus(null), 3000)
     } finally {
-      setSaving(false)
+      setSending(false)
     }
   }
 
-  async function updateStatus(invoiceId: string, status: string) {
-    const res = await fetch(`/api/projects/${projectId}/invoices/${invoiceId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    })
-    if (res.ok) {
-      const json = await res.json()
-      setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, ...json.data } : inv))
-    }
-  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-xl bg-background rounded-2xl shadow-2xl border overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-muted/20">
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-lg">{inv.invoiceNumber}</span>
+            <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', INVOICE_STATUS_COLORS[displayStatus] ?? 'bg-muted text-muted-foreground')}>
+              {INVOICE_STATUS_LABELS[displayStatus] ?? displayStatus}
+            </span>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-  const previewTotal = lineItems
-    .filter(i => i.description.trim())
-    .reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0)
+        {/* Body */}
+        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          {inv.job && <p className="text-sm text-muted-foreground">Job: {inv.job.name}</p>}
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div><p className="text-xs text-muted-foreground mb-0.5">Issue date</p>
+              <p>{new Date(inv.issueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+            </div>
+            <div><p className="text-xs text-muted-foreground mb-0.5">Due date</p>
+              <p className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </p>
+            </div>
+          </div>
+
+          {/* Line items */}
+          <div className="rounded-lg border overflow-hidden text-sm">
+            <div className="grid grid-cols-[1fr_60px_90px_90px] bg-muted/40 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">
+              <span>Description</span><span className="text-right">Qty</span><span className="text-right">Rate</span><span className="text-right">Total</span>
+            </div>
+            {inv.lineItems.map(item => (
+              <div key={item.id} className="grid grid-cols-[1fr_60px_90px_90px] border-t px-3 py-2 items-center">
+                <span className={cn('text-sm', (item as LineItem & {isTaxLine?: boolean}).isTaxLine ? 'text-muted-foreground italic' : '')}>
+                  {item.description}
+                </span>
+                <span className="text-right text-sm tabular-nums text-muted-foreground">{Number(item.quantity)}</span>
+                <span className="text-right text-sm tabular-nums text-muted-foreground">{fmt(Number(item.unitPrice), inv.currency)}</span>
+                <span className="text-right text-sm tabular-nums font-medium">{fmt(Number(item.quantity) * Number(item.unitPrice), inv.currency)}</span>
+              </div>
+            ))}
+            <div className="border-t px-3 py-2 flex justify-between">
+              <span className="text-sm font-bold">Balance due</span>
+              <span className="text-sm font-bold tabular-nums">{fmt(balance, inv.currency)}</span>
+            </div>
+          </div>
+
+          {inv.notes && (
+            <div className="rounded-lg bg-muted/30 px-4 py-3 text-xs text-muted-foreground whitespace-pre-wrap">{inv.notes}</div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex items-center gap-2 px-5 py-3 border-t bg-muted/10">
+          {emailStatus && <span className="text-xs text-muted-foreground flex-1">{emailStatus}</span>}
+          {!emailStatus && <div className="flex-1" />}
+          {inv.status === 'DRAFT' && (
+            <Link
+              href={`/projects/${projectSlug}/invoices/${inv.id}/edit`}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+              onClick={onClose}
+            >
+              <Pencil className="h-3 w-3" /> Edit
+            </Link>
+          )}
+          {(inv.status === 'SENT' || inv.status === 'PARTIAL') && (
+            <button
+              disabled={sending}
+              onClick={() => handleEmail('remind')}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+            >
+              <Bell className="h-3 w-3" /> Nudge
+            </button>
+          )}
+          {inv.status === 'DRAFT' && (
+            <button
+              disabled={sending}
+              onClick={() => handleEmail('send')}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              <Send className="h-3 w-3" /> Send
+            </button>
+          )}
+          <Link
+            href={`/projects/${projectSlug}/invoices/${inv.id}`}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            onClick={onClose}
+          >
+            <Eye className="h-3 w-3" /> Open
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Main component ────────────────────────────────────────────────── */
+type Tab = 'open' | 'paid' | 'all'
+
+export function InvoiceList({ projectId, projectSlug, invoices: initial }: Props) {
+  const router = useRouter()
+  const [invoices, setInvoices] = useState<Invoice[]>(initial)
+  const [tab, setTab] = useState<Tab>('open')
+  const [search, setSearch] = useState('')
+  const [preview, setPreview] = useState<Invoice | null>(null)
+
+  const filtered = useMemo(() => {
+    let list = invoices
+    if (tab === 'open') list = list.filter(i => !['PAID', 'VOID'].includes(i.status))
+    if (tab === 'paid') list = list.filter(i => i.status === 'PAID')
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      list = list.filter(i =>
+        i.invoiceNumber.toLowerCase().includes(q) ||
+        (i.job?.name ?? '').toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [invoices, tab, search])
+
+  const openCount = invoices.filter(i => !['PAID', 'VOID'].includes(i.status)).length
+  const paidCount = invoices.filter(i => i.status === 'PAID').length
+
+  function handleUpdate(updated: Invoice) {
+    setInvoices(prev => prev.map(i => i.id === updated.id ? { ...i, ...updated } : i))
+    if (preview?.id === updated.id) setPreview({ ...preview, ...updated })
+  }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold">{invoices.length} invoice{invoices.length !== 1 ? 's' : ''}</h2>
+      {/* Aging bar */}
+      <AgingBar invoices={invoices} />
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        {/* Tabs */}
+        <div className="flex rounded-lg border p-0.5 bg-muted/30 gap-0.5">
+          {([['open', `Open (${openCount})`], ['paid', `Paid (${paidCount})`], ['all', 'All']] as [Tab, string][]).map(([t, label]) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={cn(
+                'px-3 py-1 rounded-md text-xs font-medium transition-colors',
+                tab === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search invoices…"
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-background"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex-1" />
+
         <button
           type="button"
-          onClick={() => setShowForm(v => !v)}
-          className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          onClick={() => router.push(`/projects/${projectSlug}/invoices/new`)}
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           New invoice
         </button>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            {search ? 'No invoices match your search.' : tab === 'open' ? 'No open invoices. Create your first invoice above.' : 'No invoices yet.'}
+          </p>
         </div>
-      )}
-
-      {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 rounded-lg border p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">New invoice</h3>
-            <button type="button" onClick={resetForm} className="text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            {jobs.length > 0 && (
-              <div>
-                <label className="block text-xs font-medium mb-1">Job (optional)</label>
-                <select
-                  value={jobId}
-                  onChange={e => setJobId(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">No job</option>
-                  {jobs.map(j => (
-                    <option key={j.id} value={j.id}>{j.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div>
-              <label className="block text-xs font-medium mb-1">Due date <span className="text-destructive">*</span></label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Currency</label>
-              <select
-                value={currency}
-                onChange={e => setCurrency(e.target.value)}
-                className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {['USD', 'GBP', 'EUR', 'CAD', 'AUD'].map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Line items */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium">Line items</label>
-              <button
-                type="button"
-                onClick={addLineItem}
-                className="text-xs text-primary hover:underline flex items-center gap-1"
-              >
-                <Plus className="h-3 w-3" /> Add line
-              </button>
-            </div>
-            <div className="rounded-md border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left px-3 py-2 text-xs font-medium">Description</th>
-                    <th className="text-right px-3 py-2 text-xs font-medium w-20">Qty</th>
-                    <th className="text-right px-3 py-2 text-xs font-medium w-28">Unit price</th>
-                    <th className="text-right px-3 py-2 text-xs font-medium w-24">Total</th>
-                    <th className="w-8" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {lineItems.map((item, i) => (
-                    <tr key={i}>
-                      <td className="px-3 py-1.5">
-                        <input
-                          type="text"
-                          value={item.description}
-                          onChange={e => updateLineItem(i, 'description', e.target.value)}
-                          className="w-full text-sm focus:outline-none"
-                          placeholder="Description"
-                        />
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={e => updateLineItem(i, 'quantity', e.target.value)}
-                          className="w-full text-right text-sm focus:outline-none"
-                          min="0"
-                          step="0.001"
-                        />
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <input
-                          type="number"
-                          value={item.unitPrice}
-                          onChange={e => updateLineItem(i, 'unitPrice', e.target.value)}
-                          className="w-full text-right text-sm focus:outline-none"
-                          placeholder="0.00"
-                          min="0"
-                          step="0.01"
-                        />
-                      </td>
-                      <td className="px-3 py-1.5 text-right text-sm text-muted-foreground tabular-nums">
-                        {fmt((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0), currency)}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {lineItems.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeLineItem(i)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-muted/30 border-t">
-                  <tr>
-                    <td colSpan={3} className="px-3 py-2 text-right text-xs font-semibold">Total</td>
-                    <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums">
-                      {fmt(previewTotal, currency)}
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium mb-1">Notes (optional)</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={2}
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Payment instructions, terms, etc."
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={resetForm}
-              className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {saving ? 'Creating…' : 'Create invoice'}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {invoices.length === 0 && !showForm ? (
-        <p className="text-sm text-muted-foreground">No invoices yet. Create your first invoice to start tracking payments.</p>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left px-4 py-2 font-medium">Invoice</th>
-                <th className="text-left px-4 py-2 font-medium">Job</th>
-                <th className="text-right px-4 py-2 font-medium">Total</th>
-                <th className="text-right px-4 py-2 font-medium">Paid</th>
-                <th className="text-left px-4 py-2 font-medium">Status</th>
-                <th className="text-left px-4 py-2 font-medium">Due</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {invoices.map(inv => {
-                const total = invoiceTotal(inv.lineItems)
-                const paid = invoicePaid(inv.payments)
-                const overdue = inv.status !== 'PAID' && inv.status !== 'VOID' && new Date(inv.dueDate) < new Date()
-                const displayStatus = overdue && inv.status === 'SENT' ? 'OVERDUE' : inv.status
-                return (
-                  <tr key={inv.id} className="hover:bg-muted/20">
-                    <td className="px-4 py-2">
-                      <Link
-                        href={`/projects/${projectSlug}/invoices/${inv.id}`}
-                        className="font-medium text-primary hover:underline"
-                      >
-                        {inv.invoiceNumber}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-muted-foreground">{inv.job?.name ?? '—'}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{fmt(total, inv.currency)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
-                      {paid > 0 ? fmt(paid, inv.currency) : '—'}
-                    </td>
-                    <td className="px-4 py-2">
-                      <select
-                        value={inv.status}
-                        onChange={e => updateStatus(inv.id, e.target.value)}
-                        className={cn(
-                          'rounded-full px-2 py-0.5 text-xs font-medium border-0 cursor-pointer focus:outline-none',
-                          INVOICE_STATUS_COLORS[displayStatus] ?? 'bg-muted text-muted-foreground'
-                        )}
-                      >
-                        {Object.entries(INVOICE_STATUS_LABELS).map(([v, l]) => (
-                          <option key={v} value={v}>{l}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className={cn('px-4 py-2 text-xs', overdue && inv.status !== 'PAID' && inv.status !== 'VOID' ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
-                      {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </td>
-                    <td className="px-2 py-2">
-                      <Link
-                        href={`/projects/${projectSlug}/invoices/${inv.id}`}
-                        className="text-muted-foreground hover:text-foreground"
-                        title="View invoice"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </Link>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="rounded-xl border overflow-hidden">
+          <div className="grid grid-cols-[110px_1fr_110px_110px_130px_110px_80px] bg-muted/40 px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+            <span>Invoice</span>
+            <span>Job</span>
+            <span className="text-right">Total</span>
+            <span className="text-right">Balance</span>
+            <span>Status</span>
+            <span>Due</span>
+            <span />
+          </div>
+          {filtered.map((inv, idx) => {
+            const total = invoiceTotal(inv.lineItems)
+            const paid = invoicePaid(inv.payments)
+            const balance = total - paid
+            const displayStatus = getDisplayStatus(inv)
+            const days = daysUntil(inv.dueDate)
+            const isOverdue = displayStatus === 'OVERDUE'
+            const canSend = inv.status === 'DRAFT'
+            const canNudge = inv.status === 'SENT' || inv.status === 'PARTIAL'
+
+            return (
+              <div
+                key={inv.id}
+                className={cn(
+                  'grid grid-cols-[110px_1fr_110px_110px_130px_110px_80px] border-t px-4 py-3 items-center hover:bg-muted/10 cursor-pointer transition-colors',
+                  idx % 2 === 0 ? '' : 'bg-muted/5'
+                )}
+                onClick={() => setPreview(inv)}
+              >
+                <span className="text-sm font-medium text-primary">{inv.invoiceNumber}</span>
+                <span className="text-sm text-muted-foreground truncate pr-2">{inv.job?.name ?? '—'}</span>
+                <span className="text-sm tabular-nums text-right">{fmt(total, inv.currency)}</span>
+                <span className={cn('text-sm tabular-nums text-right', balance > 0 && isOverdue ? 'text-red-600 font-medium' : '')}>
+                  {balance > 0 ? fmt(balance, inv.currency) : <span className="text-green-600 font-medium">Paid</span>}
+                </span>
+                <span>
+                  <span className={cn('rounded-full px-2.5 py-0.5 text-[10px] font-medium', INVOICE_STATUS_COLORS[displayStatus] ?? 'bg-muted text-muted-foreground')}>
+                    {INVOICE_STATUS_LABELS[displayStatus] ?? displayStatus}
+                  </span>
+                </span>
+                <span className={cn('text-xs', isOverdue ? 'text-red-600 font-medium' : days <= 7 && days >= 0 ? 'text-amber-600' : 'text-muted-foreground')}>
+                  {isOverdue
+                    ? `${Math.abs(days)}d ago`
+                    : days === 0 ? 'Today'
+                    : days > 0 ? `${days}d`
+                    : new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+                <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                  {canSend && (
+                    <button
+                      title="Send invoice"
+                      onClick={async () => {
+                        const res = await fetch(`/api/projects/${projectId}/invoices/${inv.id}/send`, { method: 'POST' })
+                        if (res.ok) {
+                          const json = await res.json()
+                          handleUpdate({ ...inv, status: json.data.status })
+                        }
+                      }}
+                      className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {canNudge && (
+                    <button
+                      title="Send reminder"
+                      onClick={async () => {
+                        await fetch(`/api/projects/${projectId}/invoices/${inv.id}/remind`, { method: 'POST' })
+                      }}
+                      className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors"
+                    >
+                      <Bell className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <Link
+                    href={`/projects/${projectSlug}/invoices/${inv.id}`}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="View invoice"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              </div>
+            )
+          })}
         </div>
+      )}
+
+      {/* Preview modal */}
+      {preview && (
+        <InvoicePreviewModal
+          inv={preview}
+          projectId={projectId}
+          projectSlug={projectSlug}
+          onClose={() => setPreview(null)}
+          onUpdate={handleUpdate}
+        />
       )}
     </div>
   )

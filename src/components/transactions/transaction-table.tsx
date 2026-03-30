@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { Project } from '@/generated/prisma'
+import type { Project } from '@/generated/prisma/client'
 import type { TransactionWithRelations } from '@/types'
 import { type CategoryGroup, type Payee } from '@/components/rules/rule-editor'
 

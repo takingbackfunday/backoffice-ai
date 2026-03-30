@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Pencil, Printer } from 'lucide-react'
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -36,13 +38,14 @@ interface Invoice {
 
 interface Props {
   projectId: string
+  projectSlug: string
   invoice: Invoice
 }
 
 const fmt = (n: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 
-export function InvoiceDetailClient({ projectId, invoice: initial }: Props) {
+export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial }: Props) {
   const router = useRouter()
   const [invoice, setInvoice] = useState<Invoice>(initial)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
@@ -149,6 +152,23 @@ export function InvoiceDetailClient({ projectId, invoice: initial }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Edit — only for DRAFT/SENT/PARTIAL */}
+          {!['PAID', 'VOID'].includes(invoice.status) && (
+            <Link
+              href={`/projects/${projectSlug}/invoices/${invoice.id}/edit`}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+            >
+              <Pencil className="h-3 w-3" /> Edit
+            </Link>
+          )}
+          {/* Print */}
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+          >
+            <Printer className="h-3 w-3" /> Print
+          </button>
           {emailStatus && (
             <span className="text-xs text-muted-foreground">{emailStatus}</span>
           )}

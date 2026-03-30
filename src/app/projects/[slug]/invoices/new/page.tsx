@@ -5,11 +5,12 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
-import { InvoiceList } from '@/components/projects/invoice-list'
+import { InvoiceEditor } from '@/components/projects/invoice-editor'
+import Link from 'next/link'
 
 interface PageParams { params: Promise<{ slug: string }> }
 
-export default async function ProjectInvoicesPage({ params }: PageParams) {
+export default async function NewInvoicePage({ params }: PageParams) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
@@ -19,50 +20,14 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
     where: { userId, slug, type: 'CLIENT' },
     include: {
       clientProfile: {
-        include: {
-          jobs: { orderBy: { createdAt: 'desc' } },
-          invoices: {
-            include: {
-              job: { select: { id: true, name: true } },
-              lineItems: true,
-              payments: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
+        include: { jobs: { where: { status: 'ACTIVE' }, orderBy: { createdAt: 'desc' } } },
       },
     },
   })
 
   if (!project || !project.clientProfile) notFound()
 
-  const serializedInvoices = project.clientProfile.invoices.map(inv => ({
-    id: inv.id,
-    invoiceNumber: inv.invoiceNumber,
-    status: inv.status,
-    issueDate: inv.issueDate.toISOString(),
-    dueDate: inv.dueDate.toISOString(),
-    currency: inv.currency,
-    notes: inv.notes ?? null,
-    job: inv.job,
-    lineItems: inv.lineItems.map(i => ({
-      id: i.id,
-      description: i.description,
-      quantity: Number(i.quantity),
-      unitPrice: Number(i.unitPrice),
-      isTaxLine: i.isTaxLine,
-    })),
-    payments: inv.payments.map(p => ({
-      id: p.id,
-      amount: Number(p.amount),
-      paidDate: p.paidDate.toISOString(),
-    })),
-  }))
-
-  const serializedJobs = project.clientProfile.jobs.map(j => ({
-    id: j.id,
-    name: j.name,
-  }))
+  const cp = project.clientProfile
 
   return (
     <div className="flex min-h-screen">
@@ -78,11 +43,28 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
             description={project.description}
           />
           <ProjectSubNav slug={slug} type={project.type} />
-          <InvoiceList
+          <div className="mb-4 flex items-center justify-between">
+            <Link
+              href={`/projects/${slug}/invoices`}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+            >
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              All invoices
+            </Link>
+            <h2 className="text-lg font-semibold">New Invoice</h2>
+          </div>
+          <InvoiceEditor
+            mode="create"
             projectId={project.id}
             projectSlug={slug}
-            jobs={serializedJobs}
-            invoices={serializedInvoices}
+            clientName={cp.contactName ?? project.name}
+            clientEmail={cp.email ?? null}
+            paymentTermDays={cp.paymentTermDays}
+            billingType={cp.billingType}
+            company={cp.company ?? null}
+            jobs={cp.jobs.map(j => ({ id: j.id, name: j.name }))}
           />
         </main>
       </div>

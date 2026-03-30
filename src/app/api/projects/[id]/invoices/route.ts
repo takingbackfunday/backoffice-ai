@@ -7,6 +7,7 @@ const LineItemSchema = z.object({
   description: z.string().min(1, 'Description is required'),
   quantity: z.number().positive('Quantity must be positive'),
   unitPrice: z.number().min(0, 'Unit price must be non-negative'),
+  isTaxLine: z.boolean().default(false),
 })
 
 const CreateInvoiceSchema = z.object({
@@ -92,6 +93,7 @@ export async function POST(request: Request, { params }: RouteParams) {
             description: item.description,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
+            isTaxLine: item.isTaxLine,
           })),
         },
       },

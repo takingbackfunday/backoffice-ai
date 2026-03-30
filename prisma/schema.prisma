@@ -418,6 +418,7 @@ model InvoiceLineItem {
   description String
   quantity    Decimal  @db.Decimal(10, 3)
   unitPrice   Decimal  @db.Decimal(10, 2)
+  isTaxLine   Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   @@index([invoiceId])

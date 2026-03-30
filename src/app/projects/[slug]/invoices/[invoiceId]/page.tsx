@@ -47,6 +47,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       description: i.description,
       quantity: Number(i.quantity),
       unitPrice: Number(i.unitPrice),
+      isTaxLine: i.isTaxLine,
     })),
     payments: invoice.payments.map(p => ({
       id: p.id,
@@ -82,7 +83,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
               All invoices
             </Link>
           </div>
-          <InvoiceDetailClient projectId={project.id} invoice={serialized} />
+          <InvoiceDetailClient projectId={project.id} projectSlug={slug} invoice={serialized} />
         </main>
       </div>
     </div>
