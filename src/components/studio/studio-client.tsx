@@ -417,13 +417,14 @@ interface PaymentSuggestion {
   transaction: { id: string; description: string; date: string; amount: number }
 }
 
-function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, onClose, onUpdated }: {
+function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, onClose, onUpdated, onSuggestionActioned }: {
   inv: Invoice
   clientId: string
   clientName: string
   clientSlug: string
   onClose: () => void
   onUpdated?: (inv: Invoice) => void
+  onSuggestionActioned?: (transactionId: string) => void
 }) {
   const router = useRouter()
   const [inv, setInv] = useState(initial)
@@ -491,13 +492,15 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
     setVoiding(false)
   }
 
-  async function handleSuggestion(suggestionId: string, action: 'accept' | 'dismiss') {
+  async function handleSuggestion(suggestion: PaymentSuggestion, action: 'accept' | 'dismiss') {
+    const { id: suggestionId, transaction: { id: transactionId } } = suggestion
     setSuggestionsDone(p => ({ ...p, [suggestionId]: action === 'accept' ? 'accepted' : 'dismissed' }))
     const res = await fetch('/api/invoice-payment-suggestions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ suggestionId, action }),
     })
+    if (res.ok) onSuggestionActioned?.(transactionId)
     if (res.ok && action === 'accept') {
       // Re-fetch invoice to get updated status/paid amount
       const invRes = await fetch(`/api/projects/${clientId}/invoices/${inv.id}`)
@@ -632,13 +635,13 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     <button
-                      onClick={() => handleSuggestion(s.id, 'accept')}
+                      onClick={() => handleSuggestion(s, 'accept')}
                       style={{ borderRadius: 8, border: 'none', background: '#2563eb', padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer' }}
                     >
                       Accept
                     </button>
                     <button
-                      onClick={() => handleSuggestion(s.id, 'dismiss')}
+                      onClick={() => handleSuggestion(s, 'dismiss')}
                       style={{ borderRadius: 8, border: '1px solid #93c5fd', background: 'none', padding: '6px 12px', fontSize: 11, fontWeight: 600, color: '#2563eb', cursor: 'pointer' }}
                     >
                       Dismiss
@@ -730,9 +733,9 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       .then(r => r.json())
       .then(j => {
         if (j.data) {
-          const data = j.data as { invoice: { id: string }; transactionId: string }[]
+          const data = j.data as { invoice: { id: string }; transaction: { id: string } }[]
           setSuggestionInvoiceIds(new Set(data.map(s => s.invoice.id)))
-          setSuggestionTxCount(new Set(data.map(s => s.transactionId)).size)
+          setSuggestionTxCount(new Set(data.map(s => s.transaction.id)).size)
         }
       })
       .catch(() => {})
@@ -997,6 +1000,24 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           clientSlug={previewInv.clientSlug}
           onClose={() => setPreviewInv(null)}
           onUpdated={updated => setPreviewInv(p => p ? { ...p, ...updated } : p)}
+          onSuggestionActioned={transactionId => {
+            setSuggestionInvoiceIds(prev => {
+              // Re-fetch to get accurate state; optimistically remove acted-on tx's invoices
+              fetch('/api/invoice-payment-suggestions')
+                .then(r => r.json())
+                .then(j => {
+                  if (j.data) {
+                    const data = j.data as { invoice: { id: string }; transaction: { id: string } }[]
+                    setSuggestionInvoiceIds(new Set(data.map(s => s.invoice.id)))
+                    setSuggestionTxCount(new Set(data.map(s => s.transaction.id)).size)
+                  } else {
+                    setSuggestionTxCount(0)
+                  }
+                })
+                .catch(() => {})
+              return prev
+            })
+          }}
         />
       )}
 
