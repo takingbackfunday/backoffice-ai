@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
@@ -187,7 +188,7 @@ function AgingBar({ invoices }: { invoices: (Invoice & { clientId: string })[] }
 /*  ActionBanner                                                        */
 /* ------------------------------------------------------------------ */
 
-function ActionBanner({ icon, label, detail, color, onClick }: { icon: string; label: string; detail: string; color: 'red' | 'amber' | 'blue'; onClick: () => void }) {
+function ActionBanner({ icon, label, detail, color, onClick, cta = 'Filter →' }: { icon: string; label: string; detail: string; color: 'red' | 'amber' | 'blue'; onClick: () => void; cta?: string }) {
   const colors = {
     red:   { bg: '#fef2f2', border: '#fecaca', icon: '#ef4444' },
     amber: { bg: '#fffbeb', border: '#fde68a', icon: '#f59e0b' },
@@ -204,7 +205,7 @@ function ActionBanner({ icon, label, detail, color, onClick }: { icon: string; l
         <p style={{ fontSize: 13, fontWeight: 600, color: c.icon, margin: 0 }}>{label}</p>
         <p style={{ fontSize: 11, opacity: 0.7, color: c.icon, margin: 0 }}>{detail}</p>
       </div>
-      <span style={{ fontSize: 11, color: c.icon, opacity: 0.5 }}>Filter →</span>
+      <span style={{ fontSize: 11, color: c.icon, opacity: 0.5 }}>{cta}</span>
     </button>
   )
 }
@@ -563,6 +564,7 @@ function InvoicePreviewModal({ inv, clientName, clientSlug, onClose }: { inv: In
 type FlatInvoice = Invoice & { clientId: string; clientName: string; clientSlug: string; clientCompany: string | null }
 
 export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0 }: Props) {
+  const router = useRouter()
   const [view, setView] = useState<View>('open')
   const [search, setSearch] = useState('')
   const [previewInv, setPreviewInv] = useState<FlatInvoice | null>(null)
@@ -605,7 +607,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
     if (overdue.length > 0) items.push({ icon: '⚠️', label: `${overdue.length} overdue invoice${overdue.length !== 1 ? 's' : ''}`, detail: `${fmt(overdue.reduce((s, i) => s + (i.total - i.paid), 0))} needs collecting`, color: 'red', filterFn: i => getDisplayStatus(i) === 'OVERDUE' })
     const drafts = flat.filter(i => i.status === 'DRAFT')
     if (drafts.length > 0) items.push({ icon: '📨', label: `${drafts.length} draft${drafts.length !== 1 ? 's' : ''} ready to send`, detail: `${fmt(drafts.reduce((s, i) => s + i.total, 0))} in unsent invoices`, color: 'blue', filterFn: i => i.status === 'DRAFT' })
-    if (pendingSuggestions > 0) items.push({ icon: '💳', label: `${pendingSuggestions} payment match${pendingSuggestions !== 1 ? 'es' : ''} to review`, detail: 'Transactions that may be invoice payments', color: 'blue', filterFn: () => false })
+    // Note: payment suggestions live in the transactions view, not here — handled separately via onReviewSuggestions
     return items
   }, [flat])
 
@@ -661,13 +663,23 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           </div>
 
           {/* Take notice */}
-          {actions.length > 0 && (
+          {(actions.length > 0 || pendingSuggestions > 0) && (
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take notice</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {actions.map((a, i) => (
                   <ActionBanner key={i} {...a} onClick={() => { setActionFilter(() => a.filterFn); setView('all') }} />
                 ))}
+                {pendingSuggestions > 0 && (
+                  <ActionBanner
+                    icon="💳"
+                    label={`${pendingSuggestions} payment match${pendingSuggestions !== 1 ? 'es' : ''} to review`}
+                    detail="Open the relevant invoice to accept or dismiss"
+                    color="blue"
+                    cta="Show invoices →"
+                    onClick={() => { setActionFilter(() => (i: FlatInvoice) => ['SENT', 'PARTIAL'].includes(i.status)); setView('all') }}
+                  />
+                )}
               </div>
             </div>
           )}

@@ -313,7 +313,20 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
               <RefreshCw className="h-3 w-3" /> Renegotiate
             </button>
           )}
-          {invoice.status !== 'VOID' && invoice.status !== 'PAID' && (
+          {invoice.status === 'DRAFT' && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm('Delete this draft? This cannot be undone.')) return
+                const res = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}`, { method: 'DELETE' })
+                if (res.ok) router.push(`/projects/${projectSlug}/invoices`)
+              }}
+              className="rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-medium text-destructive/70 hover:text-destructive hover:border-destructive hover:bg-destructive/5 transition-colors"
+            >
+              Delete
+            </button>
+          )}
+          {invoice.status !== 'VOID' && invoice.status !== 'PAID' && invoice.status !== 'DRAFT' && (
             <button
               type="button"
               onClick={() => { if (confirm('Void this invoice? This cannot be undone.')) updateStatus('VOID') }}

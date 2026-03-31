@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Workflow
+
+**Commit without pushing** during development. Never run `git push` unless the user explicitly asks. This avoids triggering Netlify deploys on every change.
+
 ## Commands
 
 ```bash

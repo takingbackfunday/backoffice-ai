@@ -121,7 +121,13 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     const invoice = await getInvoiceForUser(invoiceId, id, userId)
     if (!invoice) return notFound('Invoice not found')
 
-    // Soft void — preserve audit trail
+    if (invoice.status === 'DRAFT') {
+      // Hard delete — draft has never been sent, no audit trail needed
+      await prisma.invoice.delete({ where: { id: invoiceId } })
+      return ok({ deleted: true })
+    }
+
+    // Soft void for all other statuses — preserve audit trail
     const voided = await prisma.invoice.update({
       where: { id: invoiceId },
       data: { status: 'VOID' },
@@ -129,6 +135,6 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
     return ok(voided)
   } catch {
-    return serverError('Failed to void invoice')
+    return serverError('Failed to delete invoice')
   }
 }
