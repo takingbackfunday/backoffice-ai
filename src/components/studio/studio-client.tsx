@@ -503,8 +503,14 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
       const invRes = await fetch(`/api/projects/${clientId}/invoices/${inv.id}`)
       if (invRes.ok) {
         const j = await invRes.json()
-        setInv(j.data)
-        onUpdated?.(j.data)
+        const raw = j.data
+        // API returns payments array; compute paid total to match modal's Invoice shape
+        const paid = Array.isArray(raw.payments)
+          ? raw.payments.reduce((s: number, p: { amount: number }) => s + Number(p.amount), 0)
+          : raw.paid ?? inv.paid
+        const updated = { ...inv, status: raw.status, paid }
+        setInv(updated)
+        onUpdated?.(updated)
       }
     }
   }
