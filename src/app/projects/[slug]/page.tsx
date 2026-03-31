@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { PropertyOverview } from '@/components/projects/property-overview'
+import { ClientInfoEditor } from '@/components/projects/client-info-editor'
 import { JOB_STATUS_LABELS } from '@/types'
 import Link from 'next/link'
 
@@ -86,41 +87,20 @@ export default async function ProjectDetailPage({ params }: PageParams) {
           {project.type === 'CLIENT' && project.clientProfile && (
             <div className="space-y-6">
               {/* Client info */}
-              <div className="rounded-lg border p-4">
-                <h2 className="text-sm font-semibold mb-3">Client info</h2>
-                <dl className="grid grid-cols-2 gap-2 text-sm">
-                  {project.clientProfile.contactName && (
-                    <>
-                      <dt className="text-muted-foreground">Contact</dt>
-                      <dd>{project.clientProfile.contactName}</dd>
-                    </>
-                  )}
-                  {project.clientProfile.company && (
-                    <>
-                      <dt className="text-muted-foreground">Company</dt>
-                      <dd>{project.clientProfile.company}</dd>
-                    </>
-                  )}
-                  {project.clientProfile.email && (
-                    <>
-                      <dt className="text-muted-foreground">Email</dt>
-                      <dd>{project.clientProfile.email}</dd>
-                    </>
-                  )}
-                  {project.clientProfile.phone && (
-                    <>
-                      <dt className="text-muted-foreground">Phone</dt>
-                      <dd>{project.clientProfile.phone}</dd>
-                    </>
-                  )}
-                  <dt className="text-muted-foreground">Billing</dt>
-                  <dd>{project.clientProfile.billingType}</dd>
-                  <dt className="text-muted-foreground">Currency</dt>
-                  <dd>{project.clientProfile.currency}</dd>
-                  <dt className="text-muted-foreground">Payment terms</dt>
-                  <dd>{project.clientProfile.paymentTermDays} days</dd>
-                </dl>
-              </div>
+              <ClientInfoEditor
+                projectId={project.id}
+                profile={{
+                  contactName: project.clientProfile.contactName,
+                  company: project.clientProfile.company,
+                  email: project.clientProfile.email,
+                  phone: project.clientProfile.phone,
+                  address: project.clientProfile.address,
+                  billingType: project.clientProfile.billingType,
+                  defaultRate: project.clientProfile.defaultRate ? Number(project.clientProfile.defaultRate) : null,
+                  currency: project.clientProfile.currency,
+                  paymentTermDays: project.clientProfile.paymentTermDays,
+                }}
+              />
 
               {/* Recent jobs */}
               <div>

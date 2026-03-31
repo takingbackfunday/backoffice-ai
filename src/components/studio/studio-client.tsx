@@ -721,6 +721,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [actionFilter, setActionFilter] = useState<((i: FlatInvoice) => boolean) | null>(null)
   const [suggestionInvoiceIds, setSuggestionInvoiceIds] = useState<Set<string>>(new Set())
+  const [suggestionTxCount, setSuggestionTxCount] = useState(pendingSuggestions)
 
   // Fetch which invoice IDs have pending suggestions so we can filter precisely
   useEffect(() => {
@@ -728,7 +729,11 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
     fetch('/api/invoice-payment-suggestions')
       .then(r => r.json())
       .then(j => {
-        if (j.data) setSuggestionInvoiceIds(new Set((j.data as { invoice: { id: string } }[]).map(s => s.invoice.id)))
+        if (j.data) {
+          const data = j.data as { invoice: { id: string }; transactionId: string }[]
+          setSuggestionInvoiceIds(new Set(data.map(s => s.invoice.id)))
+          setSuggestionTxCount(new Set(data.map(s => s.transactionId)).size)
+        }
       })
       .catch(() => {})
   }, [pendingSuggestions])
@@ -831,7 +836,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                 {pendingSuggestions > 0 && (
                   <ActionBanner
                     icon="💳"
-                    label={`${pendingSuggestions} payment match${pendingSuggestions !== 1 ? 'es' : ''} to review`}
+                    label={`${suggestionTxCount} payment match${suggestionTxCount !== 1 ? 'es' : ''} to review`}
                     detail="Open the relevant invoice to accept or dismiss"
                     color="blue"
                     cta="Show invoices →"
@@ -923,10 +928,14 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               >
                 <div style={{ padding: '10px 8px 10px 0', minWidth: 0 }}>
                   {isNewClient ? (
-                    <div>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{inv.clientName}</p>
+                    <Link
+                      href={`/projects/${inv.clientSlug}`}
+                      onClick={e => e.stopPropagation()}
+                      style={{ textDecoration: 'none', display: 'block', minWidth: 0 }}
+                    >
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#1a1a1a' }}>{inv.clientName}</p>
                       {inv.clientCompany && <p style={{ margin: 0, fontSize: 10, color: '#aaa' }}>{inv.clientCompany}</p>}
-                    </div>
+                    </Link>
                   ) : <span style={{ fontSize: 10, color: '#ccc', paddingLeft: 4 }}>↳</span>}
                 </div>
                 <div style={{ padding: '10px 0' }}>
