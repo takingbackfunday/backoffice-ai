@@ -410,37 +410,117 @@ function AiCreator({ clients, projectSlug, onCreated }: { clients: Client[]; pro
 /*  InvoicePreviewModal                                                 */
 /* ------------------------------------------------------------------ */
 
-function InvoicePreviewModal({ inv, clientName, clientSlug, onClose }: { inv: Invoice; clientName: string; clientSlug: string; onClose: () => void }) {
+interface PaymentSuggestion {
+  id: string
+  confidence: string
+  reasoning: string
+  transaction: { id: string; description: string; date: string; amount: number }
+}
+
+function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, onClose, onUpdated }: {
+  inv: Invoice
+  clientId: string
+  clientName: string
+  clientSlug: string
+  onClose: () => void
+  onUpdated?: (inv: Invoice) => void
+}) {
+  const router = useRouter()
+  const [inv, setInv] = useState(initial)
   const balance = inv.total - inv.paid
   const ds = getDisplayStatus(inv)
   const isOverdue = ds === 'OVERDUE'
+
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [nudging, setNudging] = useState(false)
   const [nudged, setNudged] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [voiding, setVoiding] = useState(false)
+  const [suggestions, setSuggestions] = useState<PaymentSuggestion[]>([])
+  const [suggestionsDone, setSuggestionsDone] = useState<Record<string, 'accepted' | 'dismissed'>>({})
 
-  const projectId = clientSlug // we pass project.id as clientSlug from page — see note below
+  // Fetch suggestions when modal opens for relevant statuses
+  useEffect(() => {
+    if (!['SENT', 'PARTIAL', 'OVERDUE'].includes(inv.status)) return
+    fetch(`/api/invoice-payment-suggestions?invoiceId=${inv.id}`)
+      .then(r => r.json())
+      .then(j => { if (j.data) setSuggestions(j.data) })
+      .catch(() => {})
+  }, [inv.id, inv.status])
 
   async function handleSend() {
     setSending(true)
-    const res = await fetch(`/api/projects/${projectId}/invoices/${inv.id}/send`, { method: 'POST' })
+    const res = await fetch(`/api/projects/${clientId}/invoices/${inv.id}/send`, { method: 'POST' })
     setSending(false)
     if (res.ok) setSent(true)
   }
 
   async function handleNudge() {
     setNudging(true)
-    const res = await fetch(`/api/projects/${projectId}/invoices/${inv.id}/remind`, { method: 'POST' })
+    const res = await fetch(`/api/projects/${clientId}/invoices/${inv.id}/remind`, { method: 'POST' })
     setNudging(false)
     if (res.ok) setNudged(true)
   }
+
+  async function handleDelete() {
+    if (!confirm('Delete this draft? This cannot be undone.')) return
+    setDeleting(true)
+    const res = await fetch(`/api/projects/${clientId}/invoices/${inv.id}`, { method: 'DELETE' })
+    if (res.ok) { onClose(); router.refresh() }
+    else setDeleting(false)
+  }
+
+  async function handleVoid() {
+    if (!confirm('Void this invoice? This cannot be undone.')) return
+    setVoiding(true)
+    const res = await fetch(`/api/projects/${clientId}/invoices/${inv.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'VOID' }),
+    })
+    if (res.ok) {
+      const j = await res.json()
+      const updated = { ...inv, status: 'VOID', ...j.data }
+      setInv(updated)
+      onUpdated?.(updated)
+    }
+    setVoiding(false)
+  }
+
+  async function handleSuggestion(suggestionId: string, action: 'accept' | 'dismiss') {
+    setSuggestionsDone(p => ({ ...p, [suggestionId]: action === 'accept' ? 'accepted' : 'dismissed' }))
+    const res = await fetch('/api/invoice-payment-suggestions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ suggestionId, action }),
+    })
+    if (res.ok && action === 'accept') {
+      // Re-fetch invoice to get updated status/paid amount
+      const invRes = await fetch(`/api/projects/${clientId}/invoices/${inv.id}`)
+      if (invRes.ok) {
+        const j = await invRes.json()
+        setInv(j.data)
+        onUpdated?.(j.data)
+      }
+    }
+  }
+
+  const headerBg = isOverdue
+    ? 'linear-gradient(135deg, #fef2f2, #fff1f2)'
+    : ds === 'PAID' ? 'linear-gradient(135deg, #f0fdf4, #ecfdf5)'
+    : ds === 'DRAFT' ? 'linear-gradient(135deg, #fafaf8, #f5f4f0)'
+    : 'linear-gradient(135deg, #f8f7fd, #f3f1fb)'
+
+  const activeSuggestions = suggestions.filter(s => !suggestionsDone[s.id])
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} />
       <div style={{ position: 'relative', width: 620, maxHeight: '90vh', overflowY: 'auto', borderRadius: 20, background: '#fff', boxShadow: '0 25px 60px rgba(0,0,0,0.2)' }}>
+
         {/* Header */}
-        <div style={{ padding: '28px 32px', background: isOverdue ? 'linear-gradient(135deg, #fef2f2, #fff1f2)' : ds === 'PAID' ? 'linear-gradient(135deg, #f0fdf4, #ecfdf5)' : 'linear-gradient(135deg, #f8f7fd, #f3f1fb)' }}>
+        <div style={{ padding: '28px 32px', background: headerBg }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -453,29 +533,27 @@ function InvoicePreviewModal({ inv, clientName, clientSlug, onClose }: { inv: In
               </p>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <p style={{ margin: 0, fontSize: 28, fontWeight: 800, fontVariantNumeric: 'tabular-nums', letterSpacing: -0.5 }}>{fmt(balance > 0 ? balance : inv.total)}</p>
-              <p style={{ margin: '2px 0 0', fontSize: 11, color: '#aaa' }}>{balance <= 0 && inv.paid > 0 ? 'Paid in full' : 'Amount due'}</p>
+              <p style={{ margin: 0, fontSize: 28, fontWeight: 800, fontVariantNumeric: 'tabular-nums', letterSpacing: -0.5 }}>
+                {fmt(balance > 0 ? balance : inv.total, inv.currency)}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: '#aaa' }}>
+                {balance <= 0 && inv.paid > 0 ? 'Paid in full' : ds === 'VOID' ? 'Voided' : 'Amount due'}
+              </p>
             </div>
           </div>
           {isOverdue && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, borderRadius: 10, background: 'rgba(239,68,68,0.08)', padding: '8px 12px' }}>
               <span style={{ fontSize: 14 }}>⏰</span>
               <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: '#dc2626' }}>{daysAgo(inv.dueDate)} days overdue</p>
-              <button
-                onClick={handleNudge}
-                disabled={nudging || nudged}
-                style={{ marginLeft: 'auto', borderRadius: 6, border: 'none', background: nudged ? '#16a34a' : '#dc2626', padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#fff', cursor: nudging || nudged ? 'default' : 'pointer' }}
-              >
-                {nudged ? '✓ Sent' : nudging ? '…' : '🔔 Send reminder'}
-              </button>
             </div>
           )}
         </div>
+
         {/* Meta */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid #f0eeeb' }}>
           {[
-            { label: 'Issued', value: new Date(inv.issueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) },
-            { label: 'Due',    value: new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) },
+            { label: 'Issued',   value: new Date(inv.issueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) },
+            { label: 'Due',      value: new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) },
             { label: 'Currency', value: inv.currency },
           ].map((m, i) => (
             <div key={m.label} style={{ padding: '14px 32px', borderRight: i < 2 ? '1px solid #f0eeeb' : 'none' }}>
@@ -484,7 +562,8 @@ function InvoicePreviewModal({ inv, clientName, clientSlug, onClose }: { inv: In
             </div>
           ))}
         </div>
-        {/* Line items (simplified — mock single row with job name + total) */}
+
+        {/* Line items */}
         <div style={{ padding: '22px 32px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
@@ -522,30 +601,85 @@ function InvoicePreviewModal({ inv, clientName, clientSlug, onClose }: { inv: In
             </tfoot>
           </table>
         </div>
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, padding: '0 32px 24px', justifyContent: 'space-between', alignItems: 'center' }}>
+
+        {/* Payment match suggestions */}
+        {activeSuggestions.length > 0 && (
+          <div style={{ padding: '0 32px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {activeSuggestions.map(s => (
+              <div key={s.id} style={{ borderRadius: 12, border: '1px solid #bfdbfe', background: '#eff6ff', padding: '12px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>💳 Possible payment match</p>
+                    <p style={{ margin: '3px 0 0', fontSize: 12, color: '#3b82f6', fontVariantNumeric: 'tabular-nums' }}>
+                      {fmtFull(s.transaction.amount, inv.currency)} · {s.transaction.description} · {new Date(s.transaction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </p>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: '#60a5fa' }}>{s.reasoning}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      onClick={() => handleSuggestion(s.id, 'accept')}
+                      style={{ borderRadius: 8, border: 'none', background: '#2563eb', padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer' }}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleSuggestion(s.id, 'dismiss')}
+                      style={{ borderRadius: 8, border: '1px solid #93c5fd', background: 'none', padding: '6px 12px', fontSize: 11, fontWeight: 600, color: '#2563eb', cursor: 'pointer' }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Actions footer */}
+        <div style={{ display: 'flex', gap: 8, padding: '0 32px 24px', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
           <Link
             href={`/projects/${clientSlug}/invoices/${inv.id}`}
             style={{ fontSize: 12, color: '#534AB7', textDecoration: 'none', fontWeight: 500 }}
           >
             Full details →
           </Link>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={onClose} style={{ borderRadius: 10, border: '1px solid #e0ddd5', background: 'none', padding: '10px 18px', fontSize: 12, fontWeight: 500, color: '#666', cursor: 'pointer' }}>Close</button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {/* Destructive: delete draft */}
+            {ds === 'DRAFT' && (
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{ borderRadius: 10, border: '1px solid #fca5a5', background: 'none', padding: '8px 14px', fontSize: 12, fontWeight: 500, color: '#dc2626', cursor: deleting ? 'default' : 'pointer', opacity: deleting ? 0.5 : 1 }}
+              >
+                {deleting ? '…' : 'Delete'}
+              </button>
+            )}
+            {/* Void for non-draft non-paid */}
+            {!['DRAFT', 'PAID', 'VOID'].includes(ds) && (
+              <button
+                onClick={handleVoid}
+                disabled={voiding}
+                style={{ borderRadius: 10, border: '1px solid #e0ddd5', background: 'none', padding: '8px 14px', fontSize: 12, fontWeight: 500, color: '#888', cursor: voiding ? 'default' : 'pointer', opacity: voiding ? 0.5 : 1 }}
+              >
+                {voiding ? '…' : 'Void'}
+              </button>
+            )}
+            <button onClick={onClose} style={{ borderRadius: 10, border: '1px solid #e0ddd5', background: 'none', padding: '8px 16px', fontSize: 12, fontWeight: 500, color: '#666', cursor: 'pointer' }}>Close</button>
+            {/* Primary CTA depends on status */}
             {ds === 'DRAFT' && (
               <button
                 onClick={handleSend}
                 disabled={sending || sent}
-                style={{ borderRadius: 10, border: 'none', background: sent ? '#16a34a' : '#534AB7', padding: '10px 22px', fontSize: 12, fontWeight: 700, color: '#fff', cursor: sending || sent ? 'default' : 'pointer', transition: 'all 0.2s' }}
+                style={{ borderRadius: 10, border: 'none', background: sent ? '#16a34a' : '#534AB7', padding: '8px 18px', fontSize: 12, fontWeight: 700, color: '#fff', cursor: sending || sent ? 'default' : 'pointer', transition: 'all 0.2s' }}
               >
                 {sent ? '✓ Sent!' : sending ? '…' : '📧 Send to client'}
               </button>
             )}
-            {(ds === 'SENT' || ds === 'PARTIAL') && !isOverdue && (
+            {(ds === 'SENT' || ds === 'PARTIAL' || ds === 'OVERDUE') && (
               <button
                 onClick={handleNudge}
                 disabled={nudging || nudged}
-                style={{ borderRadius: 10, border: 'none', background: nudged ? '#16a34a' : '#f59e0b', padding: '10px 22px', fontSize: 12, fontWeight: 700, color: '#fff', cursor: nudging || nudged ? 'default' : 'pointer' }}
+                style={{ borderRadius: 10, border: 'none', background: nudged ? '#16a34a' : isOverdue ? '#dc2626' : '#f59e0b', padding: '8px 18px', fontSize: 12, fontWeight: 700, color: '#fff', cursor: nudging || nudged ? 'default' : 'pointer' }}
               >
                 {nudged ? '✓ Sent!' : nudging ? '…' : '🔔 Send reminder'}
               </button>
@@ -571,6 +705,18 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [kpis, setKpis] = useState(initialKpis)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [actionFilter, setActionFilter] = useState<((i: FlatInvoice) => boolean) | null>(null)
+  const [suggestionInvoiceIds, setSuggestionInvoiceIds] = useState<Set<string>>(new Set())
+
+  // Fetch which invoice IDs have pending suggestions so we can filter precisely
+  useEffect(() => {
+    if (pendingSuggestions === 0) return
+    fetch('/api/invoice-payment-suggestions')
+      .then(r => r.json())
+      .then(j => {
+        if (j.data) setSuggestionInvoiceIds(new Set((j.data as { invoice: { id: string } }[]).map(s => s.invoice.id)))
+      })
+      .catch(() => {})
+  }, [pendingSuggestions])
 
   const flat: FlatInvoice[] = useMemo(() =>
     clients.flatMap(c =>
@@ -647,19 +793,16 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Take action */}
           <div>
-            <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take action</p>
-            <button
-              onClick={() => { setActionFilter(null); setShowInvoiceModal(true) }}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 12, border: '1px solid #d4d0ec', background: 'linear-gradient(135deg, #f5f4ff 0%, #eeedfb 100%)', padding: '12px 14px', width: '100%', cursor: 'pointer', textAlign: 'left' }}
-            >
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#534AB720', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-                <Plus size={16} color="#534AB7" />
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: '#534AB7', margin: 0 }}>New invoice</p>
-                <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Create and send to a client</p>
-              </div>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingLeft: 4 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>Take action</p>
+              <button
+                onClick={() => { setActionFilter(null); setShowInvoiceModal(true) }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1px solid #d4d0ec', background: 'linear-gradient(135deg, #f5f4ff 0%, #eeedfb 100%)', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#534AB7', cursor: 'pointer' }}
+              >
+                <Plus size={11} />
+                New invoice
+              </button>
+            </div>
           </div>
 
           {/* Take notice */}
@@ -677,7 +820,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                     detail="Open the relevant invoice to accept or dismiss"
                     color="blue"
                     cta="Show invoices →"
-                    onClick={() => { setActionFilter(() => (i: FlatInvoice) => ['SENT', 'PARTIAL'].includes(i.status)); setView('all') }}
+                    onClick={() => { setActionFilter(() => (i: FlatInvoice) => suggestionInvoiceIds.has(i.id)); setView('all') }}
                   />
                 )}
               </div>
@@ -825,9 +968,11 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       {previewInv && (
         <InvoicePreviewModal
           inv={previewInv}
+          clientId={previewInv.clientId}
           clientName={previewInv.clientName}
           clientSlug={previewInv.clientSlug}
           onClose={() => setPreviewInv(null)}
+          onUpdated={updated => setPreviewInv(p => p ? { ...p, ...updated } : p)}
         />
       )}
 
