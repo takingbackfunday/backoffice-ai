@@ -7,6 +7,9 @@ interface ChatStore {
   open: boolean
   toggle: () => void
   close: () => void
+  hidden: boolean
+  hide: () => void
+  show: () => void
 
   // Conversation memory
   sessionId: string
@@ -23,6 +26,9 @@ export const useChatStore = create<ChatStore>((set) => ({
   open: false,
   toggle: () => set((s) => ({ open: !s.open })),
   close: () => set({ open: false }),
+  hidden: false,
+  hide: () => set({ hidden: true, open: false }),
+  show: () => set({ hidden: false }),
 
   sessionId: makeSessionId(),
   turns: [],

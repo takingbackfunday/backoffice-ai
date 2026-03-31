@@ -134,7 +134,7 @@ export function Sidebar() {
   return (
     <nav
       className={cn(
-        'flex-shrink-0 border-r bg-background flex flex-col py-6 transition-all duration-200 h-screen sticky top-0 overflow-y-auto',
+        'flex-shrink-0 border-r bg-background flex flex-col py-6 transition-all duration-200 h-screen sticky top-0 overflow-y-auto shadow-[4px_0_16px_-4px_rgba(0,0,0,0.08)]',
         collapsed ? 'w-14' : 'w-56'
       )}
       aria-label="Main navigation"

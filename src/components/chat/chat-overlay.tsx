@@ -8,7 +8,7 @@ import { AgentQA } from '@/components/dashboard/agent-qa'
 export function ChatOverlay() {
   const pathname = usePathname()
   if (pathname.startsWith('/portal')) return null
-  const { open, toggle, close } = useChatStore()
+  const { open, toggle, close, hidden, hide, show } = useChatStore()
 
   // Close on Escape
   useEffect(() => {
@@ -19,6 +19,19 @@ export function ChatOverlay() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, close])
+
+  if (hidden) {
+    return (
+      <button
+        onClick={show}
+        aria-label="Show AI chat"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-1.5 rounded-full bg-[#3C3489]/10 text-[#3C3489] border border-[#3C3489]/20 px-3 py-1.5 text-xs font-medium hover:bg-[#3C3489]/15 transition-colors animate-in fade-in duration-300"
+      >
+        <span className="text-sm leading-none">💬</span>
+        <span>Chat with AI</span>
+      </button>
+    )
+  }
 
   return (
     <>
@@ -44,13 +57,25 @@ export function ChatOverlay() {
               <span className="text-base">💬</span>
               <span className="text-sm font-medium text-[#1a1a1a]">Chat with AI</span>
             </div>
-            <button
-              onClick={close}
-              className="text-muted-foreground hover:text-foreground transition-colors text-lg leading-none"
-              aria-label="Close chat"
-            >
-              ×
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={hide}
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-black/5"
+                aria-label="Hide chat"
+                title="Hide chat"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <button
+                onClick={close}
+                className="text-muted-foreground hover:text-foreground transition-colors text-lg leading-none"
+                aria-label="Close chat"
+              >
+                ×
+              </button>
+            </div>
           </div>
           <div className="overflow-y-auto flex-1 p-4">
             <AgentQA />
