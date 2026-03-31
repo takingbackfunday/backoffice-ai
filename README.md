@@ -2,15 +2,51 @@
 
 Financial management tool for freelancers, consultants, and small property managers.
 
-Import CSVs from bank accounts, tag transactions to projects, and automate categorisation with rules and AI agents.
+## Features
+
+### Transactions & Categorisation
+- Import bank transactions via CSV upload or automated bank sync (Browserless.io + Playwright)
+- Duplicate detection via SHA-256 hash over `(account, date, amount, description)`
+- Auto-categorise at import using a priority-ordered rules engine (regex, amount ranges, payee match, etc.)
+- AI rules agent suggests new rules based on transaction edits
+- Pivot table view for cross-category analysis
+
+### Projects (CLIENT)
+- Client projects with jobs, invoices, and payment tracking
+- Invoice lifecycle: `DRAFT → SENT → PARTIAL → PAID` (or `VOID`)
+- AI-assisted invoice creation — describe the work, get a pre-filled draft
+- Send invoices by email with PDF attachment and configurable payment methods
+- Partial payment recording with optional bank transaction link
+- Auto-match bank transactions to open invoices by amount at import time; manual suggestion review for near-matches
+- Invoice renegotiation flow: void original, create replacement draft with credit line for partial payments already received; full audit trail via `replacesInvoice` / `replacedBy` links
+- Download invoice as PDF at any stage
+
+### Projects (PROPERTY)
+- Units, leases, tenants, rent roll
+- Tenant payment tracking, overdue alerts
+- Maintenance request management
+- Tenant messaging portal
+
+### AI Agent
+- Multi-agent system: domain classifier routes questions to a Finance agent or Property agent (or both)
+- Finance agent answers questions about transactions, categories, spending trends
+- Property agent answers questions about occupancy, rent, tenant balances
+- Conversation memory across turns within a session
+
+### Bank Sync
+- LLM-guided browser automation discovers the CSV download flow for any bank
+- Saves a playbook per account; subsequent syncs replay it automatically
+- AES-256-GCM encrypted credential storage per user
 
 ## Stack
 
-- **Framework**: Next.js 16, App Router, TypeScript
+- **Framework**: Next.js App Router, TypeScript
 - **Auth**: Clerk
 - **Database**: PostgreSQL (Neon) via Prisma 7
 - **Styling**: Tailwind CSS 4 + shadcn/ui (base-nova)
-- **AI**: OpenRouter (`anthropic/claude-sonnet-4.6` for reasoning tasks, Gemini Flash for classification)
+- **AI**: OpenRouter (`anthropic/claude-sonnet-4.6` for reasoning, Gemini Flash Lite for classification)
+- **PDF**: react-pdf/renderer
+- **Bank automation**: playwright-core + Browserless.io
 
 ## Development
 
@@ -19,15 +55,15 @@ pnpm install
 pnpm dev
 ```
 
-Requires a `.env.local` file with Clerk, Neon, and OpenRouter credentials.
+Requires a `.env.local` with Clerk, Neon, OpenRouter, Browserless, and encryption secret. See CLAUDE.md for the full variable list.
 
 ## Pending setup
 
 ### Email notifications (Resend) — not yet configured
-Message notifications are implemented but disabled until Resend is set up.
+Invoice sending and message notifications are implemented but disabled until Resend is set up.
 
 1. Create an account at [resend.com](https://resend.com)
-2. Verify the domain `backoffice.cv` (adds DNS records — takes ~10 min)
+2. Verify the domain `backoffice.cv`
 3. Add to Netlify environment variables:
    - `RESEND_API_KEY` — from Resend dashboard
    - `RESEND_FROM` — `Backoffice <noreply@backoffice.cv>`
@@ -44,21 +80,19 @@ Prisma 7 uses the `prisma-client` generator which outputs to `src/generated/pris
 import { PrismaClient } from '@/generated/prisma/client'
 ```
 
-Not `@/generated/prisma` (that worked in older generator versions but breaks in v7).
-
-When you run `pnpm db:push` or `prisma generate`, you must prefix with the DATABASE_URL:
+DB CLI commands require an explicit `DATABASE_URL` prefix — Prisma's config loader does not read `.env.local`:
 
 ```bash
 DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm db:push
 DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm prisma generate
 ```
 
-`src/generated/` is gitignored — it is rebuilt at deploy time on Netlify automatically.
+`src/generated/` is gitignored — rebuilt automatically at Netlify deploy time.
 
-### Environment variables in local dev
+### Netlify serverless — no fire-and-forget
 
-`.env.local` is required for `pnpm dev`. For one-off CLI commands (db push, prisma generate) the DATABASE_URL must be passed explicitly since Prisma's config loader doesn't read `.env.local`.
+Async work (invoice matching, tenant matching) must be `await`ed before returning a response. The process is killed the moment the response is sent — `.then().catch()` background chains never run. Use `await Promise.allSettled([...])`.
 
 ### Invoice AI models
 
-Invoice AI routes (`/api/projects/[id]/invoices/ai-assist` and `ai-finalize`) call `anthropic/claude-sonnet-4.6` via OpenRouter. Responses are expected as JSON — the routes strip markdown code fences and extract the first `{...}` block as fallback.
+Invoice AI routes call `anthropic/claude-sonnet-4.6` via OpenRouter and expect JSON. Routes strip markdown code fences and fall back to extracting the first `{...}` block.

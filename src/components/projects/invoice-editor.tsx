@@ -70,6 +70,15 @@ interface Props {
   billingType: string
   company: string | null
   jobs: { id: string; name: string }[]
+  // pre-fill defaults from last invoice (create mode only)
+  lastInvoiceDefaults?: {
+    taxEnabled: boolean
+    taxLabel: string
+    taxMode: 'percent' | 'flat'
+    taxRate: string
+    currency: string
+    notes: string
+  }
   // edit mode only
   existingInvoice?: {
     id: string
@@ -174,10 +183,15 @@ export function InvoiceEditor({
   paymentTermDays,
   billingType,
   company,
-  jobs,
+  jobs: initialJobs,
+  lastInvoiceDefaults,
   existingInvoice,
 }: Props) {
   const router = useRouter()
+  const [jobs, setJobs] = useState(initialJobs)
+  const [newJobName, setNewJobName] = useState('')
+  const [creatingJob, setCreatingJob] = useState(false)
+  const [showNewJob, setShowNewJob] = useState(false)
 
   // Build initial state
   const initial: InvoiceState = existingInvoice
@@ -198,15 +212,15 @@ export function InvoiceEditor({
       }
     : {
         lineItems: [{ id: uid(), description: '', quantity: '1', unitPrice: '', isTaxLine: false }],
-        taxEnabled: false,
-        taxLabel: 'Tax',
-        taxMode: 'percent',
-        taxRate: '',
+        taxEnabled: lastInvoiceDefaults?.taxEnabled ?? false,
+        taxLabel: lastInvoiceDefaults?.taxLabel ?? 'Tax',
+        taxMode: lastInvoiceDefaults?.taxMode ?? 'percent',
+        taxRate: lastInvoiceDefaults?.taxRate ?? '',
         jobId: '',
         dueDate: defaultDueDate(paymentTermDays),
         issueDate: new Date().toISOString().split('T')[0],
-        currency: 'USD',
-        notes: '',
+        currency: lastInvoiceDefaults?.currency ?? 'USD',
+        notes: lastInvoiceDefaults?.notes ?? '',
         aiSuggestedNotes: false,
       }
 
@@ -415,6 +429,27 @@ export function InvoiceEditor({
     return regular
   }
 
+  async function handleCreateJob() {
+    if (!newJobName.trim()) return
+    setCreatingJob(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/jobs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newJobName.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) return
+      const newJob = { id: json.data.id, name: json.data.name }
+      setJobs(prev => [...prev, newJob])
+      dispatch({ type: 'SET_JOB', jobId: newJob.id })
+      setNewJobName('')
+      setShowNewJob(false)
+    } finally {
+      setCreatingJob(false)
+    }
+  }
+
   async function handleSave(sendAfter: boolean) {
     if (!state.dueDate) { setSaveError('Due date is required'); return }
     const lineItemsPayload = buildLineItemsPayload()
@@ -498,9 +533,32 @@ export function InvoiceEditor({
           )}
 
           {/* Job selector */}
-          {jobs.length > 0 && (
-            <div className="mb-5">
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Job (optional)</label>
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Job (optional)</label>
+              {!showNewJob && (
+                <button type="button" onClick={() => setShowNewJob(true)} className="text-xs text-primary hover:underline flex items-center gap-0.5">
+                  <Plus className="h-3 w-3" /> New job
+                </button>
+              )}
+            </div>
+            {showNewJob ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newJobName}
+                  onChange={e => setNewJobName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateJob() } if (e.key === 'Escape') { setShowNewJob(false); setNewJobName('') } }}
+                  placeholder="Job name…"
+                  autoFocus
+                  className="flex-1 max-w-sm rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <button type="button" onClick={handleCreateJob} disabled={creatingJob || !newJobName.trim()} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50">
+                  {creatingJob ? '…' : 'Create'}
+                </button>
+                <button type="button" onClick={() => { setShowNewJob(false); setNewJobName('') }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+              </div>
+            ) : (
               <select
                 value={state.jobId}
                 onChange={e => dispatch({ type: 'SET_JOB', jobId: e.target.value })}
@@ -509,21 +567,12 @@ export function InvoiceEditor({
                 <option value="">No specific job</option>
                 {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
               </select>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Line items */}
           <div className="mb-5">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Line items</label>
-              <button
-                type="button"
-                onClick={() => dispatch({ type: 'ADD_LINE_ITEM' })}
-                className="flex items-center gap-1 text-xs text-primary hover:underline"
-              >
-                <Plus className="h-3 w-3" /> Add line
-              </button>
-            </div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Line items</label>
             <div className="rounded-xl border overflow-hidden">
               <div className="grid grid-cols-[1fr_80px_110px_100px_32px] bg-muted/50 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                 <span>Description</span>
@@ -535,7 +584,7 @@ export function InvoiceEditor({
               {state.lineItems.map((item, idx) => {
                 const lineTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)
                 return (
-                  <div key={item.id} className="grid grid-cols-[1fr_80px_110px_100px_32px] border-t px-3 py-1.5 items-center hover:bg-muted/10">
+                  <div key={item.id} className="grid grid-cols-[1fr_80px_110px_100px_32px] border-t px-3 py-1.5 items-center hover:bg-muted/10 group">
                     <input
                       type="text"
                       value={item.description}
@@ -577,6 +626,16 @@ export function InvoiceEditor({
                   </div>
                 )
               })}
+              {/* Add line — bottom-left of table */}
+              <div className="border-t px-3 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'ADD_LINE_ITEM' })}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <Plus className="h-3 w-3" /> Add line
+                </button>
+              </div>
             </div>
           </div>
 

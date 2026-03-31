@@ -12,6 +12,7 @@ const LineItemSchema = z.object({
 
 const PatchInvoiceSchema = z.object({
   status: z.enum(['DRAFT', 'SENT', 'PARTIAL', 'PAID', 'OVERDUE', 'VOID']).optional(),
+  jobId: z.string().optional().nullable(),
   dueDate: z.string().optional(),
   notes: z.string().optional().nullable(),
   lineItems: z.array(LineItemSchema).min(1).optional(),
@@ -59,6 +60,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (invoice.status === 'VOID') return badRequest('Cannot edit a voided invoice')
 
     const body = await request.json()
+
+    // For PAID invoices only allow updating jobId
+    if (invoice.status === 'PAID') {
+      const updated = await prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { jobId: body.jobId !== undefined ? body.jobId : undefined },
+        include: { job: { select: { id: true, name: true } }, lineItems: true, payments: true },
+      })
+      return ok(updated)
+    }
+
     const parsed = PatchInvoiceSchema.safeParse(body)
     if (!parsed.success) {
       return badRequest(parsed.error.errors.map(e => e.message).join(', '))
@@ -82,6 +94,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         where: { id: invoiceId },
         data: {
           status: parsed.data.status,
+          jobId: parsed.data.jobId !== undefined ? parsed.data.jobId : undefined,
           dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
           notes: parsed.data.notes,
         },

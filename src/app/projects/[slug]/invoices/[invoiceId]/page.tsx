@@ -29,12 +29,33 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       lineItems: true,
       payments: true,
       clientProfile: { select: { email: true, contactName: true } },
+      replacesInvoice: { select: { id: true, invoiceNumber: true } },
+      replacedBy: { select: { id: true, invoiceNumber: true } },
     },
   })
   if (!invoice) notFound()
 
-  const prefs = await prisma.userPreference.findUnique({ where: { userId } })
+  const [prefs, rawSuggestions] = await Promise.all([
+    prisma.userPreference.findUnique({ where: { userId } }),
+    prisma.invoicePaymentSuggestion.findMany({
+      where: { invoiceId: invoice.id, status: 'PENDING' },
+      include: { transaction: { select: { id: true, description: true, date: true, amount: true } } },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ])
   const paymentMethods = ((prefs?.data as Record<string, unknown>)?.paymentMethods ?? {}) as PaymentMethods
+
+  const suggestions = rawSuggestions.map(s => ({
+    id: s.id,
+    confidence: s.confidence,
+    reasoning: s.reasoning,
+    transaction: {
+      id: s.transaction.id,
+      description: s.transaction.description,
+      date: s.transaction.date.toISOString(),
+      amount: Number(s.transaction.amount),
+    },
+  }))
 
   const serialized = {
     id: invoice.id,
@@ -61,6 +82,8 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       paymentMethod: p.paymentMethod ?? null,
       notes: p.notes ?? null,
     })),
+    replacesInvoice: invoice.replacesInvoice ?? null,
+    replacedBy: invoice.replacedBy ?? null,
   }
 
   return (
@@ -88,7 +111,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
               All invoices
             </Link>
           </div>
-          <InvoiceDetailClient projectId={project.id} projectSlug={slug} invoice={serialized} paymentMethods={paymentMethods} />
+          <InvoiceDetailClient projectId={project.id} projectSlug={slug} invoice={serialized} paymentMethods={paymentMethods} suggestions={suggestions} replacesInvoice={serialized.replacesInvoice} replacedBy={serialized.replacedBy} />
         </main>
       </div>
     </div>

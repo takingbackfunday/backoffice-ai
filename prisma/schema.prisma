@@ -112,10 +112,12 @@ model Transaction {
   notes         String?
   rawData       Json
   duplicateHash            String                    @unique
-  tenantPayment            TenantPayment?
-  tenantPaymentSuggestions TenantPaymentSuggestion[]
-  createdAt                DateTime                  @default(now())
-  updatedAt                DateTime                  @updatedAt
+  tenantPayment             TenantPayment?
+  tenantPaymentSuggestions  TenantPaymentSuggestion[]
+  invoicePayment            InvoicePayment?
+  invoicePaymentSuggestions InvoicePaymentSuggestion[]
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
 
   @@index([accountId, date])
   @@index([categoryId])
@@ -394,10 +396,15 @@ model Invoice {
   dueDate         DateTime
   currency        String            @default("USD")
   notes           String?
-  lineItems       InvoiceLineItem[]
-  payments        InvoicePayment[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  lineItems          InvoiceLineItem[]
+  payments           InvoicePayment[]
+  paymentSuggestions InvoicePaymentSuggestion[]
+  // Renegotiation chain — one-to-one self-relation
+  replacesInvoiceId  String?           @unique
+  replacesInvoice    Invoice?          @relation("InvoiceReplacement", fields: [replacesInvoiceId], references: [id])
+  replacedBy         Invoice?          @relation("InvoiceReplacement")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   @@index([clientProfileId])
 }
@@ -425,16 +432,44 @@ model InvoiceLineItem {
 }
 
 model InvoicePayment {
-  id            String   @id @default(cuid())
+  id            String       @id @default(cuid())
   invoiceId     String
-  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  amount        Decimal  @db.Decimal(10, 2)
+  invoice       Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount        Decimal      @db.Decimal(10, 2)
   paidDate      DateTime
   paymentMethod String?
   notes         String?
-  createdAt     DateTime @default(now())
+  // Optional — null when recorded manually without a matched bank transaction
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  createdAt     DateTime     @default(now())
 
   @@index([invoiceId])
+}
+
+// Suggested invoice payment attribution — created post-import, reviewed by user
+model InvoicePaymentSuggestion {
+  id            String                          @id @default(cuid())
+  userId        String
+  transactionId String
+  transaction   Transaction                     @relation(fields: [transactionId], references: [id])
+  invoiceId     String
+  invoice       Invoice                         @relation(fields: [invoiceId], references: [id])
+  confidence    String                          // 'high' | 'medium'
+  reasoning     String
+  status        InvoicePaymentSuggestionStatus  @default(PENDING)
+  createdAt     DateTime                        @default(now())
+  updatedAt     DateTime                        @updatedAt
+
+  @@index([userId, status])
+  @@index([transactionId])
+  @@index([invoiceId])
+}
+
+enum InvoicePaymentSuggestionStatus {
+  PENDING
+  ACCEPTED
+  DISMISSED
 }
 
 // ── Property track ──────────────────────────────────────────────────────────

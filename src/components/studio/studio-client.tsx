@@ -2,6 +2,9 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { Plus } from 'lucide-react'
+import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
+import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -35,11 +38,20 @@ interface Client {
   outstanding: number
   currency: string
   invoices: Invoice[]
+  // For invoice creation modal
+  clientProfileId: string
+  contactName: string | null
+  email: string | null
+  paymentTermDays: number
+  billingType: string
+  jobs: { id: string; name: string }[]
 }
 
 interface Props {
   clients: Client[]
   kpis: Kpis
+  paymentMethods: PaymentMethods
+  pendingSuggestions?: number
 }
 
 type View = 'open' | 'paid' | 'all'
@@ -175,7 +187,7 @@ function AgingBar({ invoices }: { invoices: (Invoice & { clientId: string })[] }
 /*  ActionBanner                                                        */
 /* ------------------------------------------------------------------ */
 
-function ActionBanner({ icon, label, detail, color }: { icon: string; label: string; detail: string; color: 'red' | 'amber' | 'blue' }) {
+function ActionBanner({ icon, label, detail, color, onClick }: { icon: string; label: string; detail: string; color: 'red' | 'amber' | 'blue'; onClick: () => void }) {
   const colors = {
     red:   { bg: '#fef2f2', border: '#fecaca', icon: '#ef4444' },
     amber: { bg: '#fffbeb', border: '#fde68a', icon: '#f59e0b' },
@@ -183,13 +195,17 @@ function ActionBanner({ icon, label, detail, color }: { icon: string; label: str
   }
   const c = colors[color]
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 12, border: `1px solid ${c.border}`, background: c.bg, padding: '12px 14px' }}>
+    <button
+      onClick={onClick}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 12, border: `1px solid ${c.border}`, background: c.bg, padding: '12px 14px', width: '100%', cursor: 'pointer', textAlign: 'left' }}
+    >
       <div style={{ width: 32, height: 32, borderRadius: 8, background: `${c.icon}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.icon, fontSize: 16, flexShrink: 0 }}>{icon}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: 13, fontWeight: 600, color: c.icon, margin: 0 }}>{label}</p>
         <p style={{ fontSize: 11, opacity: 0.7, color: c.icon, margin: 0 }}>{detail}</p>
       </div>
-    </div>
+      <span style={{ fontSize: 11, color: c.icon, opacity: 0.5 }}>Filter →</span>
+    </button>
   )
 }
 
@@ -546,11 +562,13 @@ function InvoicePreviewModal({ inv, clientName, clientSlug, onClose }: { inv: In
 
 type FlatInvoice = Invoice & { clientId: string; clientName: string; clientSlug: string; clientCompany: string | null }
 
-export function StudioClient({ clients, kpis: initialKpis }: Props) {
+export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0 }: Props) {
   const [view, setView] = useState<View>('open')
   const [search, setSearch] = useState('')
   const [previewInv, setPreviewInv] = useState<FlatInvoice | null>(null)
   const [kpis, setKpis] = useState(initialKpis)
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false)
+  const [actionFilter, setActionFilter] = useState<((i: FlatInvoice) => boolean) | null>(null)
 
   const flat: FlatInvoice[] = useMemo(() =>
     clients.flatMap(c =>
@@ -567,6 +585,7 @@ export function StudioClient({ clients, kpis: initialKpis }: Props) {
 
   const filtered = useMemo(() => {
     let result = flat
+    if (actionFilter) return result.filter(actionFilter)
     if (view === 'open') result = result.filter(i => { const s = getDisplayStatus(i); return s !== 'PAID' && s !== 'VOID' })
     else if (view === 'paid') result = result.filter(i => getDisplayStatus(i) === 'PAID')
     if (search.trim()) {
@@ -578,16 +597,15 @@ export function StudioClient({ clients, kpis: initialKpis }: Props) {
       )
     }
     return result
-  }, [flat, view, search])
+  }, [flat, view, search, actionFilter])
 
   const actions = useMemo(() => {
-    const items: { icon: string; label: string; detail: string; color: 'red' | 'amber' | 'blue' }[] = []
+    const items: { icon: string; label: string; detail: string; color: 'red' | 'amber' | 'blue'; filterFn: (i: FlatInvoice) => boolean }[] = []
     const overdue = flat.filter(i => getDisplayStatus(i) === 'OVERDUE')
-    if (overdue.length > 0) items.push({ icon: '⚠️', label: `${overdue.length} overdue invoice${overdue.length !== 1 ? 's' : ''}`, detail: `${fmt(overdue.reduce((s, i) => s + (i.total - i.paid), 0))} needs collecting`, color: 'red' })
+    if (overdue.length > 0) items.push({ icon: '⚠️', label: `${overdue.length} overdue invoice${overdue.length !== 1 ? 's' : ''}`, detail: `${fmt(overdue.reduce((s, i) => s + (i.total - i.paid), 0))} needs collecting`, color: 'red', filterFn: i => getDisplayStatus(i) === 'OVERDUE' })
     const drafts = flat.filter(i => i.status === 'DRAFT')
-    if (drafts.length > 0) items.push({ icon: '📨', label: `${drafts.length} draft${drafts.length !== 1 ? 's' : ''} ready to send`, detail: `${fmt(drafts.reduce((s, i) => s + i.total, 0))} in unsent invoices`, color: 'blue' })
-    const dueSoon = flat.filter(i => { const s = getDisplayStatus(i); if (['PAID','VOID','OVERDUE','DRAFT'].includes(s)) return false; const days = daysUntil(i.dueDate); return days >= 0 && days <= 7 })
-    if (dueSoon.length > 0) items.push({ icon: '⏰', label: `${dueSoon.length} due this week`, detail: `${fmt(dueSoon.reduce((s, i) => s + (i.total - i.paid), 0))} coming due`, color: 'amber' })
+    if (drafts.length > 0) items.push({ icon: '📨', label: `${drafts.length} draft${drafts.length !== 1 ? 's' : ''} ready to send`, detail: `${fmt(drafts.reduce((s, i) => s + i.total, 0))} in unsent invoices`, color: 'blue', filterFn: i => i.status === 'DRAFT' })
+    if (pendingSuggestions > 0) items.push({ icon: '💳', label: `${pendingSuggestions} payment match${pendingSuggestions !== 1 ? 'es' : ''} to review`, detail: 'Transactions that may be invoice payments', color: 'blue', filterFn: () => false })
     return items
   }, [flat])
 
@@ -621,34 +639,57 @@ export function StudioClient({ clients, kpis: initialKpis }: Props) {
         <KpiCard label="Clients"            value={kpis.activeClients}          sub="active" color="neutral" />
       </div>
 
-      {/* AI Creator */}
-      <div style={{ marginBottom: 20 }}>
-        <AiCreator
-          clients={clients}
-          projectSlug={null}
-          onCreated={() => { /* page will revalidate on next navigation */ }}
-        />
-      </div>
+      {/* Take action + Aging */}
+      <div style={{ display: 'grid', gridTemplateColumns: kpis.totalOutstanding > 0 ? '1fr 1fr' : '1fr', gap: 12, marginBottom: 20 }}>
+        {/* Left column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Take action */}
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take action</p>
+            <button
+              onClick={() => { setActionFilter(null); setShowInvoiceModal(true) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 12, border: '1px solid #d4d0ec', background: 'linear-gradient(135deg, #f5f4ff 0%, #eeedfb 100%)', padding: '12px 14px', width: '100%', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#534AB720', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+                <Plus size={16} color="#534AB7" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#534AB7', margin: 0 }}>New invoice</p>
+                <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Create and send to a client</p>
+              </div>
+            </button>
+          </div>
 
-      {/* Actions + Aging */}
-      {(actions.length > 0 || kpis.totalOutstanding > 0) && (
-        <div style={{ display: 'grid', gridTemplateColumns: actions.length > 0 && kpis.totalOutstanding > 0 ? '1fr 1fr' : '1fr', gap: 12, marginBottom: 20 }}>
+          {/* Take notice */}
           {actions.length > 0 && (
             <div>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Needs your attention</p>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take notice</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {actions.map((a, i) => <ActionBanner key={i} {...a} />)}
+                {actions.map((a, i) => (
+                  <ActionBanner key={i} {...a} onClick={() => { setActionFilter(() => a.filterFn); setView('all') }} />
+                ))}
               </div>
             </div>
           )}
-          {kpis.totalOutstanding > 0 && (
-            <div>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Money owed to you</p>
-              <AgingBar invoices={flat} />
-            </div>
+
+          {/* Clear filter — shown below the banners when active */}
+          {actionFilter && (
+            <button
+              onClick={() => setActionFilter(null)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid #e0ddd5', background: '#fff', padding: '7px 12px', fontSize: 12, fontWeight: 600, color: '#555', cursor: 'pointer', width: 'fit-content' }}
+            >
+              ✕ Clear filter
+            </button>
           )}
         </div>
-      )}
+
+        {kpis.totalOutstanding > 0 && (
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Money owed to you</p>
+            <AgingBar invoices={flat} />
+          </div>
+        )}
+      </div>
 
       {/* Tabs + Search */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -775,6 +816,15 @@ export function StudioClient({ clients, kpis: initialKpis }: Props) {
           clientName={previewInv.clientName}
           clientSlug={previewInv.clientSlug}
           onClose={() => setPreviewInv(null)}
+        />
+      )}
+
+      {/* Studio invoice creation modal */}
+      {showInvoiceModal && (
+        <StudioInvoiceModal
+          clients={clients}
+          paymentMethods={paymentMethods}
+          onClose={() => setShowInvoiceModal(false)}
         />
       )}
     </div>

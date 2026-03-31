@@ -8,6 +8,7 @@ const CreatePaymentSchema = z.object({
   paidDate: z.string().min(1, 'Paid date is required'),
   paymentMethod: z.string().optional(),
   notes: z.string().optional(),
+  transactionId: z.string().optional().nullable(),
 })
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
@@ -20,7 +21,11 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, clientProfile: { project: { id, userId } } },
-      include: { lineItems: true, payments: true },
+      include: {
+        lineItems: true,
+        payments: true,
+        clientProfile: { include: { project: { select: { id: true } } } },
+      },
     })
     if (!invoice) return notFound('Invoice not found')
     if (invoice.status === 'VOID') return badRequest('Cannot record payment on a voided invoice')
@@ -43,6 +48,17 @@ export async function POST(request: Request, { params }: RouteParams) {
       return badRequest(`Payment amount (${parsed.data.amount}) exceeds remaining balance (${remaining.toFixed(2)})`)
     }
 
+    // If linking to a transaction, verify it's unlinked and belongs to this project
+    const txId = parsed.data.transactionId ?? null
+    if (txId) {
+      const linkedTx = await prisma.transaction.findFirst({
+        where: { id: txId, projectId: invoice.clientProfile.project.id },
+        include: { invoicePayment: true },
+      })
+      if (!linkedTx) return notFound('Transaction not found on this project')
+      if (linkedTx.invoicePayment) return badRequest('Transaction is already linked to another payment')
+    }
+
     const payment = await prisma.$transaction(async tx => {
       const p = await tx.invoicePayment.create({
         data: {
@@ -51,6 +67,7 @@ export async function POST(request: Request, { params }: RouteParams) {
           paidDate: new Date(parsed.data.paidDate),
           paymentMethod: parsed.data.paymentMethod,
           notes: parsed.data.notes,
+          ...(txId ? { transactionId: txId } : {}),
         },
       })
 
@@ -61,6 +78,14 @@ export async function POST(request: Request, { params }: RouteParams) {
         where: { id: invoiceId },
         data: { status: newStatus },
       })
+
+      // Dismiss any pending suggestion for this transaction
+      if (txId) {
+        await tx.invoicePaymentSuggestion.updateMany({
+          where: { transactionId: txId, status: 'PENDING' },
+          data: { status: 'DISMISSED' },
+        })
+      }
 
       return p
     })

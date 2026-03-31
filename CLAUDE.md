@@ -51,6 +51,12 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `ImportBatch` — tracks CSV import sessions; records `skippedCount` for duplicates
 - `InstitutionSchema` — global (non-user) CSV column mapping templates; `csvMapping` JSON: `{ dateCol, amountCol, descCol, dateFormat, amountSign }`
 - `Project` — client/property/job entities for tagging transactions; `ProjectType`: `CLIENT | PROPERTY | JOB | OTHER`
+- `Job` — sub-unit of a CLIENT project; `status` enum `ACTIVE | COMPLETED | CANCELLED` (no `isActive` field)
+- `ClientProfile` — contact record linked to a project; holds `email`, `contactName`
+- `Invoice` — belongs to a `ClientProfile`; `status`: `DRAFT | SENT | PARTIAL | OVERDUE | PAID | VOID`; `replacesInvoiceId` self-relation (`@unique`) enables renegotiation chain — one voided invoice maps to one replacement
+- `InvoiceLineItem` — line on an invoice; `isTaxLine: true` marks tax lines (no separate tax model)
+- `InvoicePayment` — payment against an invoice; `transactionId` (`@unique`) optionally links to a bank `Transaction`; amount triggers automatic `PARTIAL` / `PAID` status update
+- `InvoicePaymentSuggestion` — auto-generated match between a `Transaction` and an `Invoice`; `confidence`: `HIGH | MEDIUM`; `status`: `PENDING | ACCEPTED | DISMISSED`; HIGH confidence matches are auto-applied at import time
 - `UserPreference` — one row per user, `data` JSON for arbitrary UI state
 - `BankPlaybook` — stores discovered browser automation steps for each connected bank account; `steps` JSON contains `PlaybookStep[]` array; `twoFaType` tracks 2FA method; `status` indicates verification state
 - `EncryptedCredential` — AES-256-GCM encrypted bank login credentials (username:password); scoped per account with unique IV and auth tag
@@ -173,3 +179,15 @@ Tax is stored as a regular line item with `isTaxLine: true`. This avoids a separ
 ### React Rules of Hooks in client components
 
 All `useState` and `useReducer` calls must be declared at the top level of the component function — never inside helper functions, shims, or conditional branches. The linter enforces `react-hooks/rules-of-hooks`.
+
+### Invoice matching runs synchronously — no fire-and-forget
+
+Netlify serverless kills the process immediately after the response is sent. Matching functions (`matchInvoicePayments`, `matchTenantPayments`) must be `await`ed before returning — use `await Promise.allSettled([...])`. Fire-and-forget `.then().catch()` chains will silently never run.
+
+### Invoice renegotiation flow
+
+`POST /api/projects/[id]/invoices/[invoiceId]/renegotiate` voids the original invoice and creates a replacement DRAFT in a single `$transaction`. Guards: status must be `SENT | PARTIAL | OVERDUE` and `replacedBy` must be null. The replacement carries `replacesInvoiceId` pointing back to the voided original. If `totalPaid > 0` a credit line item with negative `unitPrice` is prepended to the replacement.
+
+### PDF generation
+
+`GET /api/projects/[id]/invoices/[invoiceId]/pdf` generates a PDF via `generateInvoicePdf` (react-pdf/renderer, `src/lib/pdf/invoice-pdf.ts`). The response must wrap the buffer in `new Uint8Array(pdfBuffer)` — passing a `Buffer` directly fails TypeScript (`Buffer` is not assignable to `BodyInit`).

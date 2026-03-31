@@ -11,6 +11,8 @@ interface Props {
   clientName: string
   clientEmail: string
   total: number
+  paid?: number
+  balance?: number
   currency: string
   dueDate: string
   paymentMethods: PaymentMethods
@@ -26,7 +28,10 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
-function defaultMessage(clientName: string, invoiceNumber: string, total: number, currency: string, dueDate: string, isReminder: boolean) {
+function defaultMessage(clientName: string, invoiceNumber: string, total: number, paid: number, balance: number, currency: string, dueDate: string, isReminder: boolean) {
+  if (isReminder && paid > 0) {
+    return `Hi ${clientName},\n\nI wanted to follow up on ${invoiceNumber}. You've paid ${fmt(paid, currency)} so far — the remaining balance of ${fmt(balance, currency)} was due on ${fmtDate(dueDate)}.\n\nPlease find the updated invoice attached. Let me know if you have any questions.\n\nThanks,`
+  }
   if (isReminder) {
     return `Hi ${clientName},\n\nI wanted to follow up on ${invoiceNumber} for ${fmt(total, currency)}, which was due on ${fmtDate(dueDate)}.\n\nPlease find the invoice attached. Let me know if you have any questions.\n\nThanks,`
   }
@@ -78,11 +83,12 @@ function PaymentSummary({ pm }: { pm: PaymentMethods }) {
 
 export function SendInvoiceModal({
   projectId, invoiceId, invoiceNumber, clientName, clientEmail,
-  total, currency, dueDate, paymentMethods, isReminder = false,
+  total, paid = 0, balance, currency, dueDate, paymentMethods, isReminder = false,
   onClose, onSent,
 }: Props) {
+  const effectiveBalance = balance ?? total
   const [message, setMessage] = useState(() =>
-    defaultMessage(clientName, invoiceNumber, total, currency, dueDate, isReminder)
+    defaultMessage(clientName, invoiceNumber, total, paid, effectiveBalance, currency, dueDate, isReminder)
   )
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -126,6 +132,11 @@ export function SendInvoiceModal({
           <div>
             <h2 className="font-semibold text-sm">{isReminder ? 'Send reminder' : 'Send invoice'}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">To: {clientName} &lt;{clientEmail}&gt;</p>
+            {paid > 0 && (
+              <p className="text-xs mt-1 text-amber-700 font-medium">
+                Paid: {fmt(paid, currency)} · Balance: {fmt(effectiveBalance, currency)}
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="h-4 w-4" />

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { matchTenantPayments } from '@/lib/rent-matching'
+import { matchInvoicePayments } from '@/lib/invoice-matching'
 
 const nullableString = z.union([z.string(), z.null()]).transform((v) => v ?? '')
 const optionalNullableString = z.union([z.string(), z.null()]).transform((v) => (v && v.trim()) ? v.trim() : null).optional()
@@ -90,14 +91,16 @@ export async function POST(request: Request) {
       return importBatch
     })
 
-    // Fire-and-forget rent matching — never block the import response
-    prisma.transaction.findMany({
+    // Await matching before returning — fire-and-forget dies on Netlify serverless
+    const importedTxs = await prisma.transaction.findMany({
       where: { importBatchId: batch.id },
       select: { id: true },
-    }).then(txs => {
-      const ids = txs.map(t => t.id)
-      return matchTenantPayments(userId, ids)
-    }).catch(() => { /* silent — matching failure never blocks import */ })
+    })
+    const importedIds = importedTxs.map(t => t.id)
+    await Promise.allSettled([
+      matchTenantPayments(userId, importedIds),
+      matchInvoicePayments(userId, importedIds),
+    ])
 
     return ok({
       imported: newRows.length,
