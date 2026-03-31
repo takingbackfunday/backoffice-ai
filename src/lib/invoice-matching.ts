@@ -10,13 +10,15 @@
  *   3. No existing PENDING suggestion for this transaction
  *   4. Find open invoices (SENT/PARTIAL/OVERDUE) for the client
  *   5. Compute each invoice's outstanding balance (total - paid)
- *   6. Exact match (±0.01) → auto-create InvoicePayment + update status
- *   7. No exact match but open invoices exist → create suggestion for best candidate
+ *   6. HIGH confidence triggers (auto-apply):
+ *      a. Exact amount match (±0.01) against exactly one open invoice
+ *      b. Invoice number appears in the transaction description or notes
+ *   7. MEDIUM confidence — create one suggestion per open invoice so the
+ *      user can choose which invoice to apply the payment to
  *
  * Design principles:
- * - HIGH confidence (exact amount match) = auto-apply atomically
- * - MEDIUM confidence (client has invoices, no exact match) = suggest for review
- * - One suggestion per transaction (closest balance match wins)
+ * - HIGH confidence = auto-apply atomically
+ * - MEDIUM confidence = one suggestion per open invoice (user picks)
  */
 
 import { prisma } from '@/lib/prisma'
@@ -84,71 +86,80 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
       return { inv, total, balance }
     })
 
-    // Look for exact match (±0.01)
+    const txDesc = `${tx.description ?? ''} ${tx.notes ?? ''}`.toLowerCase()
+
+    // Check for invoice number reference in transaction text (HIGH confidence signal)
+    const invoiceNumberMatch = invoicesWithBalance.find(({ inv }) =>
+      inv.invoiceNumber && txDesc.includes(inv.invoiceNumber.toLowerCase())
+    )
+
+    // Exact amount match (±0.01)
     const exactMatches = invoicesWithBalance.filter(({ balance }) => Math.abs(balance - txAmount) <= 0.01)
 
-    if (exactMatches.length === 1) {
-      // HIGH confidence — auto-apply
-      const { inv, total } = exactMatches[0]
-      const reasoning = `Transaction amount ${txAmount} exactly matches outstanding balance on ${inv.invoiceNumber} (${total}). Auto-applied.`
+    // HIGH confidence: invoice number in description, or single exact amount match
+    const highConfidenceTarget = invoiceNumberMatch ?? (exactMatches.length === 1 ? exactMatches[0] : null)
 
-      console.log(`[invoice-matching]   → exact match on ${inv.invoiceNumber}, auto-applying`)
+    if (highConfidenceTarget) {
+      const { inv, total } = highConfidenceTarget
+      const reasoning = invoiceNumberMatch
+        ? `Invoice number ${inv.invoiceNumber} found in transaction description. Auto-applied.`
+        : `Transaction amount ${txAmount} exactly matches outstanding balance on ${inv.invoiceNumber}. Auto-applied.`
+
+      console.log(`[invoice-matching]   → high confidence match on ${inv.invoiceNumber} (${invoiceNumberMatch ? 'invoice # in description' : 'exact amount'}), auto-applying`)
 
       try {
         await prisma.$transaction(async tx2 => {
-          // Create InvoicePayment linked to the transaction
           await tx2.invoicePayment.create({
             data: {
               invoiceId: inv.id,
               amount: tx.amount,
               paidDate: tx.date,
               transactionId: tx.id,
-              notes: `Auto-matched via bank transaction (exact amount match)`,
+              notes: `Auto-matched via bank transaction (${invoiceNumberMatch ? 'invoice number in description' : 'exact amount match'})`,
             },
           })
 
-          // Determine new status
           const currentPaid = inv.payments.reduce((s, p) => s + Number(p.amount), 0)
           const newTotalPaid = currentPaid + txAmount
           const newStatus = newTotalPaid >= total - 0.01 ? 'PAID' : 'PARTIAL'
 
-          await tx2.invoice.update({
-            where: { id: inv.id },
-            data: { status: newStatus },
-          })
+          await tx2.invoice.update({ where: { id: inv.id }, data: { status: newStatus } })
         })
 
         console.log(`[invoice-matching]   → auto-applied to ${inv.invoiceNumber}`)
       } catch {
-        // Auto-apply failed (e.g. duplicate) — fall back to suggestion
-        console.log(`[invoice-matching]   → auto-apply failed, creating MEDIUM suggestion`)
+        console.log(`[invoice-matching]   → auto-apply failed, falling back to suggestions`)
+        // Fall through to MEDIUM suggestions below
+        for (const { inv: fi, balance } of invoicesWithBalance) {
+          suggestionsToCreate.push({
+            userId,
+            transactionId: tx.id,
+            invoiceId: fi.id,
+            confidence: 'medium',
+            reasoning: `Auto-apply failed — manual review needed. Invoice ${fi.invoiceNumber}, balance ${balance.toFixed(2)}.`,
+          })
+        }
+      }
+    } else {
+      // MEDIUM confidence — create one suggestion per open invoice so user can choose
+      console.log(`[invoice-matching]   → no high-confidence match, creating ${invoicesWithBalance.length} MEDIUM suggestion(s)`)
+
+      for (const { inv: fi, balance } of invoicesWithBalance) {
+        const diff = txAmount - balance
+        const diffNote = Math.abs(diff) < 0.01
+          ? 'exact balance match'
+          : diff > 0
+            ? `${Math.abs(diff).toFixed(2)} over balance`
+            : `${Math.abs(diff).toFixed(2)} under balance`
+
         suggestionsToCreate.push({
           userId,
           transactionId: tx.id,
-          invoiceId: inv.id,
+          invoiceId: fi.id,
           confidence: 'medium',
-          reasoning: `Could not auto-apply — manual review needed. ${reasoning}`,
+          reasoning: `Payment of ${txAmount.toFixed(2)} against ${fi.invoiceNumber} (balance ${balance.toFixed(2)}) — ${diffNote}.`,
         })
       }
-    } else {
-      // MEDIUM confidence — pick closest balance invoice as suggestion
-      invoicesWithBalance.sort((a, b) => Math.abs(a.balance - txAmount) - Math.abs(b.balance - txAmount))
-      const best = invoicesWithBalance[0]
-      const diff = Math.abs(best.balance - txAmount)
-
-      const reasoning = exactMatches.length > 1
-        ? `${exactMatches.length} invoices match this amount — manual selection required. Closest: ${best.inv.invoiceNumber} (balance ${best.balance.toFixed(2)}).`
-        : `No exact amount match found. Closest open invoice: ${best.inv.invoiceNumber} with balance ${best.balance.toFixed(2)} vs transaction ${txAmount.toFixed(2)} (diff: ${diff.toFixed(2)}).`
-
-      console.log(`[invoice-matching]   → no exact match, creating MEDIUM suggestion for ${best.inv.invoiceNumber}`)
-
-      suggestionsToCreate.push({
-        userId,
-        transactionId: tx.id,
-        invoiceId: best.inv.id,
-        confidence: 'medium',
-        reasoning,
-      })
     }
   }
 
