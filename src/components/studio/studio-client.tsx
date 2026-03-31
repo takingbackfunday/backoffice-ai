@@ -439,14 +439,17 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
   const [voiding, setVoiding] = useState(false)
   const [suggestions, setSuggestions] = useState<PaymentSuggestion[]>([])
   const [suggestionsDone, setSuggestionsDone] = useState<Record<string, 'accepted' | 'dismissed'>>({})
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
 
   // Fetch suggestions when modal opens for relevant statuses
   useEffect(() => {
     if (!['SENT', 'PARTIAL', 'OVERDUE'].includes(inv.status)) return
+    setLoadingSuggestions(true)
     fetch(`/api/invoice-payment-suggestions?invoiceId=${inv.id}`)
       .then(r => r.json())
       .then(j => { if (j.data) setSuggestions(j.data) })
       .catch(() => {})
+      .finally(() => setLoadingSuggestions(false))
   }, [inv.id, inv.status])
 
   async function handleSend() {
@@ -603,6 +606,12 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
         </div>
 
         {/* Payment match suggestions */}
+        {loadingSuggestions && (
+          <div style={{ padding: '0 32px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #d4d0ec', borderTopColor: '#534AB7', display: 'inline-block', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: '#aaa' }}>Checking for payment matches…</span>
+          </div>
+        )}
         {activeSuggestions.length > 0 && (
           <div style={{ padding: '0 32px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {activeSuggestions.map(s => (
