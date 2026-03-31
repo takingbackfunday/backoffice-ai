@@ -26,22 +26,25 @@ import { prisma } from '@/lib/prisma'
 export async function matchInvoicePayments(userId: string, newTxIds: string[]): Promise<void> {
   if (newTxIds.length === 0) return
 
-  // 1. Fetch positive transactions on CLIENT projects, not yet linked, no pending suggestion
+  // 1. Fetch positive transactions on CLIENT projects, not yet linked
   const txs = await prisma.transaction.findMany({
     where: {
       id: { in: newTxIds },
       amount: { gt: 0 },
       invoicePayment: null,
-      invoicePaymentSuggestions: { none: { status: 'PENDING' } },
       project: { userId, type: 'CLIENT' },
     },
     include: {
+      invoicePaymentSuggestions: {
+        where: { status: 'PENDING' },
+        select: { invoiceId: true },
+      },
       project: {
         include: {
           clientProfile: {
             include: {
               invoices: {
-                where: { status: { in: ['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'] } },
+                where: { status: { in: ['SENT', 'PARTIAL', 'OVERDUE'] } },
                 include: {
                   lineItems: true,
                   payments: true,
@@ -77,6 +80,9 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
       console.log(`[invoice-matching]   → no open invoices for this client, skipping`)
       continue
     }
+
+    // Skip invoices that already have a pending suggestion for this transaction
+    const alreadySuggestedIds = new Set(tx.invoicePaymentSuggestions.map(s => s.invoiceId))
 
     // Compute outstanding balance per invoice
     const invoicesWithBalance = openInvoices.map(inv => {
@@ -130,7 +136,7 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
       } catch {
         console.log(`[invoice-matching]   → auto-apply failed, falling back to suggestions`)
         // Fall through to MEDIUM suggestions below
-        for (const { inv: fi, balance } of invoicesWithBalance) {
+        for (const { inv: fi, balance } of invoicesWithBalance.filter(({ inv: fi }) => !alreadySuggestedIds.has(fi.id))) {
           suggestionsToCreate.push({
             userId,
             transactionId: tx.id,
@@ -142,9 +148,10 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
       }
     } else {
       // MEDIUM confidence — create one suggestion per open invoice so user can choose
-      console.log(`[invoice-matching]   → no high-confidence match, creating ${invoicesWithBalance.length} MEDIUM suggestion(s)`)
+      const missing = invoicesWithBalance.filter(({ inv: fi }) => !alreadySuggestedIds.has(fi.id))
+      console.log(`[invoice-matching]   → no high-confidence match, creating ${missing.length} new MEDIUM suggestion(s) (${alreadySuggestedIds.size} already exist)`)
 
-      for (const { inv: fi, balance } of invoicesWithBalance) {
+      for (const { inv: fi, balance } of missing) {
         const diff = txAmount - balance
         const diffNote = Math.abs(diff) < 0.01
           ? 'exact balance match'

@@ -812,7 +812,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>Take action</p>
               <button
                 onClick={() => { setActionFilter(null); setShowInvoiceModal(true) }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1px solid #d4d0ec', background: 'linear-gradient(135deg, #f5f4ff 0%, #eeedfb 100%)', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#534AB7', cursor: 'pointer' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: 'none', background: '#534AB7', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#fff', cursor: 'pointer' }}
               >
                 <Plus size={11} />
                 New invoice
@@ -871,7 +871,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           ] as const).map(tab => (
             <button
               key={tab.key}
-              onClick={() => setView(tab.key)}
+              onClick={() => { setActionFilter(null); setView(tab.key) }}
               style={{ borderRadius: 8, border: 'none', background: view === tab.key ? '#fff' : 'transparent', boxShadow: view === tab.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none', padding: '6px 12px', fontSize: 12, fontWeight: view === tab.key ? 600 : 500, color: view === tab.key ? '#1a1a1a' : '#888', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
             >
               {tab.label}
