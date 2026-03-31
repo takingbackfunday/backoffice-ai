@@ -819,15 +819,10 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
             <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take action</p>
             <button
               onClick={() => { setActionFilter(null); setShowInvoiceModal(true) }}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 12, border: '1px solid #d4d0ec', background: 'linear-gradient(135deg, #f5f4ff 0%, #eeedfb 100%)', padding: '10px 14px', width: '100%', cursor: 'pointer', textAlign: 'left' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: 'none', background: '#534AB7', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#fff', cursor: 'pointer' }}
             >
-              <div style={{ width: 28, height: 28, borderRadius: 7, background: '#534AB720', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Plus size={14} color="#534AB7" />
-              </div>
-              <div>
-                <p style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', margin: 0 }}>New invoice</p>
-                <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Create and send to a client</p>
-              </div>
+              <Plus size={11} />
+              New invoice
             </button>
           </div>
 
@@ -910,7 +905,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         </div>
       ) : (
         <div style={{ borderRadius: 14, border: '1px solid #e8e6df', overflow: 'hidden', background: '#fff' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto', padding: '8px 16px', background: '#fafaf8', borderBottom: '1px solid #e8e6df' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 90px 90px 80px 60px', padding: '8px 16px', background: '#fafaf8', borderBottom: '1px solid #e8e6df' }}>
             {['Client', 'Invoice', 'Job', 'Amount', 'Balance', 'Status', ''].map((h, i) => (
               <span key={h || i} style={{ fontSize: 10, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: (i === 3 || i === 4) ? 'right' : 'left', whiteSpace: 'nowrap', paddingLeft: i > 0 ? 16 : 0 }}>{h}</span>
             ))}
@@ -928,7 +923,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               <div
                 key={inv.id}
                 onClick={() => setPreviewInv(inv)}
-                style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto', padding: '0 16px', alignItems: 'center', borderBottom: '1px solid #f5f4f0', cursor: 'pointer', background: isOverdue ? 'rgba(254,226,226,0.15)' : 'transparent', transition: 'background 0.15s' }}
+                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 90px 90px 80px 60px', padding: '0 16px', alignItems: 'center', borderBottom: '1px solid #f5f4f0', cursor: 'pointer', background: isOverdue ? 'rgba(254,226,226,0.15)' : 'transparent', transition: 'background 0.15s' }}
                 onMouseEnter={e => { if (!isOverdue) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
                 onMouseLeave={e => { if (!isOverdue) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
               >
