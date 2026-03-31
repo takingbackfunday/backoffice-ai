@@ -92,10 +92,9 @@ export async function DELETE(
         where: { transactionId: id },
         data: { transactionId: null, sourceDeleted: true },
       }),
-      // Delete any pending/accepted payment suggestions referencing this transaction
-      prisma.tenantPaymentSuggestion.deleteMany({
-        where: { transactionId: id },
-      }),
+      // Delete any payment suggestions referencing this transaction
+      prisma.tenantPaymentSuggestion.deleteMany({ where: { transactionId: id } }),
+      prisma.invoicePaymentSuggestion.deleteMany({ where: { transactionId: id } }),
       prisma.transaction.delete({ where: { id } }),
     ])
     return ok({ deleted: true })
