@@ -816,16 +816,19 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Take action */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingLeft: 4 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, margin: 0 }}>Take action</p>
-              <button
-                onClick={() => { setActionFilter(null); setShowInvoiceModal(true) }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: 'none', background: '#534AB7', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#fff', cursor: 'pointer' }}
-              >
-                <Plus size={11} />
-                New invoice
-              </button>
-            </div>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take action</p>
+            <button
+              onClick={() => { setActionFilter(null); setShowInvoiceModal(true) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 12, border: '1px solid #d4d0ec', background: 'linear-gradient(135deg, #f5f4ff 0%, #eeedfb 100%)', padding: '10px 14px', width: '100%', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <div style={{ width: 28, height: 28, borderRadius: 7, background: '#534AB720', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Plus size={14} color="#534AB7" />
+              </div>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', margin: 0 }}>New invoice</p>
+                <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Create and send to a client</p>
+              </div>
+            </button>
           </div>
 
           {/* Take notice */}
@@ -907,9 +910,9 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         </div>
       ) : (
         <div style={{ borderRadius: 14, border: '1px solid #e8e6df', overflow: 'hidden', background: '#fff' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.2fr 90px 100px 90px 70px', padding: '8px 16px', background: '#fafaf8', borderBottom: '1px solid #e8e6df' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto', padding: '8px 16px', background: '#fafaf8', borderBottom: '1px solid #e8e6df' }}>
             {['Client', 'Invoice', 'Job', 'Amount', 'Balance', 'Status', ''].map((h, i) => (
-              <span key={h || i} style={{ fontSize: 10, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: (i === 3 || i === 4) ? 'right' : 'left' }}>{h}</span>
+              <span key={h || i} style={{ fontSize: 10, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: (i === 3 || i === 4) ? 'right' : 'left', whiteSpace: 'nowrap', paddingLeft: i > 0 ? 16 : 0 }}>{h}</span>
             ))}
           </div>
           {filtered.map((inv, idx) => {
@@ -925,7 +928,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               <div
                 key={inv.id}
                 onClick={() => setPreviewInv(inv)}
-                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.2fr 90px 100px 90px 70px', padding: '0 16px', alignItems: 'center', borderBottom: '1px solid #f5f4f0', cursor: 'pointer', background: isOverdue ? 'rgba(254,226,226,0.15)' : 'transparent', transition: 'background 0.15s' }}
+                style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto', padding: '0 16px', alignItems: 'center', borderBottom: '1px solid #f5f4f0', cursor: 'pointer', background: isOverdue ? 'rgba(254,226,226,0.15)' : 'transparent', transition: 'background 0.15s' }}
                 onMouseEnter={e => { if (!isOverdue) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
                 onMouseLeave={e => { if (!isOverdue) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
               >
@@ -941,27 +944,27 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                     </Link>
                   ) : <span style={{ fontSize: 10, color: '#ccc', paddingLeft: 4 }}>↳</span>}
                 </div>
-                <div style={{ padding: '10px 0' }}>
+                <div style={{ padding: '10px 0 10px 16px', whiteSpace: 'nowrap' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#534AB7', fontVariantNumeric: 'tabular-nums' }}>{inv.invoiceNumber}</span>
                 </div>
-                <div style={{ padding: '10px 8px 10px 0', minWidth: 0 }}>
-                  <span style={{ fontSize: 13, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{inv.jobName ?? '—'}</span>
+                <div style={{ padding: '10px 0 10px 16px', whiteSpace: 'nowrap', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ fontSize: 13, color: '#888' }}>{inv.jobName ?? '—'}</span>
                 </div>
-                <div style={{ padding: '10px 0', textAlign: 'right' }}>
+                <div style={{ padding: '10px 0 10px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(inv.total, inv.currency)}</span>
                 </div>
-                <div style={{ padding: '10px 0', textAlign: 'right' }}>
+                <div style={{ padding: '10px 0 10px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {ds === 'PAID' ? <span style={{ fontSize: 13, color: '#16a34a', fontWeight: 600 }}>Paid</span>
                     : ds === 'VOID' ? <span style={{ fontSize: 13, color: '#ccc' }}>Void</span>
                     : balance > 0 ? <span style={{ fontSize: 13, fontWeight: 700, color: isOverdue ? '#dc2626' : '#a16207', fontVariantNumeric: 'tabular-nums' }}>{fmt(balance, inv.currency)}</span>
                     : <span style={{ color: '#ccc' }}>—</span>}
                 </div>
-                <div style={{ padding: '10px 0' }}>
+                <div style={{ padding: '10px 0 10px 16px', whiteSpace: 'nowrap' }}>
                   <StatusBadge status={ds} />
                   {isOverdue && <span style={{ fontSize: 9, color: '#ef4444', fontWeight: 600, marginLeft: 4 }}>{daysAgo(inv.dueDate)}d</span>}
                   {!isOverdue && ds === 'SENT' && days >= 0 && days <= 7 && <span style={{ fontSize: 9, color: '#f59e0b', marginLeft: 4 }}>{days}d</span>}
                 </div>
-                <div style={{ padding: '10px 0', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                <div style={{ padding: '10px 0 10px 16px', textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
                   {isDraft && (
                     <button
                       onClick={async e => {
