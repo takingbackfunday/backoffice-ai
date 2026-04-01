@@ -11,6 +11,12 @@ export interface PdfLineItem {
   isTaxLine?: boolean
 }
 
+export interface PdfPayment {
+  amount: number
+  paidDate: string
+  paymentMethod?: string | null
+}
+
 export interface PdfInvoice {
   invoiceNumber: string
   status: string
@@ -22,8 +28,12 @@ export interface PdfInvoice {
   clientName: string
   clientCompany?: string | null
   clientEmail?: string | null
+  clientAddress?: string | null
+  clientPhone?: string | null
   fromName: string
   lineItems: PdfLineItem[]
+  totalPaid?: number
+  payments?: PdfPayment[]
 }
 
 export interface PaymentMethods {
@@ -104,6 +114,13 @@ const S = StyleSheet.create({
   payRow: { flexDirection: 'row', marginBottom: 2 },
   payKey: { width: 100, fontSize: 8, color: '#888' },
   payVal: { fontSize: 8, color: '#111' },
+  // Payments
+  paymentRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 3 },
+  paymentLabel: { width: 120, textAlign: 'right', fontSize: 8, color: '#16a34a', paddingRight: 12 },
+  paymentValue: { width: 80, textAlign: 'right', fontSize: 8, color: '#16a34a', fontFamily: 'Helvetica-Bold' },
+  balanceRow: { flexDirection: 'row', justifyContent: 'flex-end', borderTopWidth: 1, borderTopColor: '#e5e5e5', paddingTop: 6, marginTop: 4 },
+  balanceLabel: { width: 120, textAlign: 'right', fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#111', paddingRight: 12 },
+  balanceValue: { width: 80, textAlign: 'right', fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#111' },
   // Footer
   footer: { position: 'absolute', bottom: 32, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between' },
   footerText: { fontSize: 7, color: '#aaa' },
@@ -119,6 +136,9 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
   const subtotal = regularItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
   const taxTotal = taxItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
   const total = subtotal + taxTotal
+  const payments = invoice.payments ?? []
+  const totalPaid = invoice.totalPaid ?? payments.reduce((s, p) => s + p.amount, 0)
+  const balance = total - totalPaid
 
   const pm = paymentMethods
   const hasBankTransfer = pm?.bankTransfer && Object.values(pm.bankTransfer).some(v => v)
@@ -149,6 +169,8 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
             <Text style={S.metaLabel}>Bill to</Text>
             <Text style={S.metaValue}>{invoice.clientName}</Text>
             {invoice.clientCompany && <Text style={S.metaValue}>{invoice.clientCompany}</Text>}
+            {invoice.clientAddress && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.clientAddress}</Text>}
+            {invoice.clientPhone && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.clientPhone}</Text>}
             {invoice.clientEmail && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.clientEmail}</Text>}
           </View>
           <View style={S.metaBlock}>
@@ -210,9 +232,23 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
             </View>
           ))}
           <View style={S.grandTotalRow}>
-            <Text style={S.grandTotalLabel}>Total due</Text>
+            <Text style={S.grandTotalLabel}>Total</Text>
             <Text style={S.grandTotalValue}>{fmt(total, invoice.currency)}</Text>
           </View>
+          {payments.map((p, i) => (
+            <View key={i} style={S.paymentRow}>
+              <Text style={S.paymentLabel}>
+                Payment {fmtDate(p.paidDate)}{p.paymentMethod ? ` · ${p.paymentMethod}` : ''}
+              </Text>
+              <Text style={S.paymentValue}>−{fmt(p.amount, invoice.currency)}</Text>
+            </View>
+          ))}
+          {totalPaid > 0 && (
+            <View style={S.balanceRow}>
+              <Text style={S.balanceLabel}>Balance due</Text>
+              <Text style={[S.balanceValue, balance <= 0 ? { color: '#16a34a' } : {}]}>{fmt(Math.max(balance, 0), invoice.currency)}</Text>
+            </View>
+          )}
         </View>
 
         {/* Notes */}
