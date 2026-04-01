@@ -27,11 +27,11 @@ export async function POST(request: Request, { params }: RouteParams) {
         ],
       },
       include: {
-        clientProfile: { include: { project: { select: { name: true, slug: true } } } },
-        tenant: { select: { id: true, name: true, email: true } },
-        lease: { include: { unit: true, tenant: { select: { name: true, email: true } } } },
+        clientProfile: { select: { email: true, contactName: true, phone: true, address: true, project: { select: { name: true, slug: true } } } },
+        tenant: { select: { id: true, name: true, email: true, phone: true } },
+        lease: { include: { unit: true, tenant: { select: { name: true, email: true, phone: true } } } },
         lineItems: true,
-        payments: true,
+        payments: { orderBy: { paidDate: 'asc' } },
       },
     })
 
@@ -47,6 +47,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!email) return badRequest('No email address found for this invoice recipient')
 
     const recipientName = cp?.contactName ?? cp?.project.name ?? leaseTenant?.name ?? directTenant?.name ?? 'Tenant'
+    const clientPhone = cp?.phone ?? leaseTenant?.phone ?? directTenant?.phone
+    const clientAddress = cp?.address ?? null
 
     // Load user payment methods + business profile
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
@@ -56,6 +58,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.project.name || 'Invoice'
 
     const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
+    const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
 
     // Generate PDF
     const pdfBuffer = await generateInvoicePdf({
@@ -67,12 +70,20 @@ export async function POST(request: Request, { params }: RouteParams) {
       notes: invoice.notes,
       clientName: recipientName,
       clientEmail: email,
+      clientPhone: clientPhone ?? undefined,
+      clientAddress: clientAddress ?? undefined,
       fromName,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: Number(i.quantity),
         unitPrice: Number(i.unitPrice),
         isTaxLine: i.isTaxLine,
+      })),
+      totalPaid,
+      payments: invoice.payments.map(p => ({
+        amount: Number(p.amount),
+        paidDate: p.paidDate.toISOString(),
+        paymentMethod: p.paymentMethod,
       })),
     }, paymentMethods, invoicePaymentNote)
 
@@ -89,6 +100,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       notes: invoice.notes,
       message,
       paymentMethods,
+      paymentNote: invoicePaymentNote,
       pdfBuffer,
     })
 

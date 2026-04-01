@@ -9,12 +9,13 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY)
 }
 
-function renderPaymentMethodsHtml(pm: PaymentMethods): string {
+function renderPaymentMethodsHtml(pm: PaymentMethods, paymentNote?: string): string {
   const bt = pm.bankTransfer
   const hasBt = bt && Object.values(bt).some(v => v)
   const hasPaypal = !!pm.paypal?.link
   const hasStripe = !!pm.stripe?.link
-  if (!hasBt && !hasPaypal && !hasStripe) return ''
+  const hasCustom = (pm.custom?.length ?? 0) > 0
+  if (!hasBt && !hasPaypal && !hasStripe && !hasCustom) return ''
 
   const row = (label: string, value: string) =>
     `<tr><td style="color:#888;font-size:13px;padding:2px 12px 2px 0;white-space:nowrap">${label}</td><td style="font-size:13px;font-family:monospace">${value}</td></tr>`
@@ -42,6 +43,16 @@ function renderPaymentMethodsHtml(pm: PaymentMethods): string {
     html += `<p style="font-size:14px;font-weight:600;margin:12px 0 4px">Pay by card</p>
       <a href="${pm.stripe.link}" style="background:#635bff;color:#fff;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;display:inline-block;margin-top:4px">Pay now →</a>`
   }
+
+  if (hasCustom && pm.custom) {
+    for (const item of pm.custom) {
+      html += `<p style="font-size:14px;font-weight:600;margin:12px 0 4px">${item.label}</p>
+        <p style="font-size:13px;margin:0;color:#333">${item.value}</p>`
+    }
+  }
+
+  const note = paymentNote ?? 'Please include the invoice number in your payment reference.'
+  html += `<p style="font-size:11px;color:#888;margin:12px 0 0">${note}</p>`
 
   html += '</div>'
   return html
@@ -85,7 +96,7 @@ export async function sendTenantMessageNotification({
 
 export async function sendInvoiceEmail({
   toEmail, toName, fromName, invoiceNumber, invoiceId, projectSlug,
-  total, currency, dueDate, notes, message, paymentMethods, pdfBuffer,
+  total, currency, dueDate, notes, message, paymentMethods, paymentNote, pdfBuffer,
 }: {
   toEmail: string
   toName: string
@@ -99,6 +110,7 @@ export async function sendInvoiceEmail({
   notes?: string | null
   message?: string
   paymentMethods?: PaymentMethods
+  paymentNote?: string
   pdfBuffer?: Buffer
 }) {
   const resend = getResend()
@@ -111,7 +123,7 @@ export async function sendInvoiceEmail({
   const messageHtml = message
     ? `<div style="font-size:15px;line-height:1.7;white-space:pre-wrap;margin-bottom:24px;color:#333">${message}</div>`
     : ''
-  const paymentHtml = paymentMethods ? renderPaymentMethodsHtml(paymentMethods) : ''
+  const paymentHtml = paymentMethods ? renderPaymentMethodsHtml(paymentMethods, paymentNote) : ''
   const notesHtml = notes
     ? `<div style="background:#f5f5f5;border-radius:8px;padding:14px 18px;font-size:13px;line-height:1.6;white-space:pre-wrap;margin-top:20px;color:#555">${notes}</div>`
     : ''
@@ -147,7 +159,7 @@ export async function sendInvoiceEmail({
 
 export async function sendReminderEmail({
   toEmail, toName, fromName, invoiceNumber, invoiceId, projectSlug,
-  balance, currency, dueDate, isOverdue, message, paymentMethods, pdfBuffer,
+  balance, currency, dueDate, isOverdue, message, paymentMethods, paymentNote, pdfBuffer,
 }: {
   toEmail: string
   toName: string
@@ -161,6 +173,7 @@ export async function sendReminderEmail({
   isOverdue: boolean
   message?: string
   paymentMethods?: PaymentMethods
+  paymentNote?: string
   pdfBuffer?: Buffer
 }) {
   const resend = getResend()
@@ -177,7 +190,7 @@ export async function sendReminderEmail({
   const messageHtml = message
     ? `<div style="font-size:15px;line-height:1.7;white-space:pre-wrap;margin-bottom:24px;color:#333">${message}</div>`
     : ''
-  const paymentHtml = paymentMethods ? renderPaymentMethodsHtml(paymentMethods) : ''
+  const paymentHtml = paymentMethods ? renderPaymentMethodsHtml(paymentMethods, paymentNote) : ''
 
   await resend.emails.send({
     from: FROM,

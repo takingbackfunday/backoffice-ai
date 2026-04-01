@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Send, Paperclip } from 'lucide-react'
+import { X, Send, Paperclip, Loader2 } from 'lucide-react'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { PaymentSummary } from '@/components/projects/payment-summary'
 
@@ -51,8 +51,30 @@ export function SendInvoiceModal({
   )
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(true)
   const readyRef = useRef(false)
   useEffect(() => { readyRef.current = true }, [])
+
+  // Fetch PDF blob on mount for preview
+  useEffect(() => {
+    let objectUrl: string | null = null
+    async function loadPdf() {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/invoices/${invoiceId}/pdf`)
+        if (!res.ok) return
+        const blob = await res.blob()
+        objectUrl = URL.createObjectURL(blob)
+        setPdfUrl(objectUrl)
+      } finally {
+        setPdfLoading(false)
+      }
+    }
+    loadPdf()
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [projectId, invoiceId])
 
   async function handleSend() {
     setSending(true)
@@ -72,7 +94,7 @@ export function SendInvoiceModal({
         setError(json.error ?? 'Failed to send')
         return
       }
-      onSent(json.data?.status ?? (isReminder ? 'SENT' : 'SENT'))
+      onSent(json.data?.status ?? 'SENT')
       onClose()
     } finally {
       setSending(false)
@@ -84,10 +106,10 @@ export function SendInvoiceModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget && readyRef.current) onClose() }}
     >
-      <div className="w-full max-w-lg bg-background rounded-2xl shadow-2xl border overflow-hidden">
+      <div className="w-full max-w-4xl bg-background rounded-2xl shadow-2xl border overflow-hidden flex flex-col max-h-[90vh]">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b bg-muted/20">
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-muted/20 shrink-0">
           <div>
             <h2 className="font-semibold text-sm">{isReminder ? 'Send reminder' : 'Send invoice'}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">To: {clientName} &lt;{clientEmail}&gt;</p>
@@ -102,61 +124,86 @@ export function SendInvoiceModal({
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-5 space-y-4">
+        {/* Two-column body */}
+        <div className="flex flex-1 min-h-0">
 
-          {/* Message */}
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              Message
-            </label>
-            <textarea
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              rows={6}
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
-            />
+          {/* Left — PDF preview */}
+          <div className="w-1/2 border-r bg-muted/10 flex flex-col">
+            {pdfLoading ? (
+              <div className="flex flex-1 items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : pdfUrl ? (
+              <iframe
+                src={pdfUrl}
+                className="flex-1 w-full"
+                title={`${invoiceNumber} preview`}
+              />
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground p-6 text-center">
+                PDF preview unavailable
+              </div>
+            )}
           </div>
 
-          {/* No email warning */}
-          {!clientEmail && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              No email address on file for this client. Add one on the project settings page before sending.
+          {/* Right — controls */}
+          <div className="w-1/2 flex flex-col overflow-y-auto">
+            <div className="p-5 space-y-4 flex-1">
+
+              {/* Message */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                  Message
+                </label>
+                <textarea
+                  value={message}
+                  onChange={e => setMessage(e.target.value)}
+                  rows={7}
+                  className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+                />
+              </div>
+
+              {/* No email warning */}
+              {!clientEmail && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  No email address on file for this client. Add one on the project settings page before sending.
+                </div>
+              )}
+
+              {/* Attachment notice */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Paperclip className="h-3.5 w-3.5" />
+                <span>{invoiceNumber}.pdf will be attached automatically</span>
+              </div>
+
+              {/* Payment methods preview */}
+              <PaymentSummary pm={paymentMethods} />
+
+              {error && (
+                <p className="text-sm text-destructive">{error}</p>
+              )}
             </div>
-          )}
 
-          {/* Attachment notice */}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Paperclip className="h-3.5 w-3.5" />
-            <span>{invoiceNumber}.pdf will be attached automatically</span>
+            {/* Footer inside right column */}
+            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t bg-muted/10 shrink-0">
+              <button
+                onClick={onClose}
+                className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={sending || !message.trim()}
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                <Send className="h-3.5 w-3.5" />
+                {sending ? 'Sending…' : isReminder ? 'Send reminder' : 'Send invoice'}
+              </button>
+            </div>
           </div>
 
-          {/* Payment methods preview */}
-          <PaymentSummary pm={paymentMethods} />
-
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t bg-muted/10">
-          <button
-            onClick={onClose}
-            className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSend}
-            disabled={sending || !message.trim()}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            <Send className="h-3.5 w-3.5" />
-            {sending ? 'Sending…' : isReminder ? 'Send reminder' : 'Send invoice'}
-          </button>
-        </div>
-
       </div>
     </div>
   )
