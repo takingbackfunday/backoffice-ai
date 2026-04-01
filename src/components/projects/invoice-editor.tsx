@@ -28,6 +28,7 @@ type AiAction =
   | { type: 'set_due_date'; value: string }
   | { type: 'set_notes'; value: string }
   | { type: 'set_tax'; label: string; amount: number }
+  | { type: 'set_currency'; value: string }
   | { type: 'ask_clarification'; question: string }
 
 interface InvoiceState {
@@ -340,6 +341,9 @@ export function InvoiceEditor({
         break
       case 'set_tax':
         dispatch({ type: 'SET_TAX_FROM_AI', label: action.label, amount: action.amount })
+        break
+      case 'set_currency':
+        dispatch({ type: 'SET_CURRENCY', value: action.value })
         break
       case 'ask_clarification':
         // Will be shown as a chat message — no form change
@@ -864,7 +868,8 @@ export function InvoiceEditor({
                         {a.type === 'set_line_items' ? `Updated ${(a as { type: 'set_line_items'; lineItems: unknown[] }).lineItems.length} line item(s)` :
                          a.type === 'set_due_date' ? `Due date → ${(a as { type: 'set_due_date'; value: string }).value}` :
                          a.type === 'set_notes' ? 'Updated notes' :
-                         a.type === 'set_tax' ? `Tax → ${(a as { type: 'set_tax'; label: string; amount: number }).label} ${fmtFull((a as { type: 'set_tax'; label: string; amount: number }).amount, state.currency)}` : ''}
+                         a.type === 'set_tax' ? `Tax → ${(a as { type: 'set_tax'; label: string; amount: number }).label} ${fmtFull((a as { type: 'set_tax'; label: string; amount: number }).amount, state.currency)}` :
+                         a.type === 'set_currency' ? `Currency → ${(a as { type: 'set_currency'; value: string }).value}` : ''}
                       </span>
                     </p>
                   ))}

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { ActionBanner } from '@/components/ui/action-banner'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -53,6 +54,7 @@ interface Props {
   kpis: Kpis
   paymentMethods: PaymentMethods
   pendingSuggestions?: number
+  recentPaymentsCount?: number
 }
 
 type View = 'open' | 'paid' | 'all'
@@ -181,32 +183,6 @@ function AgingBar({ invoices }: { invoices: (Invoice & { clientId: string })[] }
         ))}
       </div>
     </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  ActionBanner                                                        */
-/* ------------------------------------------------------------------ */
-
-function ActionBanner({ icon, label, detail, color, onClick, cta = 'Filter →' }: { icon: string; label: string; detail: string; color: 'red' | 'amber' | 'blue'; onClick: () => void; cta?: string }) {
-  const colors = {
-    red:   { bg: '#fef2f2', border: '#fecaca', icon: '#ef4444' },
-    amber: { bg: '#fffbeb', border: '#fde68a', icon: '#f59e0b' },
-    blue:  { bg: '#eff6ff', border: '#bfdbfe', icon: '#3b82f6' },
-  }
-  const c = colors[color]
-  return (
-    <button
-      onClick={onClick}
-      style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 12, border: `1px solid ${c.border}`, background: c.bg, padding: '12px 14px', width: '100%', cursor: 'pointer', textAlign: 'left' }}
-    >
-      <div style={{ width: 32, height: 32, borderRadius: 8, background: `${c.icon}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.icon, fontSize: 16, flexShrink: 0 }}>{icon}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: c.icon, margin: 0 }}>{label}</p>
-        <p style={{ fontSize: 11, opacity: 0.7, color: c.icon, margin: 0 }}>{detail}</p>
-      </div>
-      <span style={{ fontSize: 11, color: c.icon, opacity: 0.5 }}>{cta}</span>
-    </button>
   )
 }
 
@@ -715,7 +691,7 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
 
 type FlatInvoice = Invoice & { clientId: string; clientName: string; clientSlug: string; clientCompany: string | null }
 
-export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0 }: Props) {
+export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0 }: Props) {
   const router = useRouter()
   const [view, setView] = useState<View>('open')
   const [search, setSearch] = useState('')
@@ -827,7 +803,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           </div>
 
           {/* Take notice */}
-          {(actions.length > 0 || pendingSuggestions > 0) && (
+          {(actions.length > 0 || pendingSuggestions > 0 || recentPaymentsCount > 0) && (
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take notice</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -842,6 +818,16 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                     color="blue"
                     cta="Show invoices →"
                     onClick={() => { setActionFilter(() => (i: FlatInvoice) => suggestionInvoiceIds.has(i.id)); setView('all') }}
+                  />
+                )}
+                {recentPaymentsCount > 0 && (
+                  <ActionBanner
+                    icon="✅"
+                    label={`${recentPaymentsCount} payment${recentPaymentsCount !== 1 ? 's' : ''} received in the last 7 days`}
+                    detail="View paid invoices to confirm everything looks right"
+                    color="blue"
+                    cta="View paid →"
+                    onClick={() => { setActionFilter(null); setView('paid') }}
                   />
                 )}
               </div>

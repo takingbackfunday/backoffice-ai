@@ -8,6 +8,7 @@ import {
   AlertTriangle, MapPin, Plus, X, ExternalLink,
   Calendar, DollarSign, MessageSquare, Send, Mail, ArrowUpDown,
 } from 'lucide-react'
+import { ActionBanner } from '@/components/ui/action-banner'
 import {
   UNIT_STATUS_COLORS, UNIT_STATUS_LABELS,
   MAINTENANCE_PRIORITY_LABELS, MAINTENANCE_PRIORITY_COLORS,
@@ -66,7 +67,8 @@ interface Property {
 interface Kpis {
   totalUnits: number; leasedUnits: number; vacantUnits: number;
   openMaintenance: number; monthlyRevenue: number; expiringLeases: number;
-  unreadMessages: number; overduePayments: number; activeApplicants: number
+  unreadMessages: number; overduePayments: number; activeApplicants: number;
+  recentPaymentsCount?: number
 }
 
 /* Flat row for the table */
@@ -415,6 +417,68 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
           onClick={kpis.unreadMessages > 0 ? () => setStatusFilter(statusFilter === 'UNREAD_MESSAGES' ? 'ALL' : 'UNREAD_MESSAGES') : undefined}
         />
       </div>
+
+      {/* ============================================================= */}
+      {/*  TAKE NOTICE                                                   */}
+      {/* ============================================================= */}
+
+      {(kpis.overduePayments > 0 || kpis.expiringLeases > 0 || kpis.openMaintenance > 0 || kpis.activeApplicants > 0 || (kpis.recentPaymentsCount ?? 0) > 0) && (
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Take notice</p>
+          <div className="flex flex-col gap-2">
+            {kpis.overduePayments > 0 && (
+              <ActionBanner
+                icon="⚠️"
+                label={`${kpis.overduePayments} unit${kpis.overduePayments !== 1 ? 's' : ''} with overdue rent`}
+                detail="Rent balance is outstanding — follow up with tenants"
+                color="red"
+                cta="Filter →"
+                onClick={() => setStatusFilter(statusFilter === 'RENT_OVERDUE' ? 'ALL' : 'RENT_OVERDUE')}
+              />
+            )}
+            {kpis.expiringLeases > 0 && (
+              <ActionBanner
+                icon="📋"
+                label={`${kpis.expiringLeases} lease${kpis.expiringLeases !== 1 ? 's' : ''} expiring within 90 days`}
+                detail="Reach out to tenants about renewal or vacating"
+                color="amber"
+                cta="Filter →"
+                onClick={() => setStatusFilter(statusFilter === 'EXPIRING' ? 'ALL' : 'EXPIRING')}
+              />
+            )}
+            {kpis.openMaintenance > 0 && (
+              <ActionBanner
+                icon="🔧"
+                label={`${kpis.openMaintenance} open maintenance request${kpis.openMaintenance !== 1 ? 's' : ''}`}
+                detail="Review and schedule outstanding work orders"
+                color="amber"
+                cta="Filter →"
+                onClick={() => setStatusFilter(statusFilter === 'MAINTENANCE_OPEN' ? 'ALL' : 'MAINTENANCE_OPEN')}
+              />
+            )}
+            {kpis.activeApplicants > 0 && (
+              <ActionBanner
+                icon="👥"
+                label={`${kpis.activeApplicants} active applicant${kpis.activeApplicants !== 1 ? 's' : ''} in the pipeline`}
+                detail="Review applications and move candidates forward"
+                color="blue"
+                cta="View →"
+                onClick={() => {}}
+              />
+            )}
+            {(kpis.recentPaymentsCount ?? 0) > 0 && (
+              <ActionBanner
+                icon="✅"
+                label={`${kpis.recentPaymentsCount} rent payment${kpis.recentPaymentsCount !== 1 ? 's' : ''} received in the last 7 days`}
+                detail="Confirm payments have been applied correctly"
+                color="green"
+                cta="Review →"
+                onClick={() => {}}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ============================================================= */}
       {/*  SEARCH + FILTER BAR                                           */}

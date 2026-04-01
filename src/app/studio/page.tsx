@@ -29,13 +29,26 @@ export default async function StudioPage() {
     orderBy: { name: 'asc' },
   })
 
-  const [prefs, pendingSuggestions] = await Promise.all([
+  const now = new Date()
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+  const [prefs, pendingSuggestions, recentPaymentsCount] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId } }),
     prisma.invoicePaymentSuggestion.count({ where: { userId, status: 'PENDING' } }),
+    prisma.invoicePayment.count({
+      where: {
+        paidDate: { gte: sevenDaysAgo },
+        invoice: {
+          OR: [
+            { clientProfile: { project: { userId } } },
+            { lease: { unit: { propertyProfile: { project: { userId } } } } },
+          ],
+        },
+      },
+    }),
   ])
   const paymentMethods = ((prefs?.data as Record<string, unknown>)?.paymentMethods ?? {}) as import('@/lib/pdf/invoice-pdf').PaymentMethods
 
-  const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
   // Build serialized client cards
@@ -122,7 +135,7 @@ export default async function StudioPage() {
             <h1 className="text-xl font-bold">Studio</h1>
             <p className="text-sm text-muted-foreground">Overview of your client projects and invoices</p>
           </div>
-          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} />
+          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} />
         </main>
       </div>
     </div>

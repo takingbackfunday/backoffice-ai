@@ -95,18 +95,33 @@ export default async function PortfolioPage() {
   }).length
 
   const propertyProfileIds = properties.flatMap(p => p.propertyProfile ? [p.propertyProfile.id] : [])
-  const activeApplicants = propertyProfileIds.length > 0
-    ? await prisma.applicant.count({
-        where: {
-          propertyProfileId: { in: propertyProfileIds },
-          status: { notIn: ['REJECTED', 'WITHDRAWN', 'LEASE_SIGNED'] },
-        },
-      })
-    : 0
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+  const [activeApplicants, recentPaymentsCount] = await Promise.all([
+    propertyProfileIds.length > 0
+      ? prisma.applicant.count({
+          where: {
+            propertyProfileId: { in: propertyProfileIds },
+            status: { notIn: ['REJECTED', 'WITHDRAWN', 'LEASE_SIGNED'] },
+          },
+        })
+      : Promise.resolve(0),
+    propertyProfileIds.length > 0
+      ? prisma.invoicePayment.count({
+          where: {
+            paidDate: { gte: sevenDaysAgo },
+            invoice: {
+              lease: { unit: { propertyProfileId: { in: propertyProfileIds } } },
+            },
+          },
+        })
+      : Promise.resolve(0),
+  ])
 
   const kpis = {
     totalUnits, leasedUnits, vacantUnits, openMaintenance,
     monthlyRevenue, expiringLeases, unreadMessages, overduePayments, activeApplicants,
+    recentPaymentsCount,
   }
 
   const serialized = properties.map(p => ({
