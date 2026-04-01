@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +27,9 @@ const STATUS_COLORS: Record<string, string> = {
   WITHDRAWN: 'bg-gray-100 text-gray-500',
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AppData = Record<string, any>
+
 interface Applicant {
   id: string
   name: string
@@ -42,7 +45,10 @@ interface Applicant {
   creditScore: number | null
   backgroundCheck: string | null
   rejectedReason: string | null
+  screeningConsentAt: string | null
+  applicationData: AppData | null
   unit: { id: string; unitLabel: string } | null
+  listing: { id: string; publicSlug: string; title: string } | null
   convertedToTenant: { id: string; name: string } | null
 }
 
@@ -56,10 +62,31 @@ interface Props {
   onUpdated: (applicant: Applicant) => void
 }
 
+function AppSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className="space-y-1.5">{children}</div>
+    </div>
+  )
+}
+
+function AppRow({ label, value }: { label: string; value: string | number | null | undefined }) {
+  if (!value && value !== 0) return null
+  return (
+    <div className="flex justify-between gap-2 text-xs">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="text-right">{value}</span>
+    </div>
+  )
+}
+
 export function ApplicantDetail({ projectId, applicant: initial, units, onClose, onUpdated }: Props) {
   const [applicant, setApplicant] = useState<Applicant>(initial)
   const [saving, setSaving] = useState(false)
   const [converting, setConverting] = useState(false)
+  const [sendingApp, setSendingApp] = useState(false)
+  const [sendAppSuccess, setSendAppSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notes, setNotes] = useState(initial.notes ?? '')
   const [rejectedReason, setRejectedReason] = useState(initial.rejectedReason ?? '')
@@ -94,6 +121,24 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
       onUpdated({ ...applicant, convertedToTenant: json.data })
     } finally {
       setConverting(false)
+    }
+  }
+
+  async function handleSendApplication() {
+    setSendingApp(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}/send-application`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || json.error) { setError(json.error ?? 'Failed to send'); return }
+      setSendAppSuccess(true)
+      if (json.data?.status && json.data.status !== applicant.status) {
+        const updated = { ...applicant, status: json.data.status }
+        setApplicant(updated)
+        onUpdated(updated)
+      }
+    } finally {
+      setSendingApp(false)
     }
   }
 
@@ -141,6 +186,28 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
             </div>
           </div>
 
+          {/* Send Application */}
+          {(applicant.status === 'INQUIRY' || applicant.status === 'APPLICATION_SENT') && !applicant.applicationData && applicant.listing && (
+            <div className="rounded-lg border border-dashed p-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium">Send application link</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Email them a link to the full rental application form.</p>
+              </div>
+              {sendAppSuccess ? (
+                <span className="text-xs text-emerald-600 font-medium flex-shrink-0">Sent ✓</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSendApplication}
+                  disabled={sendingApp}
+                  className="flex-shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {sendingApp ? 'Sending…' : 'Send'}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Unit */}
           <div>
             <label className="block text-xs font-medium mb-1">Unit</label>
@@ -181,6 +248,68 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
               <p className="text-sm">{applicant.annualIncome ? `$${Number(applicant.annualIncome).toLocaleString()}` : '—'}</p>
             </div>
           </div>
+
+          {/* Application data */}
+          {applicant.applicationData && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Application</p>
+                {applicant.screeningConsentAt && (
+                  <span className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                    Consent ✓ {new Date(applicant.screeningConsentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                )}
+              </div>
+
+              {/* Personal */}
+              {applicant.applicationData.personal && (
+                <AppSection label="Personal">
+                  <AppRow label="Address" value={applicant.applicationData.personal.currentAddress} />
+                  <AppRow label="Date of birth" value={applicant.applicationData.personal.dateOfBirth} />
+                </AppSection>
+              )}
+
+              {/* Employment */}
+              {applicant.applicationData.employment && (
+                <AppSection label="Employment">
+                  <AppRow label="Employer" value={applicant.applicationData.employment.currentEmployer} />
+                  <AppRow label="Position" value={applicant.applicationData.employment.position} />
+                  <AppRow label="Annual income" value={applicant.applicationData.employment.annualIncome ? `$${Number(applicant.applicationData.employment.annualIncome).toLocaleString()}` : null} />
+                  <AppRow label="Duration" value={applicant.applicationData.employment.employmentDuration} />
+                </AppSection>
+              )}
+
+              {/* Rental history */}
+              {applicant.applicationData.rentalHistory && (
+                <AppSection label="Rental history">
+                  <AppRow label="Previous landlord" value={applicant.applicationData.rentalHistory.previousLandlordName} />
+                  <AppRow label="Landlord phone" value={applicant.applicationData.rentalHistory.previousLandlordPhone} />
+                  <AppRow label="Previous address" value={applicant.applicationData.rentalHistory.previousAddress} />
+                  <AppRow label="Duration" value={applicant.applicationData.rentalHistory.durationAtAddress} />
+                  <AppRow label="Reason for leaving" value={applicant.applicationData.rentalHistory.reasonForLeaving} />
+                </AppSection>
+              )}
+
+              {/* Additional */}
+              {applicant.applicationData.additional && (
+                <AppSection label="Additional">
+                  <AppRow label="Occupants" value={applicant.applicationData.additional.numberOfOccupants} />
+                  <AppRow label="Lease term" value={applicant.applicationData.additional.desiredLeaseTerm} />
+                  <AppRow label="Vehicles" value={applicant.applicationData.additional.vehicles} />
+                  {applicant.applicationData.additional.pets && (
+                    <AppRow
+                      label="Pets"
+                      value={[
+                        applicant.applicationData.additional.pets.type,
+                        applicant.applicationData.additional.pets.breed,
+                        applicant.applicationData.additional.pets.weight ? `${applicant.applicationData.additional.pets.weight} lbs` : null,
+                      ].filter(Boolean).join(', ')}
+                    />
+                  )}
+                </AppSection>
+              )}
+            </div>
+          )}
 
           {/* Screening */}
           <div className="grid grid-cols-2 gap-3">

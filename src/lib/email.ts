@@ -269,6 +269,47 @@ export async function sendLeaseContractEmail({
   })
 }
 
+export async function sendApplicationLink({
+  toEmail,
+  toName,
+  propertyName,
+  listingTitle,
+  applicationUrl,
+}: {
+  toEmail: string
+  toName: string
+  propertyName: string
+  listingTitle: string
+  applicationUrl: string
+}) {
+  const resend = getResend()
+  if (!resend) return
+
+  await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `Your application link for ${listingTitle} — ${propertyName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
+        <h2 style="margin:0 0 16px;font-size:18px">Hi ${toName},</h2>
+        <p style="font-size:15px;line-height:1.7;color:#333">
+          Thank you for your interest in <strong>${listingTitle}</strong> at
+          <strong>${propertyName}</strong>. Please complete the rental application
+          using the link below.
+        </p>
+        <p style="margin-top:24px">
+          <a href="${applicationUrl}" style="background:#000;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-size:14px;display:inline-block">
+            Start application →
+          </a>
+        </p>
+        <p style="color:#999;font-size:12px;margin-top:32px">
+          Sent via Backoffice AI. If you did not request this, you can ignore this email.
+        </p>
+      </div>
+    `,
+  })
+}
+
 export async function sendInquiryConfirmation({
   toEmail,
   toName,
