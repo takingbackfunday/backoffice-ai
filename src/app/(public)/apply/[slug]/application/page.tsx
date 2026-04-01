@@ -25,6 +25,7 @@ export default async function ApplicationPage({ params }: { params: Promise<{ sl
     title: listing.title,
     monthlyRent: Number(listing.monthlyRent),
     applicationFee: listing.applicationFee ? Number(listing.applicationFee) : null,
+    screeningFee: listing.screeningFee ? Number(listing.screeningFee) : null,
     publicSlug: listing.publicSlug,
     unit: {
       unitLabel: listing.unit.unitLabel,

@@ -7,6 +7,7 @@ interface SerializedListing {
   title: string
   monthlyRent: number
   applicationFee: number | null
+  screeningFee: number | null
   publicSlug: string
   unit: {
     unitLabel: string
@@ -49,6 +50,7 @@ type FormData = {
   // Step 5
   screeningConsent: boolean
   truthfulnessAttestation: boolean
+  feeAcknowledgment: boolean
 }
 
 const STEPS = [
@@ -69,7 +71,7 @@ export function ApplicationFormClient({ listing }: Props) {
     currentEmployer: '', position: '', annualIncome: '', employmentDuration: '',
     previousLandlordName: '', previousLandlordPhone: '', previousAddress: '', durationAtAddress: '', reasonForLeaving: '',
     numberOfOccupants: '', petType: '', petBreed: '', petWeight: '', vehicles: '', desiredMoveIn: '', desiredLeaseTerm: '',
-    screeningConsent: false, truthfulnessAttestation: false,
+    screeningConsent: false, truthfulnessAttestation: false, feeAcknowledgment: false,
   })
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -80,8 +82,9 @@ export function ApplicationFormClient({ listing }: Props) {
   }
 
   async function handleSubmit() {
-    if (!formData.screeningConsent || !formData.truthfulnessAttestation) {
-      setError('You must agree to both consent checkboxes to proceed.')
+    const hasFees = listing.applicationFee || listing.screeningFee
+    if (!formData.screeningConsent || !formData.truthfulnessAttestation || (hasFees && !formData.feeAcknowledgment)) {
+      setError('You must agree to all required checkboxes to proceed.')
       return
     }
     setError(null)
@@ -170,6 +173,7 @@ export function ApplicationFormClient({ listing }: Props) {
         <p className="text-sm text-muted-foreground mt-1">
           {fmtCurrency(listing.monthlyRent)}/mo
           {listing.applicationFee ? ` · ${fmtCurrency(listing.applicationFee)} application fee` : ''}
+          {listing.screeningFee ? ` · ${fmtCurrency(listing.screeningFee)} screening fee` : ''}
         </p>
       </div>
 
@@ -284,6 +288,26 @@ export function ApplicationFormClient({ listing }: Props) {
               />
               <span className="text-sm"><strong>I certify</strong> that all information provided in this application is true and accurate. I understand that false statements may be grounds for rejection or lease termination. <span className="text-destructive">*</span></span>
             </label>
+            {(listing.applicationFee || listing.screeningFee) && (
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.feeAcknowledgment}
+                  onChange={e => set('feeAcknowledgment', e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border flex-shrink-0"
+                />
+                <span className="text-sm">
+                  <strong>I understand</strong> that my application will not be processed until I have paid the{' '}
+                  {listing.applicationFee && listing.screeningFee
+                    ? <>{fmtCurrency(listing.applicationFee)} application fee and {fmtCurrency(listing.screeningFee)} screening fee.</>
+                    : listing.applicationFee
+                    ? <>{fmtCurrency(listing.applicationFee)} application fee.</>
+                    : <>{fmtCurrency(listing.screeningFee!)} screening fee.</>
+                  }{' '}
+                  <span className="text-destructive">*</span>
+                </span>
+              </label>
+            )}
           </div>
         )}
       </div>
@@ -321,7 +345,7 @@ export function ApplicationFormClient({ listing }: Props) {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || !formData.screeningConsent || !formData.truthfulnessAttestation}
+            disabled={submitting || !formData.screeningConsent || !formData.truthfulnessAttestation || (!!(listing.applicationFee || listing.screeningFee) && !formData.feeAcknowledgment)}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             {submitting ? 'Submitting…' : 'Submit application'}
