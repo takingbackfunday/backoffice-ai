@@ -24,6 +24,24 @@ type Applicant = any
 export function TenantsApplicantsClient({ projectId, tenants, units, defaultTab }: Props) {
   const [tab, setTab] = useState<'applicants' | 'tenants'>(defaultTab)
   const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null)
+  const [loadingApplicant, setLoadingApplicant] = useState(false)
+
+  async function handleSelectApplicant(applicant: Applicant) {
+    setLoadingApplicant(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}`)
+      if (res.ok) {
+        const json = await res.json()
+        setSelectedApplicant(json.data)
+      } else {
+        setSelectedApplicant(applicant)
+      }
+    } catch {
+      setSelectedApplicant(applicant)
+    } finally {
+      setLoadingApplicant(false)
+    }
+  }
 
   return (
     <>
@@ -50,7 +68,7 @@ export function TenantsApplicantsClient({ projectId, tenants, units, defaultTab 
         <ApplicantPipeline
           projectId={projectId}
           units={units}
-          onSelectApplicant={setSelectedApplicant}
+          onSelectApplicant={handleSelectApplicant}
         />
       )}
 
@@ -59,6 +77,12 @@ export function TenantsApplicantsClient({ projectId, tenants, units, defaultTab 
           projectId={projectId}
           tenants={tenants}
         />
+      )}
+
+      {loadingApplicant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+          <div className="rounded-lg bg-background border shadow-lg px-5 py-3 text-sm text-muted-foreground">Loading…</div>
+        </div>
       )}
 
       {selectedApplicant && (
