@@ -147,12 +147,6 @@ export function ListingPageClient({ listing }: Props) {
             <p className="font-semibold">{petPolicyLabel[listing.petPolicy] ?? listing.petPolicy}</p>
           </div>
         )}
-        {listing.applicationFee != null && (
-          <div>
-            <p className="text-xs text-muted-foreground">Application fee</p>
-            <p className="font-semibold">{fmtCurrency(listing.applicationFee)}</p>
-          </div>
-        )}
       </div>
 
       {/* Amenities */}
@@ -245,6 +239,21 @@ export function ListingPageClient({ listing }: Props) {
             >
               {submitting ? 'Sending…' : 'Send inquiry'}
             </button>
+
+            {(listing.applicationFee || listing.screeningFee) && (
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Submitting this form only expresses your interest — no payment is required now.
+                If selected to move forward, you will receive an invitation to complete a full
+                application.{' '}
+                {listing.applicationFee && listing.screeningFee ? (
+                  <>A {fmtCurrency(listing.applicationFee)} application fee and a {fmtCurrency(listing.screeningFee)} screening fee will apply at that time.</>
+                ) : listing.applicationFee ? (
+                  <>A {fmtCurrency(listing.applicationFee)} application fee will apply at that time.</>
+                ) : (
+                  <>A {fmtCurrency(listing.screeningFee!)} screening fee will apply at that time.</>
+                )}
+              </p>
+            )}
           </form>
         )}
       </div>
