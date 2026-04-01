@@ -11,6 +11,10 @@ const UpdateLeaseSchema = z.object({
   paymentDueDay: z.number().int().min(1).max(28).optional(),
   lateFeeAmount: z.number().optional(),
   lateFeeGraceDays: z.number().int().optional(),
+  currency: z.string().length(3).optional(),
+  contractNotes: z.string().optional(),
+  contractStatus: z.enum(['NONE', 'DRAFTING', 'READY', 'SENT', 'SIGNED', 'COUNTERSIGNED']).optional(),
+  contractSignedAt: z.string().optional(),
 })
 
 interface RouteParams { params: Promise<{ id: string; leaseId: string }> }
@@ -39,11 +43,13 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
+    const { contractSignedAt, ...restData } = parsed.data
     const lease = await prisma.lease.update({
       where: { id: leaseId },
       data: {
-        ...parsed.data,
-        endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
+        ...restData,
+        endDate: restData.endDate ? new Date(restData.endDate) : undefined,
+        contractSignedAt: contractSignedAt ? new Date(contractSignedAt) : undefined,
       },
       include: { unit: true, tenant: true },
     })

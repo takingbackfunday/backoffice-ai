@@ -14,6 +14,8 @@ const CreateLeaseSchema = z.object({
   paymentDueDay: z.number().int().min(1).max(28).optional(),
   lateFeeAmount: z.number().optional(),
   lateFeeGraceDays: z.number().int().optional(),
+  currency: z.string().length(3).optional(),
+  contractNotes: z.string().optional(),
 })
 
 interface RouteParams { params: Promise<{ id: string }> }
@@ -88,6 +90,8 @@ export async function POST(request: Request, { params }: RouteParams) {
         paymentDueDay: parsed.data.paymentDueDay ?? 1,
         lateFeeAmount: parsed.data.lateFeeAmount,
         lateFeeGraceDays: parsed.data.lateFeeGraceDays ?? 5,
+        currency: parsed.data.currency ?? 'USD',
+        contractNotes: parsed.data.contractNotes,
       },
       include: { unit: true, tenant: true },
     })

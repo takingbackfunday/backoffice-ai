@@ -35,6 +35,8 @@ export function LeaseForm({ projectId, units, tenants: initialTenants, preselect
   const [paymentDueDay, setPaymentDueDay] = useState('1')
   const [lateFeeAmount, setLateFeeAmount] = useState('')
   const [lateFeeGraceDays, setLateFeeGraceDays] = useState('5')
+  const [currency, setCurrency] = useState('USD')
+  const [contractNotes, setContractNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -89,6 +91,8 @@ export function LeaseForm({ projectId, units, tenants: initialTenants, preselect
           paymentDueDay: parseInt(paymentDueDay),
           lateFeeAmount: lateFeeAmount ? parseFloat(lateFeeAmount) : undefined,
           lateFeeGraceDays: parseInt(lateFeeGraceDays),
+          currency,
+          contractNotes: contractNotes || undefined,
         }),
       })
       const json = await res.json()
@@ -250,6 +254,32 @@ export function LeaseForm({ projectId, units, tenants: initialTenants, preselect
           <label className="block text-sm font-medium mb-1">Grace days</label>
           <input type="number" value={lateFeeGraceDays} onChange={e => setLateFeeGraceDays(e.target.value)} className={inputCls} min="0" />
         </div>
+      </div>
+
+      {/* Currency */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Currency</label>
+        <select value={currency} onChange={e => setCurrency(e.target.value)} className={inputCls}>
+          <option value="USD">USD — US Dollar</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="GBP">GBP — British Pound</option>
+          <option value="CAD">CAD — Canadian Dollar</option>
+          <option value="AUD">AUD — Australian Dollar</option>
+          <option value="SGD">SGD — Singapore Dollar</option>
+          <option value="AED">AED — UAE Dirham</option>
+        </select>
+      </div>
+
+      {/* Contract notes */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Contract notes / additional terms</label>
+        <textarea
+          value={contractNotes}
+          onChange={e => setContractNotes(e.target.value)}
+          rows={3}
+          className={inputCls + ' resize-none'}
+          placeholder="Any special clauses, pet policy, parking terms…"
+        />
       </div>
 
       <div className="flex items-center gap-3 pt-2">

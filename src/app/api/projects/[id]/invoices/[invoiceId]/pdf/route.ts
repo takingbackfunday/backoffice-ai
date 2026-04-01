@@ -13,9 +13,18 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const { id, invoiceId } = await params
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, clientProfile: { project: { id, userId } } },
+      where: {
+        id: invoiceId,
+        OR: [
+          { clientProfile: { project: { id, userId } } },
+          { lease: { unit: { propertyProfile: { project: { id, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id, userId } } } } } } },
+        ],
+      },
       include: {
         clientProfile: { include: { project: { select: { name: true } } } },
+        tenant: { select: { name: true, email: true } },
+        lease: { include: { tenant: { select: { name: true, email: true } } } },
         lineItems: true,
       },
     })
@@ -26,8 +35,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const paymentMethods = (prefsData.paymentMethods ?? {}) as PaymentMethods
     const invoicePaymentNote = prefsData.invoicePaymentNote as string | undefined
     const cp = invoice.clientProfile
+    const leaseTenant = invoice.lease?.tenant
+    const directTenant = invoice.tenant
     const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.project.name || 'Invoice'
-    const clientName = cp?.contactName ?? cp?.project.name ?? invoice.invoiceNumber
+    const clientName = cp?.contactName ?? cp?.project.name ?? leaseTenant?.name ?? directTenant?.name ?? invoice.invoiceNumber
+    const clientEmail = cp?.email ?? leaseTenant?.email ?? directTenant?.email
 
     const pdfBuffer = await generateInvoicePdf({
       invoiceNumber: invoice.invoiceNumber,
@@ -37,7 +49,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       currency: invoice.currency,
       notes: invoice.notes,
       clientName,
-      clientEmail: cp?.email ?? undefined,
+      clientEmail: clientEmail ?? undefined,
       fromName,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,

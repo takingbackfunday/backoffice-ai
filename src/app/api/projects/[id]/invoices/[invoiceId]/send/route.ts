@@ -16,10 +16,20 @@ export async function POST(request: Request, { params }: RouteParams) {
     const body = await request.json().catch(() => ({}))
     const message: string | undefined = body.message
 
+    // Look up invoice — could be CLIENT (via clientProfile) or PROPERTY (via lease/tenant)
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, clientProfile: { project: { id, userId } } },
+      where: {
+        id: invoiceId,
+        OR: [
+          { clientProfile: { project: { id, userId } } },
+          { lease: { unit: { propertyProfile: { project: { id, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id, userId } } } } } } },
+        ],
+      },
       include: {
         clientProfile: { include: { project: { select: { name: true, slug: true } } } },
+        tenant: { select: { id: true, name: true, email: true } },
+        lease: { include: { unit: true, tenant: { select: { name: true, email: true } } } },
         lineItems: true,
         payments: true,
       },
@@ -29,9 +39,14 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (invoice.status === 'VOID') return badRequest('Cannot send a voided invoice')
     if (invoice.status === 'PAID') return badRequest('Invoice is already paid')
 
+    // Determine recipient: CLIENT → clientProfile, PROPERTY → tenant on lease or direct tenant
     const cp = invoice.clientProfile
-    const email = cp?.email
-    if (!email) return badRequest('Client has no email address on file')
+    const leaseTenant = invoice.lease?.tenant
+    const directTenant = invoice.tenant
+    const email = cp?.email ?? leaseTenant?.email ?? directTenant?.email
+    if (!email) return badRequest('No email address found for this invoice recipient')
+
+    const recipientName = cp?.contactName ?? cp?.project.name ?? leaseTenant?.name ?? directTenant?.name ?? 'Tenant'
 
     // Load user payment methods + business profile
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
@@ -41,7 +56,6 @@ export async function POST(request: Request, { params }: RouteParams) {
     const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.project.name || 'Invoice'
 
     const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-    const clientName = cp?.contactName ?? cp?.project.name ?? invoice.invoiceNumber
 
     // Generate PDF
     const pdfBuffer = await generateInvoicePdf({
@@ -51,7 +65,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       dueDate: invoice.dueDate.toISOString(),
       currency: invoice.currency,
       notes: invoice.notes,
-      clientName,
+      clientName: recipientName,
       clientEmail: email,
       fromName,
       lineItems: invoice.lineItems.map(i => ({
@@ -64,7 +78,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     await sendInvoiceEmail({
       toEmail: email,
-      toName: clientName,
+      toName: recipientName,
       fromName,
       invoiceNumber: invoice.invoiceNumber,
       invoiceId: invoice.id,

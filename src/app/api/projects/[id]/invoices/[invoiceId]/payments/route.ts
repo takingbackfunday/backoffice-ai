@@ -20,11 +20,17 @@ export async function POST(request: Request, { params }: RouteParams) {
     const { id, invoiceId } = await params
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, clientProfile: { project: { id, userId } } },
+      where: {
+        id: invoiceId,
+        OR: [
+          { clientProfile: { project: { id, userId } } },
+          { lease: { unit: { propertyProfile: { project: { id, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id, userId } } } } } } },
+        ],
+      },
       include: {
         lineItems: true,
         payments: true,
-        clientProfile: { include: { project: { select: { id: true } } } },
       },
     })
     if (!invoice) return notFound('Invoice not found')

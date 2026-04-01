@@ -94,9 +94,19 @@ export default async function PortfolioPage() {
     return charged - paid > 0
   }).length
 
+  const propertyProfileIds = properties.flatMap(p => p.propertyProfile ? [p.propertyProfile.id] : [])
+  const activeApplicants = propertyProfileIds.length > 0
+    ? await prisma.applicant.count({
+        where: {
+          propertyProfileId: { in: propertyProfileIds },
+          status: { notIn: ['REJECTED', 'WITHDRAWN', 'LEASE_SIGNED'] },
+        },
+      })
+    : 0
+
   const kpis = {
     totalUnits, leasedUnits, vacantUnits, openMaintenance,
-    monthlyRevenue, expiringLeases, unreadMessages, overduePayments,
+    monthlyRevenue, expiringLeases, unreadMessages, overduePayments, activeApplicants,
   }
 
   const serialized = properties.map(p => ({

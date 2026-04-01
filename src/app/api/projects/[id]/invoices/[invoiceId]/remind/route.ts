@@ -17,9 +17,18 @@ export async function POST(request: Request, { params }: RouteParams) {
     const message: string | undefined = body.message
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, clientProfile: { project: { id, userId } } },
+      where: {
+        id: invoiceId,
+        OR: [
+          { clientProfile: { project: { id, userId } } },
+          { lease: { unit: { propertyProfile: { project: { id, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id, userId } } } } } } },
+        ],
+      },
       include: {
         clientProfile: { include: { project: { select: { name: true, slug: true } } } },
+        tenant: { select: { id: true, name: true, email: true } },
+        lease: { include: { unit: true, tenant: { select: { name: true, email: true } } } },
         lineItems: true,
         payments: true,
       },
@@ -31,8 +40,12 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (invoice.status === 'DRAFT') return badRequest('Send the invoice before sending a reminder')
 
     const cp = invoice.clientProfile
-    const email = cp?.email
-    if (!email) return badRequest('Client has no email address on file')
+    const leaseTenant = invoice.lease?.tenant
+    const directTenant = invoice.tenant
+    const email = cp?.email ?? leaseTenant?.email ?? directTenant?.email
+    if (!email) return badRequest('No email address found for this invoice recipient')
+
+    const recipientName = cp?.contactName ?? cp?.project.name ?? leaseTenant?.name ?? directTenant?.name ?? 'Tenant'
 
     // Load user payment methods + business profile
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
@@ -45,9 +58,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
     const balance = total - totalPaid
     const isOverdue = new Date(invoice.dueDate) < new Date()
-    const clientName = cp?.contactName ?? cp?.project.name ?? invoice.invoiceNumber
 
-    // Attach a fresh PDF with the reminder
     const pdfBuffer = await generateInvoicePdf({
       invoiceNumber: invoice.invoiceNumber,
       status: invoice.status,
@@ -55,7 +66,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       dueDate: invoice.dueDate.toISOString(),
       currency: invoice.currency,
       notes: invoice.notes,
-      clientName,
+      clientName: recipientName,
       clientEmail: email,
       fromName,
       lineItems: invoice.lineItems.map(i => ({
@@ -68,7 +79,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     await sendReminderEmail({
       toEmail: email,
-      toName: clientName,
+      toName: recipientName,
       fromName,
       invoiceNumber: invoice.invoiceNumber,
       invoiceId: invoice.id,

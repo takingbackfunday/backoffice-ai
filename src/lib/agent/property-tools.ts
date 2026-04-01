@@ -224,6 +224,39 @@ export const PROPERTY_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'list_applicants',
+      description: 'List applicants in the pipeline for a property, optionally filtered by status.',
+      parameters: {
+        type: 'object',
+        properties: {
+          propertyName: { type: 'string', description: 'Property name (partial match, optional = all)' },
+          status: {
+            type: 'string',
+            enum: ['INQUIRY', 'APPLICATION_SENT', 'APPLIED', 'SCREENING', 'APPROVED', 'LEASE_OFFERED', 'LEASE_SIGNED', 'REJECTED', 'WITHDRAWN'],
+            description: 'Filter by applicant status (optional)',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_applicant_pipeline_summary',
+      description: 'Get a count breakdown of applicants by status for a property or all properties.',
+      parameters: {
+        type: 'object',
+        properties: {
+          propertyName: { type: 'string', description: 'Property name (partial match, optional = all)' },
+        },
+        required: [],
+      },
+    },
+  },
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -599,6 +632,47 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       return messages.map(m =>
         `${m.createdAt.toISOString().slice(0, 10)} | ${m.senderRole === 'tenant' ? `Tenant: ${m.tenant.name}` : 'Owner'} → ${m.senderRole === 'tenant' ? 'Owner' : `Tenant: ${m.tenant.name}`} | Subject: ${m.subject ?? '(none)'} | ${m.isRead ? 'read' : 'UNREAD'}\n  ${m.body.slice(0, 300)}`
       ).join('\n\n')
+    }
+
+    case 'list_applicants': {
+      const applicants = await prisma.applicant.findMany({
+        where: {
+          propertyProfile: a.propertyName
+            ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
+            : { project: { userId, type: 'PROPERTY' as const, isActive: true } },
+          ...(a.status ? { status: String(a.status) as never } : {}),
+        },
+        include: {
+          propertyProfile: { include: { project: { select: { name: true } } } },
+          unit: { select: { unitLabel: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      })
+      if (!applicants.length) return 'No applicants found.'
+      return applicants.map(ap =>
+        `${ap.propertyProfile.project.name} | ${ap.name} | ${ap.email}${ap.unit ? ` | Unit: ${ap.unit.unitLabel}` : ''} | Status: ${ap.status} | Added: ${ap.createdAt.toISOString().slice(0, 10)}`
+      ).join('\n')
+    }
+
+    case 'get_applicant_pipeline_summary': {
+      const applicants = await prisma.applicant.findMany({
+        where: {
+          propertyProfile: a.propertyName
+            ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
+            : { project: { userId, type: 'PROPERTY' as const, isActive: true } },
+        },
+        select: { status: true },
+      })
+      if (!applicants.length) return 'No applicants found.'
+      const counts: Record<string, number> = {}
+      for (const ap of applicants) {
+        counts[ap.status] = (counts[ap.status] ?? 0) + 1
+      }
+      const active = ['INQUIRY', 'APPLICATION_SENT', 'APPLIED', 'SCREENING', 'APPROVED', 'LEASE_OFFERED', 'LEASE_SIGNED']
+      const activeTotal = active.reduce((s, st) => s + (counts[st] ?? 0), 0)
+      const lines = Object.entries(counts).map(([st, n]) => `${st}: ${n}`)
+      return `Total applicants: ${applicants.length} (${activeTotal} active)\n${lines.join('\n')}`
     }
 
     default:

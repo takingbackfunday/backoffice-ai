@@ -66,7 +66,7 @@ interface Property {
 interface Kpis {
   totalUnits: number; leasedUnits: number; vacantUnits: number;
   openMaintenance: number; monthlyRevenue: number; expiringLeases: number;
-  unreadMessages: number; overduePayments: number
+  unreadMessages: number; overduePayments: number; activeApplicants: number
 }
 
 /* Flat row for the table */
@@ -380,7 +380,7 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
       {/*  KPI BAR                                                       */}
       {/* ============================================================= */}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-3">
         <KpiCard label="Units" value={kpis.totalUnits} />
         <KpiCard label="Occupancy" value={`${occupancyPct}%`} sub={<OccupancyRing pct={occupancyPct} />} />
         <KpiCard label="Leased" value={kpis.leasedUnits} accent="green"
@@ -392,6 +392,7 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
           active={statusFilter === 'VACANT'}
         />
         <KpiCard label="Revenue/mo" value={fmt(kpis.monthlyRevenue)} />
+        <KpiCard label="Applicants" value={kpis.activeApplicants} accent={kpis.activeApplicants > 0 ? 'blue' : undefined} />
         <KpiCard
           label="Expiring ≤90d"
           value={kpis.expiringLeases}
@@ -701,10 +702,10 @@ function ColHeader({ label, col, sortCol, sortDir, onSort, className, icon }: {
 /* ==================================================================== */
 
 function KpiCard({ label, value, accent, sub, onClick, active }: {
-  label: string; value: string | number; accent?: 'green' | 'amber' | 'red'
+  label: string; value: string | number; accent?: 'green' | 'amber' | 'red' | 'blue'
   sub?: React.ReactNode; onClick?: () => void; active?: boolean
 }) {
-  const accentClasses = { green: 'border-green-200 bg-green-50/50', amber: 'border-amber-200 bg-amber-50/50', red: 'border-red-200 bg-red-50/50' }
+  const accentClasses = { green: 'border-green-200 bg-green-50/50', amber: 'border-amber-200 bg-amber-50/50', red: 'border-red-200 bg-red-50/50', blue: 'border-blue-200 bg-blue-50/50' }
   const Comp = onClick ? 'button' : 'div'
 
   return (

@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { TenantList } from '@/components/projects/tenant-list'
+import { TenantsApplicantsClient } from '@/components/projects/tenants-applicants-client'
 
 interface PageParams { params: Promise<{ slug: string }> }
 
@@ -18,7 +19,18 @@ export default async function ProjectTenantsPage({ params }: PageParams) {
   const project = await prisma.project.findFirst({
     where: { userId, slug, type: 'PROPERTY' },
     include: {
-      propertyProfile: { include: { units: { select: { id: true } } } },
+      propertyProfile: {
+        include: {
+          units: { select: { id: true, unitLabel: true } },
+          _count: {
+            select: {
+              applicants: {
+                where: { status: { notIn: ['REJECTED', 'WITHDRAWN', 'LEASE_SIGNED'] } },
+              },
+            },
+          },
+        },
+      },
     },
   })
 
@@ -41,6 +53,9 @@ export default async function ProjectTenantsPage({ params }: PageParams) {
     orderBy: { name: 'asc' },
   })
 
+  const activeApplicantsCount = project.propertyProfile._count.applicants
+  const units = project.propertyProfile.units
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -55,9 +70,11 @@ export default async function ProjectTenantsPage({ params }: PageParams) {
             description={project.description}
           />
           <ProjectSubNav slug={slug} type={project.type} />
-          <TenantList
+          <TenantsApplicantsClient
             projectId={project.id}
             tenants={JSON.parse(JSON.stringify(tenants))}
+            units={units}
+            defaultTab={activeApplicantsCount > 0 ? 'applicants' : 'tenants'}
           />
         </main>
       </div>

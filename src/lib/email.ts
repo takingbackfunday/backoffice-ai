@@ -208,6 +208,52 @@ export async function sendReminderEmail({
   })
 }
 
+export async function sendLeaseContractEmail({
+  toEmail, toName, fromName, propertyName, unitLabel, startDate, endDate, pdfBuffer,
+}: {
+  toEmail: string
+  toName: string
+  fromName: string
+  propertyName: string
+  unitLabel: string
+  startDate: string
+  endDate: string
+  pdfBuffer: Buffer
+}) {
+  const resend = getResend()
+  if (!resend) return
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+
+  await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `Lease agreement for ${unitLabel} — ${propertyName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111;padding:0 0 40px">
+        <div style="border-bottom:2px solid #111;padding-bottom:16px;margin-bottom:24px">
+          <p style="color:#666;font-size:13px;margin:0 0 6px">Lease agreement from ${fromName}</p>
+          <h2 style="margin:0;font-size:22px">${propertyName} — ${unitLabel}</h2>
+        </div>
+        <p style="font-size:15px;line-height:1.7;color:#333">Dear ${toName},</p>
+        <p style="font-size:15px;line-height:1.7;color:#333">
+          Please find your lease agreement attached as a PDF. This lease covers the period
+          <strong>${fmtDate(startDate)}</strong> to <strong>${fmtDate(endDate)}</strong>.
+        </p>
+        <p style="font-size:15px;line-height:1.7;color:#333">
+          Please review the document carefully, sign it, and return a copy to your landlord.
+        </p>
+        <p style="color:#999;font-size:11px;margin-top:32px">Sent via Backoffice AI.</p>
+      </div>
+    `,
+    attachments: [{
+      filename: `lease-${unitLabel.replace(/\s+/g, '-')}.pdf`,
+      content: pdfBuffer.toString('base64'),
+    }],
+  })
+}
+
 export async function sendOwnerMessageNotification({
   toEmail,
   toName,
