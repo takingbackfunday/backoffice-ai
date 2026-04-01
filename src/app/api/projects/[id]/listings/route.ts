@@ -91,6 +91,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         },
         include: {
           unit: { select: { id: true, unitLabel: true, status: true } },
+          _count: { select: { applicants: true } },
         },
       })
 
