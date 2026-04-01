@@ -222,7 +222,7 @@ export async function sendReminderEmail({
 }
 
 export async function sendLeaseContractEmail({
-  toEmail, toName, fromName, propertyName, unitLabel, startDate, endDate, pdfBuffer,
+  toEmail, toName, fromName, propertyName, unitLabel, startDate, endDate, pdfBuffer, signingLink,
 }: {
   toEmail: string
   toName: string
@@ -232,6 +232,7 @@ export async function sendLeaseContractEmail({
   startDate: string
   endDate: string
   pdfBuffer: Buffer
+  signingLink?: string
 }) {
   const resend = getResend()
   if (!resend) return
@@ -255,8 +256,9 @@ export async function sendLeaseContractEmail({
           <strong>${fmtDate(startDate)}</strong> to <strong>${fmtDate(endDate)}</strong>.
         </p>
         <p style="font-size:15px;line-height:1.7;color:#333">
-          Please review the document carefully, sign it, and return a copy to your landlord.
+          Please review the document carefully${signingLink ? ' and sign it online using the button below' : ', sign it, and return a copy to your landlord'}.
         </p>
+        ${signingLink ? `<a href="${signingLink}" style="background:#000;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-size:14px;display:inline-block;margin-top:16px">Review &amp; Sign Lease</a>` : ''}
         <p style="color:#999;font-size:11px;margin-top:32px">Sent via Backoffice AI.</p>
       </div>
     `,
@@ -344,6 +346,56 @@ export async function sendInquiryNotificationToOwner({
           <a href="${pipelineUrl}" style="background:#000;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:14px">
             View in pipeline
           </a>
+        </p>
+      </div>
+    `,
+  })
+}
+
+export async function sendWelcomeEmail({
+  toEmail,
+  toName,
+  propertyName,
+  unitLabel,
+  ownerName,
+  portalUrl,
+  moveInDate,
+}: {
+  toEmail: string
+  toName: string
+  propertyName: string
+  unitLabel: string
+  ownerName: string
+  portalUrl: string
+  moveInDate: string
+}) {
+  const resend = getResend()
+  if (!resend) return
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+
+  await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `Welcome to ${unitLabel} — ${propertyName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
+        <h2 style="margin:0 0 16px;font-size:18px">Welcome, ${toName}!</h2>
+        <p style="font-size:15px;line-height:1.7;color:#333">
+          Your keys have been handed over and your tenancy at <strong>${unitLabel}</strong>,
+          <strong>${propertyName}</strong> has officially started on <strong>${fmtDate(moveInDate)}</strong>.
+        </p>
+        <p style="font-size:15px;line-height:1.7;color:#333">
+          You can access your tenant portal to pay rent, submit maintenance requests, and message ${ownerName}.
+        </p>
+        <p style="margin-top:24px">
+          <a href="${portalUrl}" style="background:#000;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:14px">
+            Open tenant portal
+          </a>
+        </p>
+        <p style="color:#999;font-size:12px;margin-top:32px">
+          Sent via Backoffice AI on behalf of ${ownerName}.
         </p>
       </div>
     `,

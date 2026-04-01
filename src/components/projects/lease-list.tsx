@@ -13,6 +13,8 @@ interface Lease {
   id: string; status: string; startDate: string; endDate: string;
   monthlyRent: number; securityDeposit: number | null;
   contractStatus: string;
+  tenantSignedAt: string | null;
+  ownerSignedAt: string | null;
   unit: { id: string; unitLabel: string };
   tenant: { id: string; name: string; email: string };
   _count: { tenantCharges: number; tenantPayments: number }
@@ -48,6 +50,9 @@ export function LeaseList({ projectId, leases: initial, units, tenants }: Props)
   const [showForm, setShowForm] = useState(false)
   const [contractAction, setContractAction] = useState<string | null>(null)
   const [contractError, setContractError] = useState<Record<string, string>>({})
+  const [countersignModal, setCountersignModal] = useState<string | null>(null)
+  const [countersignName, setCountersignName] = useState('')
+  const [countersignError, setCountersignError] = useState<string | null>(null)
 
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -92,6 +97,32 @@ export function LeaseList({ projectId, leases: initial, units, tenants }: Props)
         return
       }
       updateLeaseContract(leaseId, json.data.contractStatus)
+    } finally {
+      setContractAction(null)
+    }
+  }
+
+  async function handleCountersign(leaseId: string) {
+    if (!countersignName.trim()) {
+      setCountersignError('Please type your name.')
+      return
+    }
+    setContractAction(leaseId + ':countersign')
+    setCountersignError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/leases/${leaseId}/countersign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signatureName: countersignName.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) {
+        setCountersignError(json.error ?? 'Failed to countersign')
+        return
+      }
+      setLeases(prev => prev.map(l => l.id === leaseId ? { ...l, contractStatus: 'COUNTERSIGNED', ownerSignedAt: new Date().toISOString(), status: 'ACTIVE' } : l))
+      setCountersignModal(null)
+      setCountersignName('')
     } finally {
       setContractAction(null)
     }
@@ -244,6 +275,19 @@ export function LeaseList({ projectId, leases: initial, units, tenants }: Props)
                             Signed
                           </button>
                         )}
+
+                        {/* Countersign */}
+                        {cs === 'SIGNED' && (
+                          <button
+                            type="button"
+                            onClick={() => { setCountersignModal(lease.id); setCountersignError(null); setCountersignName('') }}
+                            disabled={!!busy}
+                            className="flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                            Countersign
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -251,6 +295,45 @@ export function LeaseList({ projectId, leases: initial, units, tenants }: Props)
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Countersign modal */}
+      {countersignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-background border shadow-lg p-6 space-y-4">
+            <h3 className="text-sm font-semibold">Countersign lease</h3>
+            <p className="text-xs text-muted-foreground">The tenant has signed. Type your name below to countersign and activate the lease.</p>
+            <div>
+              <label className="block text-xs font-medium mb-1">Your signature (type your name) <span className="text-destructive">*</span></label>
+              <input
+                type="text"
+                value={countersignName}
+                onChange={e => setCountersignName(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Your full name"
+                style={{ fontFamily: "'Brush Script MT', cursive" }}
+              />
+            </div>
+            {countersignError && <p className="text-sm text-destructive">{countersignError}</p>}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => { setCountersignModal(null); setCountersignName('') }}
+                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCountersign(countersignModal)}
+                disabled={!countersignName.trim() || !!contractAction}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {contractAction?.endsWith(':countersign') ? 'Signing…' : 'Countersign'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

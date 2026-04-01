@@ -20,5 +20,8 @@
 [functions."api/bank-agent/sync"]
   timeout = 120
 
+[functions."api/rent/generate"]
+  timeout = 60
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
