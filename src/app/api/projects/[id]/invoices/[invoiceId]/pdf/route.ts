@@ -23,9 +23,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
       },
       include: {
         clientProfile: { include: { project: { select: { name: true } } } },
-        tenant: { select: { name: true, email: true } },
-        lease: { include: { tenant: { select: { name: true, email: true } } } },
+        tenant: { select: { name: true, email: true, phone: true } },
+        lease: { include: { tenant: { select: { name: true, email: true, phone: true } } } },
         lineItems: true,
+        payments: { orderBy: { paidDate: 'asc' } },
       },
     })
     if (!invoice) return notFound('Invoice not found')
@@ -40,6 +41,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.project.name || 'Invoice'
     const clientName = cp?.contactName ?? cp?.project.name ?? leaseTenant?.name ?? directTenant?.name ?? invoice.invoiceNumber
     const clientEmail = cp?.email ?? leaseTenant?.email ?? directTenant?.email
+    const clientPhone = cp?.phone ?? leaseTenant?.phone ?? directTenant?.phone
+    const clientAddress = cp?.address ?? null
+
+    const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
 
     const pdfBuffer = await generateInvoicePdf({
       invoiceNumber: invoice.invoiceNumber,
@@ -50,12 +55,20 @@ export async function GET(_request: Request, { params }: RouteParams) {
       notes: invoice.notes,
       clientName,
       clientEmail: clientEmail ?? undefined,
+      clientPhone: clientPhone ?? undefined,
+      clientAddress: clientAddress ?? undefined,
       fromName,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: Number(i.quantity),
         unitPrice: Number(i.unitPrice),
         isTaxLine: i.isTaxLine,
+      })),
+      totalPaid,
+      payments: invoice.payments.map(p => ({
+        amount: Number(p.amount),
+        paidDate: p.paidDate.toISOString(),
+        paymentMethod: p.paymentMethod,
       })),
     }, paymentMethods, invoicePaymentNote)
 
