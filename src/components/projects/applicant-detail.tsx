@@ -165,6 +165,13 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
             <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>
           )}
 
+          {/* DEBUG — remove after testing */}
+          <pre className="text-[10px] bg-muted rounded p-2 overflow-auto max-h-40">
+            applicationData: {JSON.stringify(applicant.applicationData, null, 2) ?? 'null'}{'\n'}
+            listing: {JSON.stringify(applicant.listing) ?? 'null'}{'\n'}
+            status: {applicant.status}
+          </pre>
+
           {/* Status */}
           <div>
             <label className="block text-xs font-medium mb-1.5">Status</label>
