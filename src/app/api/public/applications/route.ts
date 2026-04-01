@@ -82,6 +82,53 @@ export async function POST(request: Request) {
       })
     }
 
+    // Auto-create application fee invoice if listing has fees and no invoice exists yet
+    const hasFees = (listing.applicationFee && Number(listing.applicationFee) > 0) ||
+                    (listing.screeningFee && Number(listing.screeningFee) > 0)
+
+    if (hasFees) {
+      const existingInvoice = await prisma.invoice.findFirst({
+        where: { applicantId: applicant.id },
+      })
+
+      if (!existingInvoice) {
+        const invoiceNumber = `APP-${Date.now().toString(36).toUpperCase()}`
+        const dueDate = new Date()
+        dueDate.setDate(dueDate.getDate() + 7)
+
+        const lineItems = []
+        if (listing.applicationFee && Number(listing.applicationFee) > 0) {
+          lineItems.push({
+            description: 'Application Fee',
+            quantity: 1,
+            unitPrice: Number(listing.applicationFee),
+            chargeType: 'OTHER',
+          })
+        }
+        if (listing.screeningFee && Number(listing.screeningFee) > 0) {
+          lineItems.push({
+            description: 'Screening Fee',
+            quantity: 1,
+            unitPrice: Number(listing.screeningFee),
+            chargeType: 'OTHER',
+          })
+        }
+
+        await prisma.invoice.create({
+          data: {
+            applicantId: applicant.id,
+            invoiceNumber,
+            status: 'DRAFT',
+            issueDate: new Date(),
+            dueDate,
+            currency: 'USD',
+            notes: `Application fees for ${listing.title}`,
+            lineItems: { create: lineItems },
+          },
+        })
+      }
+    }
+
     return ok({ id: applicant.id, status: applicant.status })
   } catch {
     return serverError('Failed to submit application')

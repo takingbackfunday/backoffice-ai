@@ -46,6 +46,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
         documents: { orderBy: { createdAt: 'desc' } },
         convertedToTenant: { select: { id: true, name: true, email: true } },
         listing: { select: { id: true, publicSlug: true, title: true } },
+        invoices: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { lineItems: true },
+        },
       },
     })
     if (!applicant) return notFound('Applicant not found')

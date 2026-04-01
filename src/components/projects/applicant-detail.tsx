@@ -50,6 +50,14 @@ interface Applicant {
   unit: { id: string; unitLabel: string } | null
   listing: { id: string; publicSlug: string; title: string } | null
   convertedToTenant: { id: string; name: string } | null
+  invoices?: Array<{
+    id: string
+    invoiceNumber: string
+    status: string
+    dueDate: string
+    sentAt: string | null
+    lineItems: Array<{ description: string; quantity: number; unitPrice: number }>
+  }>
 }
 
 interface UnitOption { id: string; unitLabel: string }
@@ -87,6 +95,9 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
   const [converting, setConverting] = useState(false)
   const [sendingApp, setSendingApp] = useState(false)
   const [sendAppSuccess, setSendAppSuccess] = useState(false)
+  const [sendingInvoice, setSendingInvoice] = useState(false)
+  const [invoiceSent, setInvoiceSent] = useState(false)
+  const [feeInvoice, setFeeInvoice] = useState(initial.invoices?.[0] ?? null)
   const [error, setError] = useState<string | null>(null)
   const [notes, setNotes] = useState(initial.notes ?? '')
   const [rejectedReason, setRejectedReason] = useState(initial.rejectedReason ?? '')
@@ -139,6 +150,20 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
       }
     } finally {
       setSendingApp(false)
+    }
+  }
+
+  async function handleSendInvoice() {
+    setSendingInvoice(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}/send-invoice`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || json.error) { setError(json.error ?? 'Failed to send invoice'); return }
+      setInvoiceSent(true)
+      setFeeInvoice(json.data)
+    } finally {
+      setSendingInvoice(false)
     }
   }
 
@@ -207,6 +232,55 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
               )}
             </div>
           )}
+
+          {/* Application fee invoice */}
+          {feeInvoice && (() => {
+            const total = feeInvoice.lineItems.reduce((s, li) => s + Number(li.unitPrice) * Number(li.quantity), 0)
+            const isPaid = feeInvoice.status === 'PAID'
+            const isSent = feeInvoice.status === 'SENT' || feeInvoice.sentAt
+            return (
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">Application Invoice</p>
+                  <span className={cn('text-[10px] rounded-full px-2 py-0.5 font-medium',
+                    isPaid ? 'bg-emerald-100 text-emerald-700' :
+                    isSent ? 'bg-blue-100 text-blue-700' :
+                    'bg-muted text-muted-foreground'
+                  )}>
+                    {isPaid ? 'Paid' : isSent ? 'Sent' : 'Draft'}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {feeInvoice.lineItems.map((li, i) => (
+                    <div key={i} className="flex justify-between text-xs text-muted-foreground">
+                      <span>{li.description}</span>
+                      <span>${Number(li.unitPrice).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-xs font-semibold border-t pt-1 mt-1">
+                    <span>Total</span>
+                    <span>${total.toLocaleString()}</span>
+                  </div>
+                </div>
+                {!isPaid && (
+                  invoiceSent || isSent ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      Sent to {applicant.email}{feeInvoice.sentAt ? ` on ${new Date(feeInvoice.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleSendInvoice}
+                      disabled={sendingInvoice}
+                      className="w-full rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                    >
+                      {sendingInvoice ? 'Sending…' : 'Send Invoice'}
+                    </button>
+                  )
+                )}
+              </div>
+            )
+          })()}
 
           {/* Unit */}
           <div>
