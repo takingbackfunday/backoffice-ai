@@ -43,14 +43,20 @@ export default async function ProjectListingsPage({ params }: PageParams) {
   })
 
   const serializedListings = listings.map(l => ({
-    ...l,
+    id: l.id,
+    title: l.title,
+    description: l.description,
     monthlyRent: Number(l.monthlyRent),
     applicationFee: l.applicationFee ? Number(l.applicationFee) : null,
     screeningFee: l.screeningFee ? Number(l.screeningFee) : null,
     availableDate: l.availableDate ? l.availableDate.toISOString() : null,
+    petPolicy: l.petPolicy,
     photos: l.photos as string[],
-    createdAt: l.createdAt.toISOString(),
-    updatedAt: l.updatedAt.toISOString(),
+    amenities: l.amenities,
+    isActive: l.isActive,
+    publicSlug: l.publicSlug,
+    unit: { id: l.unit.id, unitLabel: l.unit.unitLabel, status: l.unit.status },
+    _count: { applicants: l._count.applicants },
   }))
 
   return (
