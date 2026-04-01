@@ -1,7 +1,9 @@
-import { auth, clerkClient } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
 import { sendInvoiceEmail } from '@/lib/email'
+import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
+import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 interface RouteParams { params: Promise<{ id: string; applicantId: string }> }
 
@@ -24,23 +26,45 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
     const invoice = await prisma.invoice.findFirst({
       where: { applicantId },
-      include: { lineItems: true },
+      include: { lineItems: true, payments: { orderBy: { paidDate: 'asc' } } },
       orderBy: { createdAt: 'desc' },
     })
     if (!invoice) return badRequest('No invoice found for this applicant')
 
-    const total = invoice.lineItems.reduce(
-      (sum, li) => sum + Number(li.unitPrice) * Number(li.quantity),
-      0
-    )
+    // Load user payment methods + business name from preferences (same as client invoice send)
+    const prefs = await prisma.userPreference.findUnique({ where: { userId } })
+    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
+    const paymentMethods = (prefsData.paymentMethods ?? {}) as PaymentMethods
+    const invoicePaymentNote = prefsData.invoicePaymentNote as string | undefined
+    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || project.name
 
-    // Get owner name for the email
-    let fromName = project.name
-    try {
-      const clerk = await clerkClient()
-      const user = await clerk.users.getUser(userId)
-      fromName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || project.name
-    } catch { /* fall back to project name */ }
+    const total = invoice.lineItems.reduce((s, li) => s + Number(li.unitPrice) * Number(li.quantity), 0)
+    const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
+
+    const pdfBuffer = await generateInvoicePdf({
+      invoiceNumber: invoice.invoiceNumber,
+      status: invoice.status,
+      issueDate: invoice.issueDate.toISOString(),
+      dueDate: invoice.dueDate.toISOString(),
+      currency: invoice.currency,
+      notes: invoice.notes,
+      clientName: applicant.name,
+      clientEmail: applicant.email,
+      clientPhone: applicant.phone ?? undefined,
+      fromName,
+      lineItems: invoice.lineItems.map(li => ({
+        description: li.description,
+        quantity: Number(li.quantity),
+        unitPrice: Number(li.unitPrice),
+        isTaxLine: li.isTaxLine,
+      })),
+      totalPaid,
+      payments: invoice.payments.map(p => ({
+        amount: Number(p.amount),
+        paidDate: p.paidDate.toISOString(),
+        paymentMethod: p.paymentMethod,
+      })),
+    }, paymentMethods, invoicePaymentNote)
 
     await sendInvoiceEmail({
       toEmail: applicant.email,
@@ -53,6 +77,9 @@ export async function POST(_request: Request, { params }: RouteParams) {
       currency: invoice.currency,
       dueDate: invoice.dueDate.toISOString(),
       notes: invoice.notes,
+      paymentMethods,
+      paymentNote: invoicePaymentNote,
+      pdfBuffer,
     })
 
     const updated = await prisma.invoice.update({
@@ -62,7 +89,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
     })
 
     return ok(updated)
-  } catch {
+  } catch (err) {
+    console.error('[applicant-send-invoice]', err)
     return serverError('Failed to send invoice')
   }
 }
