@@ -16,7 +16,7 @@ interface Props {
 }
 
 export function LeaseForm({ projectId, units, tenants: initialTenants, preselectedUnitId, onCreated, onCancel }: Props) {
-  const [unitId, setUnitId] = useState(preselectedUnitId ?? '')
+  const [unitId, setUnitId] = useState(preselectedUnitId ?? (units.length === 1 ? units[0].id : ''))
   const [tenantId, setTenantId] = useState('')
   const [tenants, setTenants] = useState<TenantOption[]>(initialTenants)
 

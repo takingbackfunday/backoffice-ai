@@ -7,7 +7,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://backoffice.cv'
 
 interface RouteParams { params: Promise<{ id: string; applicantId: string }> }
 
-export async function POST(_request: Request, { params }: RouteParams) {
+export async function POST(request: Request, { params }: RouteParams) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
@@ -27,17 +27,36 @@ export async function POST(_request: Request, { params }: RouteParams) {
     })
     if (!applicant) return notFound('Applicant not found')
 
-    if (!applicant.listing) {
+    // Allow caller to supply a listingId if applicant has none
+    let listing = applicant.listing
+    if (!listing) {
+      const body = await request.json().catch(() => ({}))
+      if (body.listingId) {
+        const found = await prisma.listing.findFirst({
+          where: { id: body.listingId, userId, isActive: true },
+          select: { publicSlug: true, title: true, id: true },
+        })
+        if (found) {
+          listing = found
+          await prisma.applicant.update({
+            where: { id: applicantId },
+            data: { listingId: found.id },
+          })
+        }
+      }
+    }
+
+    if (!listing) {
       return badRequest('This applicant has no listing associated — share the application URL manually.')
     }
 
-    const applicationUrl = `${APP_URL}/apply/${applicant.listing.publicSlug}/application`
+    const applicationUrl = `${APP_URL}/apply/${listing.publicSlug}/application`
 
     await sendApplicationLink({
       toEmail: applicant.email,
       toName: applicant.name,
       propertyName: project.name,
-      listingTitle: applicant.listing.title,
+      listingTitle: listing.title,
       applicationUrl,
     })
 

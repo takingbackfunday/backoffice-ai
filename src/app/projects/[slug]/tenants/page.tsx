@@ -56,6 +56,12 @@ export default async function ProjectTenantsPage({ params }: PageParams) {
   const activeApplicantsCount = project.propertyProfile._count.applicants
   const units = project.propertyProfile.units
 
+  const listings = await prisma.listing.findMany({
+    where: { unitId: { in: unitIds }, userId, isActive: true },
+    select: { id: true, title: true, publicSlug: true },
+    orderBy: { createdAt: 'desc' },
+  })
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -74,6 +80,7 @@ export default async function ProjectTenantsPage({ params }: PageParams) {
             projectId={project.id}
             tenants={JSON.parse(JSON.stringify(tenants))}
             units={units}
+            listings={listings}
             defaultTab={activeApplicantsCount > 0 ? 'applicants' : 'tenants'}
           />
         </main>

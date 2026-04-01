@@ -44,7 +44,7 @@ export function ListingsClient({ projectId, listings: initialListings, units }: 
   const [createError, setCreateError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [form, setForm] = useState({
-    unitId: '',
+    unitId: units.length === 1 ? units[0].id : '',
     title: '',
     description: '',
     monthlyRent: '',
@@ -82,7 +82,7 @@ export function ListingsClient({ projectId, listings: initialListings, units }: 
       }
       setListings(prev => [json.data, ...prev])
       setShowCreateModal(false)
-      setForm({ unitId: '', title: '', description: '', monthlyRent: '', availableDate: '', petPolicy: '', amenities: '', applicationFee: '', screeningFee: '' })
+      setForm({ unitId: units.length === 1 ? units[0].id : '', title: '', description: '', monthlyRent: '', availableDate: '', petPolicy: '', amenities: '', applicationFee: '', screeningFee: '' })
     } catch {
       setCreateError('Network error. Please try again.')
     } finally {

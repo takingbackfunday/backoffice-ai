@@ -71,7 +71,7 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
   const [rejectReason, setRejectReason] = useState('')
   const [converting, setConverting] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', unitId: '', source: '', notes: '' })
+  const [addForm, setAddForm] = useState(() => ({ name: '', email: '', phone: '', unitId: units.length === 1 ? units[0].id : '', source: '', notes: '' }))
   const [addError, setAddError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
 
@@ -136,7 +136,7 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
       }
       await load()
       setShowAddModal(false)
-      setAddForm({ name: '', email: '', phone: '', unitId: '', source: '', notes: '' })
+      setAddForm({ name: '', email: '', phone: '', unitId: units.length === 1 ? units[0].id : '', source: '', notes: '' })
     } catch {
       setAddError('Network error. Please try again.')
     } finally {
@@ -354,7 +354,7 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
               <div className="flex justify-end gap-3 pt-1">
                 <button
                   type="button"
-                  onClick={() => { setShowAddModal(false); setAddError(null); setAddForm({ name: '', email: '', phone: '', unitId: '', source: '', notes: '' }) }}
+                  onClick={() => { setShowAddModal(false); setAddError(null); setAddForm({ name: '', email: '', phone: '', unitId: units.length === 1 ? units[0].id : '', source: '', notes: '' }) }}
                   className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
                 >
                   Cancel

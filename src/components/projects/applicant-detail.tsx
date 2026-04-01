@@ -61,11 +61,13 @@ interface Applicant {
 }
 
 interface UnitOption { id: string; unitLabel: string }
+interface ListingOption { id: string; title: string; publicSlug: string }
 
 interface Props {
   projectId: string
   applicant: Applicant
   units: UnitOption[]
+  listings?: ListingOption[]
   onClose: () => void
   onUpdated: (applicant: Applicant) => void
 }
@@ -89,12 +91,15 @@ function AppRow({ label, value }: { label: string; value: string | number | null
   )
 }
 
-export function ApplicantDetail({ projectId, applicant: initial, units, onClose, onUpdated }: Props) {
+export function ApplicantDetail({ projectId, applicant: initial, units, listings = [], onClose, onUpdated }: Props) {
   const [applicant, setApplicant] = useState<Applicant>(initial)
   const [saving, setSaving] = useState(false)
   const [converting, setConverting] = useState(false)
   const [sendingApp, setSendingApp] = useState(false)
   const [sendAppSuccess, setSendAppSuccess] = useState(false)
+  const [selectedListingId, setSelectedListingId] = useState(() =>
+    initial.listing?.id ?? (listings.length === 1 ? listings[0].id : '')
+  )
   const [sendingInvoice, setSendingInvoice] = useState(false)
   const [invoiceSent, setInvoiceSent] = useState(false)
   const [feeInvoice, setFeeInvoice] = useState(initial.invoices?.[0] ?? null)
@@ -139,7 +144,11 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
     setSendingApp(true)
     setError(null)
     try {
-      const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}/send-application`, { method: 'POST' })
+      const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}/send-application`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedListingId ? { listingId: selectedListingId } : {}),
+      })
       const json = await res.json()
       if (!res.ok || json.error) { setError(json.error ?? 'Failed to send'); return }
       setSendAppSuccess(true)
@@ -212,23 +221,35 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
           </div>
 
           {/* Send Application */}
-          {(applicant.status === 'INQUIRY' || applicant.status === 'APPLICATION_SENT') && !applicant.applicationData && applicant.listing && (
-            <div className="rounded-lg border border-dashed p-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium">Send application link</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Email them a link to the full rental application form.</p>
+          {(applicant.status === 'INQUIRY' || applicant.status === 'APPLICATION_SENT') && !applicant.applicationData && (applicant.listing || listings.length > 0) && (
+            <div className="rounded-lg border border-dashed p-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium">Send application link</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Email them a link to the full rental application form.</p>
+                </div>
+                {sendAppSuccess ? (
+                  <span className="text-xs text-emerald-600 font-medium flex-shrink-0">Sent ✓</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSendApplication}
+                    disabled={sendingApp || (!applicant.listing && !selectedListingId)}
+                    className="flex-shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {sendingApp ? 'Sending…' : 'Send'}
+                  </button>
+                )}
               </div>
-              {sendAppSuccess ? (
-                <span className="text-xs text-emerald-600 font-medium flex-shrink-0">Sent ✓</span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSendApplication}
-                  disabled={sendingApp}
-                  className="flex-shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              {!applicant.listing && listings.length > 1 && (
+                <select
+                  value={selectedListingId}
+                  onChange={e => setSelectedListingId(e.target.value)}
+                  className="w-full rounded-md border px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
                 >
-                  {sendingApp ? 'Sending…' : 'Send'}
-                </button>
+                  <option value="">Select a listing…</option>
+                  {listings.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                </select>
               )}
             </div>
           )}
@@ -285,14 +306,27 @@ export function ApplicantDetail({ projectId, applicant: initial, units, onClose,
           {/* Unit */}
           <div>
             <label className="block text-xs font-medium mb-1">Unit</label>
-            <select
-              value={applicant.unit?.id ?? ''}
-              onChange={e => save({ unitId: e.target.value || null })}
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">— no unit assigned —</option>
-              {units.map(u => <option key={u.id} value={u.id}>{u.unitLabel}</option>)}
-            </select>
+            {units.length === 1 && !applicant.unit ? (
+              <p className="text-sm text-muted-foreground">
+                {units[0].unitLabel}
+                <button
+                  type="button"
+                  onClick={() => save({ unitId: units[0].id })}
+                  className="ml-2 text-xs text-primary hover:underline"
+                >
+                  Assign
+                </button>
+              </p>
+            ) : (
+              <select
+                value={applicant.unit?.id ?? ''}
+                onChange={e => save({ unitId: e.target.value || null })}
+                className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">— no unit assigned —</option>
+                {units.map(u => <option key={u.id} value={u.id}>{u.unitLabel}</option>)}
+              </select>
+            )}
           </div>
 
           {/* Contact info */}

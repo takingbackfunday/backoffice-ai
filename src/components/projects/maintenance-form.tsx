@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function MaintenanceForm({ projectId, units, onCreated, onCancel }: Props) {
-  const [unitId, setUnitId] = useState('')
+  const [unitId, setUnitId] = useState(() => units.length === 1 ? units[0].id : '')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('MEDIUM')
