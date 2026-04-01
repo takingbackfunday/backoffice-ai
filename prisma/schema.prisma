@@ -395,6 +395,8 @@ model Invoice {
   lease           Lease?            @relation(fields: [leaseId], references: [id])
   tenantId        String?
   tenant          Tenant?           @relation(fields: [tenantId], references: [id])
+  applicantId     String?
+  applicant       Applicant?        @relation(fields: [applicantId], references: [id])
   invoiceNumber   String            // e.g. "INV-0042" or "RENT-0001", auto-generated
   status          InvoiceStatus     @default(DRAFT)
   issueDate       DateTime          @default(now())
@@ -418,6 +420,7 @@ model Invoice {
   @@index([clientProfileId])
   @@index([leaseId])
   @@index([tenantId])
+  @@index([applicantId])
 }
 
 enum InvoiceStatus {
@@ -487,26 +490,28 @@ enum InvoicePaymentSuggestionStatus {
 // ── Property track ──────────────────────────────────────────────────────────
 
 model PropertyProfile {
-  id              String       @id @default(cuid())
-  projectId       String       @unique
-  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  address         String
-  city            String?
-  state           String?
-  zipCode         String?
-  country         String       @default("US")
-  propertyType    PropertyType @default(RESIDENTIAL)
-  yearBuilt       Int?
-  squareFootage   Int?
-  lotSize         String?
-  purchasePrice   Decimal?     @db.Decimal(12, 2)
-  purchaseDate    DateTime?
-  currentValue    Decimal?     @db.Decimal(12, 2)
-  mortgageBalance Decimal?     @db.Decimal(12, 2)
-  units           Unit[]
-  applicants      Applicant[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id                       String       @id @default(cuid())
+  projectId                String       @unique
+  project                  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  address                  String
+  city                     String?
+  state                    String?
+  zipCode                  String?
+  country                  String       @default("US")
+  propertyType             PropertyType @default(RESIDENTIAL)
+  yearBuilt                Int?
+  squareFootage            Int?
+  lotSize                  String?
+  purchasePrice            Decimal?     @db.Decimal(12, 2)
+  purchaseDate             DateTime?
+  currentValue             Decimal?     @db.Decimal(12, 2)
+  mortgageBalance          Decimal?     @db.Decimal(12, 2)
+  requireLastMonth         Boolean      @default(false)
+  autoGenerateRentInvoice  Boolean      @default(false)
+  units                    Unit[]
+  applicants               Applicant[]
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
 }
 
 enum PropertyType {
@@ -531,6 +536,8 @@ model Unit {
   maintenanceRequests MaintenanceRequest[]
   messages            Message[]
   applicants          Applicant[]
+  listings            Listing[]
+  showings            Showing[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -569,6 +576,18 @@ model Lease {
   contractNotes    String?
   // Currency for rent invoicing
   currency         String              @default("USD")
+  // Applicant origin
+  applicantId          String?
+  applicant            Applicant?      @relation(fields: [applicantId], references: [id])
+  // Rudimentary signing
+  signingToken         String?         @unique
+  tenantSignatureName  String?
+  tenantSignatureIp    String?
+  tenantSignedAt       DateTime?
+  ownerSignatureName   String?
+  ownerSignedAt        DateTime?
+  // Move-in milestone
+  keysHandedOverAt     DateTime?
   tenantCharges    TenantCharge[]
   tenantPayments   TenantPayment[]
   tenantFiles      TenantFile[]
@@ -829,6 +848,22 @@ model Applicant {
   backgroundCheck     String?           // "passed", "failed", "pending", null
   references          Json?             // array of { name, phone, relationship }
 
+  // Listing link
+  listingId           String?
+  listing             Listing?          @relation(fields: [listingId], references: [id])
+
+  // Self-service application data
+  applicationData     Json?             // structured form submission
+
+  // Screening consent
+  screeningConsentAt  DateTime?
+  screeningConsentIp  String?
+
+  // Future screening API integration (nullable placeholders)
+  screeningRequestId  String?
+  screeningProvider   String?
+  screeningReportUrl  String?
+
   // Conversion
   convertedToTenantId String?           @unique
   convertedToTenant   Tenant?           @relation(fields: [convertedToTenantId], references: [id])
@@ -837,6 +872,9 @@ model Applicant {
   rejectedReason      String?
 
   documents           ApplicantDocument[]
+  showings            Showing[]
+  leases              Lease[]
+  invoices            Invoice[]
 
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
@@ -871,4 +909,58 @@ model ApplicantDocument {
   createdAt   DateTime  @default(now())
 
   @@index([applicantId])
+}
+
+model Listing {
+  id              String    @id @default(cuid())
+  unitId          String
+  unit            Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  userId          String    // property owner, for auth scoping
+
+  title           String
+  description     String?
+  monthlyRent     Decimal   @db.Decimal(10, 2)
+  availableDate   DateTime?
+  petPolicy       String?   // "allowed", "case-by-case", "no-pets"
+  photos          Json      @default("[]") // string[] of URLs
+  amenities       String?   // free-text or comma-separated
+
+  publicSlug      String    @unique
+  isActive        Boolean   @default(true)
+
+  applicationFee  Decimal?  @db.Decimal(10, 2)
+  screeningFee    Decimal?  @db.Decimal(10, 2)
+
+  applicants      Applicant[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([unitId])
+}
+
+model Showing {
+  id            String        @id @default(cuid())
+  applicantId   String
+  applicant     Applicant     @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  unitId        String
+  unit          Unit          @relation(fields: [unitId], references: [id])
+  scheduledAt   DateTime
+  durationMin   Int           @default(30)
+  status        ShowingStatus @default(PROPOSED)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([applicantId])
+  @@index([unitId])
+}
+
+enum ShowingStatus {
+  PROPOSED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
 }

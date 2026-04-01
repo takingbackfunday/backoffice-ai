@@ -267,6 +267,89 @@ export async function sendLeaseContractEmail({
   })
 }
 
+export async function sendInquiryConfirmation({
+  toEmail,
+  toName,
+  propertyName,
+  unitLabel,
+  ownerName,
+}: {
+  toEmail: string
+  toName: string
+  propertyName: string
+  unitLabel: string
+  ownerName: string
+}) {
+  const resend = getResend()
+  if (!resend) return
+
+  await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `We received your inquiry for ${unitLabel} — ${propertyName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
+        <h2 style="margin:0 0 16px;font-size:18px">Thanks for your interest, ${toName}!</h2>
+        <p style="font-size:15px;line-height:1.7;color:#333">
+          We received your inquiry about <strong>${unitLabel}</strong> at
+          <strong>${propertyName}</strong>. ${ownerName} will be in touch
+          soon to schedule a showing or discuss next steps.
+        </p>
+        <p style="color:#999;font-size:12px;margin-top:32px">
+          Sent via Backoffice AI on behalf of ${ownerName}.
+        </p>
+      </div>
+    `,
+  })
+}
+
+export async function sendInquiryNotificationToOwner({
+  toEmail,
+  ownerName,
+  applicantName,
+  applicantEmail,
+  applicantPhone,
+  propertyName,
+  unitLabel,
+  message,
+  pipelineUrl,
+}: {
+  toEmail: string
+  ownerName: string
+  applicantName: string
+  applicantEmail: string
+  applicantPhone: string | null
+  propertyName: string
+  unitLabel: string
+  message: string | null
+  pipelineUrl: string
+}) {
+  const resend = getResend()
+  if (!resend) return
+
+  await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `New inquiry: ${applicantName} for ${unitLabel} — ${propertyName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
+        <p style="color:#666;font-size:14px;margin-bottom:4px">New prospect inquiry</p>
+        <h2 style="margin:0 0 16px;font-size:18px">${applicantName} — ${unitLabel}</h2>
+        <table style="font-size:14px;line-height:1.8">
+          <tr><td style="color:#888;padding-right:12px">Email</td><td>${applicantEmail}</td></tr>
+          ${applicantPhone ? `<tr><td style="color:#888;padding-right:12px">Phone</td><td>${applicantPhone}</td></tr>` : ''}
+        </table>
+        ${message ? `<div style="background:#f5f5f5;border-radius:8px;padding:16px 20px;font-size:15px;line-height:1.6;white-space:pre-wrap;margin-top:16px">${message}</div>` : ''}
+        <p style="margin-top:24px">
+          <a href="${pipelineUrl}" style="background:#000;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:14px">
+            View in pipeline
+          </a>
+        </p>
+      </div>
+    `,
+  })
+}
+
 export async function sendOwnerMessageNotification({
   toEmail,
   toName,

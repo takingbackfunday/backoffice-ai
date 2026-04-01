@@ -49,6 +49,7 @@ export function TenantsApplicantsClient({ projectId, tenants, units, defaultTab 
       {tab === 'applicants' && (
         <ApplicantPipeline
           projectId={projectId}
+          units={units}
           onSelectApplicant={setSelectedApplicant}
         />
       )}

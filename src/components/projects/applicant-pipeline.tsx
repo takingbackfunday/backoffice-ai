@@ -51,8 +51,11 @@ interface Applicant {
   _count: { documents: number }
 }
 
+interface UnitOption { id: string; unitLabel: string }
+
 interface Props {
   projectId: string
+  units?: UnitOption[]
   onSelectApplicant?: (applicant: Applicant) => void
 }
 
@@ -60,13 +63,17 @@ function daysSince(iso: string) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
 }
 
-export function ApplicantPipeline({ projectId, onSelectApplicant }: Props) {
+export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: Props) {
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [rejectModal, setRejectModal] = useState<{ applicantId: string; toStatus: string } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [converting, setConverting] = useState<string | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', unitId: '', source: '', notes: '' })
+  const [addError, setAddError] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -105,6 +112,38 @@ export function ApplicantPipeline({ projectId, onSelectApplicant }: Props) {
     }
   }
 
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault()
+    setAddError(null)
+    setAdding(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/applicants`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: addForm.name,
+          email: addForm.email,
+          phone: addForm.phone || undefined,
+          unitId: addForm.unitId || undefined,
+          source: addForm.source || undefined,
+          notes: addForm.notes || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setAddError(json.error ?? 'Failed to add applicant')
+        return
+      }
+      await load()
+      setShowAddModal(false)
+      setAddForm({ name: '', email: '', phone: '', unitId: '', source: '', notes: '' })
+    } catch {
+      setAddError('Network error. Please try again.')
+    } finally {
+      setAdding(false)
+    }
+  }
+
   function handleDrop(e: React.DragEvent, toStatus: string) {
     e.preventDefault()
     if (!draggingId) return
@@ -133,6 +172,16 @@ export function ApplicantPipeline({ projectId, onSelectApplicant }: Props) {
 
   return (
     <>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold">Applicant Pipeline</h2>
+        <button
+          type="button"
+          onClick={() => setShowAddModal(true)}
+          className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          + Add Applicant
+        </button>
+      </div>
       <div className="overflow-x-auto pb-4">
         <div className="flex gap-3 min-w-max">
           {STATUSES.map(status => (
@@ -228,6 +277,97 @@ export function ApplicantPipeline({ projectId, onSelectApplicant }: Props) {
                 Reject
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add applicant modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-background border shadow-lg p-6 space-y-4">
+            <h3 className="text-sm font-semibold">Add applicant</h3>
+            <form onSubmit={handleAdd} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium mb-1">Name <span className="text-destructive">*</span></label>
+                <input
+                  required
+                  type="text"
+                  value={addForm.name}
+                  onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Email <span className="text-destructive">*</span></label>
+                <input
+                  required
+                  type="email"
+                  value={addForm.email}
+                  onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={addForm.phone}
+                  onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              {units.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium mb-1">Unit</label>
+                  <select
+                    value={addForm.unitId}
+                    onChange={e => setAddForm(f => ({ ...f, unitId: e.target.value }))}
+                    className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="">No unit assigned</option>
+                    {units.map(u => (
+                      <option key={u.id} value={u.id}>{u.unitLabel}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium mb-1">Source</label>
+                <input
+                  type="text"
+                  value={addForm.source}
+                  onChange={e => setAddForm(f => ({ ...f, source: e.target.value }))}
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="zillow, referral, walk-in…"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Notes</label>
+                <textarea
+                  value={addForm.notes}
+                  onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                  className="w-full rounded-md border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              {addError && <p className="text-sm text-destructive">{addError}</p>}
+              <div className="flex justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setShowAddModal(false); setAddError(null); setAddForm({ name: '', email: '', phone: '', unitId: '', source: '', notes: '' }) }}
+                  className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={adding}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {adding ? 'Adding…' : 'Add'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
