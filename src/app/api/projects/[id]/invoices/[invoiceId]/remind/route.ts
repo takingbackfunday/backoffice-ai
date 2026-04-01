@@ -30,20 +30,22 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (invoice.status === 'PAID') return badRequest('Invoice is already paid')
     if (invoice.status === 'DRAFT') return badRequest('Send the invoice before sending a reminder')
 
-    const email = invoice.clientProfile.email
+    const cp = invoice.clientProfile
+    const email = cp?.email
     if (!email) return badRequest('Client has no email address on file')
 
     // Load user payment methods + business profile
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
     const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
     const paymentMethods = (prefsData.paymentMethods ?? {}) as PaymentMethods
-    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || invoice.clientProfile.project.name
+    const invoicePaymentNote = prefsData.invoicePaymentNote as string | undefined
+    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.project.name || 'Invoice'
 
     const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
     const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
     const balance = total - totalPaid
     const isOverdue = new Date(invoice.dueDate) < new Date()
-    const clientName = invoice.clientProfile.contactName ?? invoice.clientProfile.project.name
+    const clientName = cp?.contactName ?? cp?.project.name ?? invoice.invoiceNumber
 
     // Attach a fresh PDF with the reminder
     const pdfBuffer = await generateInvoicePdf({
@@ -62,7 +64,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         unitPrice: Number(i.unitPrice),
         isTaxLine: i.isTaxLine,
       })),
-    }, paymentMethods)
+    }, paymentMethods, invoicePaymentNote)
 
     await sendReminderEmail({
       toEmail: email,
@@ -70,7 +72,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       fromName,
       invoiceNumber: invoice.invoiceNumber,
       invoiceId: invoice.id,
-      projectSlug: invoice.clientProfile.project.slug,
+      projectSlug: cp?.project.slug ?? id,
       balance,
       currency: invoice.currency,
       dueDate: invoice.dueDate.toISOString(),

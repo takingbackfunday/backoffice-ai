@@ -85,7 +85,7 @@ export async function POST(request: Request) {
         },
       })
 
-      // Recompute status
+      // Recompute status — DRAFT invoices are implicitly activated when a payment is accepted
       const total = inv.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
       const alreadyPaid = inv.payments.reduce((s, p) => s + Number(p.amount), 0)
       const newTotalPaid = alreadyPaid + txAmount

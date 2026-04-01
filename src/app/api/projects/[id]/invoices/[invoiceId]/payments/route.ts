@@ -52,7 +52,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const txId = parsed.data.transactionId ?? null
     if (txId) {
       const linkedTx = await prisma.transaction.findFirst({
-        where: { id: txId, projectId: invoice.clientProfile.project.id },
+        where: { id: txId, project: { id } },
         include: { invoicePayment: true },
       })
       if (!linkedTx) return notFound('Transaction not found on this project')

@@ -386,16 +386,25 @@ enum JobStatus {
 
 model Invoice {
   id              String            @id @default(cuid())
-  clientProfileId String
-  clientProfile   ClientProfile     @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientProfileId String?
+  clientProfile   ClientProfile?    @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
   jobId           String?
   job             Job?              @relation(fields: [jobId], references: [id])
-  invoiceNumber   String            // e.g. "INV-0042", auto-generated
+  // Property track FKs — set when clientProfileId is null
+  leaseId         String?
+  lease           Lease?            @relation(fields: [leaseId], references: [id])
+  tenantId        String?
+  tenant          Tenant?           @relation(fields: [tenantId], references: [id])
+  invoiceNumber   String            // e.g. "INV-0042" or "RENT-0001", auto-generated
   status          InvoiceStatus     @default(DRAFT)
   issueDate       DateTime          @default(now())
   dueDate         DateTime
   currency        String            @default("USD")
   notes           String?
+  // Email tracking
+  sentAt          DateTime?
+  sentTo          String?
+  reminderSentAt  DateTime?
   lineItems          InvoiceLineItem[]
   payments           InvoicePayment[]
   paymentSuggestions InvoicePaymentSuggestion[]
@@ -407,6 +416,8 @@ model Invoice {
   updatedAt          DateTime          @updatedAt
 
   @@index([clientProfileId])
+  @@index([leaseId])
+  @@index([tenantId])
 }
 
 enum InvoiceStatus {
@@ -426,6 +437,7 @@ model InvoiceLineItem {
   quantity    Decimal  @db.Decimal(10, 3)
   unitPrice   Decimal  @db.Decimal(10, 2)
   isTaxLine   Boolean  @default(false)
+  chargeType  String?  // property-track only: RENT, DEPOSIT, LATE_FEE, UTILITY, MAINTENANCE, OTHER
   createdAt   DateTime @default(now())
 
   @@index([invoiceId])
@@ -492,6 +504,7 @@ model PropertyProfile {
   currentValue    Decimal?     @db.Decimal(12, 2)
   mortgageBalance Decimal?     @db.Decimal(12, 2)
   units           Unit[]
+  applicants      Applicant[]
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 }
@@ -517,6 +530,7 @@ model Unit {
   leases              Lease[]
   maintenanceRequests MaintenanceRequest[]
   messages            Message[]
+  applicants          Applicant[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -533,27 +547,46 @@ enum UnitStatus {
 }
 
 model Lease {
-  id               String         @id @default(cuid())
+  id               String              @id @default(cuid())
   unitId           String
-  unit             Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unit             Unit                @relation(fields: [unitId], references: [id], onDelete: Cascade)
   tenantId         String
-  tenant           Tenant         @relation(fields: [tenantId], references: [id])
-  status           LeaseStatus    @default(DRAFT)
+  tenant           Tenant              @relation(fields: [tenantId], references: [id])
+  status           LeaseStatus         @default(DRAFT)
   startDate        DateTime
   endDate          DateTime
-  monthlyRent      Decimal        @db.Decimal(10, 2)
-  securityDeposit  Decimal?       @db.Decimal(10, 2)
-  paymentDueDay    Int            @default(1)
-  lateFeeAmount    Decimal?       @db.Decimal(10, 2)
-  lateFeeGraceDays Int            @default(5)
+  monthlyRent      Decimal             @db.Decimal(10, 2)
+  securityDeposit  Decimal?            @db.Decimal(10, 2)
+  paymentDueDay    Int                 @default(1)
+  lateFeeAmount    Decimal?            @db.Decimal(10, 2)
+  lateFeeGraceDays Int                 @default(5)
+  // Contract management
+  contractStatus   LeaseContractStatus @default(NONE)
+  contractFileUrl  String?
+  contractFileName String?
+  contractSentAt   DateTime?
+  contractSignedAt DateTime?
+  contractNotes    String?
+  // Currency for rent invoicing
+  currency         String              @default("USD")
   tenantCharges    TenantCharge[]
   tenantPayments   TenantPayment[]
   tenantFiles      TenantFile[]
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  invoices         Invoice[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([unitId])
   @@index([tenantId])
+}
+
+enum LeaseContractStatus {
+  NONE
+  DRAFTING
+  READY
+  SENT
+  SIGNED
+  COUNTERSIGNED
 }
 
 enum LeaseStatus {
@@ -582,6 +615,8 @@ model Tenant {
   tenantPayments           TenantPayment[]
   tenantPaymentSuggestions TenantPaymentSuggestion[]
   maintenanceRequests      MaintenanceRequest[]
+  invoices                 Invoice[]
+  convertedFromApplicant   Applicant?
   createdAt                DateTime                 @default(now())
   updatedAt                DateTime                 @updatedAt
 
@@ -763,4 +798,77 @@ enum MaintenanceStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+// ── Applicant pipeline ───────────────────────────────────────────────────────
+
+model Applicant {
+  id                  String            @id @default(cuid())
+  userId              String            // property owner
+  propertyProfileId   String
+  propertyProfile     PropertyProfile   @relation(fields: [propertyProfileId], references: [id], onDelete: Cascade)
+  unitId              String?
+  unit                Unit?             @relation(fields: [unitId], references: [id])
+
+  // Contact info
+  name                String
+  email               String
+  phone               String?
+
+  // Application details
+  status              ApplicantStatus   @default(INQUIRY)
+  source              String?           // "zillow", "referral", "walk-in", etc.
+  desiredMoveIn       DateTime?
+  desiredRent         Decimal?          @db.Decimal(10, 2)
+  currentEmployer     String?
+  annualIncome        Decimal?          @db.Decimal(12, 2)
+  notes               String?
+
+  // Screening
+  creditScore         Int?
+  backgroundCheck     String?           // "passed", "failed", "pending", null
+  references          Json?             // array of { name, phone, relationship }
+
+  // Conversion
+  convertedToTenantId String?           @unique
+  convertedToTenant   Tenant?           @relation(fields: [convertedToTenantId], references: [id])
+  convertedAt         DateTime?
+  rejectedAt          DateTime?
+  rejectedReason      String?
+
+  documents           ApplicantDocument[]
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([propertyProfileId])
+  @@index([status])
+}
+
+enum ApplicantStatus {
+  INQUIRY
+  APPLICATION_SENT
+  APPLIED
+  SCREENING
+  APPROVED
+  LEASE_OFFERED
+  LEASE_SIGNED
+  REJECTED
+  WITHDRAWN
+}
+
+model ApplicantDocument {
+  id          String    @id @default(cuid())
+  applicantId String
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  fileType    String    // "id", "pay_stub", "credit_report", "application_form", "other"
+  fileName    String
+  fileUrl     String
+  fileSize    Int?
+  notes       String?
+  uploadedBy  String    // userId
+  createdAt   DateTime  @default(now())
+
+  @@index([applicantId])
 }

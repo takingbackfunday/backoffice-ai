@@ -44,7 +44,7 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
           clientProfile: {
             include: {
               invoices: {
-                where: { status: { in: ['SENT', 'PARTIAL', 'OVERDUE'] } },
+                where: { status: { in: ['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'] } },
                 include: {
                   lineItems: true,
                   payments: true,
@@ -103,7 +103,22 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
     const exactMatches = invoicesWithBalance.filter(({ balance }) => Math.abs(balance - txAmount) <= 0.01)
 
     // HIGH confidence: invoice number in description, or single exact amount match
-    const highConfidenceTarget = invoiceNumberMatch ?? (exactMatches.length === 1 ? exactMatches[0] : null)
+    let highConfidenceTarget = invoiceNumberMatch ?? (exactMatches.length === 1 ? exactMatches[0] : null)
+
+    // Downgrade to MEDIUM if the matched invoice is still DRAFT — user must confirm
+    if (highConfidenceTarget && highConfidenceTarget.inv.status === 'DRAFT') {
+      console.log(`[invoice-matching]   → high confidence target ${highConfidenceTarget.inv.invoiceNumber} is DRAFT — downgrading to MEDIUM suggestion`)
+      const { inv: fi, balance } = highConfidenceTarget
+      suggestionsToCreate.push({
+        userId,
+        transactionId: tx.id,
+        invoiceId: fi.id,
+        confidence: 'medium',
+        reasoning: `Payment of ${txAmount.toFixed(2)} matches draft invoice ${fi.invoiceNumber} (balance ${balance.toFixed(2)}) — confirm to apply and activate the invoice.`,
+      })
+      highConfidenceTarget = null
+      continue
+    }
 
     if (highConfidenceTarget) {
       const { inv, total } = highConfidenceTarget

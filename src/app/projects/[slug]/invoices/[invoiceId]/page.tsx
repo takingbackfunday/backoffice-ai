@@ -66,8 +66,8 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     currency: invoice.currency,
     notes: invoice.notes ?? null,
     job: invoice.job,
-    clientEmail: invoice.clientProfile.email ?? null,
-    clientName: invoice.clientProfile.contactName ?? project.name,
+    clientEmail: invoice.clientProfile?.email ?? null,
+    clientName: invoice.clientProfile?.contactName ?? project.name,
     lineItems: invoice.lineItems.map(i => ({
       id: i.id,
       description: i.description,

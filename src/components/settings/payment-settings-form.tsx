@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 interface Props {
   initial: PaymentMethods
   initialBusinessName?: string
   initialYourName?: string
+  initialPaymentNote?: string
 }
 
 function Field({ label, value, onChange, placeholder, mono = false }: {
@@ -39,7 +41,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-export function PaymentSettingsForm({ initial, initialBusinessName = '', initialYourName = '' }: Props) {
+export function PaymentSettingsForm({ initial, initialBusinessName = '', initialYourName = '', initialPaymentNote = '' }: Props) {
   const [businessName, setBusinessName] = useState(initialBusinessName)
   const [yourName, setYourName] = useState(initialYourName)
   const bt = initial.bankTransfer ?? {}
@@ -52,6 +54,8 @@ export function PaymentSettingsForm({ initial, initialBusinessName = '', initial
   const [routingNumber, setRoutingNumber] = useState(bt.routingNumber ?? '')
   const [paypalLink, setPaypalLink] = useState(initial.paypal?.link ?? '')
   const [stripeLink, setStripeLink] = useState(initial.stripe?.link ?? '')
+  const [customMethods, setCustomMethods] = useState<{ label: string; value: string }[]>(initial.custom ?? [])
+  const [paymentNote, setPaymentNote] = useState(initialPaymentNote)
 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -75,12 +79,19 @@ export function PaymentSettingsForm({ initial, initialBusinessName = '', initial
     if (Object.keys(bankTransfer).length > 0) paymentMethods.bankTransfer = bankTransfer
     if (paypalLink) paymentMethods.paypal = { link: paypalLink }
     if (stripeLink) paymentMethods.stripe = { link: stripeLink }
+    const validCustom = customMethods.filter(m => m.label.trim() && m.value.trim())
+    if (validCustom.length > 0) paymentMethods.custom = validCustom
 
     try {
       const res = await fetch('/api/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentMethods, businessName: businessName || undefined, yourName: yourName || undefined }),
+        body: JSON.stringify({
+          paymentMethods,
+          businessName: businessName || undefined,
+          yourName: yourName || undefined,
+          invoicePaymentNote: paymentNote || undefined,
+        }),
       })
       if (!res.ok) { setError('Failed to save'); return }
       setSaved(true)
@@ -132,6 +143,56 @@ export function PaymentSettingsForm({ initial, initialBusinessName = '', initial
           value={stripeLink}
           onChange={setStripeLink}
           placeholder="buy.stripe.com/…"
+        />
+      </Section>
+
+      <Section title="Custom payment methods">
+        <p className="text-xs text-muted-foreground -mt-1">Add any other payment options (e.g. Wise, Revolut, Zelle, cash). Each appears as a block on invoices and emails.</p>
+        <div className="space-y-2">
+          {customMethods.map((m, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={m.label}
+                onChange={e => setCustomMethods(prev => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                placeholder="Label (e.g. Wise)"
+                className="w-32 shrink-0 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              />
+              <input
+                type="text"
+                value={m.value}
+                onChange={e => setCustomMethods(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}
+                placeholder="Details (account, email, handle…)"
+                className="flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={() => setCustomMethods(prev => prev.filter((_, j) => j !== i))}
+                className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                aria-label="Remove"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setCustomMethods(prev => [...prev, { label: '', value: '' }])}
+          className="flex items-center gap-1.5 text-xs text-primary hover:underline mt-1"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add method
+        </button>
+      </Section>
+
+      <Section title="Payment instructions">
+        <p className="text-xs text-muted-foreground -mt-1">Shown at the bottom of the "How to pay" section on every invoice PDF.</p>
+        <textarea
+          value={paymentNote}
+          onChange={e => setPaymentNote(e.target.value)}
+          rows={2}
+          placeholder="Please include the invoice number in your payment reference."
+          className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
         />
       </Section>
 

@@ -268,8 +268,8 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
           paid,
           balance: Math.round((total - paid) * 100) / 100,
           dueDate: inv.dueDate.toISOString().slice(0, 10),
-          clientName: inv.clientProfile.project.name,
-          clientId: inv.clientProfile.project.id,
+          clientName: inv.clientProfile?.project.name ?? null,
+          clientId: inv.clientProfile?.project.id ?? null,
           jobName: inv.job?.name ?? null,
           currency: inv.currency,
         }
@@ -363,7 +363,8 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       })
       if (!invoice) return JSON.stringify({ error: 'Invoice not found' })
 
-      const clientEmail = invoice.clientProfile.email
+      const cp = invoice.clientProfile
+      const clientEmail = cp?.email
       if (!clientEmail) return JSON.stringify({ error: 'Client has no email address on file' })
 
       const total = invoiceTotal(invoice.lineItems)
@@ -374,11 +375,11 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       const { sendInvoiceEmail } = await import('@/lib/email')
       await sendInvoiceEmail({
         toEmail: clientEmail,
-        toName: invoice.clientProfile.contactName ?? invoice.clientProfile.project.name,
-        fromName: invoice.clientProfile.project.name,
+        toName: cp?.contactName ?? cp?.project.name ?? invoice.invoiceNumber,
+        fromName: cp?.project.name ?? 'Invoice',
         invoiceNumber: invoice.invoiceNumber,
         invoiceId: invoice.id,
-        projectSlug: invoice.clientProfile.project.slug,
+        projectSlug: cp?.project.slug ?? '',
         total,
         dueDate: invoice.dueDate.toISOString(),
         currency: invoice.currency,
@@ -497,7 +498,8 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       })
       if (!invoice) return JSON.stringify({ error: 'Invoice not found' })
 
-      const clientEmail = invoice.clientProfile.email
+      const cp2 = invoice.clientProfile
+      const clientEmail = cp2?.email
       if (!clientEmail) return JSON.stringify({ error: 'Client has no email address on file' })
 
       const total = invoiceTotal(invoice.lineItems)
@@ -508,11 +510,11 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       const { sendReminderEmail } = await import('@/lib/email')
       await sendReminderEmail({
         toEmail: clientEmail,
-        toName: invoice.clientProfile.contactName ?? invoice.clientProfile.project.name,
-        fromName: invoice.clientProfile.project.name,
+        toName: cp2?.contactName ?? cp2?.project.name ?? invoice.invoiceNumber,
+        fromName: cp2?.project.name ?? 'Invoice',
         invoiceNumber: invoice.invoiceNumber,
         invoiceId: invoice.id,
-        projectSlug: invoice.clientProfile.project.slug,
+        projectSlug: cp2?.project.slug ?? '',
         balance,
         dueDate: invoice.dueDate.toISOString(),
         currency: invoice.currency,

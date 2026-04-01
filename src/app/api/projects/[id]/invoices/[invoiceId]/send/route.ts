@@ -29,17 +29,19 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (invoice.status === 'VOID') return badRequest('Cannot send a voided invoice')
     if (invoice.status === 'PAID') return badRequest('Invoice is already paid')
 
-    const email = invoice.clientProfile.email
+    const cp = invoice.clientProfile
+    const email = cp?.email
     if (!email) return badRequest('Client has no email address on file')
 
     // Load user payment methods + business profile
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
     const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
     const paymentMethods = (prefsData.paymentMethods ?? {}) as PaymentMethods
-    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || invoice.clientProfile.project.name
+    const invoicePaymentNote = prefsData.invoicePaymentNote as string | undefined
+    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.project.name || 'Invoice'
 
     const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-    const clientName = invoice.clientProfile.contactName ?? invoice.clientProfile.project.name
+    const clientName = cp?.contactName ?? cp?.project.name ?? invoice.invoiceNumber
 
     // Generate PDF
     const pdfBuffer = await generateInvoicePdf({
@@ -58,7 +60,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         unitPrice: Number(i.unitPrice),
         isTaxLine: i.isTaxLine,
       })),
-    }, paymentMethods)
+    }, paymentMethods, invoicePaymentNote)
 
     await sendInvoiceEmail({
       toEmail: email,
@@ -66,7 +68,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       fromName,
       invoiceNumber: invoice.invoiceNumber,
       invoiceId: invoice.id,
-      projectSlug: invoice.clientProfile.project.slug,
+      projectSlug: cp?.project.slug ?? id,
       total,
       currency: invoice.currency,
       dueDate: invoice.dueDate.toISOString(),

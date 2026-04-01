@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Pencil, Download, RefreshCw } from 'lucide-react'
+import { Pencil, Download, RefreshCw, Settings } from 'lucide-react'
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
 import { SendInvoiceModal } from '@/components/projects/send-invoice-modal'
+import { PaymentSummary } from '@/components/projects/payment-summary'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 interface Suggestion {
@@ -391,12 +392,15 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                 <td colSpan={3} className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground">Subtotal</td>
                 <td className="px-4 py-2 text-right font-semibold tabular-nums">{fmt(total, invoice.currency)}</td>
               </tr>
-              {paid > 0 && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-2 text-right text-xs font-semibold text-green-700">Amount paid</td>
-                  <td className="px-4 py-2 text-right font-semibold text-green-700 tabular-nums">−{fmt(paid, invoice.currency)}</td>
+              {invoice.payments.map(p => (
+                <tr key={p.id}>
+                  <td colSpan={2} className="px-4 py-2 text-right text-xs text-green-700">
+                    Payment · {new Date(p.paidDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {p.paymentMethod && <span className="text-muted-foreground"> · {p.paymentMethod}</span>}
+                  </td>
+                  <td className="px-4 py-2 text-right text-xs font-semibold text-green-700 tabular-nums" colSpan={2}>−{fmt(Number(p.amount), invoice.currency)}</td>
                 </tr>
-              )}
+              ))}
               <tr className="border-t">
                 <td colSpan={3} className="px-4 py-3 text-right text-sm font-bold">Balance due</td>
                 <td className={cn('px-4 py-3 text-right text-sm font-bold tabular-nums', balance <= 0 ? 'text-green-700' : '')}>
@@ -444,6 +448,20 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           </div>
         </div>
       ))}
+
+      {/* Payment methods info */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-muted-foreground">Payment info</h3>
+          <Link
+            href="/settings"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Settings className="h-3 w-3" /> Payment settings
+          </Link>
+        </div>
+        <PaymentSummary pm={paymentMethods} />
+      </div>
 
       {/* Payments */}
       <div>

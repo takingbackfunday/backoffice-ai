@@ -24,8 +24,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
     const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
     const paymentMethods = (prefsData.paymentMethods ?? {}) as PaymentMethods
-    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || invoice.clientProfile.project.name
-    const clientName = invoice.clientProfile.contactName ?? invoice.clientProfile.project.name
+    const invoicePaymentNote = prefsData.invoicePaymentNote as string | undefined
+    const cp = invoice.clientProfile
+    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.project.name || 'Invoice'
+    const clientName = cp?.contactName ?? cp?.project.name ?? invoice.invoiceNumber
 
     const pdfBuffer = await generateInvoicePdf({
       invoiceNumber: invoice.invoiceNumber,
@@ -35,7 +37,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       currency: invoice.currency,
       notes: invoice.notes,
       clientName,
-      clientEmail: invoice.clientProfile.email ?? undefined,
+      clientEmail: cp?.email ?? undefined,
       fromName,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
@@ -43,7 +45,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         unitPrice: Number(i.unitPrice),
         isTaxLine: i.isTaxLine,
       })),
-    }, paymentMethods)
+    }, paymentMethods, invoicePaymentNote)
 
     const filename = `${invoice.invoiceNumber}.pdf`
 

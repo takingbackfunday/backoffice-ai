@@ -86,14 +86,14 @@ export async function GET(request: Request) {
       where: { projectId: tx.project.id },
       include: {
         invoices: {
-          where: { status: { in: ['SENT', 'PARTIAL', 'OVERDUE'] } },
+          where: { status: { in: ['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'] } },
           include: { lineItems: true, payments: true },
         },
       },
     })
 
     log(`clientProfile=${clientProfile ? clientProfile.id : 'NOT FOUND'}`)
-    log(`open invoices (SENT/PARTIAL/OVERDUE): ${clientProfile?.invoices.length ?? 0}`)
+    log(`open invoices (DRAFT/SENT/PARTIAL/OVERDUE): ${clientProfile?.invoices.length ?? 0}`)
 
     if (!clientProfile || clientProfile.invoices.length === 0) {
       log('STOP: no open invoices for this client — no match possible')
@@ -105,7 +105,7 @@ export async function GET(request: Request) {
       const total = inv.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
       const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0)
       const balance = total - paid
-      log(`  invoice ${inv.invoiceNumber}: total=${total} paid=${paid} balance=${balance} status=${inv.status} diff_from_tx=${Math.abs(balance - txAmount).toFixed(2)}`)
+      log(`  invoice ${inv.invoiceNumber}: total=${total} paid=${paid} balance=${balance} status=${inv.status}${inv.status === 'DRAFT' ? ' [DRAFT — will be MEDIUM only]' : ''} diff_from_tx=${Math.abs(balance - txAmount).toFixed(2)}`)
       return { inv, total, balance }
     })
 

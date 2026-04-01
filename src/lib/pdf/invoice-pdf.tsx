@@ -38,6 +38,7 @@ export interface PaymentMethods {
   }
   paypal?: { link: string }
   stripe?: { link: string }
+  custom?: { label: string; value: string }[]
 }
 
 /* ------------------------------------------------------------------ */
@@ -112,7 +113,7 @@ const S = StyleSheet.create({
 /*  PDF Component                                                       */
 /* ------------------------------------------------------------------ */
 
-function InvoicePDF({ invoice, paymentMethods }: { invoice: PdfInvoice; paymentMethods?: PaymentMethods }) {
+function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: PdfInvoice; paymentMethods?: PaymentMethods; invoicePaymentNote?: string }) {
   const regularItems = invoice.lineItems.filter(i => !i.isTaxLine)
   const taxItems = invoice.lineItems.filter(i => i.isTaxLine)
   const subtotal = regularItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
@@ -123,7 +124,9 @@ function InvoicePDF({ invoice, paymentMethods }: { invoice: PdfInvoice; paymentM
   const hasBankTransfer = pm?.bankTransfer && Object.values(pm.bankTransfer).some(v => v)
   const hasPaypal = !!pm?.paypal?.link
   const hasStripe = !!pm?.stripe?.link
-  const hasPayment = hasBankTransfer || hasPaypal || hasStripe
+  const hasCustom = (pm?.custom?.length ?? 0) > 0
+  const hasPayment = hasBankTransfer || hasPaypal || hasStripe || hasCustom
+  const payNote = invoicePaymentNote ?? 'Please include the invoice number in your payment reference.'
 
   return (
     <Document>
@@ -262,6 +265,17 @@ function InvoicePDF({ invoice, paymentMethods }: { invoice: PdfInvoice; paymentM
                 <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.stripe.link}</Text></View>
               </View>
             )}
+
+            {hasCustom && pm?.custom?.map((item, i) => (
+              <View key={i} style={S.payBlock}>
+                <Text style={S.payBlockTitle}>{item.label}</Text>
+                <View style={S.payRow}><Text style={S.payVal}>{item.value}</Text></View>
+              </View>
+            ))}
+
+            <View style={{ marginTop: 6 }}>
+              <Text style={[S.footerText, { color: '#888', fontSize: 7.5 }]}>{payNote}</Text>
+            </View>
           </View>
         )}
 
@@ -283,7 +297,8 @@ function InvoicePDF({ invoice, paymentMethods }: { invoice: PdfInvoice; paymentM
 export async function generateInvoicePdf(
   invoice: PdfInvoice,
   paymentMethods?: PaymentMethods,
+  invoicePaymentNote?: string,
 ): Promise<Buffer> {
-  const buffer = await renderToBuffer(<InvoicePDF invoice={invoice} paymentMethods={paymentMethods} />)
+  const buffer = await renderToBuffer(<InvoicePDF invoice={invoice} paymentMethods={paymentMethods} invoicePaymentNote={invoicePaymentNote} />)
   return Buffer.from(buffer)
 }
