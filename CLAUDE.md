@@ -36,7 +36,11 @@ Required in `.env.local`:
 - `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL`
 - `OPENROUTER_API_KEY` — for AI features
 - `BROWSERLESS_TOKEN` — Browserless.io API token for cloud browser sessions
-- `ENCRYPTION_SECRET` — derives AES-256 keys for encrypted bank credentials
+- `ENCRYPTION_SECRET` — derives AES-256 keys for encrypted bank credentials; also used as HMAC secret for document upload tokens
+- `UPLOADTHING_TOKEN` — Uploadthing API token for file storage (set in Netlify env + `.env.local`)
+- `RESEND_API_KEY` — Resend transactional email (document request emails, invoice emails); optional — skipped gracefully if absent
+- `RESEND_FROM` — sender address, e.g. `Backoffice <noreply@backoffice.cv>`; defaults to that value if unset
+- `NEXT_PUBLIC_APP_URL` — public base URL used in email links; defaults to `https://backoffice.cv`
 
 ## Architecture
 
@@ -65,6 +69,8 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `BankPlaybook` — stores discovered browser automation steps for each connected bank account; `steps` JSON contains `PlaybookStep[]` array; `twoFaType` tracks 2FA method; `status` indicates verification state
 - `EncryptedCredential` — AES-256-GCM encrypted bank login credentials (username:password); scoped per account with unique IV and auth tag
 - `SyncJob` — tracks bank sync operations with status progression: `PENDING` → `CONNECTING` → `DOWNLOADING` → `IMPORTING` → `COMPLETE/FAILED`
+- `Listing` — property listing linked to a `Unit`; `requiredDocs Json @default("[]")` holds an array of doc-type keys that applicants must upload at application time
+- `ApplicantDocument` — PDF document attached to an `Applicant`; `status`: `requested | uploaded`; `fileType` is one of the standard keys in `DOC_TYPES` (or `other` with a `requestLabel`); `uploadToken` (`@unique`) is the HMAC-signed public upload token; `tokenExpiresAt` is the token TTL; `uploadedBy` is either a Clerk `userId` (manager upload) or `'applicant'` (public upload)
 
 ### API Routes (`src/app/api/`)
 
@@ -113,6 +119,32 @@ Agent models: all agents use `anthropic/claude-sonnet-4.6`; domain classifier an
 `src/lib/agent/finance-tools.ts` defines `FINANCE_TOOLS` (OpenAI-format tool definitions) and `dispatchTool(userId, toolName, args)`. Tools include `query_transactions`, `aggregate_transactions`, `get_categories`, etc.
 
 `src/lib/agent/rules-tools.ts` — similar tool set for the rules-generation agent. The SSE endpoint (`api/agent/rules`) has a 30-second per-user cooldown stored in `UserPreference.data.lastRulesAgentRun`. The `consecutiveRejections` counter is NOT reset per round — only a successful emit resets it, so persistent bad suggestions accumulate toward the cap across rounds.
+
+### Document Request System (`src/lib/doc-types.ts`, `src/lib/doc-token.ts`, `src/lib/uploadthing.ts`)
+
+Applicants can upload PDFs both inline at application time and via ad-hoc manager-requested links.
+
+**Standard doc types** (`src/lib/doc-types.ts`): `proof_of_income`, `proof_of_residence`, `government_id`, `bank_statement`, `employment_letter`, `reference_letter`, `other`. Use `docTypeLabel(key, requestLabel?)` to get the display string.
+
+**HMAC tokens** (`src/lib/doc-token.ts`): `generateDocToken(documentId)` → base64url `{documentId}:{expires}:{sig}` with 7-day TTL. `verifyDocToken(token)` → `{ documentId }` or `null`. Secret is `ENCRYPTION_SECRET`. Tokens are stored on `ApplicantDocument.uploadToken` and nulled out after use.
+
+**Uploadthing** (`src/lib/uploadthing.ts`): two routes, both PDF-only, 16MB server limit (UI enforces 10MB):
+- `applicantDocUploader` — used by the application form (public, no auth)
+- `adHocDocUploader` — used by the ad-hoc upload page (public, no auth; token validation happens in the submit handler)
+
+Uploadthing route handler at `src/app/api/uploadthing/route.ts`. Client helpers (`useUploadThing`, `uploadFiles`) exported from `src/lib/uploadthing-client.ts`.
+
+**Flow — inline at application time:**
+1. Manager configures `Listing.requiredDocs` (array of doc-type keys) in the listing create form
+2. Application form (`src/components/public/application-form-client.tsx`) shows a Documents step when `listing.requiredDocs.length > 0`
+3. Each doc uploads to Uploadthing immediately via `applicantDocUploader`; the resulting URL is included in the submission payload as `uploadedDocs[]`
+4. `POST /api/public/applications` saves each entry as an `ApplicantDocument` row (`status: 'uploaded'`)
+
+**Flow — ad-hoc manager request:**
+1. Manager opens applicant detail → clicks "+ Request docs" → selects doc types → clicks "Send request"
+2. `POST /api/projects/[id]/applicants/[applicantId]/request-docs` creates `ApplicantDocument` rows (`status: 'requested'`), generates HMAC tokens, and emails one Resend email with all upload links
+3. Applicant clicks link → `/apply/docs/[token]` page → `DocUploadClient` fetches metadata via `GET /api/public/docs?token=...`, uploads PDF via `adHocDocUploader`, then `POST /api/public/docs` saves the URL and consumes the token
+4. Applicant detail sidebar refreshes and shows the doc with `Uploaded` badge and a View link
 
 ### Bank Agent (`src/lib/bank-agent/`, `src/app/api/bank-agent/`)
 
@@ -191,6 +223,14 @@ Netlify serverless kills the process immediately after the response is sent. Mat
 ### Invoice renegotiation flow
 
 `POST /api/projects/[id]/invoices/[invoiceId]/renegotiate` voids the original invoice and creates a replacement DRAFT in a single `$transaction`. Guards: status must be `SENT | PARTIAL | OVERDUE` and `replacedBy` must be null. The replacement carries `replacesInvoiceId` pointing back to the voided original. If `totalPaid > 0` a credit line item with negative `unitPrice` is prepended to the replacement.
+
+### Uploadthing `maxFileSize` must be a power-of-2 string
+
+Valid values are `"1MB"`, `"2MB"`, `"4MB"`, `"8MB"`, `"16MB"`, etc. `"10MB"` is not accepted and will cause a TypeScript build error. The UI enforces 10MB client-side; the server limit is set to `"16MB"` to accommodate that.
+
+### Document upload token is single-use
+
+`ApplicantDocument.uploadToken` is nulled out after a successful upload (`POST /api/public/docs`). A second attempt with the same token returns `400 Invalid token`. This is intentional.
 
 ### PDF generation
 
