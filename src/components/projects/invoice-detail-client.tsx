@@ -177,7 +177,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
     try {
       const res = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}/renegotiate`, { method: 'POST' })
       const json = await res.json()
-      if (!res.ok || json.error) { setRenegotiating(false); return }
+      if (!res.ok || json.error) { setError(json.error ?? 'Failed to renegotiate'); setRenegotiating(false); return }
       router.push(`/projects/${projectSlug}/invoices/${json.data.id}/edit`)
     } catch {
       setRenegotiating(false)
@@ -305,7 +305,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
               )}
             </>
           )}
-          {['SENT', 'PARTIAL', 'OVERDUE'].includes(invoice.status) && !replacedBy && (
+          {['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'].includes(invoice.status) && !replacedBy && (
             <button
               type="button"
               onClick={() => setShowRenegotiateConfirm(true)}

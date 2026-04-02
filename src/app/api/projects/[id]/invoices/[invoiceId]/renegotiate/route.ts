@@ -19,8 +19,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
       },
     })
     if (!invoice) return notFound('Invoice not found')
-    if (!['SENT', 'PARTIAL', 'OVERDUE'].includes(invoice.status)) {
-      return badRequest('Only SENT, PARTIAL or OVERDUE invoices can be renegotiated')
+    if (!['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'].includes(invoice.status)) {
+      return badRequest('Only DRAFT, SENT, PARTIAL or OVERDUE invoices can be renegotiated')
     }
     if (invoice.replacedBy) {
       return badRequest(`This invoice has already been replaced by ${invoice.replacedBy.invoiceNumber}`)
