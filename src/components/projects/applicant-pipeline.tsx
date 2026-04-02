@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 const STATUSES = [
@@ -59,6 +60,7 @@ interface UnitOption { id: string; unitLabel: string }
 
 interface Props {
   projectId: string
+  projectSlug: string
   units?: UnitOption[]
   onSelectApplicant?: (applicant: Applicant) => void
 }
@@ -67,7 +69,8 @@ function daysSince(iso: string) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
 }
 
-export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: Props) {
+export function ApplicantPipeline({ projectId, projectSlug, units = [], onSelectApplicant }: Props) {
+  const router = useRouter()
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -79,7 +82,6 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
   const [countersignError, setCountersignError] = useState<string | null>(null)
   const [countersigning, setCountersigning] = useState(false)
   const [moveInLoading, setMoveInLoading] = useState<string | null>(null)
-  const [moveInDone, setMoveInDone] = useState<Set<string>>(new Set())
   const [showAddModal, setShowAddModal] = useState(false)
   const [addForm, setAddForm] = useState(() => ({ name: '', email: '', phone: '', unitId: units.length === 1 ? units[0].id : '', source: '', notes: '' }))
   const [addError, setAddError] = useState<string | null>(null)
@@ -151,7 +153,11 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
     try {
       const res = await fetch(`/api/projects/${projectId}/leases/${leaseId}/generate-move-in`, { method: 'POST' })
       if (res.ok) {
-        setMoveInDone(prev => new Set([...prev, applicantId]))
+        const json = await res.json()
+        const invoiceId = json.data?.invoice?.id
+        if (invoiceId) {
+          router.push(`/projects/${projectSlug}/invoices/${invoiceId}?send=1`)
+        }
       }
     } finally {
       setMoveInLoading(null)
@@ -379,7 +385,6 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
                     })()}
                     {status === 'LEASE_SIGNED' && (() => {
                       const lease = applicant.leases?.[0]
-                      const alreadySent = moveInDone.has(applicant.id)
                       return (
                         <div className="mt-1.5 space-y-1">
                           {!applicant.convertedToTenant ? (
@@ -397,20 +402,14 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
                             </div>
                           )}
                           {lease && (
-                            alreadySent ? (
-                              <div className="w-full rounded bg-muted px-2 py-1 text-[10px] text-muted-foreground text-center">
-                                Move-in invoice sent ✓
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={moveInLoading === applicant.id}
-                                onClick={e => { e.stopPropagation(); handleMoveInInvoice(applicant.id, lease.id) }}
-                                className="w-full rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-                              >
-                                {moveInLoading === applicant.id ? 'Sending…' : 'Send Move-in Invoice'}
-                              </button>
-                            )
+                            <button
+                              type="button"
+                              disabled={moveInLoading === applicant.id}
+                              onClick={e => { e.stopPropagation(); handleMoveInInvoice(applicant.id, lease.id) }}
+                              className="w-full rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                            >
+                              {moveInLoading === applicant.id ? 'Creating…' : 'Send Move-in Invoice'}
+                            </button>
                           )}
                         </div>
                       )

@@ -115,13 +115,11 @@ export async function POST(_request: Request, { params }: RouteParams) {
           leaseId: lease.id,
           tenantId: lease.tenantId,
           invoiceNumber,
-          status: 'SENT',
+          status: 'DRAFT',
           issueDate: new Date(),
           dueDate,
           currency: lease.currency ?? 'USD',
           notes: `Move-in charges for ${lease.unit.unitLabel}`,
-          sentAt: new Date(),
-          sentTo: lease.tenant.email,
           lineItems: {
             create: lineItems.map(li => ({
               description: li.description,

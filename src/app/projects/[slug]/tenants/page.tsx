@@ -78,6 +78,7 @@ export default async function ProjectTenantsPage({ params }: PageParams) {
           <ProjectSubNav slug={slug} type={project.type} />
           <TenantsApplicantsClient
             projectId={project.id}
+            projectSlug={slug}
             tenants={JSON.parse(JSON.stringify(tenants))}
             units={units}
             listings={listings}

@@ -14,6 +14,7 @@ type Tenant = any
 
 interface Props {
   projectId: string
+  projectSlug: string
   tenants: Tenant[]
   units: UnitOption[]
   listings: ListingOption[]
@@ -23,7 +24,7 @@ interface Props {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Applicant = any
 
-export function TenantsApplicantsClient({ projectId, tenants, units, listings, defaultTab }: Props) {
+export function TenantsApplicantsClient({ projectId, projectSlug, tenants, units, listings, defaultTab }: Props) {
   const [tab, setTab] = useState<'applicants' | 'tenants'>(defaultTab)
   const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null)
   const [loadingApplicant, setLoadingApplicant] = useState(false)
@@ -69,6 +70,7 @@ export function TenantsApplicantsClient({ projectId, tenants, units, listings, d
       {tab === 'applicants' && (
         <ApplicantPipeline
           projectId={projectId}
+          projectSlug={projectSlug}
           units={units}
           onSelectApplicant={handleSelectApplicant}
         />
