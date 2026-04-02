@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     const employment = appData.employment as Record<string, string> | undefined
 
     const applicantData = {
+      name: parsed.data.name,
       status: 'APPLIED' as const,
       applicationData: parsed.data.applicationData,
       screeningConsentAt: new Date(),
@@ -74,7 +75,6 @@ export async function POST(request: Request) {
         data: {
           userId: listing.userId,
           propertyProfileId: listing.unit.propertyProfileId,
-          name: parsed.data.name,
           email: parsed.data.email,
           source: 'listing',
           ...applicantData,

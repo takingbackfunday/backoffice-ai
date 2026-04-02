@@ -26,7 +26,6 @@ type FormData = {
   fullName: string
   email: string
   phone: string
-  currentAddress: string
   dateOfBirth: string
   // Step 2
   currentEmployer: string
@@ -67,7 +66,7 @@ const fmtCurrency = (n: number) =>
 export function ApplicationFormClient({ listing }: Props) {
   const [step, setStep] = useState(0)
   const [formData, setFormData] = useState<FormData>({
-    fullName: '', email: '', phone: '', currentAddress: '', dateOfBirth: '',
+    fullName: '', email: '', phone: '', dateOfBirth: '',
     currentEmployer: '', position: '', annualIncome: '', employmentDuration: '',
     previousLandlordName: '', previousLandlordPhone: '', previousAddress: '', durationAtAddress: '', reasonForLeaving: '',
     numberOfOccupants: '', petType: '', petBreed: '', petWeight: '', vehicles: '', desiredMoveIn: '', desiredLeaseTerm: '',
@@ -95,7 +94,6 @@ export function ApplicationFormClient({ listing }: Props) {
           fullName: formData.fullName,
           email: formData.email,
           phone: formData.phone,
-          currentAddress: formData.currentAddress,
           dateOfBirth: formData.dateOfBirth,
         },
         employment: {
@@ -206,8 +204,6 @@ export function ApplicationFormClient({ listing }: Props) {
               <input required type="email" value={formData.email} onChange={e => set('email', e.target.value)} className={inputClass} /></div>
             <div><label className="block text-xs font-medium mb-1">Phone <span className="text-destructive">*</span></label>
               <input required type="tel" value={formData.phone} onChange={e => set('phone', e.target.value)} className={inputClass} /></div>
-            <div><label className="block text-xs font-medium mb-1">Current address</label>
-              <input type="text" value={formData.currentAddress} onChange={e => set('currentAddress', e.target.value)} className={inputClass} /></div>
             <div><label className="block text-xs font-medium mb-1">Date of birth</label>
               <input type="date" value={formData.dateOfBirth} onChange={e => set('dateOfBirth', e.target.value)} className={inputClass} /></div>
           </>

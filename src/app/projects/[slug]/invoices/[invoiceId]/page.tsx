@@ -18,17 +18,37 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
   const { slug, invoiceId } = await params
 
   const project = await prisma.project.findFirst({
-    where: { userId, slug, type: 'CLIENT' },
+    where: { userId, slug },
+    include: {
+      propertyProfile: { include: { units: { select: { id: true } } } },
+    },
   })
   if (!project) notFound()
 
+  // Build the invoice query depending on project type
+  const isProperty = project.type === 'PROPERTY'
+  const unitIds = project.propertyProfile?.units.map(u => u.id) ?? []
+  const propertyProfileId = project.propertyProfile?.id
+
   const invoice = await prisma.invoice.findFirst({
-    where: { id: invoiceId, clientProfile: { projectId: project.id } },
+    where: {
+      id: invoiceId,
+      OR: isProperty
+        ? [
+            { lease: { unitId: { in: unitIds } } },
+            { tenant: { userId, leases: { some: { unitId: { in: unitIds } } } } },
+            ...(propertyProfileId ? [{ applicant: { propertyProfileId } }] : []),
+          ]
+        : [{ clientProfile: { projectId: project.id } }],
+    },
     include: {
       job: { select: { id: true, name: true } },
       lineItems: true,
       payments: true,
       clientProfile: { select: { email: true, contactName: true } },
+      applicant: { select: { id: true, name: true, email: true, unit: { select: { unitLabel: true } } } },
+      tenant: { select: { id: true, name: true, email: true } },
+      lease: { select: { id: true, unit: { select: { unitLabel: true } }, tenant: { select: { name: true, email: true } } } },
       replacesInvoice: { select: { id: true, invoiceNumber: true } },
       replacedBy: { select: { id: true, invoiceNumber: true } },
     },
@@ -57,6 +77,26 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     },
   }))
 
+  // Derive client name/email based on what the invoice is linked to
+  const clientEmail =
+    invoice.clientProfile?.email ??
+    invoice.applicant?.email ??
+    invoice.tenant?.email ??
+    invoice.lease?.tenant?.email ??
+    null
+
+  const clientName =
+    invoice.clientProfile?.contactName ??
+    invoice.applicant?.name ??
+    invoice.tenant?.name ??
+    invoice.lease?.tenant?.name ??
+    project.name
+
+  // Derive job label (tenant = "job" for property invoices)
+  const job = invoice.job
+    ?? (invoice.lease ? { id: invoice.lease.id, name: `Unit ${invoice.lease.unit.unitLabel}` } : null)
+    ?? (invoice.applicant ? { id: invoice.applicant.id, name: `Applicant: ${invoice.applicant.name}${invoice.applicant.unit ? ` (${invoice.applicant.unit.unitLabel})` : ''}` } : null)
+
   const serialized = {
     id: invoice.id,
     invoiceNumber: invoice.invoiceNumber,
@@ -65,9 +105,9 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     dueDate: invoice.dueDate.toISOString(),
     currency: invoice.currency,
     notes: invoice.notes ?? null,
-    job: invoice.job,
-    clientEmail: invoice.clientProfile?.email ?? null,
-    clientName: invoice.clientProfile?.contactName ?? project.name,
+    job,
+    clientEmail,
+    clientName,
     lineItems: invoice.lineItems.map(i => ({
       id: i.id,
       description: i.description,
@@ -111,7 +151,15 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
               All invoices
             </Link>
           </div>
-          <InvoiceDetailClient projectId={project.id} projectSlug={slug} invoice={serialized} paymentMethods={paymentMethods} suggestions={suggestions} replacesInvoice={serialized.replacesInvoice} replacedBy={serialized.replacedBy} />
+          <InvoiceDetailClient
+            projectId={project.id}
+            projectSlug={slug}
+            invoice={serialized}
+            paymentMethods={paymentMethods}
+            suggestions={suggestions}
+            replacesInvoice={serialized.replacesInvoice}
+            replacedBy={serialized.replacedBy}
+          />
         </main>
       </div>
     </div>
