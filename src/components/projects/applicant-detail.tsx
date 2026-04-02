@@ -106,6 +106,20 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
   const [error, setError] = useState<string | null>(null)
   const [notes, setNotes] = useState(initial.notes ?? '')
   const [rejectedReason, setRejectedReason] = useState(initial.rejectedReason ?? '')
+  const [showCreditInput, setShowCreditInput] = useState(false)
+  const [creditScoreValue, setCreditScoreValue] = useState<string>(initial.creditScore?.toString() ?? '')
+  const [showBgCheckInput, setShowBgCheckInput] = useState(false)
+  const [bgCheckValue, setBgCheckValue] = useState<string>(initial.backgroundCheck ?? '')
+  const [showLeaseForm, setShowLeaseForm] = useState(false)
+  const [leaseForm, setLeaseForm] = useState({
+    startDate: '',
+    endDate: '',
+    monthlyRent: '',
+    securityDeposit: '',
+    paymentDueDay: '1',
+    contractNotes: '',
+  })
+  const [offeringLease, setOfferingLease] = useState(false)
 
   async function save(updates: Record<string, unknown>) {
     setSaving(true)
@@ -176,6 +190,47 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
     }
   }
 
+  async function handleSaveCreditScore() {
+    const score = parseInt(creditScoreValue, 10)
+    if (isNaN(score) || score < 300 || score > 850) return
+    await save({ creditScore: score })
+    setShowCreditInput(false)
+  }
+
+  async function handleSaveBgCheck(value: string) {
+    await save({ backgroundCheck: value })
+    setBgCheckValue(value)
+    setShowBgCheckInput(false)
+  }
+
+  async function handleOfferLease() {
+    if (!leaseForm.startDate || !leaseForm.endDate || !leaseForm.monthlyRent) return
+    setOfferingLease(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}/offer-lease`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate: leaseForm.startDate,
+          endDate: leaseForm.endDate,
+          monthlyRent: parseFloat(leaseForm.monthlyRent),
+          securityDeposit: leaseForm.securityDeposit ? parseFloat(leaseForm.securityDeposit) : undefined,
+          paymentDueDay: parseInt(leaseForm.paymentDueDay, 10),
+          contractNotes: leaseForm.contractNotes || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) { setError(json.error ?? 'Failed to send lease'); return }
+      const updated = { ...applicant, status: 'LEASE_OFFERED' }
+      setApplicant(updated)
+      onUpdated(updated)
+      setShowLeaseForm(false)
+    } finally {
+      setOfferingLease(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -197,6 +252,40 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
 
           {error && (
             <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>
+          )}
+
+          {/* Screening input buttons */}
+          {!['REJECTED', 'WITHDRAWN'].includes(applicant.status) && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCreditInput(true)}
+                className={cn(
+                  'flex-1 rounded-lg border-2 border-dashed px-3 py-2.5 text-xs font-semibold transition-colors',
+                  applicant.creditScore
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-muted-foreground/30 text-muted-foreground hover:border-primary hover:text-primary'
+                )}
+              >
+                {applicant.creditScore ? `Credit: ${applicant.creditScore}` : '+ Input Credit Score'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBgCheckInput(true)}
+                className={cn(
+                  'flex-1 rounded-lg border-2 border-dashed px-3 py-2.5 text-xs font-semibold transition-colors',
+                  applicant.backgroundCheck
+                    ? applicant.backgroundCheck === 'passed'
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                      : applicant.backgroundCheck === 'failed'
+                        ? 'border-red-300 bg-red-50 text-red-700'
+                        : 'border-amber-300 bg-amber-50 text-amber-700'
+                    : 'border-muted-foreground/30 text-muted-foreground hover:border-primary hover:text-primary'
+                )}
+              >
+                {applicant.backgroundCheck ? `BG: ${applicant.backgroundCheck}` : '+ Input Background Check'}
+              </button>
+            </div>
           )}
 
           {/* Status */}
@@ -419,20 +508,6 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
             </div>
           )}
 
-          {/* Screening */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground">Credit score</p>
-              <p className="text-sm">{applicant.creditScore ?? '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Background check</p>
-              <p className={cn('text-sm capitalize', applicant.backgroundCheck === 'passed' && 'text-emerald-600', applicant.backgroundCheck === 'failed' && 'text-red-600')}>
-                {applicant.backgroundCheck ?? '—'}
-              </p>
-            </div>
-          </div>
-
           {/* Rejection reason */}
           {applicant.status === 'REJECTED' && (
             <div>
@@ -469,7 +544,60 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
         </div>
 
         {/* Footer */}
-        {(applicant.status === 'APPROVED' || applicant.status === 'LEASE_SIGNED') && !applicant.convertedToTenant && (
+        {applicant.status === 'APPROVED' && !applicant.convertedToTenant && (
+          <div className="border-t px-5 py-4">
+            {!showLeaseForm ? (
+              <button
+                type="button"
+                onClick={() => setShowLeaseForm(true)}
+                className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+              >
+                Draft Lease Agreement →
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold">Lease terms</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-medium mb-0.5">Start date *</label>
+                    <input type="date" value={leaseForm.startDate} onChange={e => setLeaseForm(f => ({ ...f, startDate: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium mb-0.5">End date *</label>
+                    <input type="date" value={leaseForm.endDate} onChange={e => setLeaseForm(f => ({ ...f, endDate: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-medium mb-0.5">Monthly rent ($) *</label>
+                    <input type="number" value={leaseForm.monthlyRent} onChange={e => setLeaseForm(f => ({ ...f, monthlyRent: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium mb-0.5">Security deposit ($)</label>
+                    <input type="number" value={leaseForm.securityDeposit} onChange={e => setLeaseForm(f => ({ ...f, securityDeposit: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium mb-0.5">Notes</label>
+                  <textarea value={leaseForm.contractNotes} onChange={e => setLeaseForm(f => ({ ...f, contractNotes: e.target.value }))} rows={2} className="w-full rounded-md border px-2 py-1.5 text-xs resize-none" />
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setShowLeaseForm(false)} className="flex-1 rounded-md border px-3 py-2 text-xs font-medium hover:bg-muted">Cancel</button>
+                  <button
+                    type="button"
+                    onClick={handleOfferLease}
+                    disabled={offeringLease || !leaseForm.startDate || !leaseForm.endDate || !leaseForm.monthlyRent}
+                    className="flex-1 rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {offeringLease ? 'Sending…' : 'Send Lease Offer'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {applicant.status === 'LEASE_SIGNED' && !applicant.convertedToTenant && (
           <div className="border-t px-5 py-4">
             <button
               type="button"
@@ -484,6 +612,63 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
 
         {saving && (
           <div className="absolute bottom-4 right-5 text-xs text-muted-foreground">Saving…</div>
+        )}
+
+        {showCreditInput && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-xs rounded-xl bg-background border shadow-lg p-5 space-y-3">
+              <h3 className="text-sm font-semibold">Input Credit Score</h3>
+              <input
+                type="number"
+                min={300}
+                max={850}
+                value={creditScoreValue}
+                onChange={e => setCreditScoreValue(e.target.value)}
+                placeholder="e.g. 720"
+                className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                autoFocus
+              />
+              <p className="text-[10px] text-muted-foreground">Valid range: 300–850</p>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowCreditInput(false)} className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancel</button>
+                <button type="button" onClick={handleSaveCreditScore} disabled={saving} className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showBgCheckInput && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-xs rounded-xl bg-background border shadow-lg p-5 space-y-3">
+              <h3 className="text-sm font-semibold">Background Check Result</h3>
+              <div className="flex flex-col gap-2">
+                {(['passed', 'failed', 'pending'] as const).map(val => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => handleSaveBgCheck(val)}
+                    disabled={saving}
+                    className={cn(
+                      'w-full rounded-md border px-3 py-2.5 text-sm font-medium transition-colors capitalize',
+                      val === 'passed' && 'hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700',
+                      val === 'failed' && 'hover:bg-red-50 hover:border-red-300 hover:text-red-700',
+                      val === 'pending' && 'hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700',
+                      bgCheckValue === val && (
+                        val === 'passed' ? 'bg-emerald-50 border-emerald-300 text-emerald-700' :
+                        val === 'failed' ? 'bg-red-50 border-red-300 text-red-700' :
+                        'bg-amber-50 border-amber-300 text-amber-700'
+                      )
+                    )}
+                  >
+                    {val}
+                  </button>
+                ))}
+              </div>
+              <div className="flex justify-end">
+                <button type="button" onClick={() => setShowBgCheckInput(false)} className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancel</button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

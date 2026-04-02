@@ -51,8 +51,8 @@ function renderPaymentMethodsHtml(pm: PaymentMethods, paymentNote?: string): str
     }
   }
 
-  const note = paymentNote ?? 'Please include the invoice number in your payment reference.'
-  html += `<p style="font-size:11px;color:#888;margin:12px 0 0">${note}</p>`
+  const note = paymentNote ?? 'Please include your invoice number and full name in your payment reference.'
+  html += `<div style="background:#fef3c7;border-radius:4px;padding:8px 12px;margin-top:12px"><p style="font-size:12px;color:#92400e;font-weight:600;margin:0">${note}</p></div>`
 
   html += '</div>'
   return html

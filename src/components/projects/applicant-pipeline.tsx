@@ -46,6 +46,8 @@ interface Applicant {
   phone: string | null
   status: string
   source: string | null
+  creditScore: number | null
+  backgroundCheck: string | null
   createdAt: string
   unit: { id: string; unitLabel: string } | null
   _count: { documents: number }
@@ -227,7 +229,91 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
                         )}
                       </div>
                     </div>
-                    {(status === 'APPROVED' || status === 'LEASE_SIGNED') && (
+                    {/* Stage-specific action buttons */}
+                    {status === 'INQUIRY' && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); onSelectApplicant?.(applicant) }}
+                        className="mt-1.5 w-full rounded bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-blue-700 transition-colors"
+                      >
+                        Send Application →
+                      </button>
+                    )}
+                    {status === 'APPLICATION_SENT' && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); onSelectApplicant?.(applicant) }}
+                        className="mt-1.5 w-full rounded bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/80 transition-colors"
+                      >
+                        Resend Application
+                      </button>
+                    )}
+                    {(status === 'APPLIED' || status === 'SCREENING') && (
+                      <div className="flex gap-1 mt-1.5">
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); onSelectApplicant?.(applicant) }}
+                          className={cn(
+                            'flex-1 rounded px-1.5 py-0.5 text-[9px] font-medium border transition-colors',
+                            applicant.creditScore
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                              : 'border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary'
+                          )}
+                        >
+                          {applicant.creditScore ? `Credit: ${applicant.creditScore}` : '+ Credit'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); onSelectApplicant?.(applicant) }}
+                          className={cn(
+                            'flex-1 rounded px-1.5 py-0.5 text-[9px] font-medium border transition-colors',
+                            applicant.backgroundCheck
+                              ? applicant.backgroundCheck === 'passed' ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                : applicant.backgroundCheck === 'failed' ? 'bg-red-50 border-red-200 text-red-700'
+                                : 'bg-amber-50 border-amber-200 text-amber-700'
+                              : 'border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary'
+                          )}
+                        >
+                          {applicant.backgroundCheck ? `BG: ${applicant.backgroundCheck}` : '+ BG Check'}
+                        </button>
+                      </div>
+                    )}
+                    {status === 'SCREENING' && (
+                      <div className="flex gap-1 mt-1">
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); updateStatus(applicant.id, 'APPROVED') }}
+                          className="flex-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[9px] font-semibold text-white hover:bg-emerald-700 transition-colors"
+                        >
+                          Approve ✓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            setRejectModal({ applicantId: applicant.id, toStatus: 'REJECTED' })
+                          }}
+                          className="flex-1 rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-semibold text-white hover:bg-red-700 transition-colors"
+                        >
+                          Reject ✗
+                        </button>
+                      </div>
+                    )}
+                    {status === 'APPROVED' && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); onSelectApplicant?.(applicant) }}
+                        className="mt-1.5 w-full rounded bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700 transition-colors"
+                      >
+                        Draft Lease Agreement →
+                      </button>
+                    )}
+                    {status === 'LEASE_OFFERED' && (
+                      <div className="mt-1.5 w-full rounded bg-teal-50 border border-teal-200 px-2 py-1 text-[10px] text-teal-700 text-center font-medium">
+                        ⏳ Awaiting signature
+                      </div>
+                    )}
+                    {status === 'LEASE_SIGNED' && (
                       <button
                         type="button"
                         disabled={converting === applicant.id}

@@ -191,7 +191,7 @@ export function PaymentSettingsForm({ initial, initialBusinessName = '', initial
           value={paymentNote}
           onChange={e => setPaymentNote(e.target.value)}
           rows={2}
-          placeholder="Please include the invoice number in your payment reference."
+          placeholder="Please include your invoice number and full name in your payment reference."
           className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
         />
       </Section>

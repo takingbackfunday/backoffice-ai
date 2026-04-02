@@ -108,7 +108,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
     }
 
-    const applicant = await prisma.applicant.update({
+    let applicant = await prisma.applicant.update({
       where: { id: applicantId },
       data: updateData,
       include: {
@@ -116,6 +116,23 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         _count: { select: { documents: true } },
       },
     })
+
+    // Auto-advance: if applicant is APPLIED and has a paid screening invoice, move to SCREENING
+    if (applicant.status === 'APPLIED') {
+      const paidInvoice = await prisma.invoice.findFirst({
+        where: { applicantId, status: 'PAID' },
+      })
+      if (paidInvoice) {
+        applicant = await prisma.applicant.update({
+          where: { id: applicantId },
+          data: { status: 'SCREENING' },
+          include: {
+            unit: { select: { id: true, unitLabel: true } },
+            _count: { select: { documents: true } },
+          },
+        })
+      }
+    }
 
     return ok(applicant)
   } catch {

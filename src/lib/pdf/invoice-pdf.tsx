@@ -146,7 +146,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
   const hasStripe = !!pm?.stripe?.link
   const hasCustom = (pm?.custom?.length ?? 0) > 0
   const hasPayment = hasBankTransfer || hasPaypal || hasStripe || hasCustom
-  const payNote = invoicePaymentNote ?? 'Please include the invoice number in your payment reference.'
+  const payNote = invoicePaymentNote ?? 'Please include your invoice number and full name in your payment reference.'
 
   return (
     <Document>
@@ -264,6 +264,10 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
           <View style={S.paySection}>
             <Text style={S.payTitle}>How to pay</Text>
 
+            <View style={{ backgroundColor: '#fef3c7', borderRadius: 4, padding: 8, marginBottom: 10 }}>
+              <Text style={{ fontSize: 8.5, color: '#92400e', fontFamily: 'Helvetica-Bold' }}>{payNote}</Text>
+            </View>
+
             {hasBankTransfer && pm?.bankTransfer && (
               <View style={S.payBlock}>
                 <Text style={S.payBlockTitle}>Bank Transfer{pm.bankTransfer.bankName ? ` — ${pm.bankTransfer.bankName}` : ''}</Text>
@@ -309,9 +313,6 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
               </View>
             ))}
 
-            <View style={{ marginTop: 6 }}>
-              <Text style={[S.footerText, { color: '#888', fontSize: 7.5 }]}>{payNote}</Text>
-            </View>
           </View>
         )}
 

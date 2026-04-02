@@ -111,17 +111,20 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
     if (!project.propertyProfile) notFound()
 
     const unitIds = project.propertyProfile.units.map(u => u.id)
+    const propertyProfileId = project.propertyProfile.id
 
     const propertyInvoices = await prisma.invoice.findMany({
       where: {
         OR: [
           { lease: { unitId: { in: unitIds } } },
           { tenant: { userId, leases: { some: { unitId: { in: unitIds } } } } },
+          { applicant: { propertyProfileId } },
         ],
       },
       include: {
         lease: { select: { id: true, unit: { select: { unitLabel: true } } } },
         tenant: { select: { id: true, name: true, email: true } },
+        applicant: { select: { id: true, name: true, email: true, unit: { select: { unitLabel: true } } } },
         lineItems: true,
         payments: true,
       },
@@ -136,7 +139,11 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
       dueDate: inv.dueDate.toISOString(),
       currency: inv.currency,
       notes: inv.notes ?? null,
-      job: inv.lease ? { id: inv.lease.id, name: `Unit ${inv.lease.unit.unitLabel}` } : null,
+      job: inv.lease
+        ? { id: inv.lease.id, name: `Unit ${inv.lease.unit.unitLabel}` }
+        : inv.applicant
+          ? { id: inv.applicant.id, name: `Applicant: ${inv.applicant.name}${inv.applicant.unit ? ` (${inv.applicant.unit.unitLabel})` : ''}` }
+          : null,
       lineItems: inv.lineItems.map(i => ({
         id: i.id,
         description: i.description,
@@ -151,11 +158,11 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
       })),
     }))
 
-    // Use first tenant as the default email recipient for the invoice modal
-    // The real per-invoice recipient is derived from lease.tenant in the send route
+    // Use first tenant/applicant as the default email recipient for the invoice modal
     const firstTenant = propertyInvoices.find(inv => inv.tenant)?.tenant
-    const clientEmail = firstTenant?.email ?? ''
-    const clientName = firstTenant?.name ?? project.name
+    const firstApplicant = propertyInvoices.find(inv => inv.applicant)?.applicant
+    const clientEmail = firstTenant?.email ?? firstApplicant?.email ?? ''
+    const clientName = firstTenant?.name ?? firstApplicant?.name ?? project.name
 
     return (
       <div className="flex min-h-screen">

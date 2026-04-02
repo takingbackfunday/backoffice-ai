@@ -7,7 +7,7 @@ import { AgentQA } from '@/components/dashboard/agent-qa'
 
 export function ChatOverlay() {
   const pathname = usePathname()
-  if (pathname.startsWith('/portal')) return null
+  if (pathname.startsWith('/portal') || pathname.startsWith('/apply') || pathname.startsWith('/sign')) return null
   const { open, toggle, close, hidden, hide, show } = useChatStore()
 
   // Close on Escape
