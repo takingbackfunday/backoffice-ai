@@ -46,6 +46,11 @@ export async function GET(request: Request, { params }: RouteParams) {
         unit: { select: { id: true, unitLabel: true } },
         _count: { select: { documents: true } },
         convertedToTenant: { select: { id: true } },
+        leases: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, contractStatus: true, tenantSignedAt: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })

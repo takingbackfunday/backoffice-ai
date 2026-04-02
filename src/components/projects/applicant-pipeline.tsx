@@ -52,6 +52,7 @@ interface Applicant {
   unit: { id: string; unitLabel: string } | null
   _count: { documents: number }
   convertedToTenant: { id: string } | null
+  leases?: Array<{ id: string; contractStatus: string; tenantSignedAt: string | null }>
 }
 
 interface UnitOption { id: string; unitLabel: string }
@@ -73,6 +74,12 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
   const [rejectModal, setRejectModal] = useState<{ applicantId: string; toStatus: string } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [converting, setConverting] = useState<string | null>(null)
+  const [countersignModal, setCountersignModal] = useState<{ applicantId: string; leaseId: string } | null>(null)
+  const [countersignName, setCountersignName] = useState('')
+  const [countersignError, setCountersignError] = useState<string | null>(null)
+  const [countersigning, setCountersigning] = useState(false)
+  const [moveInLoading, setMoveInLoading] = useState<string | null>(null)
+  const [moveInDone, setMoveInDone] = useState<Set<string>>(new Set())
   const [showAddModal, setShowAddModal] = useState(false)
   const [addForm, setAddForm] = useState(() => ({ name: '', email: '', phone: '', unitId: units.length === 1 ? units[0].id : '', source: '', notes: '' }))
   const [addError, setAddError] = useState<string | null>(null)
@@ -112,6 +119,42 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
       if (res.ok) await load()
     } finally {
       setConverting(null)
+    }
+  }
+
+  async function handleCountersign() {
+    if (!countersignModal || !countersignName.trim()) {
+      setCountersignError('Please type your name.')
+      return
+    }
+    setCountersigning(true)
+    setCountersignError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/leases/${countersignModal.leaseId}/countersign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signatureName: countersignName.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) { setCountersignError(json.error ?? 'Failed to countersign'); return }
+      // Advance applicant to LEASE_SIGNED
+      await updateStatus(countersignModal.applicantId, 'LEASE_SIGNED')
+      setCountersignModal(null)
+      setCountersignName('')
+    } finally {
+      setCountersigning(false)
+    }
+  }
+
+  async function handleMoveInInvoice(applicantId: string, leaseId: string) {
+    setMoveInLoading(applicantId)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/leases/${leaseId}/generate-move-in`, { method: 'POST' })
+      if (res.ok) {
+        setMoveInDone(prev => new Set([...prev, applicantId]))
+      }
+    } finally {
+      setMoveInLoading(null)
     }
   }
 
@@ -309,26 +352,69 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
                         Draft Lease Agreement →
                       </button>
                     )}
-                    {status === 'LEASE_OFFERED' && (
-                      <div className="mt-1.5 w-full rounded bg-teal-50 border border-teal-200 px-2 py-1 text-[10px] text-teal-700 text-center font-medium">
-                        ⏳ Awaiting signature
-                      </div>
-                    )}
-                    {status === 'LEASE_SIGNED' && !applicant.convertedToTenant && (
-                      <button
-                        type="button"
-                        disabled={converting === applicant.id}
-                        onClick={e => { e.stopPropagation(); handleConvert(applicant.id) }}
-                        className="mt-1.5 w-full rounded bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                      >
-                        {converting === applicant.id ? 'Converting…' : 'Convert to Tenant →'}
-                      </button>
-                    )}
-                    {status === 'LEASE_SIGNED' && applicant.convertedToTenant && (
-                      <div className="mt-1.5 w-full rounded bg-emerald-50 border border-emerald-200 px-2 py-1 text-[10px] text-emerald-700 text-center font-medium">
-                        ✓ Converted
-                      </div>
-                    )}
+                    {status === 'LEASE_OFFERED' && (() => {
+                      const lease = applicant.leases?.[0]
+                      const tenantSigned = lease?.contractStatus === 'SIGNED' && lease?.tenantSignedAt
+                      if (tenantSigned) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation()
+                              setCountersignModal({ applicantId: applicant.id, leaseId: lease!.id })
+                              setCountersignName('')
+                              setCountersignError(null)
+                            }}
+                            className="mt-1.5 w-full rounded bg-indigo-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-indigo-700 transition-colors"
+                          >
+                            ✍ Countersign →
+                          </button>
+                        )
+                      }
+                      return (
+                        <div className="mt-1.5 w-full rounded bg-teal-50 border border-teal-200 px-2 py-1 text-[10px] text-teal-700 text-center font-medium">
+                          ⏳ Awaiting signature
+                        </div>
+                      )
+                    })()}
+                    {status === 'LEASE_SIGNED' && (() => {
+                      const lease = applicant.leases?.[0]
+                      const alreadySent = moveInDone.has(applicant.id)
+                      return (
+                        <div className="mt-1.5 space-y-1">
+                          {!applicant.convertedToTenant ? (
+                            <button
+                              type="button"
+                              disabled={converting === applicant.id}
+                              onClick={e => { e.stopPropagation(); handleConvert(applicant.id) }}
+                              className="w-full rounded bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                            >
+                              {converting === applicant.id ? 'Converting…' : 'Convert to Tenant →'}
+                            </button>
+                          ) : (
+                            <div className="w-full rounded bg-emerald-50 border border-emerald-200 px-2 py-1 text-[10px] text-emerald-700 text-center font-medium">
+                              ✓ Converted
+                            </div>
+                          )}
+                          {lease && (
+                            alreadySent ? (
+                              <div className="w-full rounded bg-muted px-2 py-1 text-[10px] text-muted-foreground text-center">
+                                Move-in invoice sent ✓
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={moveInLoading === applicant.id}
+                                onClick={e => { e.stopPropagation(); handleMoveInInvoice(applicant.id, lease.id) }}
+                                className="w-full rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                              >
+                                {moveInLoading === applicant.id ? 'Sending…' : 'Send Move-in Invoice'}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 ))}
               </div>
@@ -460,6 +546,40 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Countersign modal */}
+      {countersignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-background border shadow-lg p-6 space-y-4">
+            <h3 className="text-sm font-semibold">Countersign lease</h3>
+            <p className="text-xs text-muted-foreground">The tenant has signed. Type your name below to countersign and activate the lease.</p>
+            <div>
+              <label className="block text-xs font-medium mb-1">Your signature (type your full name) <span className="text-destructive">*</span></label>
+              <input
+                type="text"
+                value={countersignName}
+                onChange={e => setCountersignName(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Your full name"
+                style={{ fontFamily: "'Brush Script MT', cursive" }}
+                autoFocus
+              />
+            </div>
+            {countersignError && <p className="text-sm text-destructive">{countersignError}</p>}
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setCountersignModal(null)} className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">Cancel</button>
+              <button
+                type="button"
+                onClick={handleCountersign}
+                disabled={countersigning || !countersignName.trim()}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {countersigning ? 'Signing…' : 'Countersign'}
+              </button>
+            </div>
           </div>
         </div>
       )}
