@@ -592,6 +592,10 @@ model Lease {
   additionalCharges Json  @default("[]")  // [{label, amount, frequency: 'monthly'|'one_time'}]
   utilitiesIncluded Json  @default("[]")  // string[]
   leaseRules        Json  @default("{}")  // {smokingAllowed, sublettingAllowed, petsAllowed, petNotes, parkingStall, parkingFee, storageUnit, storageFee, guestPolicy}
+  // Renegotiation chain (mirrors Invoice.replacesInvoiceId pattern)
+  replacesLeaseId   String?  @unique
+  replacesLease     Lease?   @relation("LeaseReplacement", fields: [replacesLeaseId], references: [id])
+  replacedBy        Lease?   @relation("LeaseReplacement")
   tenantCharges    TenantCharge[]
   tenantPayments   TenantPayment[]
   tenantFiles      TenantFile[]

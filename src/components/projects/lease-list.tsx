@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, FileText, Send, CheckCircle, Loader2 } from 'lucide-react'
+import { Plus, FileText, Send, CheckCircle, Loader2, RefreshCw } from 'lucide-react'
 import { LEASE_STATUS_LABELS, LEASE_STATUS_COLORS } from '@/types'
 import { LeaseForm } from './lease-form'
 import { cn } from '@/lib/utils'
@@ -12,9 +12,13 @@ interface TenantOption { id: string; name: string; email: string }
 interface Lease {
   id: string; status: string; startDate: string; endDate: string;
   monthlyRent: number; securityDeposit: number | null;
+  paymentDueDay: number | null;
+  lateFeeAmount: number | null;
+  lateFeeGraceDays: number | null;
   contractStatus: string;
   tenantSignedAt: string | null;
   ownerSignedAt: string | null;
+  replacedBy: { id: string } | null;
   unit: { id: string; unitLabel: string };
   tenant: { id: string; name: string; email: string };
   _count: { tenantCharges: number; tenantPayments: number }
@@ -53,6 +57,13 @@ export function LeaseList({ projectId, leases: initial, units, tenants }: Props)
   const [countersignModal, setCountersignModal] = useState<string | null>(null)
   const [countersignName, setCountersignName] = useState('')
   const [countersignError, setCountersignError] = useState<string | null>(null)
+  const [renegotiateModal, setRenegotiateModal] = useState<Lease | null>(null)
+  const [renegotiateForm, setRenegotiateForm] = useState({
+    startDate: '', endDate: '', monthlyRent: '', securityDeposit: '',
+    paymentDueDay: '1', lateFeeAmount: '', lateFeeGraceDays: '5',
+  })
+  const [renegotiating, setRenegotiating] = useState(false)
+  const [renegotiateError, setRenegotiateError] = useState<string | null>(null)
 
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -145,6 +156,66 @@ export function LeaseList({ projectId, leases: initial, units, tenants }: Props)
       updateLeaseContract(leaseId, 'SIGNED')
     } finally {
       setContractAction(null)
+    }
+  }
+
+  function openRenegotiateModal(lease: Lease) {
+    setRenegotiateForm({
+      startDate: lease.startDate.slice(0, 10),
+      endDate: lease.endDate.slice(0, 10),
+      monthlyRent: String(Number(lease.monthlyRent)),
+      securityDeposit: lease.securityDeposit ? String(Number(lease.securityDeposit)) : '',
+      paymentDueDay: String(lease.paymentDueDay ?? 1),
+      lateFeeAmount: lease.lateFeeAmount ? String(Number(lease.lateFeeAmount)) : '',
+      lateFeeGraceDays: String(lease.lateFeeGraceDays ?? 5),
+    })
+    setRenegotiateError(null)
+    setRenegotiateModal(lease)
+  }
+
+  async function handleRenegotiate() {
+    if (!renegotiateModal) return
+    if (!renegotiateForm.startDate || !renegotiateForm.endDate || !renegotiateForm.monthlyRent) {
+      setRenegotiateError('Start date, end date, and monthly rent are required.')
+      return
+    }
+    setRenegotiating(true)
+    setRenegotiateError(null)
+    try {
+      // Step 1: renegotiate (terminates old, creates DRAFT copy)
+      const res = await fetch(`/api/projects/${projectId}/leases/${renegotiateModal.id}/renegotiate`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || json.error) { setRenegotiateError(json.error ?? 'Failed to renegotiate'); return }
+
+      const newLease: Lease = { ...json.data, replacedBy: null }
+
+      // Step 2: patch the new lease with updated terms
+      const patchRes = await fetch(`/api/projects/${projectId}/leases/${newLease.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate: renegotiateForm.startDate,
+          endDate: renegotiateForm.endDate,
+          monthlyRent: parseFloat(renegotiateForm.monthlyRent),
+          securityDeposit: renegotiateForm.securityDeposit ? parseFloat(renegotiateForm.securityDeposit) : undefined,
+          paymentDueDay: parseInt(renegotiateForm.paymentDueDay, 10),
+          lateFeeAmount: renegotiateForm.lateFeeAmount ? parseFloat(renegotiateForm.lateFeeAmount) : undefined,
+          lateFeeGraceDays: parseInt(renegotiateForm.lateFeeGraceDays, 10),
+        }),
+      })
+      const patchJson = await patchRes.json()
+      const patchedLease: Lease = patchRes.ok && !patchJson.error
+        ? { ...newLease, ...patchJson.data, replacedBy: null }
+        : newLease
+
+      // Update list: mark old as terminated, add new draft
+      setLeases(prev => [
+        patchedLease,
+        ...prev.map(l => l.id === renegotiateModal.id ? { ...l, status: 'TERMINATED', replacedBy: { id: patchedLease.id } } : l),
+      ])
+      setRenegotiateModal(null)
+    } finally {
+      setRenegotiating(false)
     }
   }
 
@@ -288,6 +359,20 @@ export function LeaseList({ projectId, leases: initial, units, tenants }: Props)
                             Countersign
                           </button>
                         )}
+
+                        {/* Renegotiate */}
+                        {['DRAFT', 'ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'].includes(lease.status) && !lease.replacedBy && (
+                          <button
+                            type="button"
+                            onClick={() => openRenegotiateModal(lease)}
+                            disabled={!!busy}
+                            className="flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                            title="Renegotiate lease terms"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            Renegotiate
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -295,6 +380,58 @@ export function LeaseList({ projectId, leases: initial, units, tenants }: Props)
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Renegotiate modal */}
+      {renegotiateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-background border shadow-lg p-6 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold">Renegotiate lease</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                This will terminate the current lease for <strong>{renegotiateModal.unit.unitLabel}</strong> and create a new draft with the updated terms. The tenant will need to re-sign.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1">Start date <span className="text-destructive">*</span></label>
+                <input type="date" value={renegotiateForm.startDate} onChange={e => setRenegotiateForm(f => ({ ...f, startDate: e.target.value }))} className="w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">End date <span className="text-destructive">*</span></label>
+                <input type="date" value={renegotiateForm.endDate} onChange={e => setRenegotiateForm(f => ({ ...f, endDate: e.target.value }))} className="w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Monthly rent ($) <span className="text-destructive">*</span></label>
+                <input type="number" min="0" value={renegotiateForm.monthlyRent} onChange={e => setRenegotiateForm(f => ({ ...f, monthlyRent: e.target.value }))} className="w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Security deposit ($)</label>
+                <input type="number" min="0" value={renegotiateForm.securityDeposit} onChange={e => setRenegotiateForm(f => ({ ...f, securityDeposit: e.target.value }))} className="w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Payment due day</label>
+                <input type="number" min="1" max="28" value={renegotiateForm.paymentDueDay} onChange={e => setRenegotiateForm(f => ({ ...f, paymentDueDay: e.target.value }))} className="w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Late fee ($)</label>
+                <input type="number" min="0" value={renegotiateForm.lateFeeAmount} onChange={e => setRenegotiateForm(f => ({ ...f, lateFeeAmount: e.target.value }))} className="w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="e.g. 50" />
+              </div>
+            </div>
+            {renegotiateError && <p className="text-sm text-destructive">{renegotiateError}</p>}
+            <div className="flex justify-end gap-3 pt-1">
+              <button type="button" onClick={() => setRenegotiateModal(null)} className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">Cancel</button>
+              <button
+                type="button"
+                onClick={handleRenegotiate}
+                disabled={renegotiating || !renegotiateForm.startDate || !renegotiateForm.endDate || !renegotiateForm.monthlyRent}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {renegotiating ? 'Creating…' : 'Create new draft'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
