@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Project } from '@/generated/prisma/client'
 import type { TransactionWithRelations } from '@/types'
-import { type CategoryGroup, type Payee } from '@/components/rules/rule-editor'
+import { RuleEditor, type CategoryGroup, type Payee, type UserRule } from '@/components/rules/rule-editor'
 
 interface Props {
   initialRows?: TransactionWithRelations[]
@@ -907,6 +907,16 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const [rulePromptState, setRulePromptState] = useState<RulePromptState>('idle')
   const [watchingEditCount, setWatchingEditCount] = useState(0)
 
+  // ── "Make rule from this change" ─────────────────────────────────
+  interface MakeRuleSnap {
+    description: string
+    payeeName: string | null
+    categoryId: string | null
+    categoryName: string | null
+  }
+  const [makeRuleSnap, setMakeRuleSnap] = useState<MakeRuleSnap | null>(null)
+  const [showMakeRuleEditor, setShowMakeRuleEditor] = useState(false)
+
   const pageSize = 200
 
   // ── Fire suggestion request (shared between timer + manual trigger) ─
@@ -1166,38 +1176,51 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       if (!res.ok) throw new Error('patch failed')
 
       // Queue this edit for deferred rule suggestion generation.
-      const allCats = categoryGroups.flatMap((g) => g.categories)
-      const resolvedCatName =
-        field === 'categoryId'
-          ? (allCats.find((c) => c.id === rawValue)?.name ?? null)
-          : field === 'category'
-          ? (rawValue ?? null)
-          : (row.categoryRef?.name ?? (row as unknown as Record<string, unknown>).category as string ?? null)
-      const resolvedPayeeName =
-        field === 'payeeId'
-          ? (freshPayee?.name ?? payees.find((p) => p.id === rawValue)?.name ?? null)
-          : (row.payee?.name ?? null)
+      // Only category and payee changes are worth suggesting rules for.
+      if (field === 'categoryId' || field === 'category' || field === 'payeeId') {
+        const allCats = categoryGroups.flatMap((g) => g.categories)
+        const resolvedCatName =
+          field === 'categoryId'
+            ? (allCats.find((c) => c.id === rawValue)?.name ?? null)
+            : field === 'category'
+            ? (rawValue ?? null)
+            : (row.categoryRef?.name ?? (row as unknown as Record<string, unknown>).category as string ?? null)
+        const resolvedPayeeName =
+          field === 'payeeId'
+            ? (freshPayee?.name ?? payees.find((p) => p.id === rawValue)?.name ?? null)
+            : (row.payee?.name ?? null)
+        const resolvedCatId = field === 'categoryId' ? rawValue : (row.categoryId ?? null)
 
-      const editSnapshot = {
-        id: row.id,
-        description: field === 'description' ? (rawValue ?? row.description) : row.description,
-        payeeName: resolvedPayeeName,
-        categoryId: field === 'categoryId' ? rawValue : (row.categoryId ?? null),
-        categoryName: resolvedCatName,
-        amount: Number(row.amount),
+        const editSnapshot = {
+          id: row.id,
+          description: row.description,
+          payeeName: resolvedPayeeName,
+          categoryId: resolvedCatId,
+          categoryName: resolvedCatName,
+          amount: Number(row.amount),
+        }
+        const existing = editQueueRef.current.get(id) as unknown as typeof editSnapshot | undefined
+        const merged = existing ? { ...existing, ...editSnapshot } : editSnapshot
+        editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
+
+        const queueSize = editQueueRef.current.size
+        setWatchingEditCount(queueSize)
+        setRulePromptState('watching')
+
+        if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
+        suggestionTimerRef.current = setTimeout(() => {
+          fireSuggestions()
+        }, SUGGEST_DELAY_MS)
+
+        // Show "Make rule from this change" banner
+        setMakeRuleSnap({
+          description: row.description,
+          payeeName: resolvedPayeeName,
+          categoryId: resolvedCatId,
+          categoryName: resolvedCatName,
+        })
+        setShowMakeRuleEditor(false)
       }
-      const existing = editQueueRef.current.get(id) as unknown as typeof editSnapshot | undefined
-      const merged = existing ? { ...existing, ...editSnapshot } : editSnapshot
-      editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
-
-      const queueSize = editQueueRef.current.size
-      setWatchingEditCount(queueSize)
-      setRulePromptState('watching')
-
-      if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
-      suggestionTimerRef.current = setTimeout(() => {
-        fireSuggestions()
-      }, SUGGEST_DELAY_MS)
     } catch {
       // Revert on error
       if (row) {
@@ -1454,6 +1477,28 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
           </button>
         )}
 
+        {/* Upload CSV */}
+        <a
+          href="/upload"
+          className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-muted/60 transition-colors flex items-center gap-1"
+        >
+          ↑ Upload CSV
+        </a>
+
+        {/* Rules shortcuts */}
+        <a
+          href="/rules?new=1"
+          className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-muted/60 transition-colors"
+        >
+          + Create rule
+        </a>
+        <a
+          href="/rules?agent=1"
+          className="rounded-md border border-[#534AB7]/40 bg-[#EEEDFE]/60 px-2.5 py-1.5 text-xs font-medium text-[#3C3489] hover:bg-[#EEEDFE] transition-colors"
+        >
+          Run rules agent
+        </a>
+
         {/* Active filter count + clear */}
         {hasActiveFilters && (
           <div className="flex items-center gap-2">
@@ -1593,6 +1638,64 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
         onAnalyseNow={fireSuggestions}
         onDismiss={() => setRulePromptState('idle')}
       />
+
+      {/* Make rule from this change */}
+      {makeRuleSnap && !showMakeRuleEditor && (
+        <div className="flex items-center gap-3 rounded-lg border border-[#534AB7]/25 bg-[#FAFAFE] px-3 py-2 text-xs">
+          <span className="text-[13px]">💡</span>
+          <span className="text-[#3C3489] font-medium flex-1">Make a rule based on this change?</span>
+          <button
+            onClick={() => setShowMakeRuleEditor(true)}
+            className="rounded-md bg-[#534AB7] px-2.5 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
+          >
+            Create rule
+          </button>
+          <button
+            onClick={() => setMakeRuleSnap(null)}
+            className="text-muted-foreground hover:text-foreground leading-none px-0.5"
+            aria-label="Dismiss"
+          >✕</button>
+        </div>
+      )}
+
+      {makeRuleSnap && showMakeRuleEditor && (() => {
+        const snap = makeRuleSnap
+        const prebuiltRule: UserRule = {
+          id: '',
+          name: '',
+          priority: 50,
+          categoryName: snap.categoryName ?? '',
+          categoryId: snap.categoryId ?? null,
+          categoryRef: null,
+          payeeId: null,
+          payee: snap.payeeName ? { id: '', name: snap.payeeName } : null,
+          projectId: null,
+          project: null,
+          conditions: { all: [{ field: 'description', operator: 'contains', value: snap.description }] },
+          isActive: true,
+        }
+        return (
+          <div className="rounded-xl border border-[#534AB7]/25 bg-[#FAFAFE] overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-[#534AB7]/10 bg-[#EEEDFE]/30">
+              <span className="text-[13px]">💡</span>
+              <span className="text-xs font-medium text-[#3C3489] flex-1">New rule from this change</span>
+              <button onClick={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }} className="text-muted-foreground hover:text-foreground leading-none">✕</button>
+            </div>
+            <div className="p-4">
+              <RuleEditor
+                projects={projects}
+                payees={payees}
+                accounts={accounts}
+                categoryGroups={categoryGroups}
+                editingRule={prebuiltRule}
+                onSave={(_rule) => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
+                onCancel={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
+                showSaveAndApply={true}
+              />
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Table */}
       <div className="overflow-auto rounded-lg border">

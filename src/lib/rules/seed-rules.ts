@@ -551,35 +551,6 @@ export const STARTER_RULES: StarterRuleDef[] = [
     conditions: { all: [{ field: 'description', operator: 'contains', value: 'southwest' }] },
   },
 
-  // ── PAYMENTS & TRANSFERS ─────────────────────
-  {
-    id: 'venmo-transfer',
-    name: 'Venmo → Transfer',
-    group: 'payee',
-    tags: ['transfer', 'p2p'],
-    payeeName: 'Venmo',
-    categoryTargets: { personal: 'Account transfer', business: 'Account transfer' },
-    conditions: { all: [{ field: 'description', operator: 'contains', value: 'venmo' }] },
-  },
-  {
-    id: 'zelle-transfer',
-    name: 'Zelle → Transfer',
-    group: 'payee',
-    tags: ['transfer', 'p2p'],
-    payeeName: 'Zelle',
-    categoryTargets: { personal: 'Account transfer', business: 'Account transfer' },
-    conditions: { all: [{ field: 'description', operator: 'contains', value: 'zelle' }] },
-  },
-  {
-    id: 'paypal-transfer',
-    name: 'PayPal → Transfer',
-    group: 'payee',
-    tags: ['transfer', 'p2p'],
-    payeeName: 'PayPal',
-    categoryTargets: { personal: 'Account transfer', business: 'Account transfer' },
-    conditions: { all: [{ field: 'description', operator: 'contains', value: 'paypal' }] },
-  },
-
   // ── BUSINESS-ONLY ────────────────────────────
   {
     id: 'stripe-processing',

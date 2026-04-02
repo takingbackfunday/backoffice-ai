@@ -47,6 +47,7 @@ export interface UserRule {
     any?: { field: string; operator: string; value: string | number | string[] }[]
   }
   isActive: boolean
+  updatedAt?: string | Date
 }
 
 interface PreviewTx {

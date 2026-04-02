@@ -1,12 +1,26 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import type { Project } from '@/generated/prisma/client'
 import { RuleEditor, Toast, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
 import { RulesAgent, SuggestionCard, type PersistedSuggestion } from './rules-agent'
 import { StarterRules } from './starter-rules'
 
 // ── Local helpers (only needed for RuleCard display) ──────────────────────────
+
+function fmtRuleDate(d: string | Date | undefined): string {
+  if (!d) return ''
+  const date = new Date(d)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffDays = Math.floor(diffMs / 86400000)
+  if (diffDays === 0) return 'today'
+  if (diffDays === 1) return 'yesterday'
+  if (diffDays < 30) return `${diffDays}d ago`
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`
+  return `${Math.floor(diffDays / 365)}y ago`
+}
 
 const FIELD_LABELS: Record<string, string> = {
   description: 'Description', payeeName: 'Payee',
@@ -109,6 +123,11 @@ function RuleCard({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {rule.updatedAt && (
+            <span className="text-[10px] text-muted-foreground/70 tabular-nums" title={new Date(rule.updatedAt).toLocaleString()}>
+              {fmtRuleDate(rule.updatedAt)}
+            </span>
+          )}
           <span className="text-xs text-muted-foreground tabular-nums">#{rule.priority}</span>
 
           <button onClick={onToggle} disabled={toggling}
@@ -167,6 +186,10 @@ export function RulesManager({
   initialPendingSuggestions?: PersistedSuggestion[]
   initialPaymentSuggestions?: PaymentSuggestion[]
 } = {}) {
+  const searchParams = useSearchParams()
+  const autoAgent = searchParams.get('agent') === '1'
+  const autoNew = searchParams.get('new') === '1'
+
   const [rules, setRules] = useState<UserRule[]>(initialRules ?? [])
   const [projects, setProjects] = useState<Project[]>(initialProjects ?? [])
   const [payees, setPayees] = useState<Payee[]>(initialPayees ?? [])
@@ -174,7 +197,7 @@ export function RulesManager({
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>(initialCategoryGroups ?? [])
   const [loading, setLoading] = useState(!initialRules)
   const [error, setError] = useState<string | null>(null)
-  const [showEditor, setShowEditor] = useState(false)
+  const [showEditor, setShowEditor] = useState(autoNew)
   const [editingRule, setEditingRule] = useState<UserRule | undefined>(undefined)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -184,7 +207,7 @@ export function RulesManager({
   const [bulkDeleteProgress, setBulkDeleteProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<{ updated: number; total: number } | null>(null)
-  const [showAgent, setShowAgent] = useState(false)
+  const [showAgent, setShowAgent] = useState(autoAgent)
   const [showStarter, setShowStarter] = useState(false)
   const [agentFinishedSummary, setAgentFinishedSummary] = useState<{ uncategorised: number; noPayee: number } | null>(null)
   const [query, setQuery] = useState('')

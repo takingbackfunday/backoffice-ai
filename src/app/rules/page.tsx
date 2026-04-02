@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
@@ -21,7 +22,7 @@ export default async function RulesPage() {
         categoryRef: { include: { group: true } },
         payee: true,
       },
-      orderBy: { priority: 'asc' },
+      orderBy: { updatedAt: 'desc' },
     }),
     prisma.project.findMany({
       where: { userId },
@@ -79,19 +80,21 @@ export default async function RulesPage() {
               Rules automatically categorize transactions on import. Define conditions and the category, payee, or project to apply when they match.
             </p>
           </div>
-          <RulesManager
-            initialRules={rules as never}
-            initialProjects={projects}
-            initialPayees={payees}
-            initialAccounts={accounts}
-            initialPendingSuggestions={pendingSuggestions as never}
-            initialPaymentSuggestions={JSON.parse(JSON.stringify(paymentSuggestions))}
-            initialCategoryGroups={categoryGroups.map((g) => ({
-              id: g.id,
-              name: g.name,
-              categories: g.categories.map((c) => ({ id: c.id, name: c.name })),
-            }))}
-          />
+          <Suspense>
+            <RulesManager
+              initialRules={rules as never}
+              initialProjects={projects}
+              initialPayees={payees}
+              initialAccounts={accounts}
+              initialPendingSuggestions={pendingSuggestions as never}
+              initialPaymentSuggestions={JSON.parse(JSON.stringify(paymentSuggestions))}
+              initialCategoryGroups={categoryGroups.map((g) => ({
+                id: g.id,
+                name: g.name,
+                categories: g.categories.map((c) => ({ id: c.id, name: c.name })),
+              }))}
+            />
+          </Suspense>
         </main>
       </div>
     </div>

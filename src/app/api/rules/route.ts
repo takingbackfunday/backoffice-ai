@@ -49,7 +49,7 @@ export async function GET() {
         categoryRef: { include: { group: true } },
         payee: true,
       },
-      orderBy: { priority: 'asc' },
+      orderBy: { updatedAt: 'desc' },
     })
 
     return ok(rules, { count: rules.length })
