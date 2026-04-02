@@ -122,12 +122,28 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
   const [showBgCheckInput, setShowBgCheckInput] = useState(false)
   const [bgCheckValue, setBgCheckValue] = useState<string>(initial.backgroundCheck ?? '')
   const [showLeaseForm, setShowLeaseForm] = useState(false)
+  const hasPet = !!(initial.applicationData?.additional?.pets)
   const [leaseForm, setLeaseForm] = useState({
     startDate: '',
     endDate: '',
     monthlyRent: '',
     securityDeposit: '',
     paymentDueDay: '1',
+    lateFeeAmount: '',
+    lateFeeGraceDays: '5',
+    additionalCharges: hasPet
+      ? [{ label: 'Pet Fee', amount: '', frequency: 'monthly' as 'monthly' | 'one_time' }]
+      : [] as { label: string; amount: string; frequency: 'monthly' | 'one_time' }[],
+    utilitiesIncluded: [] as string[],
+    petsAllowed: hasPet,
+    petNotes: '',
+    smokingAllowed: false,
+    sublettingAllowed: false,
+    parkingStall: '',
+    parkingFee: '',
+    storageUnit: '',
+    storageFee: '',
+    guestPolicy: '',
     contractNotes: '',
   })
   const [offeringLease, setOfferingLease] = useState(false)
@@ -235,6 +251,10 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
     setOfferingLease(true)
     setError(null)
     try {
+      const validCharges = leaseForm.additionalCharges
+        .filter(c => c.label.trim() && c.amount !== '')
+        .map(c => ({ label: c.label.trim(), amount: parseFloat(c.amount), frequency: c.frequency }))
+
       const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}/offer-lease`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -244,7 +264,22 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
           monthlyRent: parseFloat(leaseForm.monthlyRent),
           securityDeposit: leaseForm.securityDeposit ? parseFloat(leaseForm.securityDeposit) : undefined,
           paymentDueDay: parseInt(leaseForm.paymentDueDay, 10),
+          lateFeeAmount: leaseForm.lateFeeAmount ? parseFloat(leaseForm.lateFeeAmount) : undefined,
+          lateFeeGraceDays: parseInt(leaseForm.lateFeeGraceDays, 10),
           contractNotes: leaseForm.contractNotes || undefined,
+          additionalCharges: validCharges,
+          utilitiesIncluded: leaseForm.utilitiesIncluded,
+          leaseRules: {
+            petsAllowed: leaseForm.petsAllowed,
+            petNotes: leaseForm.petNotes || undefined,
+            smokingAllowed: leaseForm.smokingAllowed,
+            sublettingAllowed: leaseForm.sublettingAllowed,
+            parkingStall: leaseForm.parkingStall || undefined,
+            parkingFee: leaseForm.parkingFee ? parseFloat(leaseForm.parkingFee) : undefined,
+            storageUnit: leaseForm.storageUnit || undefined,
+            storageFee: leaseForm.storageFee ? parseFloat(leaseForm.storageFee) : undefined,
+            guestPolicy: leaseForm.guestPolicy || undefined,
+          },
         }),
       })
       const json = await res.json()
@@ -656,43 +691,216 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
 
         {/* Footer */}
         {applicant.status === 'APPROVED' && !applicant.convertedToTenant && (
-          <div className="border-t px-5 py-4">
+          <div className="border-t">
             {!showLeaseForm ? (
-              <button
-                type="button"
-                onClick={() => setShowLeaseForm(true)}
-                className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
-              >
-                Draft Lease Agreement →
-              </button>
+              <div className="px-5 py-4">
+                <button
+                  type="button"
+                  onClick={() => setShowLeaseForm(true)}
+                  className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+                >
+                  Draft Lease Agreement →
+                </button>
+              </div>
             ) : (
-              <div className="space-y-3">
-                <h3 className="text-xs font-semibold">Lease terms</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-medium mb-0.5">Start date *</label>
-                    <input type="date" value={leaseForm.startDate} onChange={e => setLeaseForm(f => ({ ...f, startDate: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-medium mb-0.5">End date *</label>
-                    <input type="date" value={leaseForm.endDate} onChange={e => setLeaseForm(f => ({ ...f, endDate: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+              <div className="max-h-[70vh] overflow-y-auto px-5 py-4 space-y-5">
+                <h3 className="text-xs font-semibold">Lease Agreement</h3>
+
+                {/* Section 1 — Lease term */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Lease Term</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Start date *</label>
+                      <input type="date" value={leaseForm.startDate} onChange={e => setLeaseForm(f => ({ ...f, startDate: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">End date *</label>
+                      <input type="date" value={leaseForm.endDate} onChange={e => setLeaseForm(f => ({ ...f, endDate: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Monthly rent ($) *</label>
+                      <input type="number" min="0" value={leaseForm.monthlyRent} onChange={e => setLeaseForm(f => ({ ...f, monthlyRent: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Security deposit ($)</label>
+                      <input type="number" min="0" value={leaseForm.securityDeposit} onChange={e => setLeaseForm(f => ({ ...f, securityDeposit: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Payment due day</label>
+                      <input type="number" min="1" max="31" value={leaseForm.paymentDueDay} onChange={e => setLeaseForm(f => ({ ...f, paymentDueDay: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-medium mb-0.5">Monthly rent ($) *</label>
-                    <input type="number" value={leaseForm.monthlyRent} onChange={e => setLeaseForm(f => ({ ...f, monthlyRent: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-medium mb-0.5">Security deposit ($)</label>
-                    <input type="number" value={leaseForm.securityDeposit} onChange={e => setLeaseForm(f => ({ ...f, securityDeposit: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+
+                {/* Section 2 — Late fees */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Late Fees</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Late fee ($)</label>
+                      <input type="number" min="0" value={leaseForm.lateFeeAmount} onChange={e => setLeaseForm(f => ({ ...f, lateFeeAmount: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" placeholder="e.g. 50" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Grace period (days)</label>
+                      <input type="number" min="0" value={leaseForm.lateFeeGraceDays} onChange={e => setLeaseForm(f => ({ ...f, lateFeeGraceDays: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-medium mb-0.5">Notes</label>
-                  <textarea value={leaseForm.contractNotes} onChange={e => setLeaseForm(f => ({ ...f, contractNotes: e.target.value }))} rows={2} className="w-full rounded-md border px-2 py-1.5 text-xs resize-none" />
+
+                {/* Section 3 — Additional charges */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Additional Charges</p>
+                  {leaseForm.additionalCharges.map((charge, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Label (e.g. Pet Fee)"
+                        value={charge.label}
+                        onChange={e => setLeaseForm(f => {
+                          const next = [...f.additionalCharges]
+                          next[i] = { ...next[i], label: e.target.value }
+                          return { ...f, additionalCharges: next }
+                        })}
+                        className="flex-1 rounded-md border px-2 py-1.5 text-xs min-w-0"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="$"
+                        value={charge.amount}
+                        onChange={e => setLeaseForm(f => {
+                          const next = [...f.additionalCharges]
+                          next[i] = { ...next[i], amount: e.target.value }
+                          return { ...f, additionalCharges: next }
+                        })}
+                        className="w-20 rounded-md border px-2 py-1.5 text-xs"
+                      />
+                      <select
+                        value={charge.frequency}
+                        onChange={e => setLeaseForm(f => {
+                          const next = [...f.additionalCharges]
+                          next[i] = { ...next[i], frequency: e.target.value as 'monthly' | 'one_time' }
+                          return { ...f, additionalCharges: next }
+                        })}
+                        className="rounded-md border px-1.5 py-1.5 text-xs"
+                      >
+                        <option value="monthly">/mo</option>
+                        <option value="one_time">once</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setLeaseForm(f => ({ ...f, additionalCharges: f.additionalCharges.filter((_, j) => j !== i) }))}
+                        className="text-muted-foreground hover:text-destructive text-xs px-1"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setLeaseForm(f => ({ ...f, additionalCharges: [...f.additionalCharges, { label: '', amount: '', frequency: 'monthly' }] }))}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    + Add charge
+                  </button>
+                  {leaseForm.additionalCharges.filter(c => c.frequency === 'monthly' && c.amount).length > 0 && leaseForm.monthlyRent && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Total monthly: ${(
+                        parseFloat(leaseForm.monthlyRent || '0') +
+                        leaseForm.additionalCharges
+                          .filter(c => c.frequency === 'monthly' && c.amount)
+                          .reduce((s, c) => s + parseFloat(c.amount || '0'), 0)
+                      ).toLocaleString()}
+                    </p>
+                  )}
                 </div>
-                <div className="flex gap-2">
+
+                {/* Section 4 — Utilities */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Utilities Included in Rent</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    {['Water', 'Heat', 'Electricity', 'Gas', 'Internet', 'Garbage'].map(util => (
+                      <label key={util} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={leaseForm.utilitiesIncluded.includes(util)}
+                          onChange={e => setLeaseForm(f => ({
+                            ...f,
+                            utilitiesIncluded: e.target.checked
+                              ? [...f.utilitiesIncluded, util]
+                              : f.utilitiesIncluded.filter(u => u !== util),
+                          }))}
+                          className="h-3.5 w-3.5 rounded border"
+                        />
+                        <span className="text-xs">{util}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 5 — Parking & Storage */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Parking &amp; Storage</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Parking stall</label>
+                      <input type="text" value={leaseForm.parkingStall} onChange={e => setLeaseForm(f => ({ ...f, parkingStall: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" placeholder="e.g. #12" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Parking fee/mo ($)</label>
+                      <input type="number" min="0" value={leaseForm.parkingFee} onChange={e => setLeaseForm(f => ({ ...f, parkingFee: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Storage unit</label>
+                      <input type="text" value={leaseForm.storageUnit} onChange={e => setLeaseForm(f => ({ ...f, storageUnit: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" placeholder="e.g. B-04" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Storage fee/mo ($)</label>
+                      <input type="number" min="0" value={leaseForm.storageFee} onChange={e => setLeaseForm(f => ({ ...f, storageFee: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 6 — Rules & Policies */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Rules &amp; Policies</p>
+                  <div className="space-y-2">
+                    {[
+                      { key: 'petsAllowed', label: 'Pets allowed' },
+                      { key: 'smokingAllowed', label: 'Smoking allowed' },
+                      { key: 'sublettingAllowed', label: 'Subletting allowed' },
+                    ].map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={leaseForm[key as keyof typeof leaseForm] as boolean}
+                          onChange={e => setLeaseForm(f => ({ ...f, [key]: e.target.checked }))}
+                          className="h-3.5 w-3.5 rounded border"
+                        />
+                        <span className="text-xs">{label}</span>
+                      </label>
+                    ))}
+                    {leaseForm.petsAllowed && (
+                      <div>
+                        <label className="block text-[10px] font-medium mb-0.5">Pet notes (breed restrictions, deposit details…)</label>
+                        <input type="text" value={leaseForm.petNotes} onChange={e => setLeaseForm(f => ({ ...f, petNotes: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" placeholder="e.g. Max 2 pets, under 50 lbs" />
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-[10px] font-medium mb-0.5">Guest policy</label>
+                      <input type="text" value={leaseForm.guestPolicy} onChange={e => setLeaseForm(f => ({ ...f, guestPolicy: e.target.value }))} className="w-full rounded-md border px-2 py-1.5 text-xs" placeholder="e.g. Guests may not stay more than 14 consecutive days" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional clauses */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-medium">Additional clauses / addendum</label>
+                  <textarea value={leaseForm.contractNotes} onChange={e => setLeaseForm(f => ({ ...f, contractNotes: e.target.value }))} rows={3} className="w-full rounded-md border px-2 py-1.5 text-xs resize-none" placeholder="Any additional terms…" />
+                </div>
+
+                <div className="flex gap-2 pb-1">
                   <button type="button" onClick={() => setShowLeaseForm(false)} className="flex-1 rounded-md border px-3 py-2 text-xs font-medium hover:bg-muted">Cancel</button>
                   <button
                     type="button"

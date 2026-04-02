@@ -4,6 +4,24 @@ import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-p
 /*  Types                                                               */
 /* ------------------------------------------------------------------ */
 
+export interface LeaseAdditionalCharge {
+  label: string
+  amount: number
+  frequency: string // 'monthly' | 'one_time'
+}
+
+export interface LeaseRules {
+  smokingAllowed?: boolean
+  sublettingAllowed?: boolean
+  petsAllowed?: boolean
+  petNotes?: string
+  parkingStall?: string
+  parkingFee?: number
+  storageUnit?: string
+  storageFee?: number
+  guestPolicy?: string
+}
+
 export interface LeaseContractData {
   // Parties
   ownerName: string
@@ -23,6 +41,10 @@ export interface LeaseContractData {
   paymentDueDay: number
   lateFeeAmount?: number | null
   lateFeeGraceDays?: number | null
+  // Addenda
+  additionalCharges?: LeaseAdditionalCharge[]
+  utilitiesIncluded?: string[]
+  leaseRules?: LeaseRules
   // Contract meta
   contractNotes?: string | null
   generatedAt: string
@@ -147,6 +169,117 @@ function LeaseContractPDF({ data }: { data: LeaseContractData }) {
             </View>
           )}
         </View>
+
+        {/* Additional Charges */}
+        {data.additionalCharges && data.additionalCharges.length > 0 && (() => {
+          const monthlyExtras = data.additionalCharges
+            .filter(c => c.frequency === 'monthly')
+            .reduce((s, c) => s + c.amount, 0)
+          return (
+            <>
+              <Text style={S.sectionTitle}>Additional Charges</Text>
+              <View style={{ marginBottom: 20 }}>
+                {data.additionalCharges.map((charge, i) => (
+                  <View key={i} style={S.termRow}>
+                    <Text style={S.termLabel}>{charge.label}</Text>
+                    <Text style={S.termValue}>
+                      {fmt(charge.amount, data.currency)}{charge.frequency === 'monthly' ? '/month' : ' (one-time)'}
+                    </Text>
+                  </View>
+                ))}
+                {monthlyExtras > 0 && (
+                  <View style={[S.termRow, { borderBottomWidth: 0, marginTop: 4 }]}>
+                    <Text style={[S.termLabel, { fontFamily: 'Helvetica-Bold' }]}>Total Monthly (incl. rent)</Text>
+                    <Text style={S.termValue}>{fmt(data.monthlyRent + monthlyExtras, data.currency)}/month</Text>
+                  </View>
+                )}
+              </View>
+            </>
+          )
+        })()}
+
+        {/* Utilities Included */}
+        {data.utilitiesIncluded && (
+          <>
+            <Text style={S.sectionTitle}>Utilities &amp; Inclusions</Text>
+            <View style={{ marginBottom: 20 }}>
+              <View style={S.termRow}>
+                <Text style={S.termLabel}>Included in rent</Text>
+                <Text style={S.termValue}>
+                  {data.utilitiesIncluded.length > 0 ? data.utilitiesIncluded.join(', ') : 'None'}
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* Parking & Storage */}
+        {data.leaseRules && (data.leaseRules.parkingStall || data.leaseRules.storageUnit) && (
+          <>
+            <Text style={S.sectionTitle}>Parking &amp; Storage</Text>
+            <View style={{ marginBottom: 20 }}>
+              {data.leaseRules.parkingStall && (
+                <View style={S.termRow}>
+                  <Text style={S.termLabel}>Parking Stall</Text>
+                  <Text style={S.termValue}>
+                    {data.leaseRules.parkingStall}
+                    {data.leaseRules.parkingFee ? ` — ${fmt(data.leaseRules.parkingFee, data.currency)}/month` : ''}
+                  </Text>
+                </View>
+              )}
+              {data.leaseRules.storageUnit && (
+                <View style={S.termRow}>
+                  <Text style={S.termLabel}>Storage Unit</Text>
+                  <Text style={S.termValue}>
+                    {data.leaseRules.storageUnit}
+                    {data.leaseRules.storageFee ? ` — ${fmt(data.leaseRules.storageFee, data.currency)}/month` : ''}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
+        {/* Rules & Policies */}
+        {data.leaseRules && (
+          data.leaseRules.petsAllowed !== undefined ||
+          data.leaseRules.smokingAllowed !== undefined ||
+          data.leaseRules.sublettingAllowed !== undefined ||
+          data.leaseRules.guestPolicy
+        ) && (
+          <>
+            <Text style={S.sectionTitle}>Rules &amp; Policies</Text>
+            <View style={{ marginBottom: 20 }}>
+              {data.leaseRules.petsAllowed !== undefined && (
+                <View style={S.termRow}>
+                  <Text style={S.termLabel}>Pets</Text>
+                  <Text style={S.termValue}>
+                    {data.leaseRules.petsAllowed ? 'Allowed' : 'Not allowed'}
+                    {data.leaseRules.petsAllowed && data.leaseRules.petNotes ? ` — ${data.leaseRules.petNotes}` : ''}
+                  </Text>
+                </View>
+              )}
+              {data.leaseRules.smokingAllowed !== undefined && (
+                <View style={S.termRow}>
+                  <Text style={S.termLabel}>Smoking</Text>
+                  <Text style={S.termValue}>{data.leaseRules.smokingAllowed ? 'Allowed' : 'Not allowed'}</Text>
+                </View>
+              )}
+              {data.leaseRules.sublettingAllowed !== undefined && (
+                <View style={S.termRow}>
+                  <Text style={S.termLabel}>Subletting</Text>
+                  <Text style={S.termValue}>{data.leaseRules.sublettingAllowed ? 'Allowed' : 'Not allowed'}</Text>
+                </View>
+              )}
+              {data.leaseRules.guestPolicy && (
+                <View style={S.termRow}>
+                  <Text style={S.termLabel}>Guest Policy</Text>
+                  <Text style={S.termValue}>{data.leaseRules.guestPolicy}</Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
 
         {/* Notes / Clauses */}
         {data.contractNotes && (

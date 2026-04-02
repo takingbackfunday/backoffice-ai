@@ -588,6 +588,10 @@ model Lease {
   ownerSignedAt        DateTime?
   // Move-in milestone
   keysHandedOverAt     DateTime?
+  // Lease addenda (JSON — immutable contract record)
+  additionalCharges Json  @default("[]")  // [{label, amount, frequency: 'monthly'|'one_time'}]
+  utilitiesIncluded Json  @default("[]")  // string[]
+  leaseRules        Json  @default("{}")  // {smokingAllowed, sublettingAllowed, petsAllowed, petNotes, parkingStall, parkingFee, storageUnit, storageFee, guestPolicy}
   tenantCharges    TenantCharge[]
   tenantPayments   TenantPayment[]
   tenantFiles      TenantFile[]

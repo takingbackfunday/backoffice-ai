@@ -8,6 +8,24 @@ import { randomUUID } from 'node:crypto'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://backoffice.cv'
 
+const AdditionalChargeSchema = z.object({
+  label: z.string().min(1),
+  amount: z.number().min(0),
+  frequency: z.enum(['monthly', 'one_time']),
+})
+
+const LeaseRulesSchema = z.object({
+  smokingAllowed: z.boolean().optional(),
+  sublettingAllowed: z.boolean().optional(),
+  petsAllowed: z.boolean().optional(),
+  petNotes: z.string().optional(),
+  parkingStall: z.string().optional(),
+  parkingFee: z.number().optional(),
+  storageUnit: z.string().optional(),
+  storageFee: z.number().optional(),
+  guestPolicy: z.string().optional(),
+}).optional().default({})
+
 const OfferLeaseSchema = z.object({
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().min(1, 'End date is required'),
@@ -18,6 +36,9 @@ const OfferLeaseSchema = z.object({
   lateFeeGraceDays: z.number().int().optional().default(5),
   currency: z.string().optional().default('USD'),
   contractNotes: z.string().optional(),
+  additionalCharges: z.array(AdditionalChargeSchema).optional().default([]),
+  utilitiesIncluded: z.array(z.string()).optional().default([]),
+  leaseRules: LeaseRulesSchema,
 })
 
 interface RouteParams { params: Promise<{ id: string; applicantId: string }> }
@@ -87,6 +108,9 @@ export async function POST(request: Request, { params }: RouteParams) {
           lateFeeGraceDays: parsed.data.lateFeeGraceDays,
           currency: parsed.data.currency,
           contractNotes: parsed.data.contractNotes,
+          additionalCharges: parsed.data.additionalCharges,
+          utilitiesIncluded: parsed.data.utilitiesIncluded,
+          leaseRules: parsed.data.leaseRules,
           status: 'DRAFT',
           contractStatus: 'SENT',
           contractSentAt: new Date(),
@@ -122,6 +146,9 @@ export async function POST(request: Request, { params }: RouteParams) {
         lateFeeAmount: result.lateFeeAmount ? Number(result.lateFeeAmount) : null,
         lateFeeGraceDays: result.lateFeeGraceDays ?? 5,
         contractNotes: result.contractNotes ?? null,
+        additionalCharges: (result.additionalCharges as { label: string; amount: number; frequency: string }[]) ?? [],
+        utilitiesIncluded: (result.utilitiesIncluded as string[]) ?? [],
+        leaseRules: (result.leaseRules as Record<string, unknown>) ?? {},
         generatedAt: new Date().toISOString(),
       }
       const pdfBuffer = await generateLeaseContractPdf(contractData)
