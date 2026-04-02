@@ -95,6 +95,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
   const [applicant, setApplicant] = useState<Applicant>(initial)
   const [saving, setSaving] = useState(false)
   const [converting, setConverting] = useState(false)
+  const [conflictTenant, setConflictTenant] = useState<{ id: string; name: string; email: string } | null>(null)
   const [sendingApp, setSendingApp] = useState(false)
   const [sendAppSuccess, setSendAppSuccess] = useState(false)
   const [selectedListingId, setSelectedListingId] = useState(() =>
@@ -140,12 +141,21 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
     }
   }
 
-  async function handleConvert() {
+  async function handleConvert(linkToTenantId?: string) {
     setConverting(true)
     setError(null)
+    setConflictTenant(null)
     try {
-      const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}/convert`, { method: 'POST' })
+      const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(linkToTenantId ? { linkToTenantId } : {}),
+      })
       const json = await res.json()
+      if (res.status === 409 && json.existingTenant) {
+        setConflictTenant(json.existingTenant)
+        return
+      }
       if (!res.ok || json.error) { setError(json.error ?? 'Conversion failed'); return }
       setApplicant(prev => ({ ...prev, convertedToTenant: json.data }))
       onUpdated({ ...applicant, convertedToTenant: json.data })
@@ -601,7 +611,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
           <div className="border-t px-5 py-4">
             <button
               type="button"
-              onClick={handleConvert}
+              onClick={() => handleConvert()}
               disabled={converting || saving}
               className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
             >
@@ -612,6 +622,38 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
 
         {saving && (
           <div className="absolute bottom-4 right-5 text-xs text-muted-foreground">Saving…</div>
+        )}
+
+        {/* Email conflict reconciliation modal */}
+        {conflictTenant && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-sm rounded-xl bg-background border shadow-lg p-5 space-y-3">
+              <h3 className="text-sm font-semibold">Tenant already exists</h3>
+              <p className="text-xs text-muted-foreground">
+                A tenant named <span className="font-semibold text-foreground">{conflictTenant.name}</span> already exists with <span className="font-mono">{conflictTenant.email}</span>.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                This applicant (<span className="font-semibold text-foreground">{applicant.name}</span>) appears to be the same person. Do you want to link this application to that existing tenant, or keep them separate?
+              </p>
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setConflictTenant(null); handleConvert(conflictTenant.id) }}
+                  disabled={converting}
+                  className="w-full rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  Link to "{conflictTenant.name}" (same person)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConflictTenant(null)}
+                  className="w-full rounded-md border px-3 py-2 text-xs font-medium hover:bg-muted"
+                >
+                  Cancel — fix email first
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {showCreditInput && (

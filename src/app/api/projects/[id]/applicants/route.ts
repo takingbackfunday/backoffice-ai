@@ -45,6 +45,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       include: {
         unit: { select: { id: true, unitLabel: true } },
         _count: { select: { documents: true } },
+        convertedToTenant: { select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
     })

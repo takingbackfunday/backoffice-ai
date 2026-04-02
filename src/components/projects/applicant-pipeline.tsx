@@ -51,6 +51,7 @@ interface Applicant {
   createdAt: string
   unit: { id: string; unitLabel: string } | null
   _count: { documents: number }
+  convertedToTenant: { id: string } | null
 }
 
 interface UnitOption { id: string; unitLabel: string }
@@ -313,7 +314,7 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
                         ⏳ Awaiting signature
                       </div>
                     )}
-                    {status === 'LEASE_SIGNED' && (
+                    {status === 'LEASE_SIGNED' && !applicant.convertedToTenant && (
                       <button
                         type="button"
                         disabled={converting === applicant.id}
@@ -322,6 +323,11 @@ export function ApplicantPipeline({ projectId, units = [], onSelectApplicant }: 
                       >
                         {converting === applicant.id ? 'Converting…' : 'Convert to Tenant →'}
                       </button>
+                    )}
+                    {status === 'LEASE_SIGNED' && applicant.convertedToTenant && (
+                      <div className="mt-1.5 w-full rounded bg-emerald-50 border border-emerald-200 px-2 py-1 text-[10px] text-emerald-700 text-center font-medium">
+                        ✓ Converted
+                      </div>
                     )}
                   </div>
                 ))}
