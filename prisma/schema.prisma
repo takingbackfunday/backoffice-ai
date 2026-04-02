@@ -897,18 +897,23 @@ enum ApplicantStatus {
 }
 
 model ApplicantDocument {
-  id          String    @id @default(cuid())
-  applicantId String
-  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
-  fileType    String    // "id", "pay_stub", "credit_report", "application_form", "other"
-  fileName    String
-  fileUrl     String
-  fileSize    Int?
-  notes       String?
-  uploadedBy  String    // userId
-  createdAt   DateTime  @default(now())
+  id           String    @id @default(cuid())
+  applicantId  String
+  applicant    Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  fileType     String    // "proof_of_income" | "proof_of_residence" | "government_id" | "bank_statement" | "employment_letter" | "reference_letter" | "other"
+  requestLabel String?   // custom label when fileType = "other", or display override
+  status       String    @default("uploaded") // "requested" | "uploaded"
+  uploadToken  String?   @unique              // HMAC token for ad-hoc upload links
+  tokenExpiresAt DateTime?
+  fileName     String    @default("")
+  fileUrl      String    @default("")
+  fileSize     Int?
+  notes        String?
+  uploadedBy   String    @default("") // userId or "applicant"
+  createdAt    DateTime  @default(now())
 
   @@index([applicantId])
+  @@index([uploadToken])
 }
 
 model Listing {
@@ -930,6 +935,7 @@ model Listing {
 
   applicationFee  Decimal?  @db.Decimal(10, 2)
   screeningFee    Decimal?  @db.Decimal(10, 2)
+  requiredDocs    Json      @default("[]") // string[] of doc type keys
 
   applicants      Applicant[]
 

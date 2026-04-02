@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { useUploadThing } from '@/lib/uploadthing-client'
+import { docTypeLabel } from '@/lib/doc-types'
 
 interface SerializedListing {
   id: string
@@ -9,6 +11,7 @@ interface SerializedListing {
   applicationFee: number | null
   screeningFee: number | null
   publicSlug: string
+  requiredDocs: string[]
   unit: {
     unitLabel: string
     propertyProfile: {
@@ -46,24 +49,39 @@ type FormData = {
   vehicles: string
   desiredMoveIn: string
   desiredLeaseTerm: string
-  // Step 5
+  // Step 5 (consent)
   screeningConsent: boolean
   truthfulnessAttestation: boolean
   feeAcknowledgment: boolean
 }
 
-const STEPS = [
+interface UploadedDoc {
+  url: string
+  name: string
+  size: number
+}
+
+const BASE_STEPS = [
   'Personal info',
   'Employment',
   'Rental history',
   'Additional details',
-  'Review & consent',
 ]
+const DOCS_STEP = 'Documents'
+const CONSENT_STEP = 'Review & consent'
 
 const fmtCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 
 export function ApplicationFormClient({ listing }: Props) {
+  const hasRequiredDocs = listing.requiredDocs.length > 0
+  const STEPS = hasRequiredDocs
+    ? [...BASE_STEPS, DOCS_STEP, CONSENT_STEP]
+    : [...BASE_STEPS, CONSENT_STEP]
+
+  const docsStepIndex = hasRequiredDocs ? 4 : -1
+  const consentStepIndex = hasRequiredDocs ? 5 : 4
+
   const [step, setStep] = useState(0)
   const [formData, setFormData] = useState<FormData>({
     fullName: '', email: '', phone: '', dateOfBirth: '',
@@ -72,12 +90,46 @@ export function ApplicationFormClient({ listing }: Props) {
     numberOfOccupants: '', petType: '', petBreed: '', petWeight: '', vehicles: '', desiredMoveIn: '', desiredLeaseTerm: '',
     screeningConsent: false, truthfulnessAttestation: false, feeAcknowledgment: false,
   })
+
+  // Documents state: map of docType -> uploaded file info
+  const [uploadedDocs, setUploadedDocs] = useState<Record<string, UploadedDoc>>({})
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null)
+  const [docErrors, setDocErrors] = useState<Record<string, string>>({})
+
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const { startUpload } = useUploadThing('applicantDocUploader')
+
   function set(field: keyof FormData, value: string | boolean) {
     setFormData(f => ({ ...f, [field]: value }))
+  }
+
+  async function handleDocFile(docType: string, file: File) {
+    if (file.type !== 'application/pdf') {
+      setDocErrors(e => ({ ...e, [docType]: 'Only PDF files are accepted' }))
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setDocErrors(e => ({ ...e, [docType]: 'File must be under 10MB' }))
+      return
+    }
+    setDocErrors(e => ({ ...e, [docType]: '' }))
+    setUploadingDoc(docType)
+    try {
+      const res = await startUpload([file])
+      if (!res?.[0]) {
+        setDocErrors(e => ({ ...e, [docType]: 'Upload failed — please try again' }))
+        return
+      }
+      const { url } = res[0] as { url: string }
+      setUploadedDocs(d => ({ ...d, [docType]: { url, name: file.name, size: file.size } }))
+    } catch {
+      setDocErrors(e => ({ ...e, [docType]: 'Upload failed — please try again' }))
+    } finally {
+      setUploadingDoc(null)
+    }
   }
 
   async function handleSubmit() {
@@ -117,6 +169,14 @@ export function ApplicationFormClient({ listing }: Props) {
         },
       }
 
+      // Build uploaded docs array for submission
+      const uploadedDocsPayload = Object.entries(uploadedDocs).map(([fileType, doc]) => ({
+        fileType,
+        fileUrl: doc.url,
+        fileName: doc.name,
+        fileSize: doc.size,
+      }))
+
       const res = await fetch('/api/public/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -128,6 +188,7 @@ export function ApplicationFormClient({ listing }: Props) {
           desiredMoveIn: formData.desiredMoveIn || undefined,
           screeningConsent: formData.screeningConsent,
           applicationData,
+          uploadedDocs: uploadedDocsPayload,
         }),
       })
       const json = await res.json()
@@ -260,7 +321,61 @@ export function ApplicationFormClient({ listing }: Props) {
           </>
         )}
 
-        {step === 4 && (
+        {step === docsStepIndex && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Please upload the following documents (PDF only, max 10MB each). All documents are required to complete your application.
+            </p>
+            {listing.requiredDocs.map(docType => {
+              const uploaded = uploadedDocs[docType]
+              const isUploading = uploadingDoc === docType
+              const docError = docErrors[docType]
+              const label = docTypeLabel(docType)
+              return (
+                <div key={docType} className="rounded-lg border p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{label}</span>
+                    {uploaded && (
+                      <span className="text-xs font-medium text-emerald-600">Uploaded</span>
+                    )}
+                  </div>
+                  {uploaded ? (
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="truncate max-w-[200px]">{uploaded.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setUploadedDocs(d => { const n = { ...d }; delete n[docType]; return n })}
+                        className="ml-2 text-muted-foreground hover:text-destructive underline flex-shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className={`cursor-pointer inline-block rounded-md px-3 py-1.5 text-xs font-medium border transition-colors ${
+                      isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted'
+                    }`}>
+                      {isUploading ? 'Uploading…' : 'Choose PDF'}
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="hidden"
+                        disabled={isUploading}
+                        onChange={e => {
+                          const f = e.target.files?.[0]
+                          if (f) handleDocFile(docType, f)
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                  )}
+                  {docError && <p className="text-xs text-destructive">{docError}</p>}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {step === consentStepIndex && (
           <div className="space-y-4">
             <div className="rounded-lg bg-muted/40 border p-4 text-xs text-muted-foreground space-y-2">
               <p className="font-semibold text-foreground text-sm">Consent to screening</p>
@@ -329,6 +444,14 @@ export function ApplicationFormClient({ listing }: Props) {
               if (step === 0 && (!formData.fullName || !formData.email || !formData.phone)) {
                 setError('Name, email, and phone are required.')
                 return
+              }
+              // On docs step, require all docs to be uploaded
+              if (step === docsStepIndex) {
+                const missing = listing.requiredDocs.filter(d => !uploadedDocs[d])
+                if (missing.length > 0) {
+                  setError(`Please upload all required documents before continuing.`)
+                  return
+                }
               }
               setError(null)
               setStep(s => s + 1)

@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DOC_TYPES, docTypeLabel } from '@/lib/doc-types'
 
 const STATUS_OPTIONS = [
   'INQUIRY', 'APPLICATION_SENT', 'APPLIED', 'SCREENING',
@@ -57,6 +58,15 @@ interface Applicant {
     dueDate: string
     sentAt: string | null
     lineItems: Array<{ description: string; quantity: number; unitPrice: number }>
+  }>
+  documents?: Array<{
+    id: string
+    fileType: string
+    requestLabel: string | null
+    status: string
+    fileUrl: string | null
+    fileName: string | null
+    createdAt: string
   }>
 }
 
@@ -121,6 +131,13 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
     contractNotes: '',
   })
   const [offeringLease, setOfferingLease] = useState(false)
+  const [documents, setDocuments] = useState(initial.documents ?? [])
+  const [showRequestDocs, setShowRequestDocs] = useState(false)
+  const [requestDocTypes, setRequestDocTypes] = useState<string[]>([])
+  const [requestOtherLabel, setRequestOtherLabel] = useState('')
+  const [requestingDocs, setRequestingDocs] = useState(false)
+  const [requestDocsError, setRequestDocsError] = useState<string | null>(null)
+  const [requestDocsSent, setRequestDocsSent] = useState(false)
 
   async function save(updates: Record<string, unknown>) {
     setSaving(true)
@@ -238,6 +255,44 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
       setShowLeaseForm(false)
     } finally {
       setOfferingLease(false)
+    }
+  }
+
+  async function handleRequestDocs() {
+    if (requestDocTypes.length === 0) return
+    if (requestDocTypes.includes('other') && !requestOtherLabel.trim()) {
+      setRequestDocsError('Please specify a label for "Other"')
+      return
+    }
+    setRequestingDocs(true)
+    setRequestDocsError(null)
+    try {
+      const requests = requestDocTypes.map(fileType => ({
+        fileType,
+        ...(fileType === 'other' ? { requestLabel: requestOtherLabel.trim() } : {}),
+      }))
+      const res = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}/request-docs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) { setRequestDocsError(json.error ?? 'Failed to send request'); return }
+      // Refresh documents list
+      const freshRes = await fetch(`/api/projects/${projectId}/applicants/${applicant.id}`)
+      if (freshRes.ok) {
+        const freshJson = await freshRes.json()
+        setDocuments(freshJson.data?.documents ?? [])
+      }
+      setRequestDocsSent(true)
+      setTimeout(() => {
+        setShowRequestDocs(false)
+        setRequestDocsSent(false)
+        setRequestDocTypes([])
+        setRequestOtherLabel('')
+      }, 1500)
+    } finally {
+      setRequestingDocs(false)
     }
   }
 
@@ -518,6 +573,52 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
             </div>
           )}
 
+          {/* Documents */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Documents</p>
+              <button
+                type="button"
+                onClick={() => { setShowRequestDocs(true); setRequestDocsSent(false); setRequestDocsError(null) }}
+                className="text-xs text-primary hover:underline"
+              >
+                + Request docs
+              </button>
+            </div>
+            {documents.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No documents yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {documents.map(doc => (
+                  <div key={doc.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium truncate">{docTypeLabel(doc.fileType, doc.requestLabel)}</p>
+                      {doc.fileName && <p className="text-[10px] text-muted-foreground truncate">{doc.fileName}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      <span className={cn(
+                        'text-[10px] rounded-full px-2 py-0.5 font-medium',
+                        doc.status === 'uploaded' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      )}>
+                        {doc.status === 'uploaded' ? 'Uploaded' : 'Requested'}
+                      </span>
+                      {doc.fileUrl && doc.status === 'uploaded' && (
+                        <a
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-primary hover:underline"
+                        >
+                          View
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Rejection reason */}
           {applicant.status === 'REJECTED' && (
             <div>
@@ -709,6 +810,64 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
               <div className="flex justify-end">
                 <button type="button" onClick={() => setShowBgCheckInput(false)} className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancel</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Request Documents modal */}
+        {showRequestDocs && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-sm rounded-xl bg-background border shadow-lg p-5 space-y-4">
+              <h3 className="text-sm font-semibold">Request documents</h3>
+              <p className="text-xs text-muted-foreground">Select documents to request from {applicant.name}. An email with secure upload links will be sent to {applicant.email}.</p>
+              {requestDocsSent ? (
+                <p className="text-sm text-emerald-600 font-medium text-center py-2">Request sent ✓</p>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    {DOC_TYPES.map(doc => (
+                      <label key={doc.key} className="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={requestDocTypes.includes(doc.key)}
+                          onChange={e => setRequestDocTypes(prev =>
+                            e.target.checked ? [...prev, doc.key] : prev.filter(d => d !== doc.key)
+                          )}
+                          className="h-3.5 w-3.5 rounded border"
+                        />
+                        <span className="text-sm">{doc.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {requestDocTypes.includes('other') && (
+                    <input
+                      type="text"
+                      value={requestOtherLabel}
+                      onChange={e => setRequestOtherLabel(e.target.value)}
+                      placeholder='e.g. "Pet deposit waiver"'
+                      className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  )}
+                  {requestDocsError && <p className="text-xs text-destructive">{requestDocsError}</p>}
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => { setShowRequestDocs(false); setRequestDocTypes([]); setRequestOtherLabel(''); setRequestDocsError(null) }}
+                      className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRequestDocs}
+                      disabled={requestingDocs || requestDocTypes.length === 0}
+                      className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {requestingDocs ? 'Sending…' : 'Send request'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

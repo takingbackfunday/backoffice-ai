@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { DOC_TYPES } from '@/lib/doc-types'
 
 interface UnitOption {
   id: string
@@ -53,6 +54,7 @@ export function ListingsClient({ projectId, listings: initialListings, units }: 
     amenities: '',
     applicationFee: '',
     screeningFee: '',
+    requiredDocs: [] as string[],
   })
 
   async function handleCreate(e: React.FormEvent) {
@@ -73,6 +75,7 @@ export function ListingsClient({ projectId, listings: initialListings, units }: 
           amenities: form.amenities || undefined,
           applicationFee: form.applicationFee ? parseFloat(form.applicationFee) : undefined,
           screeningFee: form.screeningFee ? parseFloat(form.screeningFee) : undefined,
+          requiredDocs: form.requiredDocs,
         }),
       })
       const json = await res.json()
@@ -82,7 +85,7 @@ export function ListingsClient({ projectId, listings: initialListings, units }: 
       }
       setListings(prev => [json.data, ...prev])
       setShowCreateModal(false)
-      setForm({ unitId: units.length === 1 ? units[0].id : '', title: '', description: '', monthlyRent: '', availableDate: '', petPolicy: '', amenities: '', applicationFee: '', screeningFee: '' })
+      setForm({ unitId: units.length === 1 ? units[0].id : '', title: '', description: '', monthlyRent: '', availableDate: '', petPolicy: '', amenities: '', applicationFee: '', screeningFee: '', requiredDocs: [] })
     } catch {
       setCreateError('Network error. Please try again.')
     } finally {
@@ -287,6 +290,28 @@ export function ListingsClient({ projectId, listings: initialListings, units }: 
                 />
               </div>
               <div>
+                <label className="block text-xs font-medium mb-1">Required documents</label>
+                <p className="text-xs text-muted-foreground mb-2">Applicants will be prompted to upload these at application time.</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {DOC_TYPES.filter(d => d.key !== 'other').map(doc => (
+                    <label key={doc.key} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.requiredDocs.includes(doc.key)}
+                        onChange={e => setForm(f => ({
+                          ...f,
+                          requiredDocs: e.target.checked
+                            ? [...f.requiredDocs, doc.key]
+                            : f.requiredDocs.filter(d => d !== doc.key),
+                        }))}
+                        className="h-3.5 w-3.5 rounded border"
+                      />
+                      <span className="text-xs">{doc.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
                 <label className="block text-xs font-medium mb-1">Description</label>
                 <textarea
                   rows={3}
@@ -300,7 +325,7 @@ export function ListingsClient({ projectId, listings: initialListings, units }: 
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => { setShowCreateModal(false); setCreateError(null) }}
+                  onClick={() => { setShowCreateModal(false); setCreateError(null); setForm(f => ({ ...f, requiredDocs: [] })) }}
                   className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
                 >
                   Cancel

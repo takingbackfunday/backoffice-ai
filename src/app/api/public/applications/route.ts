@@ -3,6 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, notFound, serverError } from '@/lib/api-response'
 import { checkRateLimit } from '@/lib/rate-limit'
 
+const UploadedDocSchema = z.object({
+  fileType: z.string().min(1),
+  fileUrl: z.string().url(),
+  fileName: z.string().min(1),
+  fileSize: z.number().int().positive().optional(),
+})
+
 const ApplicationSchema = z.object({
   listingSlug: z.string().min(1),
   name: z.string().min(1, 'Name is required'),
@@ -11,6 +18,7 @@ const ApplicationSchema = z.object({
   desiredMoveIn: z.string().optional(),
   screeningConsent: z.literal(true, { errorMap: () => ({ message: 'Screening consent is required' }) }),
   applicationData: z.object({}).passthrough(),
+  uploadedDocs: z.array(UploadedDocSchema).optional(),
 })
 
 export async function POST(request: Request) {
@@ -79,6 +87,25 @@ export async function POST(request: Request) {
           source: 'listing',
           ...applicantData,
         },
+      })
+    }
+
+    // Save uploaded documents as ApplicantDocument rows
+    if (parsed.data.uploadedDocs && parsed.data.uploadedDocs.length > 0) {
+      // Delete any previously uploaded docs for this applicant (re-submission)
+      await prisma.applicantDocument.deleteMany({
+        where: { applicantId: applicant.id, status: 'uploaded', uploadedBy: 'applicant' },
+      })
+      await prisma.applicantDocument.createMany({
+        data: parsed.data.uploadedDocs.map(doc => ({
+          applicantId: applicant.id,
+          fileType: doc.fileType,
+          fileUrl: doc.fileUrl,
+          fileName: doc.fileName,
+          fileSize: doc.fileSize ?? null,
+          status: 'uploaded',
+          uploadedBy: 'applicant',
+        })),
       })
     }
 

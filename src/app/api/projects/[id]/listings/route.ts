@@ -15,6 +15,7 @@ const CreateListingSchema = z.object({
   amenities: z.string().optional(),
   applicationFee: z.number().optional(),
   screeningFee: z.number().optional(),
+  requiredDocs: z.array(z.string()).optional().default([]),
 })
 
 interface RouteParams { params: Promise<{ id: string }> }
@@ -87,6 +88,7 @@ export async function POST(request: Request, { params }: RouteParams) {
           amenities: parsed.data.amenities,
           applicationFee: parsed.data.applicationFee,
           screeningFee: parsed.data.screeningFee,
+          requiredDocs: parsed.data.requiredDocs,
           publicSlug,
         },
         include: {
