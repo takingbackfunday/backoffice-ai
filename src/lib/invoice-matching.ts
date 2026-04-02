@@ -2,13 +2,15 @@
  * Post-import invoice payment matching.
  *
  * After new transactions are imported/created, scan for positive transactions
- * on CLIENT projects and try to match them to open invoices by amount.
+ * on CLIENT or PROPERTY projects and try to match them to open invoices by amount.
  *
  * Matching logic:
- *   1. Transaction must be positive and tagged to a CLIENT project
+ *   1. Transaction must be positive and tagged to a CLIENT or PROPERTY project
  *   2. Not already linked to an InvoicePayment
  *   3. No existing PENDING suggestion for this transaction
- *   4. Find open invoices (SENT/PARTIAL/OVERDUE) for the client
+ *   4. Find open invoices (SENT/PARTIAL/OVERDUE) for the project
+ *      - CLIENT: invoices via clientProfile
+ *      - PROPERTY: invoices via leases on this property OR applicants on this property
  *   5. Compute each invoice's outstanding balance (total - paid)
  *   6. HIGH confidence triggers (auto-apply):
  *      a. Exact amount match (±0.01) against exactly one open invoice
@@ -19,20 +21,68 @@
  * Design principles:
  * - HIGH confidence = auto-apply atomically
  * - MEDIUM confidence = one suggestion per open invoice (user picks)
+ * - DRAFT invoices are always downgraded to MEDIUM — user must confirm
  */
 
 import { prisma } from '@/lib/prisma'
 
+type OpenInvoice = {
+  id: string
+  invoiceNumber: string
+  status: string
+  lineItems: { quantity: number | string; unitPrice: number | string }[]
+  payments: { amount: number | string }[]
+}
+
+async function getOpenInvoicesForTransaction(tx: {
+  id: string
+  project: {
+    type: string
+    clientProfile?: {
+      invoices: OpenInvoice[]
+    } | null
+    propertyProfile?: {
+      units: {
+        leases: {
+          invoices: OpenInvoice[]
+        }[]
+      }[]
+      applicants: {
+        invoices: OpenInvoice[]
+      }[]
+    } | null
+  } | null
+}): Promise<OpenInvoice[]> {
+  if (!tx.project) return []
+
+  if (tx.project.type === 'CLIENT') {
+    return tx.project.clientProfile?.invoices ?? []
+  }
+
+  if (tx.project.type === 'PROPERTY') {
+    const pp = tx.project.propertyProfile
+    if (!pp) return []
+    const leaseInvoices = pp.units.flatMap(u => u.leases.flatMap(l => l.invoices))
+    const applicantInvoices = pp.applicants.flatMap(a => a.invoices)
+    return [...leaseInvoices, ...applicantInvoices]
+  }
+
+  return []
+}
+
 export async function matchInvoicePayments(userId: string, newTxIds: string[]): Promise<void> {
   if (newTxIds.length === 0) return
 
-  // 1. Fetch positive transactions on CLIENT projects, not yet linked
+  const openInvoiceFilter = { status: { in: ['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'] as ('DRAFT' | 'SENT' | 'PARTIAL' | 'OVERDUE')[] } }
+  const invoiceInclude = { lineItems: true, payments: true }
+
+  // Fetch positive transactions on CLIENT or PROPERTY projects, not yet linked
   const txs = await prisma.transaction.findMany({
     where: {
       id: { in: newTxIds },
       amount: { gt: 0 },
       invoicePayment: null,
-      project: { userId, type: 'CLIENT' },
+      project: { userId, type: { in: ['CLIENT', 'PROPERTY'] } },
     },
     include: {
       invoicePaymentSuggestions: {
@@ -41,13 +91,36 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
       },
       project: {
         include: {
+          // CLIENT path
           clientProfile: {
             include: {
               invoices: {
-                where: { status: { in: ['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'] } },
+                where: openInvoiceFilter,
+                include: invoiceInclude,
+              },
+            },
+          },
+          // PROPERTY path
+          propertyProfile: {
+            include: {
+              units: {
                 include: {
-                  lineItems: true,
-                  payments: true,
+                  leases: {
+                    include: {
+                      invoices: {
+                        where: openInvoiceFilter,
+                        include: invoiceInclude,
+                      },
+                    },
+                  },
+                },
+              },
+              applicants: {
+                include: {
+                  invoices: {
+                    where: openInvoiceFilter,
+                    include: invoiceInclude,
+                  },
                 },
               },
             },
@@ -57,9 +130,9 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
     },
   })
 
-  console.log(`[invoice-matching] called with ${newTxIds.length} txId(s), found ${txs.length} matching CLIENT transaction(s) for userId=${userId}`)
+  console.log(`[invoice-matching] called with ${newTxIds.length} txId(s), found ${txs.length} matching transaction(s) for userId=${userId}`)
   if (txs.length === 0) {
-    console.log(`[invoice-matching] possible reasons: not positive, not tagged to CLIENT project, already linked, or pending suggestion exists`)
+    console.log(`[invoice-matching] possible reasons: not positive, not tagged to CLIENT/PROPERTY project, already linked, or pending suggestion exists`)
   }
 
   const suggestionsToCreate: {
@@ -72,12 +145,12 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
 
   for (const tx of txs) {
     const txAmount = Number(tx.amount)
-    const openInvoices = tx.project?.clientProfile?.invoices ?? []
+    const openInvoices = await getOpenInvoicesForTransaction(tx as Parameters<typeof getOpenInvoicesForTransaction>[0])
 
-    console.log(`[invoice-matching] tx=${tx.id} amount=${txAmount} desc="${tx.description}" openInvoices=${openInvoices.length}`)
+    console.log(`[invoice-matching] tx=${tx.id} amount=${txAmount} desc="${tx.description}" project.type=${tx.project?.type} openInvoices=${openInvoices.length}`)
 
     if (openInvoices.length === 0) {
-      console.log(`[invoice-matching]   → no open invoices for this client, skipping`)
+      console.log(`[invoice-matching]   → no open invoices for this project, skipping`)
       continue
     }
 
@@ -150,7 +223,6 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
         console.log(`[invoice-matching]   → auto-applied to ${inv.invoiceNumber}`)
       } catch {
         console.log(`[invoice-matching]   → auto-apply failed, falling back to suggestions`)
-        // Fall through to MEDIUM suggestions below
         for (const { inv: fi, balance } of invoicesWithBalance.filter(({ inv: fi }) => !alreadySuggestedIds.has(fi.id))) {
           suggestionsToCreate.push({
             userId,

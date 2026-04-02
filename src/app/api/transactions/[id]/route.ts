@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { matchTenantPayments } from '@/lib/rent-matching'
+import { matchInvoicePayments } from '@/lib/invoice-matching'
 
 const UpdateTransactionSchema = z.object({
   description: z.string().min(1).optional(),
@@ -64,6 +65,7 @@ export async function PATCH(
     // If a project was just assigned, run matching fire-and-forget
     if (parsed.data.projectId && parsed.data.projectId !== existing.projectId) {
       matchTenantPayments(userId, [id]).catch(() => {})
+      matchInvoicePayments(userId, [id]).catch(() => {})
     }
 
     return ok(updated)

@@ -26,6 +26,7 @@ export async function POST(request: Request, { params }: RouteParams) {
           { clientProfile: { project: { id, userId } } },
           { lease: { unit: { propertyProfile: { project: { id, userId } } } } },
           { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id, userId } } } } } } },
+          { applicant: { propertyProfile: { project: { id, userId } } } },
         ],
       },
       include: {
