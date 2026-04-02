@@ -423,6 +423,7 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
       {sendModal && (
         <SendInvoiceModal
           projectId={projectId}
+          projectSlug={projectSlug}
           invoiceId={sendModal.inv.id}
           invoiceNumber={sendModal.inv.invoiceNumber}
           clientName={clientName}

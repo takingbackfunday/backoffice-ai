@@ -670,6 +670,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
     {showSendModal && (
       <SendInvoiceModal
         projectId={projectId}
+        projectSlug={projectSlug}
         invoiceId={invoice.id}
         invoiceNumber={invoice.invoiceNumber}
         clientName={invoice.clientName}

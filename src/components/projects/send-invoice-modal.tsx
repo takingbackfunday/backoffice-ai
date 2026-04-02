@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Send, Paperclip, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { X, Send, Paperclip, Loader2, Pencil } from 'lucide-react'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { PaymentSummary } from '@/components/projects/payment-summary'
 
 interface Props {
   projectId: string
+  projectSlug: string
   invoiceId: string
   invoiceNumber: string
   clientName: string
@@ -41,7 +43,7 @@ function defaultMessage(clientName: string, invoiceNumber: string, total: number
 
 
 export function SendInvoiceModal({
-  projectId, invoiceId, invoiceNumber, clientName, clientEmail,
+  projectId, projectSlug, invoiceId, invoiceNumber, clientName, clientEmail,
   total, paid = 0, balance, currency, dueDate, paymentMethods, isReminder = false,
   onClose, onSent,
 }: Props) {
@@ -119,9 +121,18 @@ export function SendInvoiceModal({
               </p>
             )}
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/projects/${projectSlug}/invoices/${invoiceId}/edit`}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit invoice
+            </Link>
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Two-column body */}
