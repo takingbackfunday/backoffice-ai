@@ -484,6 +484,9 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
         </div>
       ))}
 
+      {/* Payment info + Payments side by side */}
+      <div className="grid grid-cols-2 gap-4 items-start">
+
       {/* Payment methods info */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
@@ -657,7 +660,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
         {invoice.payments.length === 0 ? (
           <p className="text-xs text-muted-foreground">No payments recorded yet.</p>
         ) : (
-          <div className="rounded-md border overflow-hidden">
+          <div className="rounded-md border">
             <table className="w-full text-xs">
               <thead className="bg-muted/50">
                 <tr>
@@ -720,6 +723,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           </div>
         )}
       </div>
+      </div>{/* end grid */}
     </div>
 
     {showRenegotiateConfirm && (
