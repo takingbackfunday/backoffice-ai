@@ -99,7 +99,7 @@ export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, o
       className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-stretch justify-end"
       onMouseDown={e => { if (e.target === e.currentTarget && readyRef.current) onClose() }}
     >
-      <div className="w-full max-w-5xl bg-background flex flex-col h-full shadow-2xl">
+      <div className="w-full max-w-5xl bg-background flex flex-col h-full shadow-2xl overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
@@ -178,7 +178,7 @@ export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, o
         </div>
 
         {/* Editor */}
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
           {!selectedClient ? (
             <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
               Select a client above to start the invoice

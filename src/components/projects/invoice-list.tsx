@@ -241,6 +241,7 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
   const router = useRouter()
   const [invoices, setInvoices] = useState<Invoice[]>(initial)
   const [tab, setTab] = useState<Tab>('open')
+  const [tabLoading, setTabLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [preview, setPreview] = useState<Invoice | null>(null)
   const [sendModal, setSendModal] = useState<{ inv: Invoice; isReminder: boolean } | null>(null)
@@ -279,13 +280,13 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
           {([['open', `Open (${openCount})`], ['paid', `Paid (${paidCount})`], ['all', 'All']] as [Tab, string][]).map(([t, label]) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => { if (tab !== t) { setTabLoading(true); setTab(t); setTimeout(() => setTabLoading(false), 300) } }}
               className={cn(
                 'px-3 py-1 rounded-md text-xs font-medium transition-colors',
                 tab === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              {label}
+              {tabLoading && tab === t ? <span className="inline-block w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" /> : label}
             </button>
           ))}
         </div>
