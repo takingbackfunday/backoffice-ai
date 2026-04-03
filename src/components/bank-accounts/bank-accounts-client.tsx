@@ -561,6 +561,7 @@ const TABS: { id: Tab; label: string; description: string }[] = [
 
 export function BankAccountsClient({ accounts, initialTab, onboarding }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab)
+  const [tabLoading, setTabLoading] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -576,7 +577,7 @@ export function BankAccountsClient({ accounts, initialTab, onboarding }: Props) 
         {TABS.map(t => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => { if (tab !== t.id) { setTabLoading(true); setTab(t.id); setTimeout(() => setTabLoading(false), 300) } }}
             className={cn(
               'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
               tab === t.id
@@ -584,7 +585,7 @@ export function BankAccountsClient({ accounts, initialTab, onboarding }: Props) 
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             )}
           >
-            {t.label}
+            {tabLoading && tab === t.id ? <span className="inline-block w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" /> : t.label}
           </button>
         ))}
       </div>
