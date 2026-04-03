@@ -774,6 +774,17 @@ export function InvoiceEditor({
                       type="text"
                       value={item.description}
                       onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'description', value: e.target.value })}
+                      onBlur={e => {
+                        const desc = e.target.value.trim()
+                        if (!desc || item.qtyUnit !== 'units') return
+                        fetch(`/api/projects/${projectId}/invoices/suggest-unit`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ description: desc }),
+                        }).then(r => r.json()).then(j => {
+                          if (j.data?.unit) dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'qtyUnit', value: j.data.unit })
+                        }).catch(() => {})
+                      }}
                       className="text-sm focus:outline-none bg-transparent placeholder:text-muted-foreground/50 min-w-0"
                       placeholder="Description of work or service"
                       autoFocus={idx === 0 && mode === 'create' && item.description === ''}
