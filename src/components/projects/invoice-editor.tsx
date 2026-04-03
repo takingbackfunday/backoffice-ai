@@ -251,6 +251,7 @@ export function InvoiceEditor({
   const [saveDefaultNotes, setSaveDefaultNotes] = useState(false)
   const [saveDefaultCurrency, setSaveDefaultCurrency] = useState(false)
   const [showCopyPicker, setShowCopyPicker] = useState(false)
+  const [unitPopoverId, setUnitPopoverId] = useState<string | null>(null)
   const [recentInvoices, setRecentInvoices] = useState(initialRecentInvoices ?? null as null | typeof initialRecentInvoices)
   const [loadingRecent, setLoadingRecent] = useState(false)
 
@@ -699,6 +700,11 @@ export function InvoiceEditor({
             )}
           </div>
 
+          {/* Invisible backdrop to close unit popover on click-away */}
+          {unitPopoverId && (
+            <div className="fixed inset-0 z-20" onClick={() => setUnitPopoverId(null)} aria-hidden="true" />
+          )}
+
           {/* Line items */}
           <div className="mb-5">
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Line items</label>
@@ -722,7 +728,7 @@ export function InvoiceEditor({
                       placeholder="Description of work or service"
                       autoFocus={idx === 0 && mode === 'create' && item.description === ''}
                     />
-                    <div className="flex items-center gap-1 justify-end">
+                    <div className="flex items-center gap-1 justify-end relative">
                       <input
                         type="number"
                         value={item.quantity}
@@ -731,13 +737,47 @@ export function InvoiceEditor({
                         min="0"
                         step="0.001"
                       />
-                      <input
-                        type="text"
-                        value={item.qtyUnit}
-                        onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'qtyUnit', value: e.target.value })}
-                        placeholder="unit"
-                        className="text-[10px] text-muted-foreground focus:outline-none bg-transparent w-12 border-b border-dashed border-muted-foreground/30 focus:border-primary text-center"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setUnitPopoverId(unitPopoverId === item.id ? null : item.id)}
+                        className={`text-[10px] rounded px-1 py-0.5 border transition-colors ${item.qtyUnit ? 'border-primary/40 text-primary bg-primary/5' : 'border-dashed border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/60'}`}
+                      >
+                        {item.qtyUnit || 'unit'}
+                      </button>
+                      {unitPopoverId === item.id && (
+                        <div className="absolute top-7 right-0 z-30 rounded-xl border bg-background shadow-xl p-2 w-40">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-1 mb-1.5">Unit type</p>
+                          {['hrs', 'days', 'wks', 'months', 'words', 'pages', 'imgs', 'calls', 'units', 'items'].map(u => (
+                            <button
+                              key={u}
+                              type="button"
+                              onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'qtyUnit', value: u }); setUnitPopoverId(null) }}
+                              className={`w-full text-left px-2 py-1 text-xs rounded-md hover:bg-muted/50 transition-colors ${item.qtyUnit === u ? 'font-semibold text-primary' : ''}`}
+                            >
+                              {u}
+                            </button>
+                          ))}
+                          <div className="border-t mt-1.5 pt-1.5">
+                            <input
+                              type="text"
+                              value={item.qtyUnit}
+                              onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'qtyUnit', value: e.target.value })}
+                              placeholder="custom…"
+                              className="w-full rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+                              onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setUnitPopoverId(null) }}
+                            />
+                          </div>
+                          {item.qtyUnit && (
+                            <button
+                              type="button"
+                              onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'qtyUnit', value: '' }); setUnitPopoverId(null) }}
+                              className="w-full text-left px-2 py-1 text-xs text-muted-foreground hover:text-destructive rounded-md hover:bg-muted/30 mt-0.5"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center justify-end">
                       <input
