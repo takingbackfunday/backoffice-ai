@@ -83,14 +83,26 @@ export function ChatOverlay() {
       )}
 
       {/* Floating action button */}
-      <button
-        onClick={toggle}
-        aria-label="Chat with AI about your finances"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-[#3C3489] text-white shadow-lg shadow-[#3C3489]/30 px-4 py-3 text-sm font-medium hover:bg-[#2d2770] transition-colors"
-      >
-        <span className="text-base leading-none">{open ? '×' : '💬'}</span>
-        {!open && <span>Chat with AI</span>}
-      </button>
+      <div className="fixed bottom-6 right-6 z-50 flex items-center gap-1">
+        <button
+          onClick={toggle}
+          aria-label="Chat with AI about your finances"
+          className="flex items-center gap-2 rounded-full bg-[#3C3489] text-white shadow-lg shadow-[#3C3489]/30 px-4 py-2.5 text-sm font-medium hover:bg-[#2d2770] transition-colors"
+        >
+          <span className="text-base leading-none">{open ? '×' : '💬'}</span>
+          {!open && <span>Chat with AI</span>}
+        </button>
+        {!open && (
+          <button
+            onClick={hide}
+            aria-label="Hide chat button"
+            title="Hide"
+            className="flex items-center justify-center w-5 h-5 rounded-full bg-[#3C3489]/15 text-[#3C3489] hover:bg-[#3C3489]/25 transition-colors"
+          >
+            <Minus className="w-2.5 h-2.5" />
+          </button>
+        )}
+      </div>
     </>
   )
 }
