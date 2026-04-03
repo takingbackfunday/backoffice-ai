@@ -1783,6 +1783,9 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                 className="text-right"
               />
 
+              {/* Currency */}
+              <th className="px-3 py-1 text-left font-medium whitespace-nowrap">Currency</th>
+
               {/* Payee */}
               <FilterableSortHeader
                 label="Payee"
@@ -1917,6 +1920,9 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                     className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-xs outline-none focus:ring-1 focus:ring-blue-400 text-right font-mono"
                   />
                 </td>
+                {/* Currency — derived from account, not editable */}
+                <td className="px-3 py-1 text-xs text-muted-foreground">—</td>
+
                 {/* Payee */}
                 <td className="px-3 py-1 min-w-[140px]">
                   <PayeeCell
@@ -1994,7 +2000,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
             {loading && localRows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground" aria-live="polite">
+                <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground" aria-live="polite">
                   <span className="inline-flex items-center gap-2">
                     <span className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
                     Loading from database…
@@ -2003,7 +2009,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
               </tr>
             ) : !loading && localRows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">No transactions found.</td>
+                <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">No transactions found.</td>
               </tr>
             ) : (
               localRows.map((row) => {
@@ -2035,6 +2041,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                     <td className="px-3 py-0.5 text-muted-foreground whitespace-nowrap">{row.account.name}</td>
                     {renderEditableCell(row, 'description')}
                     {renderEditableCell(row, 'amount')}
+                    <td className="px-3 py-0.5 text-xs text-muted-foreground whitespace-nowrap">{row.account.currency ?? '—'}</td>
                     {renderEditableCell(row, 'payeeId')}
                     {renderEditableCell(row, 'categoryId')}
                     <td className="px-3 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
