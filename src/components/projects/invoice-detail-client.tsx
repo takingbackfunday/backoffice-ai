@@ -299,10 +299,10 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
 
   return (
     <>
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Renegotiation banners */}
       {replacedBy && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
+        <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2">
           <span>⚠ This invoice was voided and replaced by</span>
           <Link href={`/projects/${projectSlug}/invoices/${replacedBy.id}`} className="font-semibold underline underline-offset-2">
             {replacedBy.invoiceNumber} →
@@ -310,7 +310,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
         </div>
       )}
       {replacesInvoice && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-4 py-3 text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
+        <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-3 py-2 text-xs text-blue-800 dark:text-blue-200 flex items-center gap-2">
           <span>This invoice replaces</span>
           <Link href={`/projects/${projectSlug}/invoices/${replacesInvoice.id}`} className="font-semibold underline underline-offset-2">
             {replacesInvoice.invoiceNumber} →
@@ -320,67 +320,49 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold">{invoice.invoiceNumber}</h2>
-            <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', INVOICE_STATUS_COLORS[displayStatus] ?? 'bg-muted text-muted-foreground')}>
-              {INVOICE_STATUS_LABELS[displayStatus] ?? displayStatus}
-            </span>
-          </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-bold">{invoice.invoiceNumber}</h2>
+          <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', INVOICE_STATUS_COLORS[displayStatus] ?? 'bg-muted text-muted-foreground')}>
+            {INVOICE_STATUS_LABELS[displayStatus] ?? displayStatus}
+          </span>
           {invoice.job && (
-            <p className="text-sm text-muted-foreground mt-1">Job: {invoice.job.name}</p>
+            <span className="text-xs text-muted-foreground">Job: {invoice.job.name}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Edit — only for DRAFT/SENT/PARTIAL */}
           {!['PAID', 'VOID'].includes(invoice.status) && (
             <Link
               href={`/projects/${projectSlug}/invoices/${invoice.id}/edit`}
-              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+              className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
             >
               <Pencil className="h-3 w-3" /> Edit
             </Link>
           )}
-          {/* Download PDF */}
           <a
             href={`/api/projects/${projectId}/invoices/${invoice.id}/pdf`}
             download
-            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
           >
             <Download className="h-3 w-3" /> Download PDF
           </a>
-          {emailStatus && (
-            <span className="text-xs text-green-600">{emailStatus}</span>
-          )}
+          {emailStatus && <span className="text-xs text-green-600">{emailStatus}</span>}
           {invoice.status !== 'VOID' && invoice.status !== 'PAID' && (
             <>
               {invoice.status === 'DRAFT' && (
-                <button
-                  type="button"
-                  onClick={() => openSend(false)}
-                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
-                >
+                <button type="button" onClick={() => openSend(false)} className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition-colors">
                   Send invoice
                 </button>
               )}
               {(invoice.status === 'SENT' || invoice.status === 'PARTIAL') && (
-                <button
-                  type="button"
-                  onClick={() => openSend(true)}
-                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors"
-                >
+                <button type="button" onClick={() => openSend(true)} className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
                   Send reminder
                 </button>
               )}
             </>
           )}
           {['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'].includes(invoice.status) && !replacedBy && (
-            <button
-              type="button"
-              onClick={() => setShowRenegotiateConfirm(true)}
-              className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
+            <button type="button" onClick={() => setShowRenegotiateConfirm(true)} className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
               <RefreshCw className="h-3 w-3" /> Renegotiate
             </button>
           )}
@@ -392,17 +374,13 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                 const res = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}`, { method: 'DELETE' })
                 if (res.ok) router.push(`/projects/${projectSlug}/invoices`)
               }}
-              className="rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-medium text-destructive/70 hover:text-destructive hover:border-destructive hover:bg-destructive/5 transition-colors"
+              className="rounded-md border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive/70 hover:text-destructive hover:border-destructive hover:bg-destructive/5 transition-colors"
             >
               Delete
             </button>
           )}
           {invoice.status !== 'VOID' && invoice.status !== 'PAID' && invoice.status !== 'DRAFT' && (
-            <button
-              type="button"
-              onClick={() => { if (confirm('Void this invoice? This cannot be undone.')) updateStatus('VOID') }}
-              className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-destructive hover:border-destructive transition-colors"
-            >
+            <button type="button" onClick={() => { if (confirm('Void this invoice? This cannot be undone.')) updateStatus('VOID') }} className="rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-destructive hover:border-destructive transition-colors">
               Void
             </button>
           )}
@@ -410,48 +388,47 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
       </div>
 
       {/* Meta */}
-      <div className="grid grid-cols-3 gap-4 rounded-lg border p-4 text-sm">
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Issue date</p>
-          <p>{new Date(invoice.issueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+      <div className="grid grid-cols-3 gap-3 rounded-md border px-4 py-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">Issue date</span>
+          <span className="font-medium">{new Date(invoice.issueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
         </div>
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Due date</p>
-          <p className={isOverdue ? 'text-red-600 font-medium' : ''}>
-            {new Date(invoice.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">Due date</span>
+          <span className={cn('font-medium', isOverdue ? 'text-red-600' : '')}>
+            {new Date(invoice.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             {isOverdue && ' (overdue)'}
-          </p>
+          </span>
         </div>
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Currency</p>
-          <p>{invoice.currency}</p>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">Currency</span>
+          <span className="font-medium">{invoice.currency}</span>
         </div>
       </div>
 
       {/* Line items */}
       <div>
-        <h3 className="text-sm font-semibold mb-3">Line items</h3>
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-md border overflow-hidden">
+          <table className="w-full text-xs">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left px-4 py-2 font-medium">Description</th>
-                <th className="text-right px-4 py-2 font-medium w-24">Qty</th>
-                <th className="text-right px-4 py-2 font-medium w-28">Unit price</th>
-                <th className="text-right px-4 py-2 font-medium w-28">Total</th>
+                <th className="text-left px-3 py-1.5 font-medium">Description</th>
+                <th className="text-right px-3 py-1.5 font-medium w-16">Qty</th>
+                <th className="text-right px-3 py-1.5 font-medium w-24">Unit price</th>
+                <th className="text-right px-3 py-1.5 font-medium w-24">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {invoice.lineItems.map(item => (
                 <tr key={item.id}>
-                  <td className="px-4 py-2">{item.description}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                  <td className="px-3 py-1.5">{item.description}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
                     {Number(item.quantity) % 1 === 0 ? Number(item.quantity) : Number(item.quantity).toFixed(3)}
                   </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                  <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
                     {fmt(Number(item.unitPrice), invoice.currency)}
                   </td>
-                  <td className="px-4 py-2 text-right tabular-nums font-medium">
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">
                     {fmt(Number(item.quantity) * Number(item.unitPrice), invoice.currency)}
                   </td>
                 </tr>
@@ -459,21 +436,21 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
             </tbody>
             <tfoot className="border-t bg-muted/20">
               <tr>
-                <td colSpan={3} className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground">Subtotal</td>
-                <td className="px-4 py-2 text-right font-semibold tabular-nums">{fmt(total, invoice.currency)}</td>
+                <td colSpan={3} className="px-3 py-1.5 text-right text-xs font-semibold text-muted-foreground">Subtotal</td>
+                <td className="px-3 py-1.5 text-right font-semibold tabular-nums">{fmt(total, invoice.currency)}</td>
               </tr>
               {invoice.payments.map(p => (
                 <tr key={p.id}>
-                  <td colSpan={2} className="px-4 py-2 text-right text-xs text-green-700">
+                  <td colSpan={2} className="px-3 py-1 text-right text-xs text-green-700">
                     Payment · {new Date(p.paidDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     {p.paymentMethod && <span className="text-muted-foreground"> · {p.paymentMethod}</span>}
                   </td>
-                  <td className="px-4 py-2 text-right text-xs font-semibold text-green-700 tabular-nums" colSpan={2}>−{fmt(Number(p.amount), invoice.currency)}</td>
+                  <td className="px-3 py-1 text-right text-xs font-semibold text-green-700 tabular-nums" colSpan={2}>−{fmt(Number(p.amount), invoice.currency)}</td>
                 </tr>
               ))}
               <tr className="border-t">
-                <td colSpan={3} className="px-4 py-3 text-right text-sm font-bold">Balance due</td>
-                <td className={cn('px-4 py-3 text-right text-sm font-bold tabular-nums', balance <= 0 ? 'text-green-700' : '')}>
+                <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold">Balance due</td>
+                <td className={cn('px-3 py-2 text-right text-xs font-bold tabular-nums', balance <= 0 ? 'text-green-700' : '')}>
                   {fmt(balance, invoice.currency)}
                 </td>
               </tr>
@@ -484,49 +461,34 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
 
       {/* Notes */}
       {invoice.notes && (
-        <div className="rounded-lg border p-4">
-          <h3 className="text-xs font-semibold text-muted-foreground mb-2">Notes</h3>
-          <p className="text-sm whitespace-pre-wrap">{invoice.notes}</p>
+        <div className="rounded-md border px-3 py-2">
+          <p className="text-xs text-muted-foreground mb-1 font-semibold">Notes</p>
+          <p className="text-xs whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       )}
 
       {/* Payment match suggestions */}
       {suggestions.map(s => (
-        <div key={s.id} className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-4 flex items-start justify-between gap-4">
+        <div key={s.id} className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-3 py-2 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="font-semibold text-sm text-blue-900 dark:text-blue-200">Possible payment match</p>
-            <p className="text-sm text-blue-700 dark:text-blue-300 mt-0.5">
+            <p className="font-semibold text-xs text-blue-900 dark:text-blue-200">Possible payment match</p>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
               {fmt(s.transaction.amount, invoice.currency)} · {s.transaction.description} · {new Date(s.transaction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
-            <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">{s.reasoning}</p>
+            <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">{s.reasoning}</p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => handleSuggestion(s.id, 'accept')}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
-            >
-              Accept
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSuggestion(s.id, 'dismiss')}
-              className="rounded-md border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-900/40 transition-colors"
-            >
-              Dismiss
-            </button>
+            <button type="button" onClick={() => handleSuggestion(s.id, 'accept')} className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition-colors">Accept</button>
+            <button type="button" onClick={() => handleSuggestion(s.id, 'dismiss')} className="rounded-md border border-blue-300 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-900/40 transition-colors">Dismiss</button>
           </div>
         </div>
       ))}
 
       {/* Payment methods info */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-muted-foreground">Payment info</h3>
-          <Link
-            href="/settings"
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <h3 className="text-xs font-semibold text-muted-foreground">Payment info</h3>
+          <Link href="/settings" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <Settings className="h-3 w-3" /> Payment settings
           </Link>
         </div>
@@ -535,22 +497,14 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
 
       {/* Payments */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Payments</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold">Payments</h3>
           {invoice.status !== 'VOID' && invoice.status !== 'PAID' && (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={openLinkPicker}
-                className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              >
-                Link transaction for payment
+              <button type="button" onClick={openLinkPicker} className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                Link transaction
               </button>
-              <button
-                type="button"
-                onClick={() => { setShowPaymentForm(v => !v); setShowLinkPicker(false) }}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
+              <button type="button" onClick={() => { setShowPaymentForm(v => !v); setShowLinkPicker(false) }} className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors">
                 Record payment
               </button>
             </div>
@@ -701,31 +655,31 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
         )}
 
         {invoice.payments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+          <p className="text-xs text-muted-foreground">No payments recorded yet.</p>
         ) : (
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-md border overflow-hidden">
+            <table className="w-full text-xs">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left px-4 py-2 font-medium">Date</th>
-                  <th className="text-right px-4 py-2 font-medium">Amount</th>
-                  <th className="text-left px-4 py-2 font-medium">Method</th>
-                  <th className="text-left px-4 py-2 font-medium">Notes</th>
-                  <th className="w-8 px-2 py-2" />
+                  <th className="text-left px-3 py-1.5 font-medium">Date</th>
+                  <th className="text-right px-3 py-1.5 font-medium">Amount</th>
+                  <th className="text-left px-3 py-1.5 font-medium">Method</th>
+                  <th className="text-left px-3 py-1.5 font-medium">Notes</th>
+                  <th className="w-8 px-2 py-1.5" />
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {invoice.payments.map(p => (
                   <tr key={p.id} className={refundingId === p.id || movingId === p.id ? 'opacity-50' : ''}>
-                    <td className="px-4 py-2 text-muted-foreground">
+                    <td className="px-3 py-1.5 text-muted-foreground">
                       {new Date(p.paidDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
-                    <td className="px-4 py-2 text-right font-medium tabular-nums text-green-700">
+                    <td className="px-3 py-1.5 text-right font-medium tabular-nums text-green-700">
                       {fmt(Number(p.amount), invoice.currency)}
                     </td>
-                    <td className="px-4 py-2 text-muted-foreground">{p.paymentMethod ?? '—'}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{p.notes ?? '—'}</td>
-                    <td className="px-2 py-2 relative">
+                    <td className="px-3 py-1.5 text-muted-foreground">{p.paymentMethod ?? '—'}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{p.notes ?? '—'}</td>
+                    <td className="px-2 py-1.5 relative">
                       {invoice.status !== 'VOID' && (
                         <>
                           <button
