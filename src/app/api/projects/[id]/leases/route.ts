@@ -39,7 +39,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       include: {
         unit: true,
         tenant: true,
-        _count: { select: { tenantCharges: true, tenantPayments: true } },
+        _count: { select: { invoices: true } },
       },
       orderBy: { startDate: 'desc' },
     })

@@ -2,7 +2,6 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
-import { matchTenantPayments } from '@/lib/rent-matching'
 import { matchInvoicePayments } from '@/lib/invoice-matching'
 
 const UpdateTransactionSchema = z.object({
@@ -64,7 +63,6 @@ export async function PATCH(
 
     // If a project was just assigned, run matching fire-and-forget
     if (parsed.data.projectId && parsed.data.projectId !== existing.projectId) {
-      matchTenantPayments(userId, [id]).catch(() => {})
       matchInvoicePayments(userId, [id]).catch(() => {})
     }
 
@@ -89,13 +87,12 @@ export async function DELETE(
     if (!existing) return notFound('Transaction not found')
 
     await prisma.$transaction([
-      // Flag any attributed tenant payment — keep the record but mark source as deleted
-      prisma.tenantPayment.updateMany({
+      // Flag any attributed invoice payment — keep the record but mark source as deleted
+      prisma.invoicePayment.updateMany({
         where: { transactionId: id },
         data: { transactionId: null, sourceDeleted: true },
       }),
       // Delete any payment suggestions referencing this transaction
-      prisma.tenantPaymentSuggestion.deleteMany({ where: { transactionId: id } }),
       prisma.invoicePaymentSuggestion.deleteMany({ where: { transactionId: id } }),
       prisma.transaction.delete({ where: { id } }),
     ])

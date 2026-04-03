@@ -114,7 +114,7 @@ export const PROPERTY_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_tenant_balance',
-      description: 'Get the outstanding balance for a tenant (charges minus payments).',
+      description: 'Get the outstanding balance for a tenant (invoice line item totals minus payments).',
       parameters: {
         type: 'object',
         properties: {
@@ -128,7 +128,7 @@ export const PROPERTY_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'list_tenant_payments',
-      description: 'List payment history for a tenant or all tenants in a property.',
+      description: 'List invoice payment history for a tenant or all tenants in a property.',
       parameters: {
         type: 'object',
         properties: {
@@ -413,13 +413,17 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
             orderBy: { startDate: 'desc' },
             take: 1,
           },
-          tenantCharges: { where: { forgivenAt: null }, select: { amount: true } },
-          tenantPayments: { select: { amount: true } },
+          invoices: {
+            where: { status: { not: 'VOID' } },
+            include: { lineItems: true, payments: true },
+          },
         },
       })
       if (!tenant) return `No tenant found matching "${name}".`
-      const charged = tenant.tenantCharges.reduce((s, c) => s + Number(c.amount), 0)
-      const paid = tenant.tenantPayments.reduce((s, p) => s + Number(p.amount), 0)
+      const charged = tenant.invoices.reduce((s, inv) =>
+        s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
+      const paid = tenant.invoices.reduce((s, inv) =>
+        s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
       const lease = tenant.leases[0]
       return JSON.stringify({
         name: tenant.name,
@@ -447,7 +451,13 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
           propertyProfile: { include: { project: { select: { name: true } } } },
           leases: {
             where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
-            include: { tenant: { select: { name: true } } },
+            include: {
+              tenant: { select: { name: true } },
+              invoices: {
+                where: { status: { not: 'VOID' } },
+                include: { lineItems: true, payments: true },
+              },
+            },
             orderBy: { startDate: 'desc' },
             take: 1,
           },
@@ -457,7 +467,12 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       if (!units.length) return 'No units found.'
       return units.map(u => {
         const l = u.leases[0]
-        return `${u.propertyProfile.project.name} / ${u.unitLabel} | ${u.status} | Tenant: ${l?.tenant.name ?? 'vacant'} | Rent: $${l ? Number(l.monthlyRent) : 0}/mo | Ends: ${l?.endDate ? l.endDate.toISOString().slice(0, 10) : 'n/a'}`
+        const charged = l ? l.invoices.reduce((s, inv) =>
+          s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0) : 0
+        const paid = l ? l.invoices.reduce((s, inv) =>
+          s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0) : 0
+        const balance = charged - paid
+        return `${u.propertyProfile.project.name} / ${u.unitLabel} | ${u.status} | Tenant: ${l?.tenant.name ?? 'vacant'} | Rent: $${l ? Number(l.monthlyRent) : 0}/mo | Balance: $${balance} | Ends: ${l?.endDate ? l.endDate.toISOString().slice(0, 10) : 'n/a'}`
       }).join('\n')
     }
 
@@ -465,53 +480,61 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       const name = String(a.tenantName ?? '')
       const tenantIds = await findTenantIdsByName(userId, name)
       if (!tenantIds.length) return `No tenant found matching "${name}".`
-      const [charges, payments] = await Promise.all([
-        prisma.tenantCharge.aggregate({
-          where: { lease: { tenantId: { in: tenantIds } }, forgivenAt: null },
-          _sum: { amount: true },
-        }),
-        prisma.tenantPayment.aggregate({
-          where: { tenantId: { in: tenantIds }, voidedAt: null },
-          _sum: { amount: true },
-        }),
-      ])
-      const totalCharged = Number(charges._sum.amount ?? 0)
-      const totalPaid = Number(payments._sum.amount ?? 0)
+      const invoices = await prisma.invoice.findMany({
+        where: { tenantId: { in: tenantIds }, status: { not: 'VOID' } },
+        include: { lineItems: true, payments: true },
+      })
+      const totalCharged = invoices.reduce((s, inv) =>
+        s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
+      const totalPaid = invoices.reduce((s, inv) =>
+        s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
       const balance = totalCharged - totalPaid
       return `Total charged: $${totalCharged.toLocaleString()}\nTotal paid: $${totalPaid.toLocaleString()}\nOutstanding balance: $${balance.toLocaleString()}`
     }
 
     case 'list_tenant_payments': {
-      const where: Record<string, unknown> = {
-        tenant: { userId },
+      const paymentWhere: Record<string, unknown> = {
+        voidedAt: null,
+        invoice: { tenant: { userId } },
       }
       if (a.tenantName) {
         const ids = await findTenantIdsByName(userId, String(a.tenantName))
-        where.tenantId = { in: ids }
+        paymentWhere.invoice = { ...paymentWhere.invoice as object, tenantId: { in: ids } }
       }
       if (a.propertyName) {
-        where.lease = {
-          unit: {
-            propertyProfile: {
-              project: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
+        paymentWhere.invoice = {
+          ...paymentWhere.invoice as object,
+          lease: {
+            unit: {
+              propertyProfile: {
+                project: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
+              },
             },
           },
         }
       }
       if (a.dateFrom || a.dateTo) {
-        where.paidDate = {
+        paymentWhere.paidDate = {
           ...(a.dateFrom ? { gte: new Date(String(a.dateFrom)) } : {}),
           ...(a.dateTo ? { lte: new Date(String(a.dateTo)) } : {}),
         }
       }
-      const payments = await prisma.tenantPayment.findMany({
-        where: where as never,
-        include: { tenant: { select: { name: true } } },
+      const payments = await prisma.invoicePayment.findMany({
+        where: paymentWhere as never,
+        include: {
+          invoice: {
+            select: {
+              invoiceNumber: true,
+              period: true,
+              tenant: { select: { name: true } },
+            },
+          },
+        },
         orderBy: { paidDate: 'desc' },
         take: 50,
       })
       if (!payments.length) return 'No payments found.'
-      return payments.map(p => `${p.paidDate.toISOString().slice(0, 10)} | ${p.tenant.name} | $${Number(p.amount)} | ${p.paymentMethod ?? 'unknown method'}`).join('\n')
+      return payments.map(p => `${p.paidDate.toISOString().slice(0, 10)} | ${p.invoice.tenant?.name ?? 'unknown'} | $${Number(p.amount)} | ${p.paymentMethod ?? 'unknown method'} | Invoice: ${p.invoice.invoiceNumber}`).join('\n')
     }
 
     case 'list_overdue_tenants': {
@@ -522,15 +545,19 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] }, ...propFilter },
         include: {
           tenant: { select: { name: true, email: true } },
-          tenantCharges: { where: { forgivenAt: null }, select: { amount: true } },
-          tenantPayments: { where: { voidedAt: null }, select: { amount: true } },
+          invoices: {
+            where: { status: { not: 'VOID' } },
+            include: { lineItems: true, payments: true },
+          },
           unit: { include: { propertyProfile: { include: { project: { select: { name: true } } } } } },
         },
       })
       const overdue = leases
         .map(l => {
-          const charged = l.tenantCharges.reduce((s, c) => s + Number(c.amount), 0)
-          const paid = l.tenantPayments.reduce((s, p) => s + Number(p.amount), 0)
+          const charged = l.invoices.reduce((s, inv) =>
+            s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
+          const paid = l.invoices.reduce((s, inv) =>
+            s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
           return { name: l.tenant.name, email: l.tenant.email, property: l.unit.propertyProfile.project.name, unit: l.unit.unitLabel, balance: charged - paid }
         })
         .filter(t => t.balance > 0)
@@ -562,27 +589,32 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
     }
 
     case 'get_property_revenue': {
-      const where: Record<string, unknown> = {
-        tenant: { userId },
+      const revWhere: Record<string, unknown> = {
         voidedAt: null,
+        invoice: {
+          tenant: { userId },
+        },
       }
       if (a.propertyName) {
-        where.lease = {
-          unit: {
-            propertyProfile: {
-              project: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
+        revWhere.invoice = {
+          ...revWhere.invoice as object,
+          lease: {
+            unit: {
+              propertyProfile: {
+                project: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
+              },
             },
           },
         }
       }
       if (a.dateFrom || a.dateTo) {
-        where.paidDate = {
+        revWhere.paidDate = {
           ...(a.dateFrom ? { gte: new Date(String(a.dateFrom)) } : {}),
           ...(a.dateTo ? { lte: new Date(String(a.dateTo)) } : {}),
         }
       }
-      const agg = await prisma.tenantPayment.aggregate({
-        where: where as never,
+      const agg = await prisma.invoicePayment.aggregate({
+        where: revWhere as never,
         _sum: { amount: true },
         _count: { id: true },
       })

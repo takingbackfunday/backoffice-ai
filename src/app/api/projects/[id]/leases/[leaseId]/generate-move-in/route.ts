@@ -47,7 +47,6 @@ export async function POST(_request: Request, { params }: RouteParams) {
     const daysInMonth = getDaysInMonth(startDate.getFullYear(), startDate.getMonth())
 
     const lineItems: Array<{ description: string; quantity: number; unitPrice: number; chargeType: string }> = []
-    const charges: Array<{ type: string; description: string; amount: number }> = []
 
     // First month rent (or prorated)
     if (startDay === 1) {
@@ -57,7 +56,6 @@ export async function POST(_request: Request, { params }: RouteParams) {
         unitPrice: monthlyRent,
         chargeType: 'RENT',
       })
-      charges.push({ type: 'RENT', description: 'First month rent', amount: monthlyRent })
     } else {
       // Prorated rent
       const daysRemaining = daysInMonth - startDay + 1
@@ -68,7 +66,6 @@ export async function POST(_request: Request, { params }: RouteParams) {
         unitPrice: proratedRent,
         chargeType: 'RENT',
       })
-      charges.push({ type: 'RENT', description: 'Prorated first month rent', amount: proratedRent })
 
       // First full month
       const nextMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1)
@@ -78,19 +75,16 @@ export async function POST(_request: Request, { params }: RouteParams) {
         unitPrice: monthlyRent,
         chargeType: 'RENT',
       })
-      charges.push({ type: 'RENT', description: 'First full month rent', amount: monthlyRent })
     }
 
     // Security deposit
     if (lease.securityDeposit) {
-      const depositAmount = Number(lease.securityDeposit)
       lineItems.push({
         description: 'Security deposit',
         quantity: 1,
-        unitPrice: depositAmount,
+        unitPrice: Number(lease.securityDeposit),
         chargeType: 'DEPOSIT',
       })
-      charges.push({ type: 'DEPOSIT', description: 'Security deposit', amount: depositAmount })
     }
 
     // Last month rent if required
@@ -101,7 +95,6 @@ export async function POST(_request: Request, { params }: RouteParams) {
         unitPrice: monthlyRent,
         chargeType: 'RENT',
       })
-      charges.push({ type: 'RENT', description: 'Last month rent', amount: monthlyRent })
     }
 
     const dueDate = new Date()
@@ -109,49 +102,30 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
     const invoiceNumber = `MOVE-${Date.now().toString(36).toUpperCase()}`
 
-    const result = await prisma.$transaction(async (tx) => {
-      const invoice = await tx.invoice.create({
-        data: {
-          leaseId: lease.id,
-          tenantId: lease.tenantId,
-          invoiceNumber,
-          status: 'DRAFT',
-          issueDate: new Date(),
-          dueDate,
-          currency: lease.currency ?? 'USD',
-          notes: `Move-in charges for ${lease.unit.unitLabel}`,
-          lineItems: {
-            create: lineItems.map(li => ({
-              description: li.description,
-              quantity: li.quantity,
-              unitPrice: li.unitPrice,
-              isTaxLine: false,
-              chargeType: li.chargeType,
-            })),
-          },
+    const invoice = await prisma.invoice.create({
+      data: {
+        leaseId: lease.id,
+        tenantId: lease.tenantId,
+        invoiceNumber,
+        status: 'DRAFT',
+        issueDate: new Date(),
+        dueDate,
+        currency: lease.currency ?? 'USD',
+        notes: `Move-in charges for ${lease.unit.unitLabel}`,
+        lineItems: {
+          create: lineItems.map(li => ({
+            description: li.description,
+            quantity: li.quantity,
+            unitPrice: li.unitPrice,
+            isTaxLine: false,
+            chargeType: li.chargeType,
+          })),
         },
-        include: { lineItems: true },
-      })
-
-      const createdCharges = await Promise.all(
-        charges.map(c =>
-          tx.tenantCharge.create({
-            data: {
-              leaseId: lease.id,
-              tenantId: lease.tenantId,
-              type: c.type as 'RENT' | 'DEPOSIT',
-              description: c.description,
-              amount: c.amount,
-              dueDate,
-            },
-          })
-        )
-      )
-
-      return { invoice, charges: createdCharges }
+      },
+      include: { lineItems: true },
     })
 
-    return ok(result)
+    return ok({ invoice })
   } catch {
     return serverError('Failed to generate move-in invoice')
   }

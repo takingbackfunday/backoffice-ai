@@ -164,7 +164,7 @@ interface PaymentSuggestion {
   confidence: string
   reasoning: string
   transaction: { id: string; description: string; date: string; amount: number }
-  tenant: { id: string; name: string }
+  invoice: { id: string; invoiceNumber: string }
 }
 
 // ── Main RulesManager ─────────────────────────────────────────────────────────
@@ -234,7 +234,7 @@ export function RulesManager({
       fetch('/api/payees').then((r) => r.json()),
       fetch('/api/accounts').then((r) => r.json()),
       fetch('/api/rules/suggestions').then((r) => r.json()),
-      fetch('/api/tenant-payment-suggestions').then((r) => r.json()),
+      fetch('/api/invoice-payment-suggestions').then((r) => r.json()),
     ]).then(([rulesJson, projectsJson, groupsJson, payeesJson, accountsJson, suggestionsJson, paymentSuggestionsJson]) => {
       if (!rulesJson.error) setRules(rulesJson.data ?? [])
       if (!projectsJson.error) setProjects(projectsJson.data ?? [])
@@ -277,14 +277,14 @@ export function RulesManager({
   async function reviewPaymentSuggestion(suggestionId: string, action: 'accept' | 'dismiss') {
     setReviewingPaymentId(suggestionId)
     try {
-      const res = await fetch('/api/tenant-payment-suggestions', {
+      const res = await fetch('/api/invoice-payment-suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ suggestionId, action }),
       })
       if (res.ok) {
         setPaymentSuggestions(prev => prev.filter(s => s.id !== suggestionId))
-        showToast(action === 'accept' ? 'Payment attributed to tenant' : 'Suggestion dismissed')
+        showToast(action === 'accept' ? 'Payment recorded on invoice' : 'Suggestion dismissed')
       } else {
         showToast('Failed to review suggestion', 'error')
       }
@@ -583,7 +583,7 @@ export function RulesManager({
                 <span className="text-sm font-medium text-green-900">
                   {paymentSuggestions.length} payment suggestion{paymentSuggestions.length !== 1 ? 's' : ''}
                 </span>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Incoming transactions that may be tenant payments — review and attribute</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Incoming transactions that may be invoice payments — review and attribute</p>
               </div>
             </div>
             <svg

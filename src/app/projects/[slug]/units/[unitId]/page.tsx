@@ -27,8 +27,12 @@ export default async function UnitDetailPage({ params }: PageParams) {
       leases: {
         include: {
           tenant: { select: { id: true, name: true, email: true, phone: true, emergencyName: true, emergencyPhone: true, portalInviteStatus: true, clerkUserId: true } },
-          tenantCharges: { orderBy: { dueDate: 'desc' }, take: 12 },
-          tenantPayments: { orderBy: { paidDate: 'desc' }, take: 12 },
+          invoices: {
+            where: { status: { not: 'VOID' } },
+            include: { lineItems: true, payments: true },
+            orderBy: { dueDate: 'desc' },
+            take: 12,
+          },
         },
         orderBy: { startDate: 'desc' },
       },

@@ -5,13 +5,13 @@ import { Mail, CheckCircle, Clock } from 'lucide-react'
 import { LEASE_STATUS_LABELS, LEASE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
 
-interface TenantCharge { id: string; type: string; amount: number; dueDate: string; forgivenAt: string | null }
-interface TenantPayment { id: string; amount: number; paidDate: string }
+interface InvoiceSummary {
+  id: string; lineItemTotal: number; paymentTotal: number;
+}
 interface Lease {
   id: string; status: string; startDate: string; endDate: string;
   monthlyRent: number; unit: { id: string; unitLabel: string };
-  tenantCharges: TenantCharge[]
-  tenantPayments: TenantPayment[]
+  invoices: InvoiceSummary[]
 }
 interface MaintenanceRequest { id: string; title: string; status: string; priority: string; createdAt: string }
 interface TenantFile { id: string; fileType: string; fileName: string; createdAt: string; fileUrl: string }
@@ -125,9 +125,9 @@ export function TenantDetailClient({ projectId, tenant }: Props) {
                 <div className="text-xs text-muted-foreground">
                   {fmtDate(lease.startDate)} — {fmtDate(lease.endDate)} · {fmt(Number(lease.monthlyRent))}/mo
                 </div>
-                {(lease.tenantCharges.length > 0 || lease.tenantPayments.length > 0) && (() => {
-                  const charged = lease.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + Number(c.amount), 0)
-                  const paid = lease.tenantPayments.reduce((s, p) => s + Number(p.amount), 0)
+                {lease.invoices.length > 0 && (() => {
+                  const charged = lease.invoices.reduce((s, inv) => s + inv.lineItemTotal, 0)
+                  const paid = lease.invoices.reduce((s, inv) => s + inv.paymentTotal, 0)
                   const balance = charged - paid
                   return (
                     <div className="mt-2 flex gap-3 text-xs">

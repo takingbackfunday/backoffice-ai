@@ -2,7 +2,6 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { buildDuplicateHash } from '@/lib/dedup'
-import { matchTenantPayments } from '@/lib/rent-matching'
 import { matchInvoicePayments } from '@/lib/invoice-matching'
 
 const SORT_FIELDS = ['date', 'amount', 'description', 'category'] as const
@@ -147,7 +146,6 @@ export async function POST(request: Request) {
       })
       // Await matching before returning — fire-and-forget dies on Netlify serverless
       await Promise.allSettled([
-        matchTenantPayments(userId, [transaction.id]),
         matchInvoicePayments(userId, [transaction.id]),
       ])
       return created(transaction)

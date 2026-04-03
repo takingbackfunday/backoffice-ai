@@ -43,12 +43,13 @@ export async function POST(request: Request, { params }: RouteParams) {
       return badRequest(parsed.error.errors.map(e => e.message).join(', '))
     }
 
-    // Compute invoice total and already paid
-    const invoiceTotal = invoice.lineItems.reduce(
-      (sum, item) => sum + Number(item.quantity) * Number(item.unitPrice),
-      0
-    )
-    const alreadyPaid = invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0)
+    // Compute invoice total and already paid (exclude forgiven items and voided payments)
+    const invoiceTotal = invoice.lineItems
+      .filter(item => !item.forgivenAt)
+      .reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0)
+    const alreadyPaid = invoice.payments
+      .filter(p => !p.voidedAt)
+      .reduce((sum, p) => sum + Number(p.amount), 0)
     const remaining = invoiceTotal - alreadyPaid
 
     if (parsed.data.amount > remaining + 0.001) {

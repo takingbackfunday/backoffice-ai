@@ -5,35 +5,35 @@ import { useRouter } from 'next/navigation'
 import {
   UNIT_STATUS_LABELS, UNIT_STATUS_COLORS, LEASE_STATUS_LABELS, LEASE_STATUS_COLORS,
   MAINTENANCE_PRIORITY_COLORS, MAINTENANCE_PRIORITY_LABELS, MAINTENANCE_STATUS_LABELS,
-  CHARGE_TYPE_LABELS, CHARGE_TYPE_COLORS,
+  CHARGE_TYPE_LABELS, CHARGE_TYPE_COLORS, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS,
 } from '@/types'
 import { cn } from '@/lib/utils'
 import { MessageThread } from './message-thread'
-import { CheckCircle2, CheckCircle, Clock, Plus, X, Mail } from 'lucide-react'
+import { CheckCircle2, CheckCircle, Clock, Plus, X, Mail, ChevronDown, ChevronRight } from 'lucide-react'
 
 interface Tenant {
   id: string; name: string; email: string; phone: string | null
   portalInviteStatus: string; clerkUserId: string | null
 }
-interface TenantCharge {
-  id: string; type: string; description: string | null; amount: number;
-  dueDate: string; forgivenAt: string | null; forgivenReason: string | null;
-  maintenanceRequest: { id: string; title: string } | null
+interface InvoiceLineItem {
+  id: string; description: string; quantity: number; unitPrice: number;
+  chargeType: string | null; forgivenAt: string | null; forgivenReason: string | null;
 }
-interface TenantPayment {
+interface InvoicePayment {
   id: string; amount: number; paidDate: string; paymentMethod: string | null; notes: string | null;
-  sourceDeleted: boolean;
-  voidedAt: string | null;
-  voidReason?: string | null;
-  transaction: { id: string; description: string; date: string; amount: number } | null
+  voidedAt: string | null; voidReason: string | null; sourceDeleted: boolean;
+  transaction: { id: string; description: string } | null
+}
+interface Invoice {
+  id: string; invoiceNumber: string; status: string; period: string | null;
+  dueDate: string; lineItems: InvoiceLineItem[]; payments: InvoicePayment[];
 }
 interface Lease {
   id: string; status: string; startDate: string; endDate: string;
   monthlyRent: number; securityDeposit: number | null; paymentDueDay: number;
   lateFeeAmount: number | null; lateFeeGraceDays: number;
   tenant: Tenant
-  tenantCharges: TenantCharge[]
-  tenantPayments: TenantPayment[]
+  invoices: Invoice[]
 }
 interface MaintenanceRequest {
   id: string; title: string; description: string; priority: string; status: string;
@@ -64,285 +64,201 @@ const INVITE_COLORS: Record<string, string> = {
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
+function invoiceTotals(inv: Invoice) {
+  const lineItemTotal = inv.lineItems
+    .filter(li => !li.forgivenAt)
+    .reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0)
+  const paymentTotal = inv.payments
+    .filter(p => !p.voidedAt)
+    .reduce((s, p) => s + Number(p.amount), 0)
+  return { lineItemTotal, paymentTotal, outstanding: lineItemTotal - paymentTotal }
+}
+
 /* ------------------------------------------------------------------ */
-/*  Forgive modal                                                       */
+/*  Invoice row (expandable)                                            */
 /* ------------------------------------------------------------------ */
-function ForgivePill({ projectId, unitId, charge, onDone }: {
-  projectId: string; unitId: string; charge: TenantCharge; onDone: () => void
+function InvoiceRow({ inv, projectId, invoiceId, onDone }: {
+  inv: Invoice & { lineItemTotal: number; paymentTotal: number; outstanding: number }
+  projectId: string; invoiceId: string; onDone: () => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [reason, setReason] = useState('')
+  const [expanded, setExpanded] = useState(false)
+  const [forgivingId, setForgivingId] = useState<string | null>(null)
+  const [forgiveReason, setForgiveReason] = useState('')
+  const [voidingId, setVoidingId] = useState<string | null>(null)
+  const [voidReason, setVoidReason] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function submit(action: 'forgive' | 'unforgive') {
+  async function forgiveLineItem(lineItemId: string, action: 'forgive' | 'unforgive') {
     setLoading(true)
-    await fetch(`/api/projects/${projectId}/units/${unitId}/charges/${charge.id}`, {
+    await fetch(`/api/projects/${projectId}/invoices/${invoiceId}/line-items/${lineItemId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(action === 'forgive' ? { action: 'forgive', reason } : { action: 'unforgive' }),
+      body: JSON.stringify(action === 'forgive' ? { action: 'forgive', reason: forgiveReason } : { action: 'unforgive' }),
     })
     setLoading(false)
-    setOpen(false)
+    setForgivingId(null)
+    setForgiveReason('')
     onDone()
   }
 
-  if (charge.forgivenAt) {
-    return (
-      <button
-        onClick={() => submit('unforgive')}
-        disabled={loading}
-        className="text-[10px] text-muted-foreground hover:text-foreground underline"
-        title={`Forgiven: ${charge.forgivenReason ?? 'no reason'}`}
-      >
-        {loading ? '…' : 'Restore'}
-      </button>
-    )
-  }
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-[10px] text-amber-700 hover:text-amber-900 underline"
-      >
-        Forgive
-      </button>
-    )
-  }
-
-  return (
-    <div className="mt-1 flex items-center gap-1" onClick={e => e.stopPropagation()}>
-      <input
-        autoFocus
-        type="text"
-        value={reason}
-        onChange={e => setReason(e.target.value)}
-        placeholder="Reason (optional)"
-        className="rounded border px-2 py-0.5 text-xs w-36 focus:outline-none focus:ring-1 focus:ring-primary/30"
-        onKeyDown={e => { if (e.key === 'Enter') submit('forgive'); if (e.key === 'Escape') setOpen(false) }}
-      />
-      <button onClick={() => submit('forgive')} disabled={loading} className="text-[10px] text-amber-700 hover:text-amber-900 font-medium">
-        {loading ? '…' : 'Confirm'}
-      </button>
-      <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
-        <X className="h-3 w-3" />
-      </button>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Void payment pill                                                   */
-/* ------------------------------------------------------------------ */
-function VoidPaymentPill({ projectId, unitId, payment, onDone }: {
-  projectId: string; unitId: string; payment: TenantPayment; onDone: () => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [reason, setReason] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  async function submit(action: 'void' | 'restore') {
+  async function voidPayment(paymentId: string, action: 'void' | 'restore') {
     setLoading(true)
-    await fetch(`/api/projects/${projectId}/units/${unitId}/payments/${payment.id}`, {
+    await fetch(`/api/projects/${projectId}/invoices/${invoiceId}/payments/${paymentId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(action === 'void' ? { action: 'void', reason } : { action: 'restore' }),
+      body: JSON.stringify(action === 'void' ? { action: 'void', reason: voidReason } : { action: 'restore' }),
     })
     setLoading(false)
-    setOpen(false)
-    setReason('')
+    setVoidingId(null)
+    setVoidReason('')
     onDone()
   }
 
-  if (payment.voidedAt) {
-    return (
+  return (
+    <div className="rounded-md border overflow-hidden">
+      {/* Header row */}
       <button
-        onClick={() => submit('restore')}
-        disabled={loading}
-        className="text-[10px] text-muted-foreground hover:text-foreground underline"
-        title={`Voided: ${payment.voidReason ?? 'no reason'}`}
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
       >
-        {loading ? '…' : 'Restore'}
+        {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+        <span className="text-xs font-medium">{inv.invoiceNumber}</span>
+        {inv.period && <span className="text-[10px] text-muted-foreground">{inv.period}</span>}
+        <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', INVOICE_STATUS_COLORS[inv.status] ?? 'bg-muted')}>
+          {INVOICE_STATUS_LABELS[inv.status] ?? inv.status}
+        </span>
+        <span className="text-[10px] text-muted-foreground ml-auto">Due {fmtDate(inv.dueDate)}</span>
+        <span className={cn('text-xs font-semibold tabular-nums ml-3', inv.outstanding > 0 ? 'text-amber-800' : 'text-green-700')}>
+          {inv.outstanding > 0 ? `${fmt(inv.outstanding)} owed` : inv.outstanding < 0 ? `${fmt(Math.abs(inv.outstanding))} credit` : 'Paid'}
+        </span>
       </button>
-    )
-  }
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-[10px] text-red-600 hover:text-red-800 underline"
-      >
-        Void
-      </button>
-    )
-  }
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="divide-y">
+          {/* Line items */}
+          {inv.lineItems.map(li => (
+            <div key={li.id} className="px-3 py-2">
+              <div className={cn('flex items-start gap-2 text-xs', li.forgivenAt && 'opacity-60')}>
+                {li.chargeType && (
+                  <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0', CHARGE_TYPE_COLORS[li.chargeType] ?? 'bg-muted')}>
+                    {CHARGE_TYPE_LABELS[li.chargeType] ?? li.chargeType}
+                  </span>
+                )}
+                <span className={cn('flex-1 text-muted-foreground', li.forgivenAt && 'line-through')}>
+                  {li.description}
+                  {li.forgivenAt && <span className="ml-1 not-italic">(forgiven{li.forgivenReason ? `: ${li.forgivenReason}` : ''})</span>}
+                </span>
+                <span className={cn('tabular-nums font-medium shrink-0', li.forgivenAt && 'line-through text-muted-foreground')}>
+                  {fmt(Number(li.quantity) * Number(li.unitPrice))}
+                </span>
+                <div className="shrink-0 w-16 text-right">
+                  {li.forgivenAt ? (
+                    <button
+                      onClick={() => forgiveLineItem(li.id, 'unforgive')}
+                      disabled={loading}
+                      className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                    >
+                      {loading ? '…' : 'Restore'}
+                    </button>
+                  ) : forgivingId === li.id ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={forgiveReason}
+                        onChange={e => setForgiveReason(e.target.value)}
+                        placeholder="Reason"
+                        className="rounded border px-1 py-0.5 text-[10px] w-20 focus:outline-none"
+                        onKeyDown={e => { if (e.key === 'Enter') forgiveLineItem(li.id, 'forgive'); if (e.key === 'Escape') setForgivingId(null) }}
+                      />
+                      <button onClick={() => forgiveLineItem(li.id, 'forgive')} disabled={loading} className="text-[10px] text-amber-700 font-medium">
+                        {loading ? '…' : 'OK'}
+                      </button>
+                      <button onClick={() => setForgivingId(null)}><X className="h-3 w-3 text-muted-foreground" /></button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setForgivingId(li.id)}
+                      className="text-[10px] text-amber-700 hover:text-amber-900 underline"
+                    >
+                      Forgive
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
 
-  return (
-    <div className="mt-1 flex items-center gap-1" onClick={e => e.stopPropagation()}>
-      <input
-        autoFocus
-        type="text"
-        value={reason}
-        onChange={e => setReason(e.target.value)}
-        placeholder="Reason (optional)"
-        className="rounded border px-2 py-0.5 text-xs w-36 focus:outline-none focus:ring-1 focus:ring-primary/30"
-        onKeyDown={e => { if (e.key === 'Enter') submit('void'); if (e.key === 'Escape') setOpen(false) }}
-      />
-      <button onClick={() => submit('void')} disabled={loading} className="text-[10px] text-red-600 hover:text-red-800 font-medium">
-        {loading ? '…' : 'Confirm'}
-      </button>
-      <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
-        <X className="h-3 w-3" />
-      </button>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Record payment modal                                                */
-/* ------------------------------------------------------------------ */
-function RecordPaymentModal({ projectId, unitId, onClose, onSaved }: {
-  projectId: string; unitId: string; onClose: () => void; onSaved: () => void
-}) {
-  const [amount, setAmount] = useState('')
-  const [paidDate, setPaidDate] = useState(new Date().toISOString().split('T')[0])
-  const [method, setMethod] = useState('')
-  const [notes, setNotes] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    const n = parseFloat(amount)
-    if (isNaN(n) || n <= 0) { setError('Enter a valid amount'); return }
-    setSaving(true); setError(null)
-    const res = await fetch(`/api/projects/${projectId}/units/${unitId}/payments`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: n, paidDate, paymentMethod: method || null, notes: notes || null }),
-    })
-    const json = await res.json()
-    setSaving(false)
-    if (!res.ok) { setError(json.error ?? 'Failed'); return }
-    onSaved()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-sm mx-4 rounded-xl border bg-background shadow-xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-sm font-semibold">Record payment</h3>
-          <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-        </div>
-        <form onSubmit={submit} className="p-5 space-y-3">
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          <div>
-            <label className="block text-xs font-medium mb-1">Amount *</label>
-            <input type="number" step="0.01" min="0.01" value={amount} onChange={e => setAmount(e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="0.00" autoFocus />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Date *</label>
-            <input type="date" value={paidDate} onChange={e => setPaidDate(e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Method</label>
-            <input type="text" value={method} onChange={e => setMethod(e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="e.g. Zelle, cash, bank transfer" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Notes</label>
-            <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Cancel</button>
-            <button type="submit" disabled={saving} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-              {saving ? 'Saving…' : 'Record'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Levy charge modal                                                   */
-/* ------------------------------------------------------------------ */
-function LevyChargeModal({ projectId, unitId, onClose, onSaved }: {
-  projectId: string; unitId: string; onClose: () => void; onSaved: () => void
-}) {
-  const [type, setType] = useState('MAINTENANCE')
-  const [description, setDescription] = useState('')
-  const [amount, setAmount] = useState('')
-  const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0])
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    const n = parseFloat(amount)
-    if (isNaN(n) || n <= 0) { setError('Enter a valid amount'); return }
-    setSaving(true); setError(null)
-    const res = await fetch(`/api/projects/${projectId}/units/${unitId}/charges`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, description: description || null, amount: n, dueDate }),
-    })
-    const json = await res.json()
-    setSaving(false)
-    if (!res.ok) { setError(json.error ?? 'Failed'); return }
-    onSaved()
-  }
-
-  const LEVY_TYPES = ['MAINTENANCE', 'UTILITY', 'LATE_FEE', 'DEPOSIT', 'OTHER']
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-sm mx-4 rounded-xl border bg-background shadow-xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-sm font-semibold">Levy charge</h3>
-          <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-        </div>
-        <form onSubmit={submit} className="p-5 space-y-3">
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          <div>
-            <label className="block text-xs font-medium mb-1">Type</label>
-            <div className="flex flex-wrap gap-1.5">
-              {LEVY_TYPES.map(t => (
-                <button key={t} type="button" onClick={() => setType(t)}
-                  className={cn('rounded-full px-2.5 py-1 text-xs font-medium transition-all',
-                    type === t ? cn(CHARGE_TYPE_COLORS[t], 'ring-2 ring-offset-1 ring-primary/30') : 'border text-muted-foreground hover:bg-muted/50'
-                  )}>
-                  {CHARGE_TYPE_LABELS[t]}
-                </button>
+          {/* Payments */}
+          {inv.payments.length > 0 && (
+            <div className="bg-green-50/30 divide-y">
+              {inv.payments.map(p => (
+                <div key={p.id} className={cn('flex flex-wrap items-center gap-2 px-3 py-1.5 text-xs', p.voidedAt && 'bg-red-50/40')}>
+                  <CheckCircle2 className={cn('h-3 w-3 shrink-0', p.voidedAt ? 'text-red-400' : 'text-green-600')} />
+                  <span className="text-muted-foreground shrink-0">{fmtDate(p.paidDate)}</span>
+                  <span className={cn('flex-1 text-muted-foreground truncate', p.voidedAt && 'line-through')}>
+                    {p.transaction ? p.transaction.description : (p.paymentMethod ?? 'Manual')}
+                    {p.notes && <span className="ml-1 italic">· {p.notes}</span>}
+                  </span>
+                  {p.voidedAt && (
+                    <span className="text-[10px] text-red-700 bg-red-100 rounded-full px-1.5 py-0.5" title={p.voidReason ?? ''}>voided</span>
+                  )}
+                  {!p.voidedAt && p.sourceDeleted && (
+                    <span className="text-[10px] text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">source deleted</span>
+                  )}
+                  <span className={cn('tabular-nums font-medium shrink-0', p.voidedAt ? 'text-red-400 line-through' : 'text-green-700')}>
+                    −{fmt(Number(p.amount))}
+                  </span>
+                  <div className="shrink-0">
+                    {p.voidedAt ? (
+                      <button
+                        onClick={() => voidPayment(p.id, 'restore')}
+                        disabled={loading}
+                        className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                      >
+                        {loading ? '…' : 'Restore'}
+                      </button>
+                    ) : voidingId === p.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={voidReason}
+                          onChange={e => setVoidReason(e.target.value)}
+                          placeholder="Reason"
+                          className="rounded border px-1 py-0.5 text-[10px] w-20 focus:outline-none"
+                          onKeyDown={e => { if (e.key === 'Enter') voidPayment(p.id, 'void'); if (e.key === 'Escape') setVoidingId(null) }}
+                        />
+                        <button onClick={() => voidPayment(p.id, 'void')} disabled={loading} className="text-[10px] text-red-600 font-medium">
+                          {loading ? '…' : 'OK'}
+                        </button>
+                        <button onClick={() => setVoidingId(null)}><X className="h-3 w-3 text-muted-foreground" /></button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setVoidingId(p.id)}
+                        className="text-[10px] text-red-600 hover:text-red-800 underline"
+                      >
+                        Void
+                      </button>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
+          )}
+
+          {/* Invoice subtotals */}
+          <div className="flex items-center gap-4 px-3 py-1.5 bg-muted/10 text-[11px]">
+            <span className="text-muted-foreground">Charged: <span className="font-medium text-foreground">{fmt(inv.lineItemTotal)}</span></span>
+            <span className="text-muted-foreground">Paid: <span className="font-medium text-green-700">{fmt(inv.paymentTotal)}</span></span>
+            <span className={cn('font-medium', inv.outstanding > 0 ? 'text-amber-800' : 'text-green-700')}>
+              {inv.outstanding > 0 ? `${fmt(inv.outstanding)} outstanding` : inv.outstanding < 0 ? `${fmt(Math.abs(inv.outstanding))} credit` : 'Settled'}
+            </span>
           </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Description {(type === 'MAINTENANCE' || type === 'OTHER') && <span className="text-destructive">*</span>}</label>
-            <input type="text" value={description} onChange={e => setDescription(e.target.value)} autoFocus
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="e.g. Plumber repair — 50% share" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Amount *</label>
-            <input type="number" step="0.01" min="0.01" value={amount} onChange={e => setAmount(e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="0.00" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Due date *</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">Cancel</button>
-            <button type="submit" disabled={saving} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-              {saving ? 'Saving…' : 'Levy charge'}
-            </button>
-          </div>
-        </form>
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -352,8 +268,6 @@ function LevyChargeModal({ projectId, unitId, onClose, onSaved }: {
 /* ------------------------------------------------------------------ */
 export function UnitDetailClient({ projectId, unit }: Props) {
   const router = useRouter()
-  const [levyOpen, setLevyOpen] = useState(false)
-  const [paymentOpen, setPaymentOpen] = useState(false)
   const [unitStatus, setUnitStatus] = useState(unit.status)
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [inviteStatus, setInviteStatus] = useState(
@@ -394,10 +308,12 @@ export function UnitDetailClient({ projectId, unit }: Props) {
     }
   }
 
-  // Ledger totals
-  const activeCharges = activeLease?.tenantCharges.filter(c => !c.forgivenAt) ?? []
-  const totalCharged = activeCharges.reduce((s, c) => s + Number(c.amount), 0)
-  const totalPaid = activeLease?.tenantPayments.filter(p => !p.voidedAt).reduce((s, p) => s + Number(p.amount), 0) ?? 0
+  // Ledger totals from invoices
+  const invoiceSummaries = (activeLease?.invoices ?? [])
+    .filter(inv => inv.status !== 'VOID')
+    .map(inv => ({ ...inv, ...invoiceTotals(inv) }))
+  const totalCharged = invoiceSummaries.reduce((s, inv) => s + inv.lineItemTotal, 0)
+  const totalPaid = invoiceSummaries.reduce((s, inv) => s + inv.paymentTotal, 0)
   const balance = totalCharged - totalPaid
 
   return (
@@ -480,20 +396,12 @@ export function UnitDetailClient({ projectId, unit }: Props) {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ledger</h4>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setLevyOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-muted transition-colors"
-                >
-                  <Plus className="h-3 w-3" /> Levy charge
-                </button>
-                <button
-                  onClick={() => setPaymentOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-                >
-                  <CheckCircle2 className="h-3 w-3" /> Record payment
-                </button>
-              </div>
+              <button
+                onClick={() => router.push(`/projects/${projectId}/leases/${activeLease.id}`)}
+                className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-muted transition-colors"
+              >
+                <Plus className="h-3 w-3" /> View / add invoices
+              </button>
             </div>
 
             {/* Balance row */}
@@ -514,78 +422,21 @@ export function UnitDetailClient({ projectId, unit }: Props) {
               </div>
             </div>
 
-            {/* Charges table */}
-            {activeLease.tenantCharges.length > 0 && (
-              <div className="mb-3">
-                <p className="text-[11px] font-medium text-muted-foreground mb-1.5">Charges</p>
-                <div className="rounded-md border divide-y text-xs">
-                  {activeLease.tenantCharges.map(c => (
-                    <div key={c.id} className={cn('flex items-start gap-3 px-3 py-2', c.forgivenAt && 'opacity-50')}>
-                      <span className="text-muted-foreground w-20 shrink-0">{fmtDate(c.dueDate)}</span>
-                      <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0', CHARGE_TYPE_COLORS[c.type] ?? 'bg-muted')}>
-                        {CHARGE_TYPE_LABELS[c.type] ?? c.type}
-                      </span>
-                      <span className="flex-1 text-muted-foreground truncate">
-                        {c.description ?? '—'}
-                        {c.forgivenAt && <span className="ml-1 italic">(forgiven{c.forgivenReason ? `: ${c.forgivenReason}` : ''})</span>}
-                      </span>
-                      <span className={cn('tabular-nums font-medium shrink-0', c.forgivenAt && 'line-through text-muted-foreground')}>
-                        {fmt(Number(c.amount))}
-                      </span>
-                      <div className="shrink-0 w-16 text-right">
-                        <ForgivePill projectId={projectId} unitId={unit.id} charge={c} onDone={refresh} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            {/* Invoice list */}
+            {invoiceSummaries.length > 0 ? (
+              <div className="space-y-2">
+                {invoiceSummaries.map(inv => (
+                  <InvoiceRow
+                    key={inv.id}
+                    inv={inv}
+                    projectId={projectId}
+                    invoiceId={inv.id}
+                    onDone={refresh}
+                  />
+                ))}
               </div>
-            )}
-
-            {/* Payments table */}
-            {activeLease.tenantPayments.length > 0 && (
-              <div>
-                <p className="text-[11px] font-medium text-muted-foreground mb-1.5">Payments received</p>
-                <div className="rounded-md border divide-y text-xs">
-                  {activeLease.tenantPayments.map(p => (
-                    <div key={p.id} className={cn(
-                      'flex flex-wrap items-center gap-3 px-3 py-2',
-                      p.voidedAt ? 'bg-red-50/40' : p.sourceDeleted ? 'bg-amber-50/60' : ''
-                    )}>
-                      <CheckCircle2 className={cn('h-3.5 w-3.5 shrink-0', p.voidedAt ? 'text-red-400' : p.sourceDeleted ? 'text-amber-500' : 'text-green-600')} />
-                      <span className="text-muted-foreground w-20 shrink-0">{fmtDate(p.paidDate)}</span>
-                      <span className={cn('flex-1 text-muted-foreground truncate', p.voidedAt && 'line-through')}>
-                        {p.transaction ? p.transaction.description : (p.paymentMethod ?? 'Manual entry')}
-                        {p.notes && <span className="ml-1 italic">· {p.notes}</span>}
-                      </span>
-                      {p.voidedAt && (
-                        <span className="text-[10px] text-red-700 bg-red-100 rounded-full px-1.5 py-0.5 shrink-0" title={`Voided${p.voidReason ? `: ${p.voidReason}` : ''}`}>
-                          voided
-                        </span>
-                      )}
-                      {!p.voidedAt && p.sourceDeleted && (
-                        <span className="text-[10px] text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5 shrink-0" title="The bank transaction linked to this payment was deleted. Verify and void if incorrect.">
-                          source deleted
-                        </span>
-                      )}
-                      {!p.voidedAt && p.transaction && !p.sourceDeleted && (
-                        <span className="text-[10px] text-blue-600 bg-blue-50 rounded-full px-1.5 py-0.5 shrink-0">
-                          linked tx
-                        </span>
-                      )}
-                      <span className={cn('tabular-nums font-medium shrink-0', p.voidedAt ? 'text-red-400 line-through' : p.sourceDeleted ? 'text-amber-700' : 'text-green-700')}>
-                        {fmt(Number(p.amount))}
-                      </span>
-                      <div className="shrink-0">
-                        <VoidPaymentPill projectId={projectId} unitId={unit.id} payment={p} onDone={refresh} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeLease.tenantCharges.length === 0 && activeLease.tenantPayments.length === 0 && (
-              <p className="text-xs text-muted-foreground">No ledger entries yet. Rent charges will appear here once created.</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">No invoices yet. Rent invoices will appear here once created.</p>
             )}
           </div>
         </div>
@@ -635,24 +486,6 @@ export function UnitDetailClient({ projectId, unit }: Props) {
             initialMessages={unit.messages}
           />
         </div>
-      )}
-
-      {/* Modals */}
-      {levyOpen && (
-        <LevyChargeModal
-          projectId={projectId}
-          unitId={unit.id}
-          onClose={() => setLevyOpen(false)}
-          onSaved={() => { setLevyOpen(false); refresh() }}
-        />
-      )}
-      {paymentOpen && (
-        <RecordPaymentModal
-          projectId={projectId}
-          unitId={unit.id}
-          onClose={() => setPaymentOpen(false)}
-          onSaved={() => { setPaymentOpen(false); refresh() }}
-        />
       )}
     </div>
   )

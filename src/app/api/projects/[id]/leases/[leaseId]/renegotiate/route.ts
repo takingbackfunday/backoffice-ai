@@ -59,7 +59,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
           contractStatus: 'NONE',
           replacesLeaseId: leaseId,
         },
-        include: { unit: true, tenant: true, _count: { select: { tenantCharges: true, tenantPayments: true } } },
+        include: { unit: true, tenant: true, _count: { select: { invoices: true } } },
       })
     })
 

@@ -32,7 +32,7 @@ export default async function ProjectLeasesPage({ params }: PageParams) {
       unit: true,
       tenant: true,
       replacedBy: { select: { id: true } },
-      _count: { select: { tenantCharges: true, tenantPayments: true } },
+      _count: { select: { invoices: true } },
     },
     orderBy: { startDate: 'desc' },
   })

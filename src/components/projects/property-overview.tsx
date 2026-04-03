@@ -26,14 +26,9 @@ interface MaintenanceRequest {
   tenant: { id: string; name: string } | null
 }
 
-interface TenantCharge {
-  id: string; type: string; description: string | null;
-  amount: number; dueDate: string; forgivenAt: string | null
-}
-
-interface TenantPayment {
-  id: string; amount: number; paidDate: string;
-  paymentMethod: string | null; notes: string | null; sourceDeleted: boolean; voidedAt: string | null
+interface InvoiceSummary {
+  id: string; invoiceNumber: string; status: string; period: string | null;
+  dueDate: string; lineItemTotal: number; paymentTotal: number;
 }
 
 interface RecentMessage {
@@ -52,8 +47,7 @@ interface Unit {
   paymentDueDay: number | null;
   openMaintenance: number; unreadMessages: number;
   maintenanceRequests: MaintenanceRequest[]
-  tenantCharges: TenantCharge[]
-  tenantPayments: TenantPayment[]
+  invoices: InvoiceSummary[]
   recentMessages: RecentMessage[]
 }
 
@@ -114,20 +108,6 @@ const URGENCY_STYLES = {
   critical: 'bg-red-50 border-red-200 text-red-700',
   warning: 'bg-amber-50 border-amber-200 text-amber-700',
   soon: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-}
-
-const CHARGE_TYPE_COLORS: Record<string, string> = {
-  RENT: 'bg-blue-100 text-blue-800',
-  LATE_FEE: 'bg-red-100 text-red-800',
-  MAINTENANCE: 'bg-orange-100 text-orange-800',
-  UTILITY: 'bg-cyan-100 text-cyan-800',
-  DEPOSIT: 'bg-purple-100 text-purple-800',
-  OTHER: 'bg-gray-100 text-gray-700',
-}
-
-const CHARGE_TYPE_LABELS: Record<string, string> = {
-  RENT: 'Rent', LATE_FEE: 'Late fee', MAINTENANCE: 'Maint.',
-  UTILITY: 'Utility', DEPOSIT: 'Deposit', OTHER: 'Other',
 }
 
 const MAINTENANCE_STATUSES = ['OPEN', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const
@@ -233,8 +213,9 @@ export function PropertyOverview({ projectId, slug, address, city, state, proper
               const isExpanded = expandedUnits.has(unit.id)
               const urgency = getLeaseUrgency(unit.leaseEndDate)
               const days = unit.leaseEndDate ? daysUntil(unit.leaseEndDate) : null
-              const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + c.amount, 0)
-              const paid = unit.tenantPayments.reduce((s, p) => s + p.amount, 0)
+              const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
+              const charged = activeInvoices.reduce((s, inv) => s + inv.lineItemTotal, 0)
+              const paid = activeInvoices.reduce((s, inv) => s + inv.paymentTotal, 0)
               const balance = charged - paid
 
               return (
@@ -361,25 +342,27 @@ export function PropertyOverview({ projectId, slug, address, city, state, proper
                                 </div>
                               </div>
                               <div className="space-y-1">
-                                {unit.tenantCharges.slice(0, 3).map(c => (
-                                  <div key={c.id} className={cn('flex items-center gap-2 text-xs', c.forgivenAt && 'opacity-40 line-through')}>
-                                    <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0', CHARGE_TYPE_COLORS[c.type] ?? 'bg-muted')}>
-                                      {CHARGE_TYPE_LABELS[c.type] ?? c.type}
+                                {activeInvoices.slice(0, 3).map(inv => (
+                                  <div key={inv.id} className="flex items-center gap-2 text-xs">
+                                    {inv.period && <span className="text-muted-foreground shrink-0">{inv.period}</span>}
+                                    <span className="font-medium tabular-nums ml-auto">
+                                      {inv.lineItemTotal - inv.paymentTotal > 0
+                                        ? <span className="text-amber-700">{fmtFull(inv.lineItemTotal - inv.paymentTotal)} owed</span>
+                                        : <span className="text-green-700">Paid</span>
+                                      }
                                     </span>
-                                    <span className="text-muted-foreground shrink-0">{fmtMonthYear(c.dueDate)}</span>
-                                    <span className="font-medium tabular-nums ml-auto">{fmtFull(c.amount)}</span>
                                   </div>
                                 ))}
                               </div>
                               <Link href={`/projects/${slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                                <ExternalLink className="h-3 w-3" /> Apply levy / full ledger
+                                <ExternalLink className="h-3 w-3" /> Full ledger
                               </Link>
                             </div>
                           ) : (
                             <div className="space-y-1.5">
                               <p className="text-xs text-muted-foreground">No ledger records</p>
                               <Link href={`/projects/${slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                                <ExternalLink className="h-3 w-3" /> Apply levy / full ledger
+                                <ExternalLink className="h-3 w-3" /> Full ledger
                               </Link>
                             </div>
                           )}

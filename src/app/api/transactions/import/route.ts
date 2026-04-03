@@ -2,7 +2,6 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
-import { matchTenantPayments } from '@/lib/rent-matching'
 import { matchInvoicePayments } from '@/lib/invoice-matching'
 
 const nullableString = z.union([z.string(), z.null()]).transform((v) => v ?? '')
@@ -98,7 +97,6 @@ export async function POST(request: Request) {
     })
     const importedIds = importedTxs.map(t => t.id)
     await Promise.allSettled([
-      matchTenantPayments(userId, importedIds),
       matchInvoicePayments(userId, importedIds),
     ])
 

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { cn } from '@/lib/utils'
 import { getPortalSession } from '@/lib/portal-auth'
-import { CHARGE_TYPE_LABELS, CHARGE_TYPE_COLORS } from '@/types'
+import { CHARGE_TYPE_LABELS, CHARGE_TYPE_COLORS, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 const fmtDate = (d: string | Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -18,8 +18,11 @@ export default async function PortalPaymentsPage() {
     },
     include: {
       unit: { select: { unitLabel: true } },
-      tenantCharges: { orderBy: { dueDate: 'asc' } },
-      tenantPayments: { orderBy: { paidDate: 'desc' } },
+      invoices: {
+        where: { status: { not: 'VOID' } },
+        include: { lineItems: true, payments: true },
+        orderBy: { dueDate: 'desc' },
+      },
     },
     orderBy: { startDate: 'desc' },
   })
@@ -35,9 +38,19 @@ export default async function PortalPaymentsPage() {
     )
   }
 
-  const activeCharges = lease.tenantCharges.filter(c => !c.forgivenAt)
-  const totalCharged = activeCharges.reduce((sum, c) => sum + Number(c.amount), 0)
-  const totalPaid = lease.tenantPayments.reduce((sum, p) => sum + Number(p.amount), 0)
+  let totalCharged = 0
+  let totalPaid = 0
+  const invoiceSummaries = lease.invoices.map(inv => {
+    const lineItemTotal = inv.lineItems
+      .filter(li => !li.forgivenAt)
+      .reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0)
+    const paymentTotal = inv.payments
+      .filter(p => !p.voidedAt)
+      .reduce((s, p) => s + Number(p.amount), 0)
+    totalCharged += lineItemTotal
+    totalPaid += paymentTotal
+    return { ...inv, lineItemTotal, paymentTotal, outstanding: lineItemTotal - paymentTotal }
+  })
   const balance = totalCharged - totalPaid
 
   return (
@@ -75,75 +88,61 @@ export default async function PortalPaymentsPage() {
         </div>
       )}
 
-      {/* Charges */}
+      {/* Invoices */}
       <div>
-        <h2 className="text-sm font-semibold mb-3">Charges</h2>
-        {lease.tenantCharges.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No charges yet.</p>
+        <h2 className="text-sm font-semibold mb-3">Invoices</h2>
+        {invoiceSummaries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No invoices yet.</p>
         ) : (
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left px-4 py-2 font-medium">Due date</th>
-                  <th className="text-left px-4 py-2 font-medium">Type</th>
-                  <th className="text-left px-4 py-2 font-medium hidden sm:table-cell">Description</th>
-                  <th className="text-right px-4 py-2 font-medium">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {lease.tenantCharges.map(c => (
-                  <tr key={c.id} className={cn('hover:bg-muted/20', c.forgivenAt && 'opacity-50')}>
-                    <td className="px-4 py-2 text-muted-foreground">{fmtDate(c.dueDate)}</td>
-                    <td className="px-4 py-2">
-                      <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', CHARGE_TYPE_COLORS[c.type] ?? 'bg-muted')}>
-                        {CHARGE_TYPE_LABELS[c.type] ?? c.type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-muted-foreground hidden sm:table-cell">
-                      {c.forgivenAt
-                        ? <span className="line-through">{c.description ?? '—'} (forgiven)</span>
-                        : c.description ?? '—'
-                      }
-                    </td>
-                    <td className={cn('px-4 py-2 text-right font-medium tabular-nums', c.forgivenAt && 'line-through text-muted-foreground')}>
-                      {fmt(Number(c.amount))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Payments received */}
-      <div>
-        <h2 className="text-sm font-semibold mb-3">Payments received</h2>
-        {lease.tenantPayments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
-        ) : (
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left px-4 py-2 font-medium">Date</th>
-                  <th className="text-right px-4 py-2 font-medium">Amount</th>
-                  <th className="text-left px-4 py-2 font-medium hidden sm:table-cell">Method</th>
-                  <th className="text-left px-4 py-2 font-medium hidden sm:table-cell">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {lease.tenantPayments.map(p => (
-                  <tr key={p.id} className="hover:bg-muted/20">
-                    <td className="px-4 py-2 text-muted-foreground">{fmtDate(p.paidDate)}</td>
-                    <td className="px-4 py-2 text-right font-medium text-green-700 tabular-nums">{fmt(Number(p.amount))}</td>
-                    <td className="px-4 py-2 text-muted-foreground hidden sm:table-cell">{p.paymentMethod ?? '—'}</td>
-                    <td className="px-4 py-2 text-muted-foreground hidden sm:table-cell">{p.notes ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            {invoiceSummaries.map(inv => (
+              <div key={inv.id} className="rounded-lg border overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{inv.invoiceNumber}</span>
+                    {inv.period && <span className="text-xs text-muted-foreground">{inv.period}</span>}
+                    <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', INVOICE_STATUS_COLORS[inv.status] ?? 'bg-muted')}>
+                      {INVOICE_STATUS_LABELS[inv.status] ?? inv.status}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold">{fmt(inv.outstanding)}</p>
+                    <p className="text-[10px] text-muted-foreground">outstanding</p>
+                  </div>
+                </div>
+                {/* Line items */}
+                <table className="w-full text-sm">
+                  <tbody className="divide-y">
+                    {inv.lineItems.map(li => (
+                      <tr key={li.id} className={cn('hover:bg-muted/20', li.forgivenAt && 'opacity-50')}>
+                        <td className="px-4 py-2">
+                          {li.chargeType && (
+                            <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium mr-2', CHARGE_TYPE_COLORS[li.chargeType] ?? 'bg-muted')}>
+                              {CHARGE_TYPE_LABELS[li.chargeType] ?? li.chargeType}
+                            </span>
+                          )}
+                          {li.forgivenAt ? <span className="line-through text-muted-foreground">{li.description} (forgiven)</span> : li.description}
+                        </td>
+                        <td className={cn('px-4 py-2 text-right font-medium tabular-nums', li.forgivenAt && 'line-through text-muted-foreground')}>
+                          {fmt(Number(li.quantity) * Number(li.unitPrice))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {/* Payments */}
+                {inv.payments.filter(p => !p.voidedAt).length > 0 && (
+                  <div className="border-t bg-green-50/50 px-4 py-2 space-y-1">
+                    {inv.payments.filter(p => !p.voidedAt).map(p => (
+                      <div key={p.id} className="flex justify-between text-xs text-green-800">
+                        <span>{fmtDate(p.paidDate)} {p.paymentMethod ? `— ${p.paymentMethod}` : ''}</span>
+                        <span className="font-medium">−{fmt(Number(p.amount))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

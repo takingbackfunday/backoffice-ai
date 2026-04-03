@@ -66,7 +66,7 @@ export type { NormalizedTransaction, NormalizedAccount, BankProviderAdapter, Con
 
 // === Projects expansion types ===
 
-export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, TenantCharge, TenantPayment, TenantPaymentSuggestion, MaintenanceRequest, Invoice, InvoiceLineItem, InvoicePayment } from '@/generated/prisma/client'
+export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, MaintenanceRequest, Invoice, InvoiceLineItem, InvoicePayment } from '@/generated/prisma/client'
 
 export type BillingType = 'HOURLY' | 'FIXED' | 'RETAINER' | 'MILESTONE'
 export type JobStatus = 'DRAFT' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
@@ -75,7 +75,6 @@ export type UnitStatus = 'VACANT' | 'LEASED' | 'NOTICE_GIVEN' | 'PREPARING' | 'M
 export type LeaseStatus = 'DRAFT' | 'ACTIVE' | 'EXPIRING_SOON' | 'MONTH_TO_MONTH' | 'TERMINATED' | 'EXPIRED'
 export type TenantFileType = 'LEASE_AGREEMENT' | 'ID_DOCUMENT' | 'PAY_STUB' | 'CREDIT_REPORT' | 'INSPECTION_REPORT' | 'MOVE_IN_PHOTOS' | 'MOVE_OUT_PHOTOS' | 'INSURANCE' | 'OTHER'
 export type ChargeType = 'RENT' | 'LATE_FEE' | 'MAINTENANCE' | 'UTILITY' | 'DEPOSIT' | 'OTHER'
-export type TenantPaymentSuggestionStatus = 'PENDING' | 'ACCEPTED' | 'DISMISSED'
 export type MaintenancePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY'
 export type MaintenanceStatus = 'OPEN' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
 

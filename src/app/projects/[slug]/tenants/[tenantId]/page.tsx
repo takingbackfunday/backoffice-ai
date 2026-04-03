@@ -26,8 +26,11 @@ export default async function TenantDetailPage({ params }: PageParams) {
       leases: {
         include: {
           unit: true,
-          tenantCharges: { orderBy: { dueDate: 'desc' } },
-          tenantPayments: { orderBy: { paidDate: 'desc' } },
+          invoices: {
+            where: { status: { not: 'VOID' } },
+            include: { lineItems: true, payments: true },
+            orderBy: { dueDate: 'desc' },
+          },
         },
         orderBy: { startDate: 'desc' },
       },
@@ -55,7 +58,17 @@ export default async function TenantDetailPage({ params }: PageParams) {
           <ProjectSubNav slug={slug} type={project.type} />
           <TenantDetailClient
             projectId={project.id}
-            tenant={JSON.parse(JSON.stringify(tenant))}
+            tenant={{
+              ...JSON.parse(JSON.stringify(tenant)),
+              leases: tenant.leases.map(l => ({
+                ...JSON.parse(JSON.stringify(l)),
+                invoices: l.invoices.map(inv => ({
+                  id: inv.id,
+                  lineItemTotal: inv.lineItems.filter(li => !li.forgivenAt).reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0),
+                  paymentTotal: inv.payments.filter(p => !p.voidedAt).reduce((s, p) => s + Number(p.amount), 0),
+                })),
+              })),
+            }}
           />
         </main>
       </div>

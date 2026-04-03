@@ -10,7 +10,7 @@ const LineItemSchema = z.object({
   unitPrice: z.number().min(0, 'Unit price must be non-negative'),
   isTaxLine: z.boolean().default(false),
   chargeType: z.string().optional(),
-  tenantChargeId: z.string().optional(), // link this line item to a TenantCharge row
+  maintenanceRequestId: z.string().optional(),
 })
 
 const CreateInvoiceSchema = z.object({
@@ -19,6 +19,8 @@ const CreateInvoiceSchema = z.object({
   // PROPERTY fields
   leaseId: z.string().optional(),
   tenantId: z.string().optional(),
+  period: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  appendToCurrentDraft: z.boolean().default(false),
   // shared
   dueDate: z.string().min(1, 'Due date is required'),
   currency: z.string().default('USD'),
@@ -174,6 +176,47 @@ export async function POST(request: Request, { params }: RouteParams) {
         return badRequest('Either leaseId or tenantId is required for property invoices')
       }
 
+      // If appendToCurrentDraft: find an existing DRAFT for this (leaseId, period) and append
+      if (parsed.data.appendToCurrentDraft && parsed.data.leaseId && parsed.data.period) {
+        const existingDraft = await prisma.invoice.findFirst({
+          where: {
+            leaseId: parsed.data.leaseId,
+            period: parsed.data.period,
+            status: 'DRAFT',
+          },
+          include: {
+            lease: { select: { id: true, unit: { select: { unitLabel: true } } } },
+            tenant: { select: { id: true, name: true, email: true } },
+            lineItems: true,
+            payments: true,
+          },
+        })
+        if (existingDraft) {
+          await prisma.invoiceLineItem.createMany({
+            data: parsed.data.lineItems.map(li => ({
+              invoiceId: existingDraft.id,
+              description: li.description,
+              quantity: li.quantity,
+              unitPrice: li.unitPrice,
+              isTaxLine: false,
+              chargeType: li.chargeType ?? null,
+              maintenanceRequestId: li.maintenanceRequestId ?? null,
+            })),
+          })
+          const updated = await prisma.invoice.findUnique({
+            where: { id: existingDraft.id },
+            include: {
+              lease: { select: { id: true, unit: { select: { unitLabel: true } } } },
+              tenant: { select: { id: true, name: true, email: true } },
+              lineItems: true,
+              payments: true,
+            },
+          })
+          return ok(updated!)
+        }
+        // No draft exists — fall through to create a new invoice
+      }
+
       // RENT- prefix for property invoices
       const propertyInvoiceCount = await prisma.invoice.count({
         where: { lease: { unitId: { in: unitIds } } },
@@ -185,6 +228,7 @@ export async function POST(request: Request, { params }: RouteParams) {
           leaseId: parsed.data.leaseId ?? null,
           tenantId: parsed.data.tenantId ?? null,
           invoiceNumber,
+          period: parsed.data.period ?? null,
           dueDate: new Date(parsed.data.dueDate),
           currency: parsed.data.currency,
           notes: parsed.data.notes,
@@ -196,6 +240,7 @@ export async function POST(request: Request, { params }: RouteParams) {
               unitPrice: item.unitPrice,
               isTaxLine: item.isTaxLine,
               chargeType: item.chargeType ?? null,
+              maintenanceRequestId: item.maintenanceRequestId ?? null,
             })),
           },
         },
@@ -206,19 +251,6 @@ export async function POST(request: Request, { params }: RouteParams) {
           payments: true,
         },
       })
-
-      // Link TenantCharge rows to their corresponding invoice line items
-      const chargeLinks = parsed.data.lineItems
-        .map((item, idx) => ({ tenantChargeId: item.tenantChargeId, lineItem: invoice.lineItems[idx] }))
-        .filter(l => l.tenantChargeId && l.lineItem)
-      if (chargeLinks.length > 0) {
-        await Promise.all(chargeLinks.map(l =>
-          prisma.tenantCharge.update({
-            where: { id: l.tenantChargeId! },
-            data: { invoiceLineItemId: l.lineItem!.id },
-          })
-        ))
-      }
 
       return created(invoice)
     }

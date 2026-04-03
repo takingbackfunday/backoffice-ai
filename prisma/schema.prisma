@@ -25,13 +25,13 @@ model InstitutionSchema {
 }
 
 model Account {
-  id                  String            @id @default(cuid())
+  id                  String               @id @default(cuid())
   userId              String
   institutionSchemaId String
-  institution         InstitutionSchema @relation(fields: [institutionSchemaId], references: [id])
+  institution         InstitutionSchema    @relation(fields: [institutionSchemaId], references: [id])
   name                String
   type                AccountType
-  currency            String            @default("USD")
+  currency            String               @default("USD")
   lastImportAt        DateTime?
   transactions        Transaction[]
   importBatches       ImportBatch[]
@@ -39,8 +39,8 @@ model Account {
   encryptedCredential EncryptedCredential?
   bankConnection      BankConnection?
   syncJobs            SyncJob[]
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@index([userId])
 }
@@ -77,47 +77,45 @@ model Category {
 }
 
 model Payee {
-  id                String        @id @default(cuid())
+  id                String               @id @default(cuid())
   userId            String
   name              String
   defaultCategoryId String?
-  defaultCategory   Category?     @relation(fields: [defaultCategoryId], references: [id])
+  defaultCategory   Category?            @relation(fields: [defaultCategoryId], references: [id])
   transactions      Transaction[]
   rules             CategorizationRule[]
   ruleSuggestions   RuleSuggestion[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
-  @@index([userId])
   @@unique([userId, name])
+  @@index([userId])
 }
 
 model Transaction {
-  id            String       @id @default(cuid())
-  accountId     String
-  account       Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  projectId     String?
-  project       Project?     @relation(fields: [projectId], references: [id])
-  importBatchId String?
-  importBatch   ImportBatch? @relation(fields: [importBatchId], references: [id])
-  categoryId    String?
-  categoryRef   Category?    @relation(fields: [categoryId], references: [id])
-  payeeId       String?
-  payee         Payee?       @relation(fields: [payeeId], references: [id])
-  date          DateTime
-  amount        Decimal      @db.Decimal(12, 2)
-  description   String
-  category      String?
-  tags          String[]
-  notes         String?
-  rawData       Json
-  duplicateHash            String                    @unique
-  tenantPayment             TenantPayment?
-  tenantPaymentSuggestions  TenantPaymentSuggestion[]
+  id                        String                     @id @default(cuid())
+  accountId                 String
+  account                   Account                    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  projectId                 String?
+  project                   Project?                   @relation(fields: [projectId], references: [id])
+  importBatchId             String?
+  importBatch               ImportBatch?               @relation(fields: [importBatchId], references: [id])
+  categoryId                String?
+  categoryRef               Category?                  @relation(fields: [categoryId], references: [id])
+  payeeId                   String?
+  payee                     Payee?                     @relation(fields: [payeeId], references: [id])
+  date                      DateTime
+  amount                    Decimal                    @db.Decimal(12, 2)
+  description               String
+  category                  String?
+  tags                      String[]
+  notes                     String?
+  rawData                   Json
+  duplicateHash             String                     @unique
   invoicePayment            InvoicePayment?
   invoicePaymentSuggestions InvoicePaymentSuggestion[]
-  createdAt                 DateTime                  @default(now())
-  updatedAt                 DateTime                  @updatedAt
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 
   @@index([accountId, date])
   @@index([categoryId])
@@ -174,24 +172,24 @@ model UserPreference {
 }
 
 model RuleSuggestion {
-  id           String           @id @default(cuid())
+  id           String               @id @default(cuid())
   userId       String
   status       RuleSuggestionStatus @default(PENDING)
   conditions   Json
   categoryName String
   categoryId   String?
-  categoryRef  Category?        @relation(fields: [categoryId], references: [id])
+  categoryRef  Category?            @relation(fields: [categoryId], references: [id])
   payeeName    String?
   payeeId      String?
-  payee        Payee?           @relation(fields: [payeeId], references: [id])
+  payee        Payee?               @relation(fields: [payeeId], references: [id])
   confidence   String
   impact       String
   reasoning    String
-  matchCount   Int              @default(0)
-  totalAmount  Decimal          @default(0) @db.Decimal(12, 2)
+  matchCount   Int                  @default(0)
+  totalAmount  Decimal              @default(0) @db.Decimal(12, 2)
   sourceEdits  Json
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 
   @@index([userId, status])
 }
@@ -218,14 +216,14 @@ model BankPlaybook {
 }
 
 model EncryptedCredential {
-  id          String   @id @default(cuid())
-  accountId   String   @unique
-  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  ciphertext  String
-  iv          String
-  authTag     String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  accountId  String   @unique
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  ciphertext String
+  iv         String
+  authTag    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model SyncJob {
@@ -263,29 +261,29 @@ enum ConnectionStatus {
 }
 
 model BankConnection {
-  id                   String           @id @default(cuid())
-  accountId            String           @unique
-  account              Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  userId               String
-  provider             BankProvider
-  status               ConnectionStatus @default(ACTIVE)
-  tellerEnrollmentId   String?
-  tellerAccountId      String?
-  tellerInstitutionId  String?
-  plaidItemId          String?
-  plaidAccountId       String?
-  plaidInstitutionId   String?
-  tokenCiphertext      String?
-  tokenIv              String?
-  tokenAuthTag         String?
-  lastSyncAt           DateTime?
-  lastSyncCursor       String?
-  errorCount           Int              @default(0)
-  disconnectReason     String?
-  metadata             Json             @default("{}")
-  syncJobs             SyncJob[]
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  id                  String           @id @default(cuid())
+  accountId           String           @unique
+  account             Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId              String
+  provider            BankProvider
+  status              ConnectionStatus @default(ACTIVE)
+  tellerEnrollmentId  String?
+  tellerAccountId     String?
+  tellerInstitutionId String?
+  plaidItemId         String?
+  plaidAccountId      String?
+  plaidInstitutionId  String?
+  tokenCiphertext     String?
+  tokenIv             String?
+  tokenAuthTag        String?
+  lastSyncAt          DateTime?
+  lastSyncCursor      String?
+  errorCount          Int              @default(0)
+  disconnectReason    String?
+  metadata            Json             @default("{}")
+  syncJobs            SyncJob[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
   @@index([userId])
   @@index([tellerEnrollmentId])
@@ -305,19 +303,19 @@ enum SyncJobStatus {
 // ── Projects expansion (NEW) ────────────────────────────────────────────────
 
 model Project {
-  id                    String              @id @default(cuid())
-  userId                String
-  name                  String
-  slug                  String
-  type                  ProjectType
-  description           String?
-  isActive              Boolean             @default(true)
-  clientProfile         ClientProfile?
-  propertyProfile       PropertyProfile?
-  transactions          Transaction[]
-  categorizationRules   CategorizationRule[]
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  id                  String               @id @default(cuid())
+  userId              String
+  name                String
+  slug                String
+  type                ProjectType
+  description         String?
+  isActive            Boolean              @default(true)
+  clientProfile       ClientProfile?
+  propertyProfile     PropertyProfile?
+  transactions        Transaction[]
+  categorizationRules CategorizationRule[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@unique([userId, slug])
   @@index([userId])
@@ -385,37 +383,40 @@ enum JobStatus {
 // ── Invoice track ────────────────────────────────────────────────────────────
 
 model Invoice {
-  id              String            @id @default(cuid())
-  clientProfileId String?
-  clientProfile   ClientProfile?    @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  jobId           String?
-  job             Job?              @relation(fields: [jobId], references: [id])
+  id                 String                     @id @default(cuid())
+  clientProfileId    String?
+  clientProfile      ClientProfile?             @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  jobId              String?
+  job                Job?                       @relation(fields: [jobId], references: [id])
   // Property track FKs — set when clientProfileId is null
-  leaseId         String?
-  lease           Lease?            @relation(fields: [leaseId], references: [id])
-  tenantId        String?
-  tenant          Tenant?           @relation(fields: [tenantId], references: [id])
-  applicantId     String?
-  applicant       Applicant?        @relation(fields: [applicantId], references: [id])
-  invoiceNumber   String            // e.g. "INV-0042" or "RENT-0001", auto-generated
-  status          InvoiceStatus     @default(DRAFT)
-  issueDate       DateTime          @default(now())
-  dueDate         DateTime
-  currency        String            @default("USD")
-  notes           String?
+  leaseId            String?
+  lease              Lease?                     @relation(fields: [leaseId], references: [id])
+  tenantId           String?
+  tenant             Tenant?                    @relation(fields: [tenantId], references: [id])
+  applicantId        String?
+  applicant          Applicant?                 @relation(fields: [applicantId], references: [id])
+  invoiceNumber      String // e.g. "INV-0042" or "RENT-0001", auto-generated
+  status             InvoiceStatus              @default(DRAFT)
+  issueDate          DateTime                   @default(now())
+  dueDate            DateTime
+  currency           String                     @default("USD")
+  notes              String?
+  // NEW: period grouping for monthly rent invoices
+  period             String? // e.g. "2026-04" for monthly grouping, null for ad-hoc
+  autoGenerated      Boolean                    @default(false) // true = system-created rent invoice
   // Email tracking
-  sentAt          DateTime?
-  sentTo          String?
-  reminderSentAt  DateTime?
+  sentAt             DateTime?
+  sentTo             String?
+  reminderSentAt     DateTime?
   lineItems          InvoiceLineItem[]
   payments           InvoicePayment[]
   paymentSuggestions InvoicePaymentSuggestion[]
   // Renegotiation chain — one-to-one self-relation
-  replacesInvoiceId  String?           @unique
-  replacesInvoice    Invoice?          @relation("InvoiceReplacement", fields: [replacesInvoiceId], references: [id])
-  replacedBy         Invoice?          @relation("InvoiceReplacement")
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  replacesInvoiceId  String?                    @unique
+  replacesInvoice    Invoice?                   @relation("InvoiceReplacement", fields: [replacesInvoiceId], references: [id])
+  replacedBy         Invoice?                   @relation("InvoiceReplacement")
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
 
   @@index([clientProfileId])
   @@index([leaseId])
@@ -433,17 +434,23 @@ enum InvoiceStatus {
 }
 
 model InvoiceLineItem {
-  id          String   @id @default(cuid())
-  invoiceId   String
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  description String
-  quantity    Decimal  @db.Decimal(10, 3)
-  qtyUnit     String?  // e.g. "hrs", "days", "words", "pages", "units"
-  unitPrice   Decimal  @db.Decimal(10, 2)
-  isTaxLine   Boolean  @default(false)
-  chargeType  String?  // property-track only: RENT, DEPOSIT, LATE_FEE, UTILITY, MAINTENANCE, OTHER
-  createdAt   DateTime @default(now())
-  tenantCharge TenantCharge?
+  id                   String              @id @default(cuid())
+  invoiceId            String
+  invoice              Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description          String
+  quantity             Decimal             @db.Decimal(10, 3)
+  qtyUnit              String? // e.g. "hrs", "days", "words", "pages", "units"
+  unitPrice            Decimal             @db.Decimal(10, 2)
+  isTaxLine            Boolean             @default(false)
+  chargeType           String? // property-track only: RENT, DEPOSIT, LATE_FEE, UTILITY, MAINTENANCE, OTHER
+  createdAt            DateTime            @default(now())
+  // NEW: forgiveness (migrated from TenantCharge)
+  forgivenAt           DateTime?
+  forgivenBy           String? // userId of manager who forgave
+  forgivenReason       String?
+  // NEW: optional back-link to source maintenance job (migrated from TenantCharge)
+  maintenanceRequestId String?
+  maintenanceRequest   MaintenanceRequest? @relation(fields: [maintenanceRequestId], references: [id])
 
   @@index([invoiceId])
 }
@@ -460,23 +467,29 @@ model InvoicePayment {
   transactionId String?      @unique
   transaction   Transaction? @relation(fields: [transactionId], references: [id])
   createdAt     DateTime     @default(now())
+  // NEW: voiding (migrated from TenantPayment)
+  voidedAt      DateTime?
+  voidedBy      String? // userId of manager who voided
+  voidReason    String?
+  // NEW: source deletion tracking (migrated from TenantPayment)
+  sourceDeleted Boolean      @default(false) // true when linked transaction was deleted
 
   @@index([invoiceId])
 }
 
 // Suggested invoice payment attribution — created post-import, reviewed by user
 model InvoicePaymentSuggestion {
-  id            String                          @id @default(cuid())
+  id            String                         @id @default(cuid())
   userId        String
   transactionId String
-  transaction   Transaction                     @relation(fields: [transactionId], references: [id])
+  transaction   Transaction                    @relation(fields: [transactionId], references: [id])
   invoiceId     String
-  invoice       Invoice                         @relation(fields: [invoiceId], references: [id])
-  confidence    String                          // 'high' | 'medium'
+  invoice       Invoice                        @relation(fields: [invoiceId], references: [id])
+  confidence    String // 'high' | 'medium'
   reasoning     String
-  status        InvoicePaymentSuggestionStatus  @default(PENDING)
-  createdAt     DateTime                        @default(now())
-  updatedAt     DateTime                        @updatedAt
+  status        InvoicePaymentSuggestionStatus @default(PENDING)
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
 
   @@index([userId, status])
   @@index([transactionId])
@@ -492,28 +505,28 @@ enum InvoicePaymentSuggestionStatus {
 // ── Property track ──────────────────────────────────────────────────────────
 
 model PropertyProfile {
-  id                       String       @id @default(cuid())
-  projectId                String       @unique
-  project                  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  address                  String
-  city                     String?
-  state                    String?
-  zipCode                  String?
-  country                  String       @default("US")
-  propertyType             PropertyType @default(RESIDENTIAL)
-  yearBuilt                Int?
-  squareFootage            Int?
-  lotSize                  String?
-  purchasePrice            Decimal?     @db.Decimal(12, 2)
-  purchaseDate             DateTime?
-  currentValue             Decimal?     @db.Decimal(12, 2)
-  mortgageBalance          Decimal?     @db.Decimal(12, 2)
-  requireLastMonth         Boolean      @default(false)
-  autoGenerateRentInvoice  Boolean      @default(false)
-  units                    Unit[]
-  applicants               Applicant[]
-  createdAt                DateTime     @default(now())
-  updatedAt                DateTime     @updatedAt
+  id                      String       @id @default(cuid())
+  projectId               String       @unique
+  project                 Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  address                 String
+  city                    String?
+  state                   String?
+  zipCode                 String?
+  country                 String       @default("US")
+  propertyType            PropertyType @default(RESIDENTIAL)
+  yearBuilt               Int?
+  squareFootage           Int?
+  lotSize                 String?
+  purchasePrice           Decimal?     @db.Decimal(12, 2)
+  purchaseDate            DateTime?
+  currentValue            Decimal?     @db.Decimal(12, 2)
+  mortgageBalance         Decimal?     @db.Decimal(12, 2)
+  requireLastMonth        Boolean      @default(false)
+  autoGenerateRentInvoice Boolean      @default(false)
+  units                   Unit[]
+  applicants              Applicant[]
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
 }
 
 enum PropertyType {
@@ -556,54 +569,52 @@ enum UnitStatus {
 }
 
 model Lease {
-  id               String              @id @default(cuid())
-  unitId           String
-  unit             Unit                @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  tenantId         String
-  tenant           Tenant              @relation(fields: [tenantId], references: [id])
-  status           LeaseStatus         @default(DRAFT)
-  startDate        DateTime
-  endDate          DateTime
-  monthlyRent      Decimal             @db.Decimal(10, 2)
-  securityDeposit  Decimal?            @db.Decimal(10, 2)
-  paymentDueDay    Int                 @default(1)
-  lateFeeAmount    Decimal?            @db.Decimal(10, 2)
-  lateFeeGraceDays Int                 @default(5)
+  id                  String              @id @default(cuid())
+  unitId              String
+  unit                Unit                @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenantId            String
+  tenant              Tenant              @relation(fields: [tenantId], references: [id])
+  status              LeaseStatus         @default(DRAFT)
+  startDate           DateTime
+  endDate             DateTime
+  monthlyRent         Decimal             @db.Decimal(10, 2)
+  securityDeposit     Decimal?            @db.Decimal(10, 2)
+  paymentDueDay       Int                 @default(1)
+  lateFeeAmount       Decimal?            @db.Decimal(10, 2)
+  lateFeeGraceDays    Int                 @default(5)
   // Contract management
-  contractStatus   LeaseContractStatus @default(NONE)
-  contractFileUrl  String?
-  contractFileName String?
-  contractSentAt   DateTime?
-  contractSignedAt DateTime?
-  contractNotes    String?
+  contractStatus      LeaseContractStatus @default(NONE)
+  contractFileUrl     String?
+  contractFileName    String?
+  contractSentAt      DateTime?
+  contractSignedAt    DateTime?
+  contractNotes       String?
   // Currency for rent invoicing
-  currency         String              @default("USD")
+  currency            String              @default("USD")
   // Applicant origin
-  applicantId          String?
-  applicant            Applicant?      @relation(fields: [applicantId], references: [id])
+  applicantId         String?
+  applicant           Applicant?          @relation(fields: [applicantId], references: [id])
   // Rudimentary signing
-  signingToken         String?         @unique
-  tenantSignatureName  String?
-  tenantSignatureIp    String?
-  tenantSignedAt       DateTime?
-  ownerSignatureName   String?
-  ownerSignedAt        DateTime?
+  signingToken        String?             @unique
+  tenantSignatureName String?
+  tenantSignatureIp   String?
+  tenantSignedAt      DateTime?
+  ownerSignatureName  String?
+  ownerSignedAt       DateTime?
   // Move-in milestone
-  keysHandedOverAt     DateTime?
+  keysHandedOverAt    DateTime?
   // Lease addenda (JSON — immutable contract record)
-  additionalCharges Json  @default("[]")  // [{label, amount, frequency: 'monthly'|'one_time'}]
-  utilitiesIncluded Json  @default("[]")  // string[]
-  leaseRules        Json  @default("{}")  // {smokingAllowed, sublettingAllowed, petsAllowed, petNotes, parkingStall, parkingFee, storageUnit, storageFee, guestPolicy}
+  additionalCharges   Json                @default("[]") // [{label, amount, frequency: 'monthly'|'one_time'}]
+  utilitiesIncluded   Json                @default("[]") // string[]
+  leaseRules          Json                @default("{}") // {smokingAllowed, sublettingAllowed, petsAllowed, petNotes, parkingStall, parkingFee, storageUnit, storageFee, guestPolicy}
   // Renegotiation chain (mirrors Invoice.replacesInvoiceId pattern)
-  replacesLeaseId   String?  @unique
-  replacesLease     Lease?   @relation("LeaseReplacement", fields: [replacesLeaseId], references: [id])
-  replacedBy        Lease?   @relation("LeaseReplacement")
-  tenantCharges    TenantCharge[]
-  tenantPayments   TenantPayment[]
-  tenantFiles      TenantFile[]
-  invoices         Invoice[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  replacesLeaseId     String?             @unique
+  replacesLease       Lease?              @relation("LeaseReplacement", fields: [replacesLeaseId], references: [id])
+  replacedBy          Lease?              @relation("LeaseReplacement")
+  tenantFiles         TenantFile[]
+  invoices            Invoice[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   @@index([unitId])
   @@index([tenantId])
@@ -628,29 +639,26 @@ enum LeaseStatus {
 }
 
 model Tenant {
-  id                       String                   @id @default(cuid())
-  userId                   String
-  clerkUserId              String?
-  name                     String
-  email                    String
-  phone                    String?
-  emergencyName            String?
-  emergencyPhone           String?
-  portalInviteStatus       PortalInviteStatus       @default(NONE)
-  leases                   Lease[]
-  tenantFiles              TenantFile[]
-  messages                 Message[]
-  tenantCharges            TenantCharge[]
-  tenantPayments           TenantPayment[]
-  tenantPaymentSuggestions TenantPaymentSuggestion[]
-  maintenanceRequests      MaintenanceRequest[]
-  invoices                 Invoice[]
-  convertedFromApplicant   Applicant?
-  createdAt                DateTime                 @default(now())
-  updatedAt                DateTime                 @updatedAt
+  id                     String               @id @default(cuid())
+  userId                 String
+  clerkUserId            String?
+  name                   String
+  email                  String
+  phone                  String?
+  emergencyName          String?
+  emergencyPhone         String?
+  portalInviteStatus     PortalInviteStatus   @default(NONE)
+  leases                 Lease[]
+  tenantFiles            TenantFile[]
+  messages               Message[]
+  maintenanceRequests    MaintenanceRequest[]
+  invoices               Invoice[]
+  convertedFromApplicant Applicant?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 
-  @@index([userId])
   @@unique([userId, email])
+  @@index([userId])
 }
 
 enum PortalInviteStatus {
@@ -660,18 +668,18 @@ enum PortalInviteStatus {
 }
 
 model TenantFile {
-  id          String         @id @default(cuid())
-  tenantId    String
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  leaseId     String?
-  lease       Lease?         @relation(fields: [leaseId], references: [id])
-  fileType    TenantFileType
-  fileName    String
-  fileUrl     String
-  fileSize    Int?
-  notes       String?
-  uploadedBy  String
-  createdAt   DateTime       @default(now())
+  id         String         @id @default(cuid())
+  tenantId   String
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leaseId    String?
+  lease      Lease?         @relation(fields: [leaseId], references: [id])
+  fileType   TenantFileType
+  fileName   String
+  fileUrl    String
+  fileSize   Int?
+  notes      String?
+  uploadedBy String
+  createdAt  DateTime       @default(now())
 }
 
 enum TenantFileType {
@@ -703,116 +711,24 @@ model Message {
   @@index([tenantId, unitId])
 }
 
-// ── Tenant ledger ────────────────────────────────────────────────────────────
-// balance = SUM(active TenantCharge.amount) - SUM(TenantPayment.amount)
-// Forgiven charges are excluded from the balance (forgivenAt IS NOT NULL).
-// Payments are attributed to a tenant, not to a specific charge.
-
-model TenantCharge {
-  id                   String      @id @default(cuid())
-  leaseId              String
-  lease                Lease       @relation(fields: [leaseId], references: [id])
-  tenantId             String
-  tenant               Tenant      @relation(fields: [tenantId], references: [id])
-  type                 ChargeType
-  description          String?     // required for MAINTENANCE/OTHER; optional for RENT/LATE_FEE
-  amount               Decimal     @db.Decimal(10, 2)
-  dueDate              DateTime
-  // Forgiveness — soft nullability, not deletion, preserves audit trail
-  forgivenAt           DateTime?
-  forgivenBy           String?     // userId of manager who forgave
-  forgivenReason       String?
-  // Optional back-link to source maintenance job
-  maintenanceRequestId String?
-  maintenanceRequest   MaintenanceRequest? @relation(fields: [maintenanceRequestId], references: [id])
-  // Optional forward-link to the invoice line item that invoiced this charge
-  invoiceLineItemId    String?             @unique
-  invoiceLineItem      InvoiceLineItem?    @relation(fields: [invoiceLineItemId], references: [id])
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
-
-  @@index([leaseId])
-  @@index([tenantId])
-  @@index([tenantId, forgivenAt]) // fast active-charge queries
-}
-
-enum ChargeType {
-  RENT
-  LATE_FEE
-  MAINTENANCE
-  UTILITY
-  DEPOSIT
-  OTHER
-}
-
-model TenantPayment {
-  id            String       @id @default(cuid())
-  leaseId       String?
-  lease         Lease?       @relation(fields: [leaseId], references: [id])
-  tenantId      String
-  tenant        Tenant       @relation(fields: [tenantId], references: [id])
-  amount        Decimal      @db.Decimal(10, 2)
-  paidDate      DateTime
-  // Optional — null when recorded manually without a matched bank transaction
-  transactionId String?      @unique  // one transaction can only be attributed once
-  transaction   Transaction? @relation(fields: [transactionId], references: [id])
-  paymentMethod String?
-  notes         String?
-  sourceDeleted Boolean      @default(false)  // true when the linked transaction was deleted
-  voidedAt      DateTime?                     // set when manager voids this payment
-  voidedBy      String?                       // userId of manager who voided
-  voidReason    String?                       // optional reason
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-
-  @@index([leaseId])
-  @@index([tenantId])
-  @@index([transactionId])
-}
-
-// Suggested payment attribution — created post-import, reviewed by manager
-model TenantPaymentSuggestion {
-  id            String                      @id @default(cuid())
-  userId        String                      // property owner — for auth scoping
-  transactionId String                      // the incoming bank transaction
-  transaction   Transaction                 @relation(fields: [transactionId], references: [id])
-  tenantId      String
-  tenant        Tenant                      @relation(fields: [tenantId], references: [id])
-  leaseId       String?
-  confidence    String                      // 'high' | 'medium'
-  reasoning     String                      // human-readable explanation
-  status        TenantPaymentSuggestionStatus @default(PENDING)
-  createdAt     DateTime                    @default(now())
-  updatedAt     DateTime                    @updatedAt
-
-  @@index([userId, status])
-  @@index([transactionId])
-}
-
-enum TenantPaymentSuggestionStatus {
-  PENDING
-  ACCEPTED
-  DISMISSED
-}
-
 model MaintenanceRequest {
-  id            String              @id @default(cuid())
-  unitId        String
-  unit          Unit                @relation(fields: [unitId], references: [id])
-  tenantId      String?
-  tenant        Tenant?             @relation(fields: [tenantId], references: [id])
-  title         String
-  description   String
-  priority      MaintenancePriority @default(MEDIUM)
-  status        MaintenanceStatus   @default(OPEN)
-  scheduledDate DateTime?
-  completedDate DateTime?
-  cost           Decimal?            @db.Decimal(10, 2)
-  vendorName     String?
-  transactionId  String?
-  tenantCharges  TenantCharge[]
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id               String              @id @default(cuid())
+  unitId           String
+  unit             Unit                @relation(fields: [unitId], references: [id])
+  tenantId         String?
+  tenant           Tenant?             @relation(fields: [tenantId], references: [id])
+  title            String
+  description      String
+  priority         MaintenancePriority @default(MEDIUM)
+  status           MaintenanceStatus   @default(OPEN)
+  scheduledDate    DateTime?
+  completedDate    DateTime?
+  cost             Decimal?            @db.Decimal(10, 2)
+  vendorName       String?
+  transactionId    String?
+  invoiceLineItems InvoiceLineItem[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([unitId])
 }
@@ -835,62 +751,62 @@ enum MaintenanceStatus {
 // ── Applicant pipeline ───────────────────────────────────────────────────────
 
 model Applicant {
-  id                  String            @id @default(cuid())
-  userId              String            // property owner
-  propertyProfileId   String
-  propertyProfile     PropertyProfile   @relation(fields: [propertyProfileId], references: [id], onDelete: Cascade)
-  unitId              String?
-  unit                Unit?             @relation(fields: [unitId], references: [id])
+  id                String          @id @default(cuid())
+  userId            String // property owner
+  propertyProfileId String
+  propertyProfile   PropertyProfile @relation(fields: [propertyProfileId], references: [id], onDelete: Cascade)
+  unitId            String?
+  unit              Unit?           @relation(fields: [unitId], references: [id])
 
   // Contact info
-  name                String
-  email               String
-  phone               String?
+  name  String
+  email String
+  phone String?
 
   // Application details
-  status              ApplicantStatus   @default(INQUIRY)
-  source              String?           // "zillow", "referral", "walk-in", etc.
-  desiredMoveIn       DateTime?
-  desiredRent         Decimal?          @db.Decimal(10, 2)
-  currentEmployer     String?
-  annualIncome        Decimal?          @db.Decimal(12, 2)
-  notes               String?
+  status          ApplicantStatus @default(INQUIRY)
+  source          String? // "zillow", "referral", "walk-in", etc.
+  desiredMoveIn   DateTime?
+  desiredRent     Decimal?        @db.Decimal(10, 2)
+  currentEmployer String?
+  annualIncome    Decimal?        @db.Decimal(12, 2)
+  notes           String?
 
   // Screening
-  creditScore         Int?
-  backgroundCheck     String?           // "passed", "failed", "pending", null
-  references          Json?             // array of { name, phone, relationship }
+  creditScore     Int?
+  backgroundCheck String? // "passed", "failed", "pending", null
+  references      Json? // array of { name, phone, relationship }
 
   // Listing link
-  listingId           String?
-  listing             Listing?          @relation(fields: [listingId], references: [id])
+  listingId String?
+  listing   Listing? @relation(fields: [listingId], references: [id])
 
   // Self-service application data
-  applicationData     Json?             // structured form submission
+  applicationData Json? // structured form submission
 
   // Screening consent
-  screeningConsentAt  DateTime?
-  screeningConsentIp  String?
+  screeningConsentAt DateTime?
+  screeningConsentIp String?
 
   // Future screening API integration (nullable placeholders)
-  screeningRequestId  String?
-  screeningProvider   String?
-  screeningReportUrl  String?
+  screeningRequestId String?
+  screeningProvider  String?
+  screeningReportUrl String?
 
   // Conversion
-  convertedToTenantId String?           @unique
-  convertedToTenant   Tenant?           @relation(fields: [convertedToTenantId], references: [id])
+  convertedToTenantId String?   @unique
+  convertedToTenant   Tenant?   @relation(fields: [convertedToTenantId], references: [id])
   convertedAt         DateTime?
   rejectedAt          DateTime?
   rejectedReason      String?
 
-  documents           ApplicantDocument[]
-  showings            Showing[]
-  leases              Lease[]
-  invoices            Invoice[]
+  documents ApplicantDocument[]
+  showings  Showing[]
+  leases    Lease[]
+  invoices  Invoice[]
 
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([propertyProfileId])
@@ -910,67 +826,67 @@ enum ApplicantStatus {
 }
 
 model ApplicantDocument {
-  id           String    @id @default(cuid())
-  applicantId  String
-  applicant    Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
-  fileType     String    // "proof_of_income" | "proof_of_residence" | "government_id" | "bank_statement" | "employment_letter" | "reference_letter" | "other"
-  requestLabel String?   // custom label when fileType = "other", or display override
-  status       String    @default("uploaded") // "requested" | "uploaded"
-  uploadToken  String?   @unique              // HMAC token for ad-hoc upload links
+  id             String    @id @default(cuid())
+  applicantId    String
+  applicant      Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  fileType       String // "proof_of_income" | "proof_of_residence" | "government_id" | "bank_statement" | "employment_letter" | "reference_letter" | "other"
+  requestLabel   String? // custom label when fileType = "other", or display override
+  status         String    @default("uploaded") // "requested" | "uploaded"
+  uploadToken    String?   @unique // HMAC token for ad-hoc upload links
   tokenExpiresAt DateTime?
-  fileName     String    @default("")
-  fileUrl      String    @default("")
-  fileSize     Int?
-  notes        String?
-  uploadedBy   String    @default("") // userId or "applicant"
-  createdAt    DateTime  @default(now())
+  fileName       String    @default("")
+  fileUrl        String    @default("")
+  fileSize       Int?
+  notes          String?
+  uploadedBy     String    @default("") // userId or "applicant"
+  createdAt      DateTime  @default(now())
 
   @@index([applicantId])
   @@index([uploadToken])
 }
 
 model Listing {
-  id              String    @id @default(cuid())
-  unitId          String
-  unit            Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  userId          String    // property owner, for auth scoping
+  id     String @id @default(cuid())
+  unitId String
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  userId String // property owner, for auth scoping
 
-  title           String
-  description     String?
-  monthlyRent     Decimal   @db.Decimal(10, 2)
-  availableDate   DateTime?
-  petPolicy       String?   // "allowed", "case-by-case", "no-pets"
-  photos          Json      @default("[]") // string[] of URLs
-  amenities       String?   // free-text or comma-separated
+  title         String
+  description   String?
+  monthlyRent   Decimal   @db.Decimal(10, 2)
+  availableDate DateTime?
+  petPolicy     String? // "allowed", "case-by-case", "no-pets"
+  photos        Json      @default("[]") // string[] of URLs
+  amenities     String? // free-text or comma-separated
 
-  publicSlug      String    @unique
-  isActive        Boolean   @default(true)
+  publicSlug String  @unique
+  isActive   Boolean @default(true)
 
-  applicationFee  Decimal?  @db.Decimal(10, 2)
-  screeningFee    Decimal?  @db.Decimal(10, 2)
-  requiredDocs    Json      @default("[]") // string[] of doc type keys
+  applicationFee Decimal? @db.Decimal(10, 2)
+  screeningFee   Decimal? @db.Decimal(10, 2)
+  requiredDocs   Json     @default("[]") // string[] of doc type keys
 
-  applicants      Applicant[]
+  applicants Applicant[]
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([unitId])
 }
 
 model Showing {
-  id            String        @id @default(cuid())
-  applicantId   String
-  applicant     Applicant     @relation(fields: [applicantId], references: [id], onDelete: Cascade)
-  unitId        String
-  unit          Unit          @relation(fields: [unitId], references: [id])
-  scheduledAt   DateTime
-  durationMin   Int           @default(30)
-  status        ShowingStatus @default(PROPOSED)
-  notes         String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id          String        @id @default(cuid())
+  applicantId String
+  applicant   Applicant     @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  unitId      String
+  unit        Unit          @relation(fields: [unitId], references: [id])
+  scheduledAt DateTime
+  durationMin Int           @default(30)
+  status      ShowingStatus @default(PROPOSED)
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@index([applicantId])
   @@index([unitId])

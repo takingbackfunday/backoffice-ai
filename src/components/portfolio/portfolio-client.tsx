@@ -26,14 +26,9 @@ interface MaintenanceRequest {
   tenant: { id: string; name: string } | null
 }
 
-interface TenantCharge {
-  id: string; type: string; description: string | null;
-  amount: number; dueDate: string; forgivenAt: string | null
-}
-
-interface TenantPayment {
-  id: string; amount: number; paidDate: string;
-  paymentMethod: string | null; notes: string | null; sourceDeleted: boolean; voidedAt: string | null
+interface InvoiceSummary {
+  id: string; invoiceNumber: string; status: string; period: string | null;
+  dueDate: string; lineItemTotal: number; paymentTotal: number;
 }
 
 interface RecentMessage {
@@ -53,8 +48,7 @@ interface Unit {
   paymentDueDay: number | null;
   openMaintenance: number; unreadMessages: number;
   maintenanceRequests: MaintenanceRequest[]
-  tenantCharges: TenantCharge[]
-  tenantPayments: TenantPayment[]
+  invoices: InvoiceSummary[]
   recentMessages: RecentMessage[]
 }
 
@@ -142,49 +136,38 @@ const URGENCY_STYLES = {
   soon: 'bg-yellow-50 border-yellow-200 text-yellow-700',
 }
 
-const CHARGE_TYPE_COLORS: Record<string, string> = {
-  RENT: 'bg-blue-100 text-blue-800',
-  LATE_FEE: 'bg-red-100 text-red-800',
-  MAINTENANCE: 'bg-orange-100 text-orange-800',
-  UTILITY: 'bg-cyan-100 text-cyan-800',
-  DEPOSIT: 'bg-purple-100 text-purple-800',
-  OTHER: 'bg-gray-100 text-gray-700',
-}
-
-const CHARGE_TYPE_LABELS: Record<string, string> = {
-  RENT: 'Rent', LATE_FEE: 'Late fee', MAINTENANCE: 'Maint.',
-  UTILITY: 'Utility', DEPOSIT: 'Deposit', OTHER: 'Other',
-}
-
 const MAINTENANCE_STATUSES = ['OPEN', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const
 
 function hasOverdueRent(unit: Unit): boolean {
-  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((sum, c) => sum + c.amount, 0)
-  const paid = unit.tenantPayments.reduce((sum, p) => sum + p.amount, 0)
+  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
+  const charged = activeInvoices.reduce((sum, inv) => sum + inv.lineItemTotal, 0)
+  const paid = activeInvoices.reduce((sum, inv) => sum + inv.paymentTotal, 0)
   return charged - paid > 0
 }
 
 function getBalance(unit: Unit): number {
-  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((sum, c) => sum + c.amount, 0)
-  const paid = unit.tenantPayments.reduce((sum, p) => sum + p.amount, 0)
+  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
+  const charged = activeInvoices.reduce((sum, inv) => sum + inv.lineItemTotal, 0)
+  const paid = activeInvoices.reduce((sum, inv) => sum + inv.paymentTotal, 0)
   return charged - paid
 }
 
 /** Returns a sortable numeric score for payment status: 0=vacant/none, 1=current, 2=partial, 3=late<30, 4=30+, 5=60+ */
 function paymentStatusScore(unit: Unit): number {
   if (!unit.tenant) return 0
-  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((sum, c) => sum + c.amount, 0)
-  const paid = unit.tenantPayments.reduce((sum, p) => sum + p.amount, 0)
+  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
+  const charged = activeInvoices.reduce((sum, inv) => sum + inv.lineItemTotal, 0)
+  const paid = activeInvoices.reduce((sum, inv) => sum + inv.paymentTotal, 0)
   if (charged === 0) return 0
   const balance = charged - paid
   if (balance <= 0) return 1 // current
-  // check oldest unpaid charge date for lateness
-  const latestCharge = unit.tenantCharges
-    .filter(c => !c.forgivenAt)
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0]
-  if (!latestCharge) return 2
-  const daysSinceDue = Math.floor((Date.now() - new Date(latestCharge.dueDate).getTime()) / (1000 * 60 * 60 * 24))
   if (paid > 0 && paid < charged) return 2 // partial
+  // use earliest unpaid invoice due date for lateness
+  const oldestUnpaid = activeInvoices
+    .filter(inv => inv.lineItemTotal - inv.paymentTotal > 0)
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0]
+  if (!oldestUnpaid) return 2
+  const daysSinceDue = Math.floor((Date.now() - new Date(oldestUnpaid.dueDate).getTime()) / (1000 * 60 * 60 * 24))
   if (daysSinceDue >= 60) return 5
   if (daysSinceDue >= 30) return 4
   if (daysSinceDue > 0) return 3
@@ -193,8 +176,8 @@ function paymentStatusScore(unit: Unit): number {
 
 function PaymentStatusBadge({ unit }: { unit: Unit }) {
   if (!unit.tenant) return <span className="text-muted-foreground/30 text-xs">—</span>
-  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((sum, c) => sum + c.amount, 0)
-  const paid = unit.tenantPayments.reduce((sum, p) => sum + p.amount, 0)
+  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
+  const charged = activeInvoices.reduce((sum, inv) => sum + inv.lineItemTotal, 0)
   if (charged === 0) return <span className="text-muted-foreground/30 text-xs">—</span>
 
   const score = paymentStatusScore(unit)
@@ -572,7 +555,7 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
               const urgency = getLeaseUrgency(unit.leaseEndDate)
               const days = unit.leaseEndDate ? daysUntil(unit.leaseEndDate) : null
               const balance = getBalance(unit)
-              const hasLedger = unit.tenantCharges.length > 0 || unit.tenantPayments.length > 0
+              const hasLedger = unit.invoices.some(inv => inv.status !== 'VOID')
 
               // Group separation: add top margin before first row of a new property group
               const prevRow = rowIdx > 0 ? flatRows[rowIdx - 1] : null
@@ -823,8 +806,9 @@ function ExpandedPanel({ unit, property, onCreateMaintenance, onSendMessage, onM
 }) {
   const urgency = getLeaseUrgency(unit.leaseEndDate)
   const days = unit.leaseEndDate ? daysUntil(unit.leaseEndDate) : null
-  const charged = unit.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + c.amount, 0)
-  const paid = unit.tenantPayments.reduce((s, p) => s + p.amount, 0)
+  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
+  const charged = activeInvoices.reduce((s, inv) => s + inv.lineItemTotal, 0)
+  const paid = activeInvoices.reduce((s, inv) => s + inv.paymentTotal, 0)
   const balance = charged - paid
 
   return (
@@ -888,25 +872,27 @@ function ExpandedPanel({ unit, property, onCreateMaintenance, onSendMessage, onM
                 </div>
               </div>
               <div className="space-y-1">
-                {unit.tenantCharges.slice(0, 3).map(c => (
-                  <div key={c.id} className={cn('flex items-center gap-2 text-xs', c.forgivenAt && 'opacity-40 line-through')}>
-                    <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0', CHARGE_TYPE_COLORS[c.type] ?? 'bg-muted')}>
-                      {CHARGE_TYPE_LABELS[c.type] ?? c.type}
+                {activeInvoices.slice(0, 3).map(inv => (
+                  <div key={inv.id} className="flex items-center gap-2 text-xs">
+                    {inv.period && <span className="text-muted-foreground shrink-0">{inv.period}</span>}
+                    <span className="font-medium tabular-nums ml-auto">
+                      {inv.lineItemTotal - inv.paymentTotal > 0
+                        ? <span className="text-amber-700">{fmtFull(inv.lineItemTotal - inv.paymentTotal)} owed</span>
+                        : <span className="text-green-700">Paid</span>
+                      }
                     </span>
-                    <span className="text-muted-foreground shrink-0">{fmtMonthYear(c.dueDate)}</span>
-                    <span className="font-medium tabular-nums ml-auto">{fmtFull(c.amount)}</span>
                   </div>
                 ))}
               </div>
               <Link href={`/projects/${property.slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                <ExternalLink className="h-3 w-3" /> Apply levy / full ledger
+                <ExternalLink className="h-3 w-3" /> Full ledger
               </Link>
             </div>
           ) : (
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">No ledger records</p>
               <Link href={`/projects/${property.slug}/units/${unit.id}`} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                <ExternalLink className="h-3 w-3" /> Apply levy / full ledger
+                <ExternalLink className="h-3 w-3" /> Full ledger
               </Link>
             </div>
           )}

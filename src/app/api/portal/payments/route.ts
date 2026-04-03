@@ -14,33 +14,63 @@ export async function GET() {
       },
       include: {
         unit: { select: { unitLabel: true } },
-        tenantCharges: {
-          orderBy: { dueDate: 'asc' },
-          select: {
-            id: true, type: true, description: true,
-            amount: true, dueDate: true,
-            forgivenAt: true, forgivenReason: true,
-            createdAt: true,
+        invoices: {
+          where: { status: { not: 'VOID' } },
+          include: {
+            lineItems: true,
+            payments: true,
           },
-        },
-        tenantPayments: {
-          orderBy: { paidDate: 'desc' },
-          select: {
-            id: true, amount: true, paidDate: true,
-            paymentMethod: true, notes: true, createdAt: true,
-            voidedAt: true,
-          },
+          orderBy: { dueDate: 'desc' },
         },
       },
       orderBy: { startDate: 'desc' },
     })
 
-    if (!lease) return ok({ lease: null, charges: [], payments: [], balance: 0, totalCharged: 0, totalPaid: 0 })
+    if (!lease) return ok({ lease: null, invoices: [], balance: 0, totalCharged: 0, totalPaid: 0 })
 
-    const activeCharges = lease.tenantCharges.filter(c => !c.forgivenAt)
-    const totalCharged = activeCharges.reduce((s, c) => s + Number(c.amount), 0)
-    const totalPaid = lease.tenantPayments.filter(p => !p.voidedAt).reduce((s, p) => s + Number(p.amount), 0)
-    const balance = totalCharged - totalPaid
+    let totalCharged = 0
+    let totalPaid = 0
+
+    const mappedInvoices = lease.invoices.map(inv => {
+      const lineItemTotal = inv.lineItems
+        .filter(li => !li.forgivenAt)
+        .reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0)
+      const paymentTotal = inv.payments
+        .filter(p => !p.voidedAt)
+        .reduce((s, p) => s + Number(p.amount), 0)
+
+      totalCharged += lineItemTotal
+      totalPaid += paymentTotal
+
+      return {
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        status: inv.status,
+        period: inv.period,
+        dueDate: inv.dueDate.toISOString(),
+        lineItems: inv.lineItems.map(li => ({
+          id: li.id,
+          description: li.description,
+          quantity: Number(li.quantity),
+          unitPrice: Number(li.unitPrice),
+          chargeType: li.chargeType,
+          forgivenAt: li.forgivenAt?.toISOString() ?? null,
+        })),
+        payments: inv.payments
+          .filter(p => !p.voidedAt)
+          .map(p => ({
+            id: p.id,
+            amount: Number(p.amount),
+            paidDate: p.paidDate.toISOString(),
+            paymentMethod: p.paymentMethod,
+            notes: p.notes,
+            createdAt: p.createdAt.toISOString(),
+          })),
+        lineItemTotal,
+        paymentTotal,
+        outstanding: lineItemTotal - paymentTotal,
+      }
+    })
 
     return ok({
       lease: {
@@ -52,27 +82,10 @@ export async function GET() {
         paymentDueDay: lease.paymentDueDay,
         unitLabel: lease.unit.unitLabel,
       },
-      charges: lease.tenantCharges.map(c => ({
-        id: c.id,
-        type: c.type,
-        description: c.description,
-        amount: Number(c.amount),
-        dueDate: c.dueDate.toISOString(),
-        forgivenAt: c.forgivenAt?.toISOString() ?? null,
-        forgivenReason: c.forgivenReason,
-        createdAt: c.createdAt.toISOString(),
-      })),
-      payments: lease.tenantPayments.map(p => ({
-        id: p.id,
-        amount: Number(p.amount),
-        paidDate: p.paidDate.toISOString(),
-        paymentMethod: p.paymentMethod,
-        notes: p.notes,
-        createdAt: p.createdAt.toISOString(),
-      })),
+      invoices: mappedInvoices,
       totalCharged,
       totalPaid,
-      balance,
+      balance: totalCharged - totalPaid,
     })
   } catch {
     return serverError('Failed to fetch payments')

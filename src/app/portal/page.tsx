@@ -19,12 +19,10 @@ export default async function PortalDashboardPage() {
               propertyProfile: { include: { project: true } },
             },
           },
-          tenantCharges: {
-            orderBy: { dueDate: 'asc' },
-            take: 6,
-          },
-          tenantPayments: {
-            orderBy: { paidDate: 'desc' },
+          invoices: {
+            where: { status: { not: 'VOID' } },
+            include: { lineItems: true, payments: true },
+            orderBy: { dueDate: 'desc' },
             take: 6,
           },
         },
@@ -90,9 +88,9 @@ export default async function PortalDashboardPage() {
       )}
 
       {/* Balance summary */}
-      {activeLease && (activeLease.tenantCharges.length > 0 || activeLease.tenantPayments.length > 0) && (() => {
-        const charged = activeLease.tenantCharges.filter(c => !c.forgivenAt).reduce((s, c) => s + Number(c.amount), 0)
-        const paid = activeLease.tenantPayments.reduce((s, p) => s + Number(p.amount), 0)
+      {activeLease && activeLease.invoices.length > 0 && (() => {
+        const charged = activeLease.invoices.reduce((s, inv) => s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
+        const paid = activeLease.invoices.reduce((s, inv) => s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
         const balance = charged - paid
         return (
           <div>

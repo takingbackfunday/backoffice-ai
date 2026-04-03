@@ -20,12 +20,10 @@ export default async function PortfolioPage() {
                 where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
                 include: {
                   tenant: { select: { id: true, name: true, email: true, phone: true } },
-                  tenantCharges: {
+                  invoices: {
+                    where: { status: { not: 'VOID' } },
+                    include: { lineItems: true, payments: true },
                     orderBy: { dueDate: 'desc' },
-                    take: 12,
-                  },
-                  tenantPayments: {
-                    orderBy: { paidDate: 'desc' },
                     take: 12,
                   },
                 },
@@ -87,10 +85,10 @@ export default async function PortfolioPage() {
   const overduePayments = allUnits.filter(u => {
     const lease = u.leases[0]
     if (!lease) return false
-    const charged = lease.tenantCharges
-      .filter(c => !c.forgivenAt)
-      .reduce((sum, c) => sum + Number(c.amount), 0)
-    const paid = lease.tenantPayments.filter(p => !p.voidedAt).reduce((sum, p) => sum + Number(p.amount), 0)
+    const charged = lease.invoices.reduce((s, inv) =>
+      s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
+    const paid = lease.invoices.reduce((s, inv) =>
+      s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
     return charged - paid > 0
   }).length
 
@@ -158,22 +156,14 @@ export default async function PortfolioPage() {
         createdAt: m.createdAt.toISOString(),
         tenant: m.tenant ? { id: m.tenant.id, name: m.tenant.name } : null,
       })),
-      tenantCharges: (u.leases[0]?.tenantCharges ?? []).map(c => ({
-        id: c.id,
-        type: c.type,
-        description: c.description ?? null,
-        amount: Number(c.amount),
-        dueDate: c.dueDate.toISOString(),
-        forgivenAt: c.forgivenAt?.toISOString() ?? null,
-      })),
-      tenantPayments: (u.leases[0]?.tenantPayments ?? []).map(p => ({
-        id: p.id,
-        amount: Number(p.amount),
-        paidDate: p.paidDate.toISOString(),
-        paymentMethod: p.paymentMethod ?? null,
-        notes: p.notes ?? null,
-        sourceDeleted: p.sourceDeleted,
-        voidedAt: p.voidedAt?.toISOString() ?? null,
+      invoices: (u.leases[0]?.invoices ?? []).map(inv => ({
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        status: inv.status,
+        period: inv.period,
+        dueDate: inv.dueDate.toISOString(),
+        lineItemTotal: inv.lineItems.filter(li => !li.forgivenAt).reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0),
+        paymentTotal: inv.payments.filter(p => !p.voidedAt).reduce((s, p) => s + Number(p.amount), 0),
       })),
       recentMessages: u.messages.map(m => ({
         id: m.id,

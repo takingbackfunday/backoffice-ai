@@ -32,8 +32,12 @@ export async function GET(_request: Request, { params }: RouteParams) {
         leases: {
           include: {
             tenant: true,
-            tenantCharges: { orderBy: { dueDate: 'desc' }, take: 12 },
-            tenantPayments: { orderBy: { paidDate: 'desc' }, take: 12 },
+            invoices: {
+              where: { status: { not: 'VOID' } },
+              include: { lineItems: true, payments: true },
+              orderBy: { dueDate: 'desc' },
+              take: 12,
+            },
           },
           orderBy: { startDate: 'desc' },
         },
