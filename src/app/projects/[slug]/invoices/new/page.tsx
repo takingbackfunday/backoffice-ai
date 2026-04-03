@@ -43,6 +43,11 @@ export default async function NewInvoicePage({ params }: PageParams) {
 
   if (!project) notFound()
 
+  const prefs = await prisma.userPreference.findUnique({ where: { userId } })
+  const invoiceDefaults = (prefs?.data as Record<string, unknown> | null)?.invoiceDefaults as {
+    taxEnabled?: boolean; taxLabel?: string; taxMode?: 'percent' | 'flat'; taxRate?: string; currency?: string; notes?: string
+  } | undefined
+
   /* ── PROPERTY project ─────────────────────────────────────────── */
   if (project.type === 'PROPERTY') {
     const activeLeases = (project.propertyProfile?.units ?? [])
@@ -134,6 +139,14 @@ export default async function NewInvoicePage({ params }: PageParams) {
             billingType={cp.billingType}
             company={cp.company ?? null}
             jobs={cp.jobs.map(j => ({ id: j.id, name: j.name }))}
+            lastInvoiceDefaults={invoiceDefaults ? {
+              taxEnabled: invoiceDefaults.taxEnabled ?? false,
+              taxLabel: invoiceDefaults.taxLabel ?? 'Tax',
+              taxMode: invoiceDefaults.taxMode ?? 'percent',
+              taxRate: invoiceDefaults.taxRate ?? '',
+              currency: invoiceDefaults.currency ?? 'USD',
+              notes: invoiceDefaults.notes ?? '',
+            } : undefined}
           />
         </main>
       </div>

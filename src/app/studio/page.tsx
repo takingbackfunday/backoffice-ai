@@ -47,7 +47,11 @@ export default async function StudioPage() {
       },
     }),
   ])
-  const paymentMethods = ((prefs?.data as Record<string, unknown>)?.paymentMethods ?? {}) as import('@/lib/pdf/invoice-pdf').PaymentMethods
+  const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
+  const paymentMethods = (prefsData.paymentMethods ?? {}) as import('@/lib/pdf/invoice-pdf').PaymentMethods
+  const invoiceDefaults = prefsData.invoiceDefaults as {
+    taxEnabled?: boolean; taxLabel?: string; taxMode?: 'percent' | 'flat'; taxRate?: string; currency?: string; notes?: string
+  } | undefined
 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
@@ -135,7 +139,7 @@ export default async function StudioPage() {
             <h1 className="text-xl font-bold">Studio</h1>
             <p className="text-sm text-muted-foreground">Overview of your client projects and invoices</p>
           </div>
-          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} />
+          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} invoiceDefaults={invoiceDefaults} />
         </main>
       </div>
     </div>

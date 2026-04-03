@@ -6,6 +6,7 @@ import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-r
 const LineItemSchema = z.object({
   description: z.string().min(1),
   quantity: z.number().positive(),
+  qtyUnit: z.string().optional(),
   unitPrice: z.number().min(0),
   isTaxLine: z.boolean().default(false),
 })
@@ -89,6 +90,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
             invoiceId,
             description: item.description,
             quantity: item.quantity,
+            qtyUnit: item.qtyUnit ?? null,
             unitPrice: item.unitPrice,
             isTaxLine: item.isTaxLine,
           })),

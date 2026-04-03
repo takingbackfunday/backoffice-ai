@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
+import { NewClientModal, NewJobModal } from '@/components/studio/studio-action-modals'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { ActionBanner } from '@/components/ui/action-banner'
 
@@ -49,12 +50,22 @@ interface Client {
   jobs: { id: string; name: string }[]
 }
 
+interface InvoiceDefaults {
+  taxEnabled?: boolean
+  taxLabel?: string
+  taxMode?: 'percent' | 'flat'
+  taxRate?: string
+  currency?: string
+  notes?: string
+}
+
 interface Props {
   clients: Client[]
   kpis: Kpis
   paymentMethods: PaymentMethods
   pendingSuggestions?: number
   recentPaymentsCount?: number
+  invoiceDefaults?: InvoiceDefaults
 }
 
 type View = 'open' | 'paid' | 'all'
@@ -691,13 +702,15 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
 
 type FlatInvoice = Invoice & { clientId: string; clientName: string; clientSlug: string; clientCompany: string | null }
 
-export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0 }: Props) {
+export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults }: Props) {
   const router = useRouter()
   const [view, setView] = useState<View>('open')
   const [search, setSearch] = useState('')
   const [previewInv, setPreviewInv] = useState<FlatInvoice | null>(null)
   const [kpis, setKpis] = useState(initialKpis)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
+  const [showNewClientModal, setShowNewClientModal] = useState(false)
+  const [showNewJobModal, setShowNewJobModal] = useState(false)
   const [actionFilter, setActionFilter] = useState<((i: FlatInvoice) => boolean) | null>(null)
   const [suggestionInvoiceIds, setSuggestionInvoiceIds] = useState<Set<string>>(new Set())
   const [suggestionTxCount, setSuggestionTxCount] = useState(pendingSuggestions)
@@ -793,13 +806,29 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           {/* Take action */}
           <div>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take action</p>
-            <button
-              onClick={() => { setActionFilter(null); setShowInvoiceModal(true) }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: 'none', background: '#534AB7', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#fff', cursor: 'pointer' }}
-            >
-              <Plus size={11} />
-              New invoice
-            </button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <button
+                onClick={() => { setActionFilter(null); setShowInvoiceModal(true) }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: 'none', background: '#534AB7', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#fff', cursor: 'pointer' }}
+              >
+                <Plus size={11} />
+                Draft new invoice
+              </button>
+              <button
+                onClick={() => setShowNewClientModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #534AB7', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#534AB7', cursor: 'pointer' }}
+              >
+                <Plus size={11} />
+                New client
+              </button>
+              <button
+                onClick={() => setShowNewJobModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #888', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#555', cursor: 'pointer' }}
+              >
+                <Plus size={11} />
+                New job
+              </button>
+            </div>
           </div>
 
           {/* Take notice */}
@@ -1010,7 +1039,21 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         <StudioInvoiceModal
           clients={clients}
           paymentMethods={paymentMethods}
+          invoiceDefaults={invoiceDefaults}
           onClose={() => setShowInvoiceModal(false)}
+        />
+      )}
+      {showNewClientModal && (
+        <NewClientModal
+          onClose={() => setShowNewClientModal(false)}
+          onCreated={({ slug }) => { setShowNewClientModal(false); router.push(`/projects/${slug}`) }}
+        />
+      )}
+      {showNewJobModal && (
+        <NewJobModal
+          clients={clients.map(c => ({ id: c.id, name: c.name }))}
+          onClose={() => setShowNewJobModal(false)}
+          onCreated={() => { setShowNewJobModal(false); router.refresh() }}
         />
       )}
     </div>

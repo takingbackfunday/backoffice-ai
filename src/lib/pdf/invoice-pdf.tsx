@@ -7,6 +7,7 @@ import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-p
 export interface PdfLineItem {
   description: string
   quantity: number
+  qtyUnit?: string | null
   unitPrice: number
   isTaxLine?: boolean
 }
@@ -202,7 +203,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
         {regularItems.map((item, i) => (
           <View key={i} style={S.tableRow}>
             <Text style={[S.tdText, S.colDesc]}>{item.description}</Text>
-            <Text style={[S.tdMuted, S.colQty]}>{item.quantity % 1 === 0 ? item.quantity : item.quantity.toFixed(2)}</Text>
+            <Text style={[S.tdMuted, S.colQty]}>{item.quantity % 1 === 0 ? item.quantity : item.quantity.toFixed(2)}{item.qtyUnit ? ` ${item.qtyUnit}` : ''}</Text>
             <Text style={[S.tdMuted, S.colRate]}>{fmt(item.unitPrice, invoice.currency)}</Text>
             <Text style={[S.tdText, S.colTotal]}>{fmt(item.quantity * item.unitPrice, invoice.currency)}</Text>
           </View>

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
+import { Minus, Sparkles } from 'lucide-react'
 import { useChatStore } from '@/stores/chat-store'
 import { AgentQA } from '@/components/dashboard/agent-qa'
 
@@ -25,10 +26,10 @@ export function ChatOverlay() {
       <button
         onClick={show}
         aria-label="Show AI chat"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-1.5 rounded-full bg-[#3C3489]/10 text-[#3C3489] border border-[#3C3489]/20 px-3 py-1.5 text-xs font-medium hover:bg-[#3C3489]/15 transition-colors animate-in fade-in duration-300"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-1.5 rounded-full bg-[#3C3489]/10 text-[#3C3489] border border-[#3C3489]/20 px-3 py-1.5 text-xs font-medium hover:bg-[#3C3489]/15 transition-colors animate-in slide-in-from-bottom-2 fade-in duration-300"
       >
-        <span className="text-sm leading-none">💬</span>
-        <span>Chat with AI</span>
+        <Sparkles className="h-3.5 w-3.5" />
+        <span>AI Chat</span>
       </button>
     )
   }
@@ -64,9 +65,7 @@ export function ChatOverlay() {
                 aria-label="Hide chat"
                 title="Hide chat"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
+                <Minus className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={close}

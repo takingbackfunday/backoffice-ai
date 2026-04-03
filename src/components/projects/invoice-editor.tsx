@@ -2,7 +2,7 @@
 
 import { useReducer, useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, X, Sparkles, Send, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, X, Sparkles, Eye, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -13,6 +13,7 @@ export interface LineItemInput {
   id: string // client-only key
   description: string
   quantity: string
+  qtyUnit: string  // e.g. "hrs", "days", ""
   unitPrice: string
   isTaxLine: boolean
 }
@@ -26,9 +27,12 @@ interface ChatMessage {
 type AiAction =
   | { type: 'set_line_items'; lineItems: { description: string; quantity: number; unitPrice: number }[] }
   | { type: 'set_due_date'; value: string }
+  | { type: 'set_issue_date'; value: string }
   | { type: 'set_notes'; value: string }
   | { type: 'set_tax'; label: string; amount: number }
   | { type: 'set_currency'; value: string }
+  | { type: 'set_job'; jobId: string }
+  | { type: 'set_qty_unit'; lineItemIndex: number; unit: string }
   | { type: 'ask_clarification'; question: string }
 
 interface InvoiceState {
@@ -80,6 +84,8 @@ interface Props {
     currency: string
     notes: string
   }
+  // create mode only — for "Copy from past invoice"
+  recentInvoices?: { id: string; invoiceNumber: string; dueDate: string; total: number; currency: string }[]
   // edit mode only
   existingInvoice?: {
     id: string
@@ -90,7 +96,7 @@ interface Props {
     issueDate: string
     currency: string
     notes: string | null
-    lineItems: { id: string; description: string; quantity: number; unitPrice: number; isTaxLine: boolean }[]
+    lineItems: { id: string; description: string; quantity: number; qtyUnit?: string | null; unitPrice: number; isTaxLine: boolean }[]
     totalPaid: number
   }
 }
@@ -143,7 +149,7 @@ function reducer(state: InvoiceState, action: InvoiceAction): InvoiceState {
         ),
       }
     case 'ADD_LINE_ITEM':
-      return { ...state, lineItems: [...state.lineItems, { id: uid(), description: '', quantity: '1', unitPrice: '', isTaxLine: false }] }
+      return { ...state, lineItems: [...state.lineItems, { id: uid(), description: '', quantity: '1', qtyUnit: '', unitPrice: '', isTaxLine: false }] }
     case 'REMOVE_LINE_ITEM':
       return { ...state, lineItems: state.lineItems.filter(i => i.id !== action.id) }
     case 'SET_TAX_ENABLED':
@@ -187,6 +193,7 @@ export function InvoiceEditor({
   jobs: initialJobs,
   lastInvoiceDefaults,
   existingInvoice,
+  recentInvoices: initialRecentInvoices,
 }: Props) {
   const router = useRouter()
   const [jobs, setJobs] = useState(initialJobs)
@@ -199,7 +206,7 @@ export function InvoiceEditor({
     ? {
         lineItems: existingInvoice.lineItems
           .filter(i => !i.isTaxLine)
-          .map(i => ({ id: uid(), description: i.description, quantity: String(i.quantity), unitPrice: String(i.unitPrice), isTaxLine: false })),
+          .map(i => ({ id: uid(), description: i.description, quantity: String(i.quantity), qtyUnit: i.qtyUnit ?? '', unitPrice: String(i.unitPrice), isTaxLine: false })),
         taxEnabled: existingInvoice.lineItems.some(i => i.isTaxLine),
         taxLabel: existingInvoice.lineItems.find(i => i.isTaxLine)?.description ?? 'Tax',
         taxMode: 'flat',
@@ -212,7 +219,7 @@ export function InvoiceEditor({
         aiSuggestedNotes: false,
       }
     : {
-        lineItems: [{ id: uid(), description: '', quantity: '1', unitPrice: '', isTaxLine: false }],
+        lineItems: [{ id: uid(), description: '', quantity: '1', qtyUnit: '', unitPrice: '', isTaxLine: false }],
         taxEnabled: lastInvoiceDefaults?.taxEnabled ?? false,
         taxLabel: lastInvoiceDefaults?.taxLabel ?? 'Tax',
         taxMode: lastInvoiceDefaults?.taxMode ?? 'percent',
@@ -240,6 +247,73 @@ export function InvoiceEditor({
   const [finalizing, setFinalizing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveDefaultTax, setSaveDefaultTax] = useState(false)
+  const [saveDefaultNotes, setSaveDefaultNotes] = useState(false)
+  const [saveDefaultCurrency, setSaveDefaultCurrency] = useState(false)
+  const [showCopyPicker, setShowCopyPicker] = useState(false)
+  const [recentInvoices, setRecentInvoices] = useState(initialRecentInvoices ?? null as null | typeof initialRecentInvoices)
+  const [loadingRecent, setLoadingRecent] = useState(false)
+
+  async function openCopyPicker() {
+    setShowCopyPicker(true)
+    if (recentInvoices !== null) return
+    setLoadingRecent(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invoices`)
+      const json = await res.json()
+      // Show only sent/paid invoices, newest first, max 10
+      const all = (json.data ?? []) as { id: string; invoiceNumber: string; status: string; dueDate: string; lineItems: unknown[]; currency: string }[]
+      const relevant = all
+        .filter(i => ['SENT', 'PARTIAL', 'PAID', 'OVERDUE'].includes(i.status))
+        .slice(0, 10)
+        .map(i => ({
+          id: i.id,
+          invoiceNumber: i.invoiceNumber,
+          dueDate: i.dueDate,
+          total: (i.lineItems as { quantity: number; unitPrice: number; isTaxLine: boolean }[]).reduce((s, l) => s + (l.isTaxLine ? 0 : l.quantity * l.unitPrice), 0),
+          currency: i.currency,
+        }))
+      setRecentInvoices(relevant)
+    } catch {
+      setRecentInvoices([])
+    } finally {
+      setLoadingRecent(false)
+    }
+  }
+
+  async function copyFromInvoice(invoiceId: string) {
+    setShowCopyPicker(false)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invoices/${invoiceId}`)
+      const json = await res.json()
+      if (!res.ok || json.error) return
+      const inv = json.data
+      dispatch({
+        type: 'SET_LINE_ITEMS',
+        items: (inv.lineItems as { description: string; quantity: number; qtyUnit?: string | null; unitPrice: number; isTaxLine: boolean }[])
+          .filter((i) => !i.isTaxLine)
+          .map((i) => ({ id: uid(), description: i.description, quantity: String(i.quantity), qtyUnit: i.qtyUnit ?? '', unitPrice: String(i.unitPrice), isTaxLine: false })),
+      })
+      if (inv.notes) dispatch({ type: 'SET_NOTES', value: inv.notes })
+      if (inv.currency) dispatch({ type: 'SET_CURRENCY', value: inv.currency })
+      const taxLine = (inv.lineItems as { isTaxLine: boolean; description: string; unitPrice: number }[]).find(i => i.isTaxLine)
+      if (taxLine) dispatch({ type: 'SET_TAX_FROM_AI', label: taxLine.description, amount: taxLine.unitPrice })
+    } catch { /* silent */ }
+  }
+
+  async function persistDefaults(patch: Record<string, unknown>) {
+    try {
+      // Fetch current invoiceDefaults so we deep-merge rather than overwrite the whole key
+      const getRes = await fetch('/api/preferences')
+      const prefs = getRes.ok ? await getRes.json() : {}
+      const existing = (prefs?.data?.invoiceDefaults ?? {}) as Record<string, unknown>
+      await fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceDefaults: { ...existing, ...patch } }),
+      })
+    } catch { /* non-critical */ }
+  }
   const chatEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -328,6 +402,7 @@ export function InvoiceEditor({
             id: uid(),
             description: i.description,
             quantity: String(i.quantity),
+            qtyUnit: '',
             unitPrice: String(i.unitPrice),
             isTaxLine: false,
           })),
@@ -335,6 +410,9 @@ export function InvoiceEditor({
         break
       case 'set_due_date':
         dispatch({ type: 'SET_DUE_DATE', value: action.value })
+        break
+      case 'set_issue_date':
+        dispatch({ type: 'SET_ISSUE_DATE', value: action.value })
         break
       case 'set_notes':
         dispatch({ type: 'SET_NOTES', value: action.value })
@@ -344,6 +422,12 @@ export function InvoiceEditor({
         break
       case 'set_currency':
         dispatch({ type: 'SET_CURRENCY', value: action.value })
+        break
+      case 'set_job':
+        dispatch({ type: 'SET_JOB', jobId: action.jobId })
+        break
+      case 'set_qty_unit':
+        dispatch({ type: 'UPDATE_LINE_ITEM', id: state.lineItems[action.lineItemIndex]?.id ?? '', key: 'qtyUnit', value: action.unit })
         break
       case 'ask_clarification':
         // Will be shown as a chat message — no form change
@@ -417,6 +501,7 @@ export function InvoiceEditor({
       .map(i => ({
         description: i.description.trim(),
         quantity: parseFloat(i.quantity) || 1,
+        qtyUnit: i.qtyUnit.trim() || undefined,
         unitPrice: parseFloat(i.unitPrice) || 0,
         isTaxLine: false,
       }))
@@ -425,6 +510,7 @@ export function InvoiceEditor({
       regular.push({
         description: state.taxLabel || 'Tax',
         quantity: 1,
+        qtyUnit: undefined,
         unitPrice: taxAmount,
         isTaxLine: true,
       })
@@ -536,15 +622,54 @@ export function InvoiceEditor({
             </div>
           )}
 
+          {/* Copy from past invoice — create mode only */}
+          {mode === 'create' && (
+            <div className="mb-5 relative">
+              <button
+                type="button"
+                onClick={openCopyPicker}
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 flex items-center gap-1"
+              >
+                <ChevronRight className="h-3 w-3" /> Copy from past invoice
+              </button>
+              {showCopyPicker && (
+                <div className="absolute top-6 left-0 z-20 w-72 rounded-xl border bg-background shadow-xl p-2">
+                  <div className="flex items-center justify-between px-2 py-1 mb-1">
+                    <span className="text-xs font-semibold">Select invoice to copy</span>
+                    <button type="button" onClick={() => setShowCopyPicker(false)} className="text-muted-foreground hover:text-foreground">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  {loadingRecent && <p className="text-xs text-muted-foreground px-2 py-2">Loading…</p>}
+                  {!loadingRecent && recentInvoices && recentInvoices.length === 0 && (
+                    <p className="text-xs text-muted-foreground px-2 py-2">No past invoices found.</p>
+                  )}
+                  {!loadingRecent && recentInvoices && recentInvoices.map(inv => (
+                    <button
+                      key={inv.id}
+                      type="button"
+                      onClick={() => copyFromInvoice(inv.id)}
+                      className="w-full flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
+                    >
+                      <span className="font-medium">{inv.invoiceNumber}</span>
+                      <span className="text-muted-foreground">{new Intl.NumberFormat('en-US', { style: 'currency', currency: inv.currency }).format(inv.total)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Job selector */}
           <div className="mb-5">
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Job (optional)</label>
+            <div className="flex items-center gap-2 mb-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Job</label>
               {!showNewJob && (
                 <button type="button" onClick={() => setShowNewJob(true)} className="text-xs text-primary hover:underline flex items-center gap-0.5">
                   <Plus className="h-3 w-3" /> New job
                 </button>
               )}
+              <span className="text-xs text-muted-foreground italic">(Optional — for your records only)</span>
             </div>
             {showNewJob ? (
               <div className="flex items-center gap-2">
@@ -578,9 +703,9 @@ export function InvoiceEditor({
           <div className="mb-5">
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Line items</label>
             <div className="rounded-xl border overflow-hidden">
-              <div className="grid grid-cols-[1fr_80px_110px_100px_32px] bg-muted/50 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              <div className="grid grid-cols-[1fr_140px_110px_100px_32px] bg-muted/50 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                 <span>Description</span>
-                <span className="text-right">Qty</span>
+                <span className="text-right">Qty / Unit</span>
                 <span className="text-right">Rate</span>
                 <span className="text-right">Total</span>
                 <span />
@@ -588,7 +713,7 @@ export function InvoiceEditor({
               {state.lineItems.map((item, idx) => {
                 const lineTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)
                 return (
-                  <div key={item.id} className="grid grid-cols-[1fr_80px_110px_100px_32px] border-t px-3 py-1.5 items-center hover:bg-muted/10 group">
+                  <div key={item.id} className="grid grid-cols-[1fr_140px_110px_100px_32px] border-t px-3 py-1.5 items-center hover:bg-muted/10 group">
                     <input
                       type="text"
                       value={item.description}
@@ -597,14 +722,23 @@ export function InvoiceEditor({
                       placeholder="Description of work or service"
                       autoFocus={idx === 0 && mode === 'create' && item.description === ''}
                     />
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'quantity', value: e.target.value })}
-                      className="text-sm text-right focus:outline-none bg-transparent tabular-nums w-full"
-                      min="0"
-                      step="0.001"
-                    />
+                    <div className="flex items-center gap-1 justify-end">
+                      <input
+                        type="number"
+                        value={item.quantity}
+                        onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'quantity', value: e.target.value })}
+                        className="text-sm text-right focus:outline-none bg-transparent tabular-nums w-12"
+                        min="0"
+                        step="0.001"
+                      />
+                      <input
+                        type="text"
+                        value={item.qtyUnit}
+                        onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'qtyUnit', value: e.target.value })}
+                        placeholder="unit"
+                        className="text-[10px] text-muted-foreground focus:outline-none bg-transparent w-12 border-b border-dashed border-muted-foreground/30 focus:border-primary text-center"
+                      />
+                    </div>
                     <div className="flex items-center justify-end">
                       <input
                         type="number"
@@ -645,7 +779,7 @@ export function InvoiceEditor({
 
           {/* Tax */}
           <div className="mb-5">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -656,7 +790,7 @@ export function InvoiceEditor({
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add tax</span>
               </label>
               {state.taxEnabled && (
-                <div className="flex items-center gap-2 flex-1">
+                <div className="flex items-center gap-2 flex-1 flex-wrap">
                   <input
                     type="text"
                     value={state.taxLabel}
@@ -684,6 +818,18 @@ export function InvoiceEditor({
                   {taxAmount > 0 && (
                     <span className="text-xs text-muted-foreground">= {fmtFull(taxAmount, state.currency)}</span>
                   )}
+                  <label className="flex items-center gap-1.5 cursor-pointer ml-auto">
+                    <input
+                      type="checkbox"
+                      checked={saveDefaultTax}
+                      onChange={e => {
+                        setSaveDefaultTax(e.target.checked)
+                        if (e.target.checked) persistDefaults({ taxEnabled: state.taxEnabled, taxLabel: state.taxLabel, taxMode: state.taxMode, taxRate: state.taxRate })
+                      }}
+                      className="rounded border"
+                    />
+                    <span className="text-[10px] text-muted-foreground">Save as default</span>
+                  </label>
                 </div>
               )}
             </div>
@@ -741,6 +887,18 @@ export function InvoiceEditor({
               >
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+              <label className="flex items-center gap-1.5 cursor-pointer mt-1.5">
+                <input
+                  type="checkbox"
+                  checked={saveDefaultCurrency}
+                  onChange={e => {
+                    setSaveDefaultCurrency(e.target.checked)
+                    if (e.target.checked) persistDefaults({ currency: state.currency })
+                  }}
+                  className="rounded border"
+                />
+                <span className="text-[10px] text-muted-foreground">Save as default</span>
+              </label>
             </div>
           </div>
 
@@ -748,11 +906,25 @@ export function InvoiceEditor({
           <div className="mb-6">
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes / payment terms</label>
-              {state.aiSuggestedNotes && (
-                <span className="text-[10px] text-primary flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" /> AI suggested
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {state.aiSuggestedNotes && (
+                  <span className="text-[10px] text-primary flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" /> AI suggested
+                  </span>
+                )}
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={saveDefaultNotes}
+                    onChange={e => {
+                      setSaveDefaultNotes(e.target.checked)
+                      if (e.target.checked) persistDefaults({ notes: state.notes })
+                    }}
+                    className="rounded border"
+                  />
+                  <span className="text-[10px] text-muted-foreground">Save as default</span>
+                </label>
+              </div>
             </div>
             <textarea
               value={state.notes}
@@ -809,8 +981,8 @@ export function InvoiceEditor({
                 title={!clientEmail ? 'Add client email to send' : undefined}
                 className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
-                <Send className="h-3.5 w-3.5" />
-                {saving ? 'Sending…' : 'Create & send'}
+                <Eye className="h-3.5 w-3.5" />
+                {saving ? 'Saving…' : 'Create & review'}
               </button>
             )}
           </div>

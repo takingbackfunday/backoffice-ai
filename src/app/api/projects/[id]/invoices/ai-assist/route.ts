@@ -94,12 +94,6 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id } = await params
 
-    const project = await prisma.project.findFirst({
-      where: { id, userId },
-      select: { id: true, name: true },
-    })
-    if (!project) return notFound('Project not found')
-
     const body = await request.json()
     const parsed = RequestSchema.safeParse(body)
     if (!parsed.success) return badRequest(parsed.error.errors.map(e => e.message).join(', '))
@@ -107,9 +101,18 @@ export async function POST(request: Request, { params }: RouteParams) {
     const { messages, currentInvoice, clientName, company, paymentTermDays } = parsed.data
     const today = new Date().toISOString().split('T')[0]
 
+    const projectWithJobs = await prisma.project.findFirst({
+      where: { id, userId },
+      select: { id: true, name: true, clientProfile: { select: { jobs: { select: { id: true, name: true }, where: { status: 'ACTIVE' } } } } },
+    })
+    if (!projectWithJobs) return notFound('Project not found')
+    const project = projectWithJobs
+    const availableJobs = projectWithJobs.clientProfile?.jobs ?? []
+
     const systemPrompt = `You are an invoice assistant for a freelance professional.
 Today: ${today}. Client: ${clientName ?? 'the client'}${company ? ` (${company})` : ''}. Payment terms: ${paymentTermDays ?? 30} days net.
 Project name in the finance system: "${project.name}".
+${availableJobs.length > 0 ? `Available jobs: ${availableJobs.map(j => `"${j.name}" (id: ${j.id})`).join(', ')}.` : ''}
 
 Current invoice state:
 ${JSON.stringify(currentInvoice, null, 2)}
@@ -123,9 +126,12 @@ After any tool calls, respond with JSON ONLY — no prose outside the JSON objec
   "actions": [
     { "type": "set_line_items", "lineItems": [{ "description": "...", "quantity": 1, "unitPrice": 0 }] },
     { "type": "set_due_date", "value": "YYYY-MM-DD" },
+    { "type": "set_issue_date", "value": "YYYY-MM-DD" },
     { "type": "set_notes", "value": "..." },
     { "type": "set_tax", "label": "GST 15%", "amount": 262.50 },
     { "type": "set_currency", "value": "EUR" },
+    { "type": "set_job", "jobId": "<id from available jobs list>" },
+    { "type": "set_qty_unit", "lineItemIndex": 0, "unit": "hrs" },
     { "type": "ask_clarification", "question": "..." }
   ]
 }
@@ -137,7 +143,9 @@ Rules:
 - Only include actions that actually change something.
 - The "actions" array can be empty if user is only asking a question.
 - For ask_clarification: include no other actions — just the question.
-- For set_currency: use ISO 4217 codes (USD, EUR, GBP, CAD, AUD, etc.).`
+- For set_currency: use ISO 4217 codes (USD, EUR, GBP, CAD, AUD, etc.).
+- For set_job: only use job IDs from the available jobs list above.
+- For set_qty_unit: use short unit labels like "hrs", "days", "wks", "pages", "words", "units".`
 
     const llmMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },

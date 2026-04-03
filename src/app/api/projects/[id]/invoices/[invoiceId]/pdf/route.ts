@@ -61,6 +61,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: Number(i.quantity),
+        qtyUnit: i.qtyUnit ?? undefined,
         unitPrice: Number(i.unitPrice),
         isTaxLine: i.isTaxLine,
       })),

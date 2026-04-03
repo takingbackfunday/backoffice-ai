@@ -19,13 +19,23 @@ interface ClientOption {
   jobs: { id: string; name: string }[]
 }
 
+interface InvoiceDefaults {
+  taxEnabled?: boolean
+  taxLabel?: string
+  taxMode?: 'percent' | 'flat'
+  taxRate?: string
+  currency?: string
+  notes?: string
+}
+
 interface Props {
   clients: ClientOption[]
   paymentMethods: PaymentMethods
+  invoiceDefaults?: InvoiceDefaults
   onClose: () => void
 }
 
-export function StudioInvoiceModal({ clients, paymentMethods, onClose }: Props) {
+export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, onClose }: Props) {
   const [selectedClientId, setSelectedClientId] = useState('')
   const [showNewClient, setShowNewClient] = useState(false)
   const [newClientName, setNewClientName] = useState('')
@@ -185,6 +195,14 @@ export function StudioInvoiceModal({ clients, paymentMethods, onClose }: Props) 
               billingType={selectedClient.billingType}
               company={selectedClient.company}
               jobs={selectedClient.jobs}
+              lastInvoiceDefaults={invoiceDefaults ? {
+                taxEnabled: invoiceDefaults.taxEnabled ?? false,
+                taxLabel: invoiceDefaults.taxLabel ?? 'Tax',
+                taxMode: invoiceDefaults.taxMode ?? 'percent',
+                taxRate: invoiceDefaults.taxRate ?? '',
+                currency: invoiceDefaults.currency ?? 'USD',
+                notes: invoiceDefaults.notes ?? '',
+              } : undefined}
             />
           )}
         </div>

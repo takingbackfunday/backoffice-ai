@@ -6,9 +6,11 @@ import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/
 const LineItemSchema = z.object({
   description: z.string().min(1, 'Description is required'),
   quantity: z.number().positive('Quantity must be positive'),
+  qtyUnit: z.string().optional(),
   unitPrice: z.number().min(0, 'Unit price must be non-negative'),
   isTaxLine: z.boolean().default(false),
   chargeType: z.string().optional(),
+  tenantChargeId: z.string().optional(), // link this line item to a TenantCharge row
 })
 
 const CreateInvoiceSchema = z.object({
@@ -132,6 +134,7 @@ export async function POST(request: Request, { params }: RouteParams) {
             create: parsed.data.lineItems.map(item => ({
               description: item.description,
               quantity: item.quantity,
+              qtyUnit: item.qtyUnit ?? null,
               unitPrice: item.unitPrice,
               isTaxLine: item.isTaxLine,
               chargeType: item.chargeType ?? null,
@@ -189,6 +192,7 @@ export async function POST(request: Request, { params }: RouteParams) {
             create: parsed.data.lineItems.map(item => ({
               description: item.description,
               quantity: item.quantity,
+              qtyUnit: item.qtyUnit ?? null,
               unitPrice: item.unitPrice,
               isTaxLine: item.isTaxLine,
               chargeType: item.chargeType ?? null,
@@ -202,6 +206,20 @@ export async function POST(request: Request, { params }: RouteParams) {
           payments: true,
         },
       })
+
+      // Link TenantCharge rows to their corresponding invoice line items
+      const chargeLinks = parsed.data.lineItems
+        .map((item, idx) => ({ tenantChargeId: item.tenantChargeId, lineItem: invoice.lineItems[idx] }))
+        .filter(l => l.tenantChargeId && l.lineItem)
+      if (chargeLinks.length > 0) {
+        await Promise.all(chargeLinks.map(l =>
+          prisma.tenantCharge.update({
+            where: { id: l.tenantChargeId! },
+            data: { invoiceLineItemId: l.lineItem!.id },
+          })
+        ))
+      }
+
       return created(invoice)
     }
 

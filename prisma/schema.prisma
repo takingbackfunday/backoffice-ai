@@ -438,10 +438,12 @@ model InvoiceLineItem {
   invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   description String
   quantity    Decimal  @db.Decimal(10, 3)
+  qtyUnit     String?  // e.g. "hrs", "days", "words", "pages", "units"
   unitPrice   Decimal  @db.Decimal(10, 2)
   isTaxLine   Boolean  @default(false)
   chargeType  String?  // property-track only: RENT, DEPOSIT, LATE_FEE, UTILITY, MAINTENANCE, OTHER
   createdAt   DateTime @default(now())
+  tenantCharge TenantCharge?
 
   @@index([invoiceId])
 }
@@ -723,6 +725,9 @@ model TenantCharge {
   // Optional back-link to source maintenance job
   maintenanceRequestId String?
   maintenanceRequest   MaintenanceRequest? @relation(fields: [maintenanceRequestId], references: [id])
+  // Optional forward-link to the invoice line item that invoiced this charge
+  invoiceLineItemId    String?             @unique
+  invoiceLineItem      InvoiceLineItem?    @relation(fields: [invoiceLineItemId], references: [id])
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 

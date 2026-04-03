@@ -189,6 +189,9 @@ export function SendInvoiceModal({
 
               {/* Payment methods preview */}
               <PaymentSummary pm={paymentMethods} />
+              <Link href="/settings" className="text-xs text-primary hover:underline">
+                Edit payment methods
+              </Link>
 
               {error && (
                 <p className="text-sm text-destructive">{error}</p>

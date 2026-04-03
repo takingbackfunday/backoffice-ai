@@ -93,6 +93,14 @@ export function ListingsClient({ projectId, listings: initialListings, units }: 
     }
   }
 
+  async function deleteListing(listing: Listing) {
+    if (!confirm(`Delete listing "${listing.title}"? This cannot be undone.`)) return
+    const res = await fetch(`/api/projects/${projectId}/listings/${listing.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setListings(prev => prev.filter(l => l.id !== listing.id))
+    }
+  }
+
   async function toggleActive(listing: Listing) {
     const res = await fetch(`/api/projects/${projectId}/listings/${listing.id}`, {
       method: 'PATCH',
@@ -178,6 +186,15 @@ export function ListingsClient({ projectId, listings: initialListings, units }: 
                       >
                         {listing.isActive ? 'Deactivate' : 'Activate'}
                       </button>
+                      {!listing.isActive && listing._count.applicants === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => deleteListing(listing)}
+                          className="text-xs text-destructive hover:underline"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

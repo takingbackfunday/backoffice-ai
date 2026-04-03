@@ -93,6 +93,7 @@ export default async function EditInvoicePage({ params }: PageParams) {
                 id: i.id,
                 description: i.description,
                 quantity: Number(i.quantity),
+                qtyUnit: i.qtyUnit ?? null,
                 unitPrice: Number(i.unitPrice),
                 isTaxLine: i.isTaxLine,
               })),
