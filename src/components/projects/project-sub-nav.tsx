@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
 interface Tab {
@@ -43,6 +44,7 @@ interface Props {
 export function ProjectSubNav({ slug, type }: Props) {
   const pathname = usePathname()
   const tabs = getTabsForType(slug, type)
+  const [loadingHref, setLoadingHref] = useState<string | null>(null)
 
   return (
     <nav className="border-b mb-6" aria-label="Project navigation">
@@ -51,17 +53,20 @@ export function ProjectSubNav({ slug, type }: Props) {
           const isActive = tab.href === `/projects/${slug}`
             ? pathname === tab.href
             : pathname.startsWith(tab.href)
+          const isLoading = loadingHref === tab.href && !isActive
           return (
             <Link
               key={tab.href}
               href={tab.href}
+              onClick={() => { if (!isActive) setLoadingHref(tab.href) }}
               className={cn(
-                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
+                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5',
                 isActive
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40'
               )}
             >
+              {isLoading && <span className="inline-block w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
               {tab.label}
             </Link>
           )
