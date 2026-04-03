@@ -113,12 +113,12 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
   const [loadingMoveInvoices, setLoadingMoveInvoices] = useState(false)
   const [movingId, setMovingId] = useState<string | null>(null)
 
-  // Close payment menu on outside click
+  // Close payment menu on outside click — deferred so the opening click doesn't immediately close it
   useEffect(() => {
     if (!paymentMenuOpen) return
     function handler() { setPaymentMenuOpen(null) }
-    document.addEventListener('click', handler)
-    return () => document.removeEventListener('click', handler)
+    const t = setTimeout(() => document.addEventListener('click', handler), 0)
+    return () => { clearTimeout(t); document.removeEventListener('click', handler) }
   }, [paymentMenuOpen])
 
   const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
@@ -730,7 +730,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                         <>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); setPaymentMenuOpen(paymentMenuOpen === p.id ? null : p.id) }}
+                            onClick={() => setPaymentMenuOpen(paymentMenuOpen === p.id ? null : p.id)}
                             className="flex items-center justify-center w-7 h-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                             aria-label="Payment actions"
                           >
