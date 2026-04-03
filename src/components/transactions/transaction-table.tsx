@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react'
 import type { Project } from '@/generated/prisma/client'
 import type { TransactionWithRelations } from '@/types'
 import { RuleEditor, type CategoryGroup, type Payee, type UserRule } from '@/components/rules/rule-editor'
+import { RulesAgent } from '@/components/rules/rules-agent'
 
 interface Props {
   initialRows?: TransactionWithRelations[]
@@ -1025,6 +1026,10 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const [showMakeRuleEditor, setShowMakeRuleEditor] = useState(false)
   const [lastEditedRowId, setLastEditedRowId] = useState<string | null>(null)
 
+  // ── Toolbar modals ────────────────────────────────────────────────
+  const [showNewRuleModal, setShowNewRuleModal] = useState(false)
+  const [showAgentModal, setShowAgentModal] = useState(false)
+
   const pageSize = 200
 
   // ── Fire suggestion request (shared between timer + manual trigger) ─
@@ -1595,18 +1600,20 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
         </a>
 
         {/* Rules shortcuts */}
-        <a
-          href="/rules?new=1"
+        <button
+          type="button"
+          onClick={() => setShowNewRuleModal(true)}
           className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-muted/60 transition-colors"
         >
           + Create rule
-        </a>
-        <a
-          href="/rules?agent=1"
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowAgentModal(true)}
           className="rounded-md border border-[#534AB7]/40 bg-[#EEEDFE]/60 px-2.5 py-1.5 text-xs font-medium text-[#3C3489] hover:bg-[#EEEDFE] transition-colors"
         >
           Run rules agent
-        </a>
+        </button>
 
         {/* Active filter count + clear */}
         {hasActiveFilters && (
@@ -2146,6 +2153,54 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
           >
             Next →
           </button>
+        </div>
+      )}
+
+      {/* ── New rule modal ─────────────────────────────────────────── */}
+      {showNewRuleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowNewRuleModal(false)}>
+          <div className="w-full max-w-2xl rounded-xl border border-[#534AB7]/25 bg-white shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#534AB7]/10 bg-[#EEEDFE]/30">
+              <span className="text-[13px]">✦</span>
+              <span className="text-xs font-medium text-[#3C3489] flex-1">New rule</span>
+              <button onClick={() => setShowNewRuleModal(false)} className="text-muted-foreground hover:text-foreground leading-none">✕</button>
+            </div>
+            <div className="p-4">
+              <RuleEditor
+                projects={projects}
+                payees={payees}
+                accounts={accounts}
+                categoryGroups={categoryGroups}
+                editingRule={undefined}
+                onSave={() => setShowNewRuleModal(false)}
+                onCancel={() => setShowNewRuleModal(false)}
+                showSaveAndApply={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Rules agent modal ──────────────────────────────────────── */}
+      {showAgentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAgentModal(false)}>
+          <div className="w-full max-w-2xl rounded-xl border border-[#534AB7]/25 bg-white shadow-xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#534AB7]/10 bg-[#EEEDFE]/30 shrink-0">
+              <span className="text-[13px]">✦</span>
+              <span className="text-xs font-medium text-[#3C3489] flex-1">Rules agent</span>
+              <button onClick={() => setShowAgentModal(false)} className="text-muted-foreground hover:text-foreground leading-none">✕</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              <RulesAgent
+                categoryGroups={categoryGroups}
+                payees={payees}
+                projects={projects}
+                accounts={accounts}
+                onRuleAccepted={() => {}}
+                onClose={() => setShowAgentModal(false)}
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>
