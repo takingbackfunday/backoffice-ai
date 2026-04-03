@@ -63,7 +63,7 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `ClientProfile` — contact record linked to a project; holds `email`, `contactName`
 - `Invoice` — belongs to a `ClientProfile`; `status`: `DRAFT | SENT | PARTIAL | OVERDUE | PAID | VOID`; `replacesInvoiceId` self-relation (`@unique`) enables renegotiation chain — one voided invoice maps to one replacement
 - `InvoiceLineItem` — line on an invoice; `isTaxLine: true` marks tax lines (no separate tax model)
-- `InvoicePayment` — payment against an invoice; `transactionId` (`@unique`) optionally links to a bank `Transaction`; amount triggers automatic `PARTIAL` / `PAID` status update
+- `InvoicePayment` — payment against an invoice; `transactionId` (`@unique`) optionally links to a bank `Transaction`; amount triggers automatic `PARTIAL` / `PAID` status update; payments can be deleted (`DELETE /payments/[paymentId]`) or moved to another open invoice (`PATCH /payments/[paymentId]`) — both recalculate invoice status atomically
 - `InvoicePaymentSuggestion` — auto-generated match between a `Transaction` and an `Invoice`; `confidence`: `HIGH | MEDIUM`; `status`: `PENDING | ACCEPTED | DISMISSED`; HIGH confidence matches are auto-applied at import time
 - `UserPreference` — one row per user, `data` JSON for arbitrary UI state
 - `BankPlaybook` — stores discovered browser automation steps for each connected bank account; `steps` JSON contains `PlaybookStep[]` array; `twoFaType` tracks 2FA method; `status` indicates verification state
@@ -165,6 +165,23 @@ API routes (all SSE-streaming, same pattern as `api/agent/ask`):
 Nav model: `anthropic/claude-sonnet-4.6`. LLM prompt requires raw JSON output — fallback regex extracts `{...}` from prose if model wraps response. `STEP_DELAY_MS = 800ms`. Netlify timeout: 120s for both connect and sync routes.
 
 **Never log credentials** — username/password are passed as params but must never appear in `console.log`.
+
+### Invoice Detail Layout (`src/components/projects/invoice-detail-client.tsx`)
+
+Compact layout designed to fit without scrolling:
+- Payment info and Payments table sit side by side in a `grid-cols-2`
+- Payments table container has no `overflow-hidden` — required so the `...` dropdown menu is not clipped
+- Each payment row has a three-dot SVG menu with **Remove** (DELETE) and **Move to invoice…** (PATCH) actions
+- The `...` menu registers its close listener via `setTimeout(0)` so the opening click does not immediately re-fire the document listener and close the menu
+
+### Transaction Table & Rules UI (`src/components/transactions/transaction-table.tsx`)
+
+- **Make-rule popup** — `MakeRulePopup` renders at a fixed position anchored to the edited row via `getBoundingClientRect()` on the `<tr data-row-id="...">` element; flips above the row if the popup would clip the viewport bottom
+- **Toolbar modals** — "Create rule" and "Run rules agent" are buttons in the toolbar that open inline modals (no page navigation); both share the same purple header style as `MakeRulePopup`; "Create rule" reuses `RuleEditor`; "Run rules agent" embeds `RulesAgent` in a scrollable modal
+
+### Chat Overlay (`src/components/chat/chat-overlay.tsx`)
+
+Single icon pill always visible — Sparkles icon by default, expands to show "chat to ai" text on hover via `max-w-0 → max-w` CSS transition. No hidden/show/minimize states; no separate hide button.
 
 ### CSV Import Flow
 

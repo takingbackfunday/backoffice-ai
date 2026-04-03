@@ -37,10 +37,11 @@ Workflow:
 5. Call finish_analysis
 
 PAYEE ASSIGNMENT — CRITICAL:
-- ALWAYS set payeeName on every suggestion where the merchant/counterparty is identifiable
-- Use your world knowledge aggressively: "Wayfair", "Zalando", "Stripe", "GitHub", "Netflix", "Spotify", "Uber", "Amazon", "AWS", "SUPER.COM", etc. are recognisable merchants — set them as payee even if not in the existing payees list
-- If the transaction description or existing payeeName clearly identifies the merchant, use it
-- Only leave payeeName null if the counterparty is genuinely ambiguous (e.g. "Bank transfer ref 12345")
+- ALWAYS set payeeName on every suggestion where the merchant/counterparty is identifiable — this means nearly every suggestion should have a payee
+- The merchant name from the description IS the payee: "The Lobster Pot" → payee "The Lobster Pot". "FALCO SLICE" → payee "Falco Slice". "LS Wen Cheng IV" → payee "LS Wen Cheng IV". You do NOT need global brand recognition — any named restaurant, shop, service, or venue has an identifiable name that should be used as the payee
+- Use your world knowledge for well-known brands: "Wayfair", "Zalando", "Stripe", "GitHub", "Netflix", "Spotify", "Uber", "Amazon", "AWS", "PIKAPODS", "FlixBus", "Railcard", etc. — use the canonical brand name (e.g. "FlixBus" not "FLIXBUS.COM")
+- If the transaction description or existing payeeName clearly identifies any named business, use that name as the payee
+- Only leave payeeName null if the counterparty is genuinely ambiguous (e.g. "Bank transfer ref 12345", "OZAN OZYUKSEL" when it could be a personal transfer with no consistent payee name)
 - Check the EXISTING PAYEES list first — if the payee already exists there, use the exact same spelling
 - When executing suggestions, copy the payee name EXACTLY from the record_plan output. If the plan says "payee: Sharenow", set payeeName to "Sharenow". Do not drop payees that were identified in the plan.
 

@@ -638,7 +638,7 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
           summary: {
             type: 'string',
             description:
-              'Structured plan listing EVERY group you will emit. Format each as: "merchant → category (payee: PayeeName)" or "merchant → SKIP (reason)". The execution model copies payee names directly from this plan. Example: "Spaetkauf → SKIP (round amounts suggest ATM withdrawals). Sharenow → Rideshare (payee: Sharenow). Transdev → Public transit (payee: Transdev Vertrieb GmbH). SHELL UK → Fuel & gas (payee: Shell)."',
+              'Structured plan listing EVERY group you will emit. Format each as: "merchant → category (payee: PayeeName)" or "merchant → SKIP (reason)". The execution model copies payee names directly from this plan — payee names are critical to get right here. EVERY named business gets a payee — restaurants, shops, venues, services, software — even local or unknown ones (e.g. "Some Local Bistro" → payee "Some Local Bistro"). Only "payee: null" for genuinely ambiguous counterparties (bare reference numbers, personal names that could be transfers). Example: "Spaetkauf → SKIP (round amounts suggest ATM withdrawals). Sharenow → Rideshare (payee: Sharenow). Transdev → Public transit (payee: Transdev Vertrieb GmbH). SHELL UK → Fuel & gas (payee: Shell)."',
           },
         },
       },
