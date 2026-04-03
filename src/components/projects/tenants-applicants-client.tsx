@@ -26,6 +26,7 @@ type Applicant = any
 
 export function TenantsApplicantsClient({ projectId, projectSlug, tenants, units, listings, defaultTab }: Props) {
   const [tab, setTab] = useState<'applicants' | 'tenants'>(defaultTab)
+  const [tabLoading, setTabLoading] = useState(false)
   const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null)
   const [loadingApplicant, setLoadingApplicant] = useState(false)
 
@@ -54,7 +55,7 @@ export function TenantsApplicantsClient({ projectId, projectSlug, tenants, units
           <button
             key={t}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => { if (tab !== t) { setTabLoading(true); setTab(t); setTimeout(() => setTabLoading(false), 300) } }}
             className={cn(
               'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px capitalize',
               tab === t
@@ -62,7 +63,7 @@ export function TenantsApplicantsClient({ projectId, projectSlug, tenants, units
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40'
             )}
           >
-            {t}
+            {tabLoading && tab === t ? <span className="inline-block w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" /> : t}
           </button>
         ))}
       </div>
