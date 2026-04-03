@@ -149,7 +149,7 @@ function reducer(state: InvoiceState, action: InvoiceAction): InvoiceState {
         ),
       }
     case 'ADD_LINE_ITEM':
-      return { ...state, lineItems: [...state.lineItems, { id: uid(), description: '', quantity: '1', qtyUnit: '', unitPrice: '', isTaxLine: false }] }
+      return { ...state, lineItems: [...state.lineItems, { id: uid(), description: '', quantity: '1', qtyUnit: 'units', unitPrice: '', isTaxLine: false }] }
     case 'REMOVE_LINE_ITEM':
       return { ...state, lineItems: state.lineItems.filter(i => i.id !== action.id) }
     case 'SET_TAX_ENABLED':
@@ -219,7 +219,7 @@ export function InvoiceEditor({
         aiSuggestedNotes: false,
       }
     : {
-        lineItems: [{ id: uid(), description: '', quantity: '1', qtyUnit: '', unitPrice: '', isTaxLine: false }],
+        lineItems: [{ id: uid(), description: '', quantity: '1', qtyUnit: 'units', unitPrice: '', isTaxLine: false }],
         taxEnabled: lastInvoiceDefaults?.taxEnabled ?? false,
         taxLabel: lastInvoiceDefaults?.taxLabel ?? 'Tax',
         taxMode: lastInvoiceDefaults?.taxMode ?? 'percent',
@@ -247,9 +247,6 @@ export function InvoiceEditor({
   const [finalizing, setFinalizing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveDefaultTax, setSaveDefaultTax] = useState(false)
-  const [saveDefaultNotes, setSaveDefaultNotes] = useState(false)
-  const [saveDefaultCurrency, setSaveDefaultCurrency] = useState(false)
   const [showCopyPicker, setShowCopyPicker] = useState(false)
   const [unitPopoverId, setUnitPopoverId] = useState<string | null>(null)
   const [unitPopoverPos, setUnitPopoverPos] = useState<{ top: number; right: number } | null>(null)
@@ -303,19 +300,6 @@ export function InvoiceEditor({
     } catch { /* silent */ }
   }
 
-  async function persistDefaults(patch: Record<string, unknown>) {
-    try {
-      // Fetch current invoiceDefaults so we deep-merge rather than overwrite the whole key
-      const getRes = await fetch('/api/preferences')
-      const prefs = getRes.ok ? await getRes.json() : {}
-      const existing = (prefs?.data?.invoiceDefaults ?? {}) as Record<string, unknown>
-      await fetch('/api/preferences', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceDefaults: { ...existing, ...patch } }),
-      })
-    } catch { /* non-critical */ }
-  }
   const chatEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -404,7 +388,7 @@ export function InvoiceEditor({
             id: uid(),
             description: i.description,
             quantity: String(i.quantity),
-            qtyUnit: '',
+            qtyUnit: 'units',
             unitPrice: String(i.unitPrice),
             isTaxLine: false,
           })),
@@ -576,6 +560,20 @@ export function InvoiceEditor({
         if (!res.ok || json.error) { setSaveError(json.error ?? 'Failed to create invoice'); return }
         invoiceId = json.data.id
 
+        // Auto-save current settings as defaults for next invoice (fire-and-forget)
+        fetch('/api/preferences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoiceDefaults: {
+            taxEnabled: state.taxEnabled,
+            taxLabel: state.taxLabel,
+            taxMode: state.taxMode,
+            taxRate: state.taxRate,
+            currency: state.currency,
+            notes: state.notes,
+          }}),
+        }).catch(() => {})
+
       } else {
         const res = await fetch(`/api/projects/${projectId}/invoices/${existingInvoice!.id}`, {
           method: 'PATCH',
@@ -624,44 +622,6 @@ export function InvoiceEditor({
             </div>
           )}
 
-          {/* Copy from past invoice — create mode only */}
-          {mode === 'create' && (
-            <div className="mb-5 relative">
-              <button
-                type="button"
-                onClick={openCopyPicker}
-                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 flex items-center gap-1"
-              >
-                <ChevronRight className="h-3 w-3" /> Copy from past invoice
-              </button>
-              {showCopyPicker && (
-                <div className="absolute top-6 left-0 z-20 w-72 rounded-xl border bg-background shadow-xl p-2">
-                  <div className="flex items-center justify-between px-2 py-1 mb-1">
-                    <span className="text-xs font-semibold">Select invoice to copy</span>
-                    <button type="button" onClick={() => setShowCopyPicker(false)} className="text-muted-foreground hover:text-foreground">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  {loadingRecent && <p className="text-xs text-muted-foreground px-2 py-2">Loading…</p>}
-                  {!loadingRecent && recentInvoices && recentInvoices.length === 0 && (
-                    <p className="text-xs text-muted-foreground px-2 py-2">No past invoices found.</p>
-                  )}
-                  {!loadingRecent && recentInvoices && recentInvoices.map(inv => (
-                    <button
-                      key={inv.id}
-                      type="button"
-                      onClick={() => copyFromInvoice(inv.id)}
-                      className="w-full flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
-                    >
-                      <span className="font-medium">{inv.invoiceNumber}</span>
-                      <span className="text-muted-foreground">{new Intl.NumberFormat('en-US', { style: 'currency', currency: inv.currency }).format(inv.total)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Job selector */}
           <div className="mb-5">
             <div className="flex items-center gap-2 mb-1.5">
@@ -672,6 +632,42 @@ export function InvoiceEditor({
                 </button>
               )}
               <span className="text-xs text-muted-foreground italic">(Optional — for your records only)</span>
+              {mode === 'create' && (
+                <div className="ml-auto relative">
+                  <button
+                    type="button"
+                    onClick={openCopyPicker}
+                    className="rounded-md border border-muted-foreground/30 bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground hover:border-muted-foreground/60 transition-colors"
+                  >
+                    Start from past invoice as template
+                  </button>
+                  {showCopyPicker && (
+                    <div className="absolute top-8 right-0 z-20 w-72 rounded-xl border bg-background shadow-xl p-2">
+                      <div className="flex items-center justify-between px-2 py-1 mb-1">
+                        <span className="text-xs font-semibold">Select invoice</span>
+                        <button type="button" onClick={() => setShowCopyPicker(false)} className="text-muted-foreground hover:text-foreground">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {loadingRecent && <p className="text-xs text-muted-foreground px-2 py-2">Loading…</p>}
+                      {!loadingRecent && recentInvoices && recentInvoices.length === 0 && (
+                        <p className="text-xs text-muted-foreground px-2 py-2">No past invoices found.</p>
+                      )}
+                      {!loadingRecent && recentInvoices && recentInvoices.map(inv => (
+                        <button
+                          key={inv.id}
+                          type="button"
+                          onClick={() => copyFromInvoice(inv.id)}
+                          className="w-full flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
+                        >
+                          <span className="font-medium">{inv.invoiceNumber}</span>
+                          <span className="text-muted-foreground">{new Intl.NumberFormat('en-US', { style: 'currency', currency: inv.currency }).format(inv.total)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             {showNewJob ? (
               <div className="flex items-center gap-2">
@@ -709,19 +705,31 @@ export function InvoiceEditor({
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setUnitPopoverId(null)} aria-hidden="true" />
                 <div
-                  className="fixed z-50 rounded-xl border bg-background shadow-xl p-2 w-40"
+                  className="fixed z-50 rounded-xl border bg-background shadow-xl p-1 w-44 max-h-80 overflow-y-auto"
                   style={{ top: unitPopoverPos.top, right: unitPopoverPos.right }}
                 >
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-1 mb-1.5">Unit type</p>
-                  {['hrs', 'days', 'wks', 'months', 'words', 'pages', 'imgs', 'calls', 'units', 'items'].map(u => (
-                    <button
-                      key={u}
-                      type="button"
-                      onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: u }); setUnitPopoverId(null) }}
-                      className={`w-full text-left px-2 py-1 text-xs rounded-md hover:bg-muted/50 transition-colors ${activeItem.qtyUnit === u ? 'font-semibold text-primary' : ''}`}
-                    >
-                      {u}
-                    </button>
+                  {([
+                    ['Time', ['hours', 'days', 'weeks', 'months']],
+                    ['Area', ['sq ft', 'sq m']],
+                    ['Assets', ['assets']],
+                    ['Activities', ['visits', 'inspections', 'sessions', 'revisions', 'cleanings']],
+                    ['Units', ['units', 'pieces']],
+                    ['Licenses', ['licenses', 'seats', 'prints']],
+                    ['Flat fee', ['flat fee']],
+                  ] as [string, string[]][]).map(([group, opts]) => (
+                    <div key={group}>
+                      <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wide px-2 pt-1.5 pb-0.5">{group}</p>
+                      {opts.map(u => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: u }); setUnitPopoverId(null) }}
+                          className={`w-full text-left px-2 py-1 text-xs rounded-md hover:bg-muted/50 transition-colors ${activeItem.qtyUnit === u ? 'font-semibold text-primary bg-primary/5' : ''}`}
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
                   ))}
                   <div className="border-t mt-1.5 pt-1.5">
                     <input
@@ -871,18 +879,6 @@ export function InvoiceEditor({
                   {taxAmount > 0 && (
                     <span className="text-xs text-muted-foreground">= {fmtFull(taxAmount, state.currency)}</span>
                   )}
-                  <label className="flex items-center gap-1.5 cursor-pointer ml-auto">
-                    <input
-                      type="checkbox"
-                      checked={saveDefaultTax}
-                      onChange={e => {
-                        setSaveDefaultTax(e.target.checked)
-                        if (e.target.checked) persistDefaults({ taxEnabled: state.taxEnabled, taxLabel: state.taxLabel, taxMode: state.taxMode, taxRate: state.taxRate })
-                      }}
-                      className="rounded border"
-                    />
-                    <span className="text-[10px] text-muted-foreground">Save as default</span>
-                  </label>
                 </div>
               )}
             </div>
@@ -940,18 +936,6 @@ export function InvoiceEditor({
               >
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <label className="flex items-center gap-1.5 cursor-pointer mt-1.5">
-                <input
-                  type="checkbox"
-                  checked={saveDefaultCurrency}
-                  onChange={e => {
-                    setSaveDefaultCurrency(e.target.checked)
-                    if (e.target.checked) persistDefaults({ currency: state.currency })
-                  }}
-                  className="rounded border"
-                />
-                <span className="text-[10px] text-muted-foreground">Save as default</span>
-              </label>
             </div>
           </div>
 
@@ -959,25 +943,11 @@ export function InvoiceEditor({
           <div className="mb-6">
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes / payment terms</label>
-              <div className="flex items-center gap-3">
-                {state.aiSuggestedNotes && (
-                  <span className="text-[10px] text-primary flex items-center gap-1">
-                    <Sparkles className="h-3 w-3" /> AI suggested
-                  </span>
-                )}
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={saveDefaultNotes}
-                    onChange={e => {
-                      setSaveDefaultNotes(e.target.checked)
-                      if (e.target.checked) persistDefaults({ notes: state.notes })
-                    }}
-                    className="rounded border"
-                  />
-                  <span className="text-[10px] text-muted-foreground">Save as default</span>
-                </label>
-              </div>
+              {state.aiSuggestedNotes && (
+                <span className="text-[10px] text-primary flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" /> AI suggested
+                </span>
+              )}
             </div>
             <textarea
               value={state.notes}
