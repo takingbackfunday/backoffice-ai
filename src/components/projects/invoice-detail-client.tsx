@@ -35,6 +35,7 @@ interface InvoicePayment {
   paidDate: string
   paymentMethod: string | null
   notes: string | null
+  transactionId?: string | null
 }
 
 interface InvoiceRef {
@@ -104,6 +105,22 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
   const [showRenegotiateConfirm, setShowRenegotiateConfirm] = useState(false)
   const [renegotiating, setRenegotiating] = useState(false)
 
+  // ── Payment actions (refund / move) ──────────────────────────────
+  const [paymentMenuOpen, setPaymentMenuOpen] = useState<string | null>(null)
+  const [refundingId, setRefundingId] = useState<string | null>(null)
+  const [movePaymentId, setMovePaymentId] = useState<string | null>(null)
+  const [moveInvoices, setMoveInvoices] = useState<{ id: string; invoiceNumber: string; status: string }[]>([])
+  const [loadingMoveInvoices, setLoadingMoveInvoices] = useState(false)
+  const [movingId, setMovingId] = useState<string | null>(null)
+
+  // Close payment menu on outside click
+  useEffect(() => {
+    if (!paymentMenuOpen) return
+    function handler() { setPaymentMenuOpen(null) }
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [paymentMenuOpen])
+
   const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
   const paid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
   const balance = total - paid
@@ -170,6 +187,59 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
   function openSend(isReminder: boolean) {
     setSendModalIsReminder(isReminder)
     setShowSendModal(true)
+  }
+
+  async function handleRefundPayment(paymentId: string) {
+    if (!confirm('Remove this payment? This will reopen the invoice balance.')) return
+    setRefundingId(paymentId)
+    setPaymentMenuOpen(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}/payments/${paymentId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok || json.error) { setError(json.error ?? 'Failed to remove payment'); return }
+      const refreshRes = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}`)
+      if (refreshRes.ok) setInvoice((await refreshRes.json()).data)
+    } finally {
+      setRefundingId(null)
+    }
+  }
+
+  async function openMovePicker(paymentId: string) {
+    setMovePaymentId(paymentId)
+    setPaymentMenuOpen(null)
+    if (moveInvoices.length > 0) return
+    setLoadingMoveInvoices(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invoices`)
+      if (res.ok) {
+        const json = await res.json()
+        setMoveInvoices(
+          (json.data ?? []).filter(
+            (inv: { id: string; status: string }) => inv.id !== invoice.id && inv.status !== 'VOID' && inv.status !== 'PAID'
+          )
+        )
+      }
+    } finally {
+      setLoadingMoveInvoices(false)
+    }
+  }
+
+  async function handleMovePayment(paymentId: string, targetInvoiceId: string) {
+    setMovingId(paymentId)
+    setMovePaymentId(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}/payments/${paymentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetInvoiceId }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) { setError(json.error ?? 'Failed to move payment'); return }
+      const refreshRes = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}`)
+      if (refreshRes.ok) setInvoice((await refreshRes.json()).data)
+    } finally {
+      setMovingId(null)
+    }
   }
 
   async function handleRenegotiate() {
@@ -600,6 +670,36 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           </form>
         )}
 
+        {/* Move-to-invoice picker */}
+        {movePaymentId && (
+          <div className="mb-3 rounded-lg border overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
+              <p className="text-xs font-semibold">Move payment to…</p>
+              <button type="button" onClick={() => setMovePaymentId(null)} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+            </div>
+            {loadingMoveInvoices ? (
+              <p className="px-3 py-3 text-xs text-muted-foreground">Loading…</p>
+            ) : moveInvoices.length === 0 ? (
+              <p className="px-3 py-3 text-xs text-muted-foreground">No other open invoices found for this project.</p>
+            ) : (
+              <div className="divide-y max-h-48 overflow-y-auto">
+                {moveInvoices.map(inv => (
+                  <button
+                    key={inv.id}
+                    type="button"
+                    disabled={movingId === movePaymentId}
+                    onClick={() => handleMovePayment(movePaymentId, inv.id)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/40 transition-colors text-xs"
+                  >
+                    <span className="font-medium">{inv.invoiceNumber}</span>
+                    <span className="text-muted-foreground capitalize">{inv.status.toLowerCase()}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {invoice.payments.length === 0 ? (
           <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
         ) : (
@@ -611,11 +711,12 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                   <th className="text-right px-4 py-2 font-medium">Amount</th>
                   <th className="text-left px-4 py-2 font-medium">Method</th>
                   <th className="text-left px-4 py-2 font-medium">Notes</th>
+                  <th className="w-8 px-2 py-2" />
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {invoice.payments.map(p => (
-                  <tr key={p.id}>
+                  <tr key={p.id} className={refundingId === p.id || movingId === p.id ? 'opacity-50' : ''}>
                     <td className="px-4 py-2 text-muted-foreground">
                       {new Date(p.paidDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
@@ -624,6 +725,38 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                     </td>
                     <td className="px-4 py-2 text-muted-foreground">{p.paymentMethod ?? '—'}</td>
                     <td className="px-4 py-2 text-muted-foreground">{p.notes ?? '—'}</td>
+                    <td className="px-2 py-2 relative">
+                      {invoice.status !== 'VOID' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setPaymentMenuOpen(paymentMenuOpen === p.id ? null : p.id) }}
+                            className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label="Payment actions"
+                          >
+                            ⋯
+                          </button>
+                          {paymentMenuOpen === p.id && (
+                            <div className="absolute right-0 top-8 z-20 w-44 rounded-lg border bg-background shadow-md py-1 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => openMovePicker(p.id)}
+                                className="w-full text-left px-3 py-2 hover:bg-muted transition-colors"
+                              >
+                                Move to invoice…
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRefundPayment(p.id)}
+                                className="w-full text-left px-3 py-2 hover:bg-muted text-destructive transition-colors"
+                              >
+                                Remove payment
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
