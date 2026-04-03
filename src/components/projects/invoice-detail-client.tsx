@@ -731,10 +731,12 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setPaymentMenuOpen(paymentMenuOpen === p.id ? null : p.id) }}
-                            className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            className="flex items-center justify-center w-7 h-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                             aria-label="Payment actions"
                           >
-                            ⋯
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                              <circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="14" cy="8" r="1.5"/>
+                            </svg>
                           </button>
                           {paymentMenuOpen === p.id && (
                             <div className="absolute right-0 top-8 z-20 w-44 rounded-lg border bg-background shadow-md py-1 text-xs">
