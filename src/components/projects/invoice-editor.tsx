@@ -1000,8 +1000,8 @@ export function InvoiceEditor({
               <button
                 type="button"
                 onClick={() => handleSave(true)}
-                disabled={saving || !clientEmail}
-                title={!clientEmail ? 'Add client email to send' : undefined}
+                disabled={saving}
+                title={undefined}
                 className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 <Eye className="h-3.5 w-3.5" />
