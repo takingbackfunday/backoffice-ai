@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
-import { openrouterWithTools } from '@/lib/llm/openrouter'
+import { openrouterChat, openrouterWithTools } from '@/lib/llm/openrouter'
 import type { ChatMessage, ToolDefinition } from '@/lib/llm/openrouter'
 import { query_transactions, aggregate_transactions } from '@/lib/agent/finance-tools'
 
@@ -164,13 +164,12 @@ Rules:
         return ok(result ?? { text, actions: [] })
       }
 
-      // Push assistant message with tool calls
-      llmMessages.push({
-        role: 'assistant',
-        content: response.content ?? '',
-        // Tool calls are in the content for models that support it;
-        // for OpenRouter we append them as stringified content for context
-      })
+      // Push assistant message — omit content when null/empty to avoid
+      // Claude (Vertex) rejecting empty-string content alongside tool_calls
+      const assistantMsg: Record<string, unknown> = { role: 'assistant' }
+      if (response.content) assistantMsg.content = response.content
+      assistantMsg.tool_calls = response.tool_calls
+      llmMessages.push(assistantMsg as unknown as ChatMessage)
 
       // Execute tool calls and push results
       for (const tc of response.tool_calls) {
@@ -207,10 +206,12 @@ Rules:
       }
     }
 
-    // Exhausted rounds — ask for final answer without tools
+    // Exhausted rounds — ask for final answer without tools (non-streaming, faster)
     llmMessages.push({ role: 'user', content: 'Please provide your final response now as the JSON object.' })
-    const final = await openrouterWithTools(llmMessages, [], 'anthropic/claude-sonnet-4.6')
-    const text = final.content ?? ''
+    const text = await openrouterChat(
+      llmMessages as { role: 'user' | 'assistant' | 'system'; content: string }[],
+      'anthropic/claude-sonnet-4.6'
+    )
     const result = parseInvoiceJson(text)
     return ok(result ?? { text, actions: [] })
 
