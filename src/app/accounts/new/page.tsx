@@ -14,12 +14,17 @@ const ACCOUNT_TYPES = [
   { value: 'TRUST_ACCOUNT', label: 'Trust Account' },
 ]
 
-const CURRENCIES = ['USD', 'GBP', 'EUR']
+const CURRENCIES = ['GBP', 'EUR', 'USD']
 
 const COUNTRIES = [
-  { value: 'US', label: 'United States' },
   { value: 'UK', label: 'United Kingdom' },
   { value: 'DE', label: 'Germany' },
+  { value: 'FR', label: 'France' },
+  { value: 'ES', label: 'Spain' },
+  { value: 'IT', label: 'Italy' },
+  { value: 'NL', label: 'Netherlands' },
+  { value: 'BE', label: 'Belgium' },
+  { value: 'US', label: 'United States' },
   { value: 'Other', label: 'Other' },
 ]
 
@@ -43,7 +48,8 @@ export default function NewAccountPage() {
   })
   const [showCustomBank, setShowCustomBank] = useState(false)
   const [customBankName, setCustomBankName] = useState('')
-  const [customBankCountry, setCustomBankCountry] = useState('US')
+  const [customBankCountry, setCustomBankCountry] = useState('UK')
+  const [customBankCountryOther, setCustomBankCountryOther] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -63,7 +69,7 @@ export default function NewAccountPage() {
     // Create custom institution first if needed
     if (showCustomBank) {
       if (!customBankName.trim()) { setError('Please enter a bank name.'); setLoading(false); return }
-      const country = customBankCountry === 'Other' ? 'US' : customBankCountry as 'US' | 'UK' | 'DE'
+      const country = customBankCountry === 'Other' ? customBankCountryOther.trim() || 'Other' : customBankCountry
       const instRes = await fetch('/api/institutions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -178,6 +184,15 @@ export default function NewAccountPage() {
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
                   </select>
+                  {customBankCountry === 'Other' && (
+                    <input
+                      type="text"
+                      value={customBankCountryOther}
+                      onChange={e => setCustomBankCountryOther(e.target.value)}
+                      placeholder="Enter country name"
+                      className="mt-1.5 w-full rounded-md border px-3 py-2 text-sm"
+                    />
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">CSV column mapping can be configured after adding the account.</p>
               </div>

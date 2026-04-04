@@ -5,7 +5,7 @@ import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-re
 
 const CreateInstitutionSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  country: z.enum(['US', 'UK', 'DE']),
+  country: z.string().min(1, 'Country is required'),
   csvMapping: z.object({
     dateCol: z.string(),
     amountCol: z.string(),
