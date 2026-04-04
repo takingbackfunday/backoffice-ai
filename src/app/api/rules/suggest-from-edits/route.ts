@@ -138,13 +138,12 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
       const toolNames = response.tool_calls?.map((tc) => tc.function.name) ?? []
       console.log(`[suggest-from-edits] round ${round + 1} tools:`, toolNames.length ? toolNames : '(none — finished)')
 
-      messages.push({
-        role: 'assistant',
-        content: response.content ?? '',
-        ...(response.tool_calls
-          ? ({ tool_calls: response.tool_calls } as unknown as Record<string, unknown>)
-          : {}),
-      } as ChatMessage)
+      // Omit content when null/empty alongside tool_calls
+      const assistantMsg: Record<string, unknown> = { role: 'assistant' }
+      if (response.content) assistantMsg.content = response.content
+      if (response.tool_calls) assistantMsg.tool_calls = response.tool_calls
+      if (!assistantMsg.content && !assistantMsg.tool_calls) assistantMsg.content = ''
+      messages.push(assistantMsg as unknown as ChatMessage)
 
       if (!response.tool_calls || response.tool_calls.length === 0) {
         finished = true
