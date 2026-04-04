@@ -13,14 +13,14 @@ export async function runToolLoop(opts: {
   for (let round = 0; round < opts.maxRounds; round++) {
     const response = await openrouterWithTools(opts.messages, opts.tools, opts.model)
 
-    // Append assistant turn (with tool_calls if present)
-    opts.messages.push({
-      role: 'assistant',
-      content: response.content ?? '',
-      ...(response.tool_calls
-        ? { tool_calls: response.tool_calls } as unknown as Record<string, unknown>
-        : {}),
-    } as ChatMessage)
+    // Append assistant turn (with tool_calls if present).
+    // When tool_calls are present, omit content entirely if it's null/empty —
+    // some providers (Claude via Vertex) reject an empty-string content alongside tool_calls.
+    const assistantMsg: Record<string, unknown> = { role: 'assistant' }
+    if (response.content) assistantMsg.content = response.content
+    if (response.tool_calls) assistantMsg.tool_calls = response.tool_calls
+    if (!assistantMsg.content && !assistantMsg.tool_calls) assistantMsg.content = ''
+    opts.messages.push(assistantMsg as unknown as ChatMessage)
 
     // No tool calls = final answer
     if (!response.tool_calls || response.tool_calls.length === 0) {
