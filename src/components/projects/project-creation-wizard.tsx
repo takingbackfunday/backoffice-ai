@@ -259,21 +259,56 @@ export function ProjectCreationWizard() {
         <div>
           <h2 className="text-lg font-semibold mb-4">Review & create</h2>
 
-          <div className="rounded-lg border p-4 space-y-2 mb-6">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">{name}</span>
+          <div className="rounded-lg border divide-y mb-6">
+            {/* Name + type */}
+            <div className="px-4 py-3 flex items-center gap-2">
+              <span className="text-sm font-semibold">{name}</span>
               <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{typeLabels[type]}</span>
             </div>
-            {type === 'CLIENT' && clientData.company && (
-              <p className="text-sm text-muted-foreground">{clientData.company}</p>
+
+            {/* CLIENT fields */}
+            {type === 'CLIENT' && (
+              <div className="px-4 py-3 grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                {clientData.contactName && (
+                  <><span className="text-muted-foreground">Contact</span><span>{clientData.contactName}</span></>
+                )}
+                {clientData.company && (
+                  <><span className="text-muted-foreground">Company</span><span>{clientData.company}</span></>
+                )}
+                {clientData.email && (
+                  <><span className="text-muted-foreground">Email</span><span>{clientData.email}</span></>
+                )}
+                {clientData.phone && (
+                  <><span className="text-muted-foreground">Phone</span><span>{clientData.phone}</span></>
+                )}
+                {clientData.address && (
+                  <><span className="text-muted-foreground">Address</span><span>{clientData.address}</span></>
+                )}
+              </div>
             )}
+
+            {/* PROPERTY fields */}
             {type === 'PROPERTY' && (
-              <p className="text-sm text-muted-foreground">{propertyData.address}</p>
+              <div className="px-4 py-3 grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                <span className="text-muted-foreground">Address</span><span>{propertyData.address}</span>
+                {propertyData.city && (
+                  <><span className="text-muted-foreground">City</span><span>{propertyData.city}</span></>
+                )}
+                {propertyData.state && (
+                  <><span className="text-muted-foreground">State</span><span>{propertyData.state}</span></>
+                )}
+                {propertyData.propertyType && (
+                  <><span className="text-muted-foreground">Type</span><span>{propertyData.propertyType}</span></>
+                )}
+                {propertyData.units.filter(u => u.unitLabel).length > 0 && (
+                  <><span className="text-muted-foreground">Units</span><span>{propertyData.units.filter(u => u.unitLabel).length}</span></>
+                )}
+              </div>
             )}
-            {type === 'PROPERTY' && propertyData.units.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {propertyData.units.filter(u => u.unitLabel).length} unit(s)
-              </p>
+
+            {/* OTHER: description */}
+            {type === 'OTHER' && description && (
+              <div className="px-4 py-3 text-sm text-muted-foreground">{description}</div>
             )}
           </div>
 
@@ -291,7 +326,7 @@ export function ProjectCreationWizard() {
               disabled={submitting}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {submitting ? 'Creating…' : 'Create project'}
+              {submitting ? 'Creating…' : `Create ${typeLabels[type].toLowerCase()}`}
             </button>
           </div>
         </div>
