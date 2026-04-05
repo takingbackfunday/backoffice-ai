@@ -17,8 +17,21 @@ export function ProjectCreationWizard() {
   const validInitialType: ProjectType | null = rawType && ['CLIENT', 'PROPERTY', 'OTHER'].includes(rawType)
     ? (rawType as ProjectType)
     : null
-  const [step, setStep] = useState<Step>(validInitialType ? 2 : 1)
-  const [type, setType] = useState<ProjectType | null>(validInitialType)
+
+  // If no type from URL, infer from businessType in localStorage
+  function inferType(): ProjectType | null {
+    if (validInitialType) return validInitialType
+    if (typeof window === 'undefined') return null
+    const bt = localStorage.getItem('businessType')
+    if (bt === 'freelance') return 'CLIENT'
+    if (bt === 'property') return 'PROPERTY'
+    if (bt === 'personal') return 'OTHER'
+    return null // 'both' or unknown — show step 1
+  }
+
+  const initialType = inferType()
+  const [step, setStep] = useState<Step>(initialType ? 2 : 1)
+  const [type, setType] = useState<ProjectType | null>(initialType)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -179,10 +192,11 @@ export function ProjectCreationWizard() {
           </h2>
 
           <div className="space-y-6">
-            {/* Project name (always shown) */}
+            {/* Name field */}
             <div>
               <label className="block text-sm font-medium mb-1">
-                Project name <span className="text-destructive">*</span>
+                {type === 'CLIENT' ? 'Client name' : type === 'PROPERTY' ? 'Property name' : 'Project name'}
+                {' '}<span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
