@@ -15,7 +15,10 @@ interface NewClientModalProps {
 export function NewClientModal({ onClose, onCreated }: NewClientModalProps) {
   const [name, setName] = useState('')
   const [contactName, setContactName] = useState('')
+  const [company, setCompany] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,7 +36,10 @@ export function NewClientModal({ onClose, onCreated }: NewClientModalProps) {
           type: 'CLIENT',
           client: {
             contactName: contactName.trim() || undefined,
+            company: company.trim() || undefined,
             email: email.trim() || undefined,
+            phone: phone.trim() || undefined,
+            address: address.trim() || undefined,
           },
         }),
       })
@@ -45,9 +51,11 @@ export function NewClientModal({ onClose, onCreated }: NewClientModalProps) {
     }
   }
 
+  const field = 'w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30'
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="w-full max-w-sm rounded-xl bg-background border shadow-xl p-5 space-y-4">
+      <div className="w-full max-w-lg rounded-xl bg-background border shadow-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">New client</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -57,36 +65,36 @@ export function NewClientModal({ onClose, onCreated }: NewClientModalProps) {
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="block text-xs font-medium mb-1">Client / business name <span className="text-destructive">*</span></label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Acme Corp"
-              autoFocus
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
+            <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Acme Corp" autoFocus className={field} />
           </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1">Contact name</label>
+              <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Jane Smith" className={field} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Company</label>
+              <input type="text" value={company} onChange={e => setCompany(e.target.value)} placeholder="Acme Corp Ltd" className={field} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1">Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@acme.com" className={field} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Phone</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555 000 0000" className={field} />
+            </div>
+          </div>
+
           <div>
-            <label className="block text-xs font-medium mb-1">Contact name</label>
-            <input
-              type="text"
-              value={contactName}
-              onChange={e => setContactName(e.target.value)}
-              placeholder="Jane Smith"
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
+            <label className="block text-xs font-medium mb-1">Address</label>
+            <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St, City, State" className={field} />
           </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="jane@acme.com"
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
+
           {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors">Cancel</button>
