@@ -57,7 +57,6 @@ export function Sidebar() {
   }, [])
 
   const projectsItems = useMemo(() => {
-    const term = getTerminology(businessType as BusinessType | null)
     const items: { href: string; label: string; icon: string }[] = []
 
     if (businessType === 'freelance' || businessType === 'both') {
@@ -70,7 +69,6 @@ export function Sidebar() {
       items.push({ href: '/projects', label: 'Projects', icon: '📁' })
     }
 
-    items.push({ href: term.addHref, label: term.addLabel, icon: '➕' })
     items.push({ href: '/settings', label: 'Settings', icon: '⚙️' })
 
     return items
