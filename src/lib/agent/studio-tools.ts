@@ -160,7 +160,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
 
     case 'list_clients': {
       const search = (a.searchName as string | undefined)?.toLowerCase()
-      const projects = await prisma.project.findMany({
+      const projects = await prisma.workspace.findMany({
         where: { userId, type: 'CLIENT', isActive: true },
         include: {
           clientProfile: {
@@ -201,7 +201,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
 
     case 'find_client': {
       const name = ((a.name as string) ?? '').toLowerCase()
-      const projects = await prisma.project.findMany({
+      const projects = await prisma.workspace.findMany({
         where: { userId, type: 'CLIENT', isActive: true },
         include: { clientProfile: true },
       })
@@ -239,7 +239,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       const invoices = await prisma.invoice.findMany({
         where: {
           clientProfile: {
-            project: {
+            workspace: {
               userId,
               ...(clientId ? { id: clientId } : {}),
             },
@@ -249,7 +249,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
           job: { select: { id: true, name: true } },
           lineItems: true,
           payments: true,
-          clientProfile: { include: { project: { select: { id: true, name: true } } } },
+          clientProfile: { include: { workspace: { select: { id: true, name: true } } } },
         },
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -268,8 +268,8 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
           paid,
           balance: Math.round((total - paid) * 100) / 100,
           dueDate: inv.dueDate.toISOString().slice(0, 10),
-          clientName: inv.clientProfile?.project.name ?? null,
-          clientId: inv.clientProfile?.project.id ?? null,
+          clientName: inv.clientProfile?.workspace.name ?? null,
+          clientId: inv.clientProfile?.workspace.id ?? null,
           jobName: inv.job?.name ?? null,
           currency: inv.currency,
         }
@@ -286,7 +286,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       const jobId = a.jobId as string | undefined
 
       // Verify ownership
-      const project = await prisma.project.findFirst({
+      const project = await prisma.workspace.findFirst({
         where: { id: clientId, userId, type: 'CLIENT' },
         include: { clientProfile: true },
       })
@@ -306,7 +306,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
 
       // Auto-generate invoice number
       const count = await prisma.invoice.count({
-        where: { clientProfile: { project: { userId } } },
+        where: { clientProfile: { workspace: { userId } } },
       })
       const invoiceNumber = `INV-${String(count + 1).padStart(4, '0')}`
 
@@ -354,11 +354,11 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       const invoiceId = a.invoiceId as string
 
       const invoice = await prisma.invoice.findFirst({
-        where: { id: invoiceId, clientProfile: { project: { userId } } },
+        where: { id: invoiceId, clientProfile: { workspace: { userId } } },
         include: {
           lineItems: true,
           payments: true,
-          clientProfile: { include: { project: { select: { id: true, name: true, slug: true } } } },
+          clientProfile: { include: { workspace: { select: { id: true, name: true, slug: true } } } },
         },
       })
       if (!invoice) return JSON.stringify({ error: 'Invoice not found' })
@@ -375,11 +375,11 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       const { sendInvoiceEmail } = await import('@/lib/email')
       await sendInvoiceEmail({
         toEmail: clientEmail,
-        toName: cp?.contactName ?? cp?.project.name ?? invoice.invoiceNumber,
-        fromName: cp?.project.name ?? 'Invoice',
+        toName: cp?.contactName ?? cp?.workspace.name ?? invoice.invoiceNumber,
+        fromName: cp?.workspace.name ?? 'Invoice',
         invoiceNumber: invoice.invoiceNumber,
         invoiceId: invoice.id,
-        projectSlug: cp?.project.slug ?? '',
+        projectSlug: cp?.workspace.slug ?? '',
         total,
         dueDate: invoice.dueDate.toISOString(),
         currency: invoice.currency,
@@ -406,7 +406,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       const paymentMethod = a.paymentMethod as string | undefined
 
       const invoice = await prisma.invoice.findFirst({
-        where: { id: invoiceId, clientProfile: { project: { userId } } },
+        where: { id: invoiceId, clientProfile: { workspace: { userId } } },
         include: { lineItems: true, payments: true },
       })
       if (!invoice) return JSON.stringify({ error: 'Invoice not found' })
@@ -437,7 +437,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
 
     case 'get_outstanding_summary': {
       const now = new Date()
-      const projects = await prisma.project.findMany({
+      const projects = await prisma.workspace.findMany({
         where: { userId, type: 'CLIENT' },
         include: {
           clientProfile: {
@@ -489,11 +489,11 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       const invoiceId = a.invoiceId as string
 
       const invoice = await prisma.invoice.findFirst({
-        where: { id: invoiceId, clientProfile: { project: { userId } } },
+        where: { id: invoiceId, clientProfile: { workspace: { userId } } },
         include: {
           lineItems: true,
           payments: true,
-          clientProfile: { include: { project: { select: { name: true, slug: true } } } },
+          clientProfile: { include: { workspace: { select: { name: true, slug: true } } } },
         },
       })
       if (!invoice) return JSON.stringify({ error: 'Invoice not found' })
@@ -510,11 +510,11 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
       const { sendReminderEmail } = await import('@/lib/email')
       await sendReminderEmail({
         toEmail: clientEmail,
-        toName: cp2?.contactName ?? cp2?.project.name ?? invoice.invoiceNumber,
-        fromName: cp2?.project.name ?? 'Invoice',
+        toName: cp2?.contactName ?? cp2?.workspace.name ?? invoice.invoiceNumber,
+        fromName: cp2?.workspace.name ?? 'Invoice',
         invoiceNumber: invoice.invoiceNumber,
         invoiceId: invoice.id,
-        projectSlug: cp2?.project.slug ?? '',
+        projectSlug: cp2?.workspace.slug ?? '',
         balance,
         dueDate: invoice.dueDate.toISOString(),
         currency: invoice.currency,

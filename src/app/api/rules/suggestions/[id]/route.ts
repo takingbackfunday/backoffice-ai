@@ -46,7 +46,7 @@ export async function POST(
           isActive: true,
         },
         include: {
-          project: { select: { id: true, name: true } },
+          workspace: { select: { id: true, name: true } },
           categoryRef: { include: { group: true } },
           payee: true,
         },

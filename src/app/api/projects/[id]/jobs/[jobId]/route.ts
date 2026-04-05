@@ -20,7 +20,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id, jobId } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId, type: 'CLIENT' },
       include: { clientProfile: true },
     })
@@ -58,7 +58,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id, jobId } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId, type: 'CLIENT' },
       include: { clientProfile: true },
     })

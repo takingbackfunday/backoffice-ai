@@ -14,7 +14,7 @@ export default async function TransactionsPage() {
   const where = { account: { userId } }
 
   const [projects, categoryGroups, payees, accounts, total, transactions] = await Promise.all([
-    prisma.project.findMany({
+    prisma.workspace.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     }),
@@ -38,7 +38,7 @@ export default async function TransactionsPage() {
       where,
       include: {
         account: { include: { institution: true } },
-        project: true,
+        workspace: true,
         categoryRef: { include: { group: true } },
         payee: true,
       },
@@ -56,7 +56,7 @@ export default async function TransactionsPage() {
           <TransactionTable
             initialRows={transactions as never}
             initialTotal={total}
-            initialProjects={projects}
+            initialWorkspaces={projects}
             initialCategoryGroups={categoryGroups.map((g) => ({
               id: g.id,
               name: g.name,

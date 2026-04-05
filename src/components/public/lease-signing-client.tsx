@@ -20,7 +20,7 @@ interface SerializedLease {
       address: string
       city: string | null
       state: string | null
-      project: { name: string }
+      workspace: { name: string }
     }
   }
 }
@@ -43,7 +43,7 @@ export function LeaseSigningClient({ lease }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const { unit } = lease
-  const propertyName = unit.propertyProfile.project.name
+  const propertyName = unit.propertyProfile.workspace.name
   const address = [unit.propertyProfile.address, unit.propertyProfile.city, unit.propertyProfile.state]
     .filter(Boolean)
     .join(', ')

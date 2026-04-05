@@ -101,7 +101,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const { messages, currentInvoice, clientName, company, paymentTermDays } = parsed.data
     const today = new Date().toISOString().split('T')[0]
 
-    const projectWithJobs = await prisma.project.findFirst({
+    const projectWithJobs = await prisma.workspace.findFirst({
       where: { id, userId },
       select: { id: true, name: true, clientProfile: { select: { jobs: { select: { id: true, name: true }, where: { status: 'ACTIVE' } } } } },
     })

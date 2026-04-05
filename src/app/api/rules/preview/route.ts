@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const transactions = await prisma.transaction.findMany({
       where: { account: { userId } },
       orderBy: { date: 'desc' },
-      include: { account: true, payee: true, project: true },
+      include: { account: true, payee: true, workspace: true },
     })
 
     const allMatches = transactions.filter((tx) => {
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
         currency: tx.account.currency,
         category: tx.category,
         payeeName: tx.payee?.name ?? null,
-        projectName: tx.project?.name ?? null,
+        projectName: tx.workspace?.name ?? null,
       })),
       { matchCount }
     )

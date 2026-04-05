@@ -1,10 +1,12 @@
-import type { Account, Project, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee } from '@/generated/prisma/client'
+import type { Account, Workspace, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee } from '@/generated/prisma/client'
 
 // Re-export Prisma types for convenience
-export type { Account, Project, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee }
+export type { Account, Workspace, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee }
+export type Project = Workspace  // backward compat alias
 
 export type AccountType = 'CREDIT_CARD' | 'DEBIT_CARD' | 'CHECKING' | 'SAVINGS' | 'BUSINESS_CHECKING' | 'TRUST_ACCOUNT'
-export type ProjectType = 'CLIENT' | 'PROPERTY' | 'OTHER'
+export type WorkspaceType = 'CLIENT' | 'PROPERTY' | 'OTHER'
+export type ProjectType = WorkspaceType  // backward compat alias
 
 // CSV column mapping stored in InstitutionSchema.csvMapping
 export interface CsvMapping {
@@ -56,7 +58,7 @@ export interface PaginationMeta {
 // Transaction with relations for display
 export type TransactionWithRelations = Transaction & {
   account: Account & { institution: InstitutionSchema }
-  project: Project | null
+  workspace: Workspace | null
   categoryRef: (Category & { group: CategoryGroup }) | null
   payee: Payee | null
 }

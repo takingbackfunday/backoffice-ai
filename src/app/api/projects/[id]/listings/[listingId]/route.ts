@@ -19,7 +19,7 @@ const UpdateListingSchema = z.object({
 interface RouteParams { params: Promise<{ id: string; listingId: string }> }
 
 async function getPropertyProject(id: string, userId: string) {
-  return prisma.project.findFirst({
+  return prisma.workspace.findFirst({
     where: { id, userId, type: 'PROPERTY' },
     include: { propertyProfile: { include: { units: { select: { id: true } } } } },
   })

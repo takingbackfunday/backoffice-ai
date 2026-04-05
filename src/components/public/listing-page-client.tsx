@@ -25,7 +25,7 @@ interface SerializedListing {
       address: string
       city: string | null
       state: string | null
-      project: { name: string }
+      workspace: { name: string }
     }
   }
 }
@@ -53,7 +53,7 @@ export function ListingPageClient({ listing }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const { unit } = listing
-  const propertyName = unit.propertyProfile.project.name
+  const propertyName = unit.propertyProfile.workspace.name
   const address = [
     unit.propertyProfile.address,
     unit.propertyProfile.city,

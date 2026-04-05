@@ -14,7 +14,7 @@ export default async function PortalMessagesPage() {
     include: {
       leases: {
         where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
-        include: { unit: { include: { propertyProfile: { include: { project: true } } } } },
+        include: { unit: { include: { propertyProfile: { include: { workspace: true } } } } },
         orderBy: { startDate: 'desc' },
         take: 1,
       },
@@ -39,7 +39,7 @@ export default async function PortalMessagesPage() {
     orderBy: { createdAt: 'asc' },
   })
 
-  const projectId = activeLease.unit.propertyProfile?.project?.id ?? ''
+  const projectId = activeLease.unit.propertyProfile?.workspace?.id ?? ''
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -49,7 +49,7 @@ export default async function PortalMessagesPage() {
           Messages with your landlord about{' '}
           {activeLease.unit.unitLabel !== 'Main'
             ? activeLease.unit.unitLabel
-            : (activeLease.unit.propertyProfile?.project?.name ?? 'your rental')}
+            : (activeLease.unit.propertyProfile?.workspace?.name ?? 'your rental')}
         </p>
       </div>
       <PortalMessageThread

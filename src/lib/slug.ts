@@ -15,7 +15,7 @@ export async function generateSlug(userId: string, name: string): Promise<string
   let counter = 1
 
   while (true) {
-    const existing = await prisma.project.findUnique({
+    const existing = await prisma.workspace.findUnique({
       where: { userId_slug: { userId, slug } },
     })
     if (!existing) return slug

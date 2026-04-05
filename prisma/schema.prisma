@@ -96,8 +96,8 @@ model Transaction {
   id                        String                     @id @default(cuid())
   accountId                 String
   account                   Account                    @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  projectId                 String?
-  project                   Project?                   @relation(fields: [projectId], references: [id])
+  workspaceId               String?                    @map("projectId")
+  workspace                 Workspace?                 @relation(fields: [workspaceId], references: [id])
   importBatchId             String?
   importBatch               ImportBatch?               @relation(fields: [importBatchId], references: [id])
   categoryId                String?
@@ -120,7 +120,7 @@ model Transaction {
   @@index([accountId, date])
   @@index([categoryId])
   @@index([payeeId])
-  @@index([projectId])
+  @@index([workspaceId])
 }
 
 model ImportBatch {
@@ -154,8 +154,8 @@ model CategorizationRule {
   categoryRef  Category? @relation(fields: [categoryId], references: [id])
   payeeId      String?
   payee        Payee?    @relation(fields: [payeeId], references: [id])
-  projectId    String?
-  project      Project?  @relation(fields: [projectId], references: [id])
+  workspaceId  String?   @map("projectId")
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id])
   setNotes     String?
   addTags      String[]  @default([])
   isActive     Boolean   @default(true)
@@ -302,14 +302,15 @@ enum SyncJobStatus {
 
 // ── Projects expansion (NEW) ────────────────────────────────────────────────
 
-model Project {
+model Workspace {
   id                  String               @id @default(cuid())
   userId              String
   name                String
   slug                String
-  type                ProjectType
+  type                WorkspaceType
   description         String?
   isActive            Boolean              @default(true)
+  isDefault           Boolean              @default(false)
   clientProfile       ClientProfile?
   propertyProfile     PropertyProfile?
   transactions        Transaction[]
@@ -319,20 +320,23 @@ model Project {
 
   @@unique([userId, slug])
   @@index([userId])
+  @@map("Project")
 }
 
-enum ProjectType {
+enum WorkspaceType {
   CLIENT
   PROPERTY
   OTHER
+
+  @@map("ProjectType")
 }
 
 // ── Client track ────────────────────────────────────────────────────────────
 
 model ClientProfile {
   id              String      @id @default(cuid())
-  projectId       String      @unique
-  project         Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspaceId     String      @unique @map("projectId")
+  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contactName     String?
   email           String?
   phone           String?
@@ -506,8 +510,8 @@ enum InvoicePaymentSuggestionStatus {
 
 model PropertyProfile {
   id                      String       @id @default(cuid())
-  projectId               String       @unique
-  project                 Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspaceId             String       @unique @map("projectId")
+  workspace               Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   address                 String
   city                    String?
   state                   String?

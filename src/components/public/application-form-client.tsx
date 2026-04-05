@@ -15,7 +15,7 @@ interface SerializedListing {
   unit: {
     unitLabel: string
     propertyProfile: {
-      project: { name: string }
+      workspace: { name: string }
     }
   }
 }
@@ -217,7 +217,7 @@ export function ApplicationFormClient({ listing }: Props) {
         <h1 className="text-xl font-bold">Application submitted!</h1>
         <p className="text-sm text-muted-foreground">
           We received your application for <strong>{listing.unit.unitLabel}</strong> at{' '}
-          <strong>{listing.unit.propertyProfile.project.name}</strong>. You will hear from the property manager soon.
+          <strong>{listing.unit.propertyProfile.workspace.name}</strong>. You will hear from the property manager soon.
         </p>
       </div>
     )
@@ -227,7 +227,7 @@ export function ApplicationFormClient({ listing }: Props) {
     <div className="max-w-xl mx-auto px-4 py-10 space-y-6">
       {/* Header */}
       <div>
-        <p className="text-sm text-muted-foreground">{listing.unit.propertyProfile.project.name} · {listing.unit.unitLabel}</p>
+        <p className="text-sm text-muted-foreground">{listing.unit.propertyProfile.workspace.name} · {listing.unit.unitLabel}</p>
         <h1 className="text-xl font-bold mt-0.5">Rental Application</h1>
         <p className="text-sm text-muted-foreground mt-1">
           {fmtCurrency(listing.monthlyRent)}/mo

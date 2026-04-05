@@ -57,7 +57,7 @@ export async function GET(request: Request) {
       where.type = type
     }
 
-    const projects = await prisma.project.findMany({
+    const projects = await prisma.workspace.findMany({
       where,
       include: {
         _count: { select: { transactions: true } },
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
     const slug = await generateSlug(userId, name)
 
-    const project = await prisma.project.create({
+    const project = await prisma.workspace.create({
       data: {
         userId,
         name,

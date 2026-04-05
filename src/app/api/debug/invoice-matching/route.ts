@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     if (!txId) {
       // List recent transactions on CLIENT projects for this user
       const recent = await prisma.transaction.findMany({
-        where: { project: { userId, type: 'CLIENT' } },
+        where: { workspace: { userId, type: 'CLIENT' } },
         orderBy: { createdAt: 'desc' },
         take: 10,
         select: {
@@ -30,8 +30,8 @@ export async function GET(request: Request) {
           amount: true,
           description: true,
           date: true,
-          projectId: true,
-          project: { select: { name: true, type: true } },
+          workspaceId: true,
+          workspace: { select: { name: true, type: true } },
           invoicePayment: { select: { id: true } },
           invoicePaymentSuggestions: { select: { id: true, status: true } },
         },
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     const tx = await prisma.transaction.findUnique({
       where: { id: txId },
       include: {
-        project: { select: { id: true, name: true, type: true, userId: true } },
+        workspace: { select: { id: true, name: true, type: true, userId: true } },
         invoicePayment: true,
         invoicePaymentSuggestions: true,
       },
@@ -53,18 +53,18 @@ export async function GET(request: Request) {
     log(`tx.id=${tx.id}`)
     log(`tx.amount=${tx.amount} (positive: ${Number(tx.amount) > 0})`)
     log(`tx.description="${tx.description}"`)
-    log(`tx.project=${JSON.stringify(tx.project)}`)
-    log(`tx.project.userId === userId: ${tx.project?.userId === userId}`)
-    log(`tx.project.type: ${tx.project?.type} (is CLIENT: ${tx.project?.type === 'CLIENT'})`)
+    log(`tx.workspace=${JSON.stringify(tx.workspace)}`)
+    log(`tx.workspace.userId === userId: ${tx.workspace?.userId === userId}`)
+    log(`tx.workspace.type: ${tx.workspace?.type} (is CLIENT: ${tx.workspace?.type === 'CLIENT'})`)
     log(`tx.invoicePayment=${tx.invoicePayment ? 'EXISTS (already linked)' : 'null (unlinked)'}`)
     log(`tx.invoicePaymentSuggestions=${JSON.stringify(tx.invoicePaymentSuggestions)}`)
 
-    if (!tx.project || tx.project.type !== 'CLIENT') {
-      log('STOP: project is not CLIENT type — matching will be skipped')
+    if (!tx.workspace || tx.workspace.type !== 'CLIENT') {
+      log('STOP: workspace is not CLIENT type — matching will be skipped')
       return NextResponse.json({ logs, tx })
     }
-    if (tx.project.userId !== userId) {
-      log('STOP: project does not belong to this userId')
+    if (tx.workspace.userId !== userId) {
+      log('STOP: workspace does not belong to this userId')
       return NextResponse.json({ logs, tx })
     }
     if (Number(tx.amount) <= 0) {
@@ -83,7 +83,7 @@ export async function GET(request: Request) {
 
     // Now check the client profile and open invoices
     const clientProfile = await prisma.clientProfile.findUnique({
-      where: { projectId: tx.project.id },
+      where: { workspaceId: tx.workspace.id },
       include: {
         invoices: {
           where: { status: { in: ['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'] } },

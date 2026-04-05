@@ -31,7 +31,7 @@ const CreateRuleSchema = z.object({
   categoryName: z.string().default(''),
   categoryId: z.string().nullable().optional(),
   payeeName: z.string().nullable().optional(),
-  projectId: z.string().nullable().optional(),
+  workspaceId: z.string().nullable().optional(),
   setNotes: z.string().nullable().optional(),
   addTags: z.array(z.string()).optional().default([]),
   isActive: z.boolean().optional().default(true),
@@ -45,7 +45,7 @@ export async function GET() {
     const rules = await prisma.categorizationRule.findMany({
       where: { userId },
       include: {
-        project: { select: { id: true, name: true } },
+        workspace: { select: { id: true, name: true } },
         categoryRef: { include: { group: true } },
         payee: true,
       },
@@ -69,11 +69,11 @@ export async function POST(request: Request) {
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
-    const { projectId, payeeName, categoryId, setNotes, addTags, ...rest } = parsed.data
+    const { workspaceId, payeeName, categoryId, setNotes, addTags, ...rest } = parsed.data
 
     // Verify project belongs to user if provided
-    if (projectId) {
-      const project = await prisma.project.findFirst({ where: { id: projectId, userId } })
+    if (workspaceId) {
+      const project = await prisma.workspace.findFirst({ where: { id: workspaceId, userId } })
       if (!project) return badRequest('Project not found or does not belong to you')
     }
 
@@ -92,14 +92,14 @@ export async function POST(request: Request) {
       data: {
         ...rest,
         payeeId,
-        projectId: projectId ?? null,
+        workspaceId: workspaceId ?? null,
         categoryId: categoryId ?? null,
         setNotes: setNotes ?? null,
         addTags: addTags ?? [],
         userId,
       },
       include: {
-        project: { select: { id: true, name: true } },
+        workspace: { select: { id: true, name: true } },
         categoryRef: { include: { group: true } },
         payee: true,
       },

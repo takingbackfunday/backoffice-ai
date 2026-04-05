@@ -16,7 +16,7 @@ export default async function ProjectMessageThreadPage({ params }: PageParams) {
 
   const { slug, tenantId } = await params
 
-  const project = await prisma.project.findFirst({
+  const project = await prisma.workspace.findFirst({
     where: { userId, slug, type: 'PROPERTY' },
     include: { propertyProfile: { include: { units: { select: { id: true } } } } },
   })

@@ -12,12 +12,12 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const { id } = await params
 
     // Verify the project belongs to this user
-    const project = await prisma.project.findFirst({ where: { id, userId } })
+    const project = await prisma.workspace.findFirst({ where: { id, userId } })
     if (!project) return notFound('Project not found')
 
     const transactions = await prisma.transaction.findMany({
       where: {
-        projectId: id,
+        workspaceId: id,
         amount: { gt: 0 },
         invoicePayment: null,
       },

@@ -38,7 +38,7 @@ export async function loadUserRules(
         categoryName: row.categoryName,
         categoryId: row.categoryId ?? null,
         payeeId: row.payeeId ?? null,
-        projectId: row.projectId ?? null,
+        workspaceId: row.workspaceId ?? null,
         notes: meta.setNotes ?? null,
         addTags: meta.addTags ?? [],
         confidence: 'high' as const,

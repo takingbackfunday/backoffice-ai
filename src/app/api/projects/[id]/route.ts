@@ -43,7 +43,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId },
       include: {
         clientProfile: { include: { jobs: { orderBy: { createdAt: 'desc' } } } },
@@ -80,7 +80,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id } = await params
 
-    const existing = await prisma.project.findFirst({ where: { id, userId } })
+    const existing = await prisma.workspace.findFirst({ where: { id, userId } })
     if (!existing) return notFound('Project not found')
 
     const body = await request.json()
@@ -91,7 +91,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     const { name, description, isActive, client, property } = parsed.data
 
-    const project = await prisma.project.update({
+    const project = await prisma.workspace.update({
       where: { id },
       data: {
         ...(name !== undefined ? { name } : {}),
@@ -127,10 +127,10 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id } = await params
 
-    const existing = await prisma.project.findFirst({ where: { id, userId } })
+    const existing = await prisma.workspace.findFirst({ where: { id, userId } })
     if (!existing) return notFound('Project not found')
 
-    await prisma.project.delete({ where: { id } })
+    await prisma.workspace.delete({ where: { id } })
     return ok({ deleted: true })
   } catch {
     return serverError('Failed to delete project')

@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import type { Project } from '@/generated/prisma/client'
+import type { Workspace } from '@/generated/prisma/client'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ export interface UserRule {
   payeeId: string | null
   payee: { id: string; name: string } | null
   projectId: string | null
-  project: { id: string; name: string } | null
+  workspace: { id: string; name: string } | null
   conditions: {
     all?: { field: string; operator: string; value: string | number | string[] }[]
     any?: { field: string; operator: string; value: string | number | string[] }[]
@@ -151,7 +151,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
   op: ConditionOp
   outputs: OutputAction[]
   categoryGroups: CategoryGroup[]
-  projects: Project[]
+  projects: Workspace[]
 }) {
   const [results, setResults] = useState<PreviewTx[]>([])
   const [matchCount, setMatchCount] = useState(0)
@@ -222,8 +222,8 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
   const allCats = categoryGroups.flatMap((g) => g.categories)
   const newCategory = rawCategory ? (allCats.find((c) => c.id === rawCategory)?.name ?? rawCategory) : null
   const newPayee = outputs.find((o) => o.type === 'payee')?.value.trim() || null
-  const newProjectId = outputs.find((o) => o.type === 'project')?.value || null
-  const newProjectName = newProjectId ? (projects.find((p) => p.id === newProjectId)?.name ?? null) : null
+  const newWorkspaceId = outputs.find((o) => o.type === 'project')?.value || null
+  const newWorkspaceName = newWorkspaceId ? (projects.find((p) => p.id === newWorkspaceId)?.name ?? null) : null
 
   const PREVIEW_ROWS = 2
   const visible = results.slice(0, showAll ? undefined : PREVIEW_ROWS)
@@ -248,7 +248,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
                   <th className="px-1.5 py-1 text-left font-medium text-[#999]">Ccy</th>
                   <th className="px-1.5 py-1 text-left font-medium text-[#999]">Category</th>
                   <th className="px-1.5 py-1 text-left font-medium text-[#999]">Payee</th>
-                  <th className="px-1.5 py-1 text-left font-medium text-[#999]">Project</th>
+                  <th className="px-1.5 py-1 text-left font-medium text-[#999]">Workspace</th>
                 </tr>
               </thead>
               <tbody className="bg-white">
@@ -262,7 +262,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
                     <td className="px-1.5 py-1 text-[#888]">{tx.currency}</td>
                     <DeltaCell current={tx.category} next={newCategory} />
                     <DeltaCell current={tx.payeeName} next={newPayee} />
-                    <DeltaCell current={tx.projectName} next={newProjectName} />
+                    <DeltaCell current={tx.projectName} next={newWorkspaceName} />
                   </tr>
                 ))}
               </tbody>
@@ -400,14 +400,14 @@ const OUTPUT_STYLES: Record<OutputActionType, { bg: string; label: string; text:
 const OUTPUT_LABELS: Record<OutputActionType, string> = {
   category: 'Category',
   payee:    'Payee',
-  project:  'Project',
+  project:  'Workspace',
   notes:    'Notes',
 }
 
 export function OutputRow({
   action, projects, payees, categoryGroups, onChange, onRemove, canRemove,
 }: {
-  action: OutputAction; projects: Project[]; payees: Payee[]; categoryGroups: CategoryGroup[]
+  action: OutputAction; projects: Workspace[]; payees: Payee[]; categoryGroups: CategoryGroup[]
   onChange: (a: OutputAction) => void; onRemove: () => void; canRemove: boolean
 }) {
   const s = OUTPUT_STYLES[action.type]
@@ -418,7 +418,7 @@ export function OutputRow({
       {action.type === 'project' ? (
         <select value={action.value} onChange={(e) => onChange({ ...action, value: e.target.value })}
           className={`bg-transparent text-[13px] ${s.text} ${s.value} border-none outline-none cursor-pointer flex-1`}
-          aria-label="Project">
+          aria-label="Workspace">
           <option value="">— None —</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
@@ -471,7 +471,7 @@ export function RuleEditor({
   projects, payees, accounts, categoryGroups, editingRule, onSave, onCancel, saveLabel, cancelLabel, showSaveAndApply, onApplyComplete,
   cardHeader, onSaveOverride,
 }: {
-  projects: Project[]
+  projects: Workspace[]
   payees: Payee[]
   accounts?: { id: string; name: string }[]
   categoryGroups: CategoryGroup[]

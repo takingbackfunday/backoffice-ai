@@ -11,7 +11,7 @@ export default async function ListingPage({ params }: { params: Promise<{ slug: 
       unit: {
         include: {
           propertyProfile: {
-            include: { project: { select: { name: true } } },
+            include: { workspace: { select: { name: true } } },
           },
         },
       },

@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId, type: 'PROPERTY' },
       include: { propertyProfile: { include: { units: { select: { id: true } } } } },
     })
@@ -54,7 +54,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId, type: 'PROPERTY' },
     })
     if (!project) return notFound('Property project not found')
@@ -101,7 +101,7 @@ export async function POST(request: Request, { params }: RouteParams) {
           conditions: { any: [{ field: 'description', operator: 'contains', value: tenant.name.toLowerCase() }] },
           categoryName: 'Income',
           payeeId: payee.id,
-          projectId: project.id,
+          workspaceId: project.id,
           isActive: true,
         },
       })

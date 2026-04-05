@@ -17,7 +17,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
 
   const { slug, invoiceId } = await params
 
-  const project = await prisma.project.findFirst({
+  const project = await prisma.workspace.findFirst({
     where: { userId, slug },
     include: {
       propertyProfile: { include: { units: { select: { id: true } } } },
@@ -39,7 +39,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
             { tenant: { userId, leases: { some: { unitId: { in: unitIds } } } } },
             ...(propertyProfileId ? [{ applicant: { propertyProfileId } }] : []),
           ]
-        : [{ clientProfile: { projectId: project.id } }],
+        : [{ clientProfile: { workspaceId: project.id } }],
     },
     include: {
       job: { select: { id: true, name: true } },

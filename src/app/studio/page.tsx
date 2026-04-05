@@ -9,7 +9,7 @@ export default async function StudioPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const projects = await prisma.project.findMany({
+  const projects = await prisma.workspace.findMany({
     where: { userId, type: 'CLIENT', isActive: true },
     include: {
       clientProfile: {
@@ -40,8 +40,8 @@ export default async function StudioPage() {
         paidDate: { gte: sevenDaysAgo },
         invoice: {
           OR: [
-            { clientProfile: { project: { userId } } },
-            { lease: { unit: { propertyProfile: { project: { userId } } } } },
+            { clientProfile: { workspace: { userId } } },
+            { lease: { unit: { propertyProfile: { workspace: { userId } } } } },
           ],
         },
       },

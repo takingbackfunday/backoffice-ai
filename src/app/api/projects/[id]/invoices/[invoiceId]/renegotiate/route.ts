@@ -11,7 +11,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     const { id, invoiceId } = await params
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, clientProfile: { project: { id, userId } } },
+      where: { id: invoiceId, clientProfile: { workspace: { id, userId } } },
       include: {
         lineItems: true,
         payments: true,
@@ -34,7 +34,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
       // 2. Generate next invoice number
       const count = await tx.invoice.count({
-        where: { clientProfile: { project: { userId } } },
+        where: { clientProfile: { workspace: { userId } } },
       })
       const invoiceNumber = `INV-${String(count + 1).padStart(4, '0')}`
 

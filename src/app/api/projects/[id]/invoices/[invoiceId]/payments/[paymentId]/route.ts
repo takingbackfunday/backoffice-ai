@@ -12,10 +12,10 @@ async function getOwnedInvoice(userId: string, projectId: string, invoiceId: str
     where: {
       id: invoiceId,
       OR: [
-        { clientProfile: { project: { id: projectId, userId } } },
-        { lease: { unit: { propertyProfile: { project: { id: projectId, userId } } } } },
-        { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id: projectId, userId } } } } } } },
-        { applicant: { propertyProfile: { project: { id: projectId, userId } } } },
+        { clientProfile: { workspace: { id: projectId, userId } } },
+        { lease: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } },
+        { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } } } },
+        { applicant: { propertyProfile: { workspace: { id: projectId, userId } } } },
       ],
     },
     include: { lineItems: true, payments: true },
@@ -123,10 +123,10 @@ async function handleMove(
       where: {
         id: invoiceId,
         OR: [
-          { clientProfile: { project: { id: projectId, userId } } },
-          { lease: { unit: { propertyProfile: { project: { id: projectId, userId } } } } },
-          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id: projectId, userId } } } } } } },
-          { applicant: { propertyProfile: { project: { id: projectId, userId } } } },
+          { clientProfile: { workspace: { id: projectId, userId } } },
+          { lease: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } } } },
+          { applicant: { propertyProfile: { workspace: { id: projectId, userId } } } },
         ],
       },
       include: { lineItems: true, payments: true },
@@ -135,10 +135,10 @@ async function handleMove(
       where: {
         id: targetInvoiceId,
         OR: [
-          { clientProfile: { project: { id: projectId, userId } } },
-          { lease: { unit: { propertyProfile: { project: { id: projectId, userId } } } } },
-          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id: projectId, userId } } } } } } },
-          { applicant: { propertyProfile: { project: { id: projectId, userId } } } },
+          { clientProfile: { workspace: { id: projectId, userId } } },
+          { lease: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } } } },
+          { applicant: { propertyProfile: { workspace: { id: projectId, userId } } } },
         ],
       },
       include: { lineItems: true, payments: true },

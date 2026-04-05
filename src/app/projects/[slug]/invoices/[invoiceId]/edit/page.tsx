@@ -16,7 +16,7 @@ export default async function EditInvoicePage({ params }: PageParams) {
 
   const { slug, invoiceId } = await params
 
-  const project = await prisma.project.findFirst({
+  const project = await prisma.workspace.findFirst({
     where: { userId, slug, type: 'CLIENT' },
     include: {
       clientProfile: {
@@ -27,7 +27,7 @@ export default async function EditInvoicePage({ params }: PageParams) {
   if (!project || !project.clientProfile) notFound()
 
   const invoice = await prisma.invoice.findFirst({
-    where: { id: invoiceId, clientProfile: { projectId: project.id } },
+    where: { id: invoiceId, clientProfile: { workspaceId: project.id } },
     include: {
       lineItems: true,
       payments: true,

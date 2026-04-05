@@ -23,7 +23,7 @@ const UpdateApplicantSchema = z.object({
 interface RouteParams { params: Promise<{ id: string; applicantId: string }> }
 
 async function getPropertyProfile(id: string, userId: string) {
-  const project = await prisma.project.findFirst({
+  const project = await prisma.workspace.findFirst({
     where: { id, userId, type: 'PROPERTY' },
     include: { propertyProfile: true },
   })

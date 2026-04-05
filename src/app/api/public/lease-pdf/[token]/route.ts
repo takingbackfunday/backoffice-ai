@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         unit: {
           include: {
             propertyProfile: {
-              include: { project: { select: { id: true, name: true, userId: true } } },
+              include: { workspace: { select: { id: true, name: true, userId: true } } },
             },
           },
         },
@@ -24,7 +24,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (!lease) return notFound()
 
     const prefs = await prisma.userPreference.findUnique({
-      where: { userId: lease.unit.propertyProfile.project.userId },
+      where: { userId: lease.unit.propertyProfile.workspace.userId },
     })
     const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
     const ownerName = (prefsData.displayName as string | undefined) ?? 'Property Manager'
@@ -34,7 +34,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       tenantName: lease.tenant.name,
       tenantEmail: lease.tenant.email,
       tenantPhone: lease.tenant.phone ?? null,
-      propertyName: lease.unit.propertyProfile.project.name,
+      propertyName: lease.unit.propertyProfile.workspace.name,
       propertyAddress: lease.unit.propertyProfile.address ?? null,
       unitLabel: lease.unit.unitLabel,
       startDate: lease.startDate.toISOString(),

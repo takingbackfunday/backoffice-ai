@@ -14,7 +14,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id, leaseId } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId, type: 'PROPERTY' },
       include: {
         propertyProfile: {

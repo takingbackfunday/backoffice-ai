@@ -36,7 +36,7 @@ type OpenInvoice = {
 
 async function getOpenInvoicesForTransaction(tx: {
   id: string
-  project: {
+  workspace: {
     type: string
     clientProfile?: {
       invoices: OpenInvoice[]
@@ -53,14 +53,14 @@ async function getOpenInvoicesForTransaction(tx: {
     } | null
   } | null
 }): Promise<OpenInvoice[]> {
-  if (!tx.project) return []
+  if (!tx.workspace) return []
 
-  if (tx.project.type === 'CLIENT') {
-    return tx.project.clientProfile?.invoices ?? []
+  if (tx.workspace.type === 'CLIENT') {
+    return tx.workspace.clientProfile?.invoices ?? []
   }
 
-  if (tx.project.type === 'PROPERTY') {
-    const pp = tx.project.propertyProfile
+  if (tx.workspace.type === 'PROPERTY') {
+    const pp = tx.workspace.propertyProfile
     if (!pp) return []
     const leaseInvoices = pp.units.flatMap(u => u.leases.flatMap(l => l.invoices))
     const applicantInvoices = pp.applicants.flatMap(a => a.invoices)
@@ -82,14 +82,14 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
       id: { in: newTxIds },
       amount: { gt: 0 },
       invoicePayment: null,
-      project: { userId, type: { in: ['CLIENT', 'PROPERTY'] } },
+      workspace: { userId, type: { in: ['CLIENT', 'PROPERTY'] } },
     },
     include: {
       invoicePaymentSuggestions: {
         where: { status: 'PENDING' },
         select: { invoiceId: true },
       },
-      project: {
+      workspace: {
         include: {
           // CLIENT path
           clientProfile: {
@@ -147,7 +147,7 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
     const txAmount = Number(tx.amount)
     const openInvoices = await getOpenInvoicesForTransaction(tx as Parameters<typeof getOpenInvoicesForTransaction>[0])
 
-    console.log(`[invoice-matching] tx=${tx.id} amount=${txAmount} desc="${tx.description}" project.type=${tx.project?.type} openInvoices=${openInvoices.length}`)
+    console.log(`[invoice-matching] tx=${tx.id} amount=${txAmount} desc="${tx.description}" project.type=${tx.workspace?.type} openInvoices=${openInvoices.length}`)
 
     if (openInvoices.length === 0) {
       console.log(`[invoice-matching]   → no open invoices for this project, skipping`)

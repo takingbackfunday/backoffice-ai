@@ -50,12 +50,12 @@ export async function POST(req: Request) {
     // Find the owner's email via Clerk and notify them (fire-and-forget)
     const unit = await prisma.unit.findUnique({
       where: { id: unitId },
-      include: { propertyProfile: { include: { project: true } } },
+      include: { propertyProfile: { include: { workspace: true } } },
     })
-    if (unit?.propertyProfile?.project) {
+    if (unit?.propertyProfile?.workspace) {
       const { clerkClient } = await import('@clerk/nextjs/server')
       const clerk = await clerkClient()
-      const owner = await clerk.users.getUser(unit.propertyProfile.project.userId)
+      const owner = await clerk.users.getUser(unit.propertyProfile.workspace.userId)
       const ownerEmail = owner.emailAddresses.find(e => e.id === owner.primaryEmailAddressId)?.emailAddress
       if (ownerEmail) {
         const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://backoffice.cv'
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
           subject: subject?.trim() || 'New message',
           body: body.trim(),
           tenantName: tenant.name,
-          portalUrl: `${APP_URL}/projects/${unit.propertyProfile.project.slug}/messages/${session.tenantId}`,
+          portalUrl: `${APP_URL}/projects/${unit.propertyProfile.workspace.slug}/messages/${session.tenantId}`,
         }).catch(() => {})
       }
     }

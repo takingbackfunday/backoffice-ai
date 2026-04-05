@@ -29,7 +29,7 @@ const UpdateRuleSchema = z.object({
   categoryName: z.string().optional(),
   categoryId: z.string().nullable().optional(),
   payeeName: z.string().nullable().optional(),
-  projectId: z.string().nullable().optional(),
+  workspaceId: z.string().nullable().optional(),
   setNotes: z.string().nullable().optional(),
   addTags: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
@@ -72,7 +72,7 @@ export async function PATCH(
       where: { id },
       data: { ...rest, ...(payeeId !== undefined ? { payeeId } : {}) },
       include: {
-        project: { select: { id: true, name: true } },
+        workspace: { select: { id: true, name: true } },
         categoryRef: { include: { group: true } },
         payee: true,
       },

@@ -18,13 +18,13 @@ export default async function RulesPage() {
     prisma.categorizationRule.findMany({
       where: { userId },
       include: {
-        project: { select: { id: true, name: true } },
+        workspace: { select: { id: true, name: true } },
         categoryRef: { include: { group: true } },
         payee: true,
       },
       orderBy: { updatedAt: 'desc' },
     }),
-    prisma.project.findMany({
+    prisma.workspace.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     }),
@@ -75,7 +75,7 @@ export default async function RulesPage() {
           <Suspense>
             <RulesManager
               initialRules={rules as never}
-              initialProjects={projects}
+              initialWorkspaces={projects}
               initialPayees={payees}
               initialAccounts={accounts}
               initialPendingSuggestions={pendingSuggestions as never}

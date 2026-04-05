@@ -23,10 +23,10 @@ export async function POST(request: Request, { params }: RouteParams) {
       where: {
         id: invoiceId,
         OR: [
-          { clientProfile: { project: { id, userId } } },
-          { lease: { unit: { propertyProfile: { project: { id, userId } } } } },
-          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id, userId } } } } } } },
-          { applicant: { propertyProfile: { project: { id, userId } } } },
+          { clientProfile: { workspace: { id, userId } } },
+          { lease: { unit: { propertyProfile: { workspace: { id, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id, userId } } } } } } },
+          { applicant: { propertyProfile: { workspace: { id, userId } } } },
         ],
       },
       include: {
@@ -60,7 +60,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const txId = parsed.data.transactionId ?? null
     if (txId) {
       const linkedTx = await prisma.transaction.findFirst({
-        where: { id: txId, project: { id } },
+        where: { id: txId, workspace: { id } },
         include: { invoicePayment: true },
       })
       if (!linkedTx) return notFound('Transaction not found on this project')

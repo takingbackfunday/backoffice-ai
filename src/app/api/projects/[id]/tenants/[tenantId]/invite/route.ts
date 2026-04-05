@@ -12,7 +12,7 @@ export async function POST(_req: Request, { params }: RouteParams) {
     const { id: projectId, tenantId } = await params
 
     // Verify project ownership
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id: projectId, userId, type: 'PROPERTY' },
     })
     if (!project) return notFound('Project not found')

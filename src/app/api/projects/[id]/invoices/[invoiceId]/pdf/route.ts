@@ -16,13 +16,13 @@ export async function GET(_request: Request, { params }: RouteParams) {
       where: {
         id: invoiceId,
         OR: [
-          { clientProfile: { project: { id, userId } } },
-          { lease: { unit: { propertyProfile: { project: { id, userId } } } } },
-          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id, userId } } } } } } },
+          { clientProfile: { workspace: { id, userId } } },
+          { lease: { unit: { propertyProfile: { workspace: { id, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id, userId } } } } } } },
         ],
       },
       include: {
-        clientProfile: { include: { project: { select: { name: true } } } },
+        clientProfile: { include: { workspace: { select: { name: true } } } },
         tenant: { select: { name: true, email: true, phone: true } },
         lease: { include: { tenant: { select: { name: true, email: true, phone: true } } } },
         lineItems: true,
@@ -38,8 +38,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const cp = invoice.clientProfile
     const leaseTenant = invoice.lease?.tenant
     const directTenant = invoice.tenant
-    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.project.name || 'Invoice'
-    const clientName = cp?.contactName ?? cp?.project.name ?? leaseTenant?.name ?? directTenant?.name ?? invoice.invoiceNumber
+    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.workspace.name || 'Invoice'
+    const clientName = cp?.contactName ?? cp?.workspace.name ?? leaseTenant?.name ?? directTenant?.name ?? invoice.invoiceNumber
     const clientEmail = cp?.email ?? leaseTenant?.email ?? directTenant?.email
     const clientPhone = cp?.phone ?? leaseTenant?.phone ?? directTenant?.phone
     const clientAddress = cp?.address ?? null

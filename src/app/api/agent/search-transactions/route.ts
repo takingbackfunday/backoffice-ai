@@ -24,7 +24,7 @@ export async function POST(request: Request) {
         orderBy: { name: 'asc' },
       }),
       prisma.payee.findMany({ where: { userId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-      prisma.project.findMany({ where: { userId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+      prisma.workspace.findMany({ where: { userId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
       prisma.account.findMany({ where: { userId }, select: { name: true }, orderBy: { name: 'asc' } }),
       prisma.transaction.aggregate({
         where: { account: { userId } },
@@ -56,7 +56,7 @@ ${categoryList}
 Available payees (use the name for payeeName):
 ${payeeList}
 
-Available projects (use the id for projectId):
+Available projects (use the id for workspaceId):
 ${projectList}
 
 Available accounts (use the name for accountName):
@@ -71,7 +71,7 @@ IMPORTANT RULES:
 - Use "search" only when the query is very broad and should match across description, notes, category, payee, and account
 - Use "payeeName" when the user references a known payee by name (case-insensitive substring match)
 - Use "categoryId" when the user references a category — resolve fuzzy names to the best matching category ID from the list above
-- Use "projectId" when the user references a project — resolve to the best matching project ID
+- Use "workspaceId" when the user references a project — resolve to the best matching project ID
 - Use "accountName" when the user references a specific bank account
 - Date formats must be YYYY-MM-DD
 - For relative dates like "last month", "this quarter", "past 90 days", calculate the actual dates based on today's date
@@ -87,7 +87,7 @@ Respond with ONLY a JSON object, no markdown, no explanation outside the JSON:
     "accountName": "",
     "payeeName": "",
     "categoryId": "",
-    "projectId": "",
+    "workspaceId": "",
     "amountMin": "",
     "amountMax": "",
     "dateFrom": "",

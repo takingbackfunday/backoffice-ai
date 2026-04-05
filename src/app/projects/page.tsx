@@ -9,7 +9,7 @@ export default async function ProjectsPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const projects = await prisma.project.findMany({
+  const projects = await prisma.workspace.findMany({
     where: { userId },
     include: {
       _count: { select: { transactions: true } },

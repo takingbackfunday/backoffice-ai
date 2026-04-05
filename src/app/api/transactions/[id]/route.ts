@@ -12,7 +12,7 @@ const UpdateTransactionSchema = z.object({
   categoryId: z.string().nullable().optional(),
   payeeId: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
-  projectId: z.string().nullable().optional(),
+  workspaceId: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
 })
 
@@ -45,8 +45,8 @@ export async function PATCH(
       const payee = await prisma.payee.findFirst({ where: { id: parsed.data.payeeId, userId } })
       if (!payee) return badRequest('Payee not found or does not belong to you')
     }
-    if (parsed.data.projectId) {
-      const project = await prisma.project.findFirst({ where: { id: parsed.data.projectId, userId } })
+    if (parsed.data.workspaceId) {
+      const project = await prisma.workspace.findFirst({ where: { id: parsed.data.workspaceId, userId } })
       if (!project) return badRequest('Project not found or does not belong to you')
     }
 
@@ -55,14 +55,14 @@ export async function PATCH(
       data: parsed.data,
       include: {
         account: true,
-        project: true,
+        workspace: true,
         categoryRef: { include: { group: true } },
         payee: true,
       },
     })
 
     // If a project was just assigned, run matching fire-and-forget
-    if (parsed.data.projectId && parsed.data.projectId !== existing.projectId) {
+    if (parsed.data.workspaceId && parsed.data.workspaceId !== existing.workspaceId) {
       matchInvoicePayments(userId, [id]).catch(() => {})
     }
 

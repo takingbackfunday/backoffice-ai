@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import type { Project } from '@/generated/prisma/client'
+import type { Workspace } from '@/generated/prisma/client'
 import { RuleEditor, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ export interface PersistedSuggestion extends Omit<AgentSuggestion, 'autoAccepted
 interface RulesAgentProps {
   categoryGroups: CategoryGroup[]
   payees: Payee[]
-  projects: Project[]
+  projects: Workspace[]
   accounts?: { id: string; name: string }[]
   onRuleAccepted: (rule: unknown) => void
   onClose: (summary?: { uncategorised: number; noPayee: number }) => void
@@ -58,7 +58,7 @@ function suggestionToRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): 
     payeeId: s.payeeId,
     payee: s.payeeName ? { id: s.payeeId ?? '', name: s.payeeName } : null,
     projectId: null,
-    project: null,
+    workspace: null,
     conditions: s.conditions,
     isActive: true,
   }
@@ -121,7 +121,7 @@ export function SuggestionCard({
   total: number
   categoryGroups: CategoryGroup[]
   payees: Payee[]
-  projects: Project[]
+  projects: Workspace[]
   accounts?: { id: string; name: string }[]
   onAccepted: (rule: UserRule, index: number) => void
   onDecline: () => void

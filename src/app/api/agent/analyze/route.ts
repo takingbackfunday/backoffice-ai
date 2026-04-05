@@ -30,15 +30,15 @@ export async function GET() {
             where: { account: { userId } },
             select: {
               id: true, amount: true, description: true, date: true,
-              categoryId: true, projectId: true,
+              categoryId: true, workspaceId: true,
               payeeId: true, payee: { select: { name: true } },
               account: { select: { name: true, currency: true } },
-              project: { select: { name: true } },
+              workspace: { select: { name: true } },
               categoryRef: { select: { name: true } },
             },
           }),
           prisma.categorizationRule.count({ where: { userId, isActive: true } }),
-          prisma.project.findMany({ where: { userId }, select: { id: true, name: true } }),
+          prisma.workspace.findMany({ where: { userId }, select: { id: true, name: true } }),
           prisma.account.findMany({ where: { userId }, select: { name: true, currency: true } }),
         ])
 
@@ -49,7 +49,7 @@ export async function GET() {
         const total = transactions.length
         const categorised = transactions.filter((t) => t.categoryId).length
         const uncategorised = total - categorised
-        const tagged = transactions.filter((t) => t.projectId).length
+        const tagged = transactions.filter((t) => t.workspaceId).length
         const untagged = total - tagged
 
         const income = transactions.filter((t) => Number(t.amount) > 0)
@@ -81,8 +81,8 @@ export async function GET() {
         // Project spend breakdown
         const byProject = new Map<string, number>()
         for (const tx of transactions) {
-          if (!tx.project) continue
-          byProject.set(tx.project.name, (byProject.get(tx.project.name) ?? 0) + Math.abs(Number(tx.amount)))
+          if (!tx.workspace) continue
+          byProject.set(tx.workspace.name, (byProject.get(tx.workspace.name) ?? 0) + Math.abs(Number(tx.amount)))
         }
         const projectBreakdown = [...byProject.entries()]
           .sort((a, b) => b[1] - a[1])

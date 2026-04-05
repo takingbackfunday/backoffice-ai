@@ -263,7 +263,7 @@ export const PROPERTY_TOOLS: ToolDefinition[] = [
 
 async function propertyWhere(userId: string, propertyName?: string) {
   return {
-    project: {
+    workspace: {
       userId,
       type: 'PROPERTY' as const,
       isActive: true,
@@ -288,9 +288,9 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
   switch (toolName) {
     case 'list_properties': {
       const props = await prisma.propertyProfile.findMany({
-        where: { project: { userId, type: 'PROPERTY', isActive: true } },
+        where: { workspace: { userId, type: 'PROPERTY', isActive: true } },
         include: {
-          project: { select: { name: true, slug: true } },
+          workspace: { select: { name: true, slug: true } },
           units: { select: { id: true, status: true, monthlyRent: true } },
         },
       })
@@ -301,7 +301,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         const monthlyRev = p.units
           .filter(u => u.status === 'LEASED' && u.monthlyRent)
           .reduce((s, u) => s + Number(u.monthlyRent), 0)
-        return `${p.project.name} | ${p.address}${p.city ? ', ' + p.city : ''} | ${leased}/${total} occupied | $${monthlyRev.toLocaleString()}/mo revenue`
+        return `${p.workspace.name} | ${p.address}${p.city ? ', ' + p.city : ''} | ${leased}/${total} occupied | $${monthlyRev.toLocaleString()}/mo revenue`
       })
       return rows.join('\n')
     }
@@ -309,16 +309,16 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
     case 'get_property': {
       const name = String(a.propertyName ?? '')
       const prop = await prisma.propertyProfile.findFirst({
-        where: { project: { userId, type: 'PROPERTY', isActive: true, name: { contains: name, mode: 'insensitive' } } },
+        where: { workspace: { userId, type: 'PROPERTY', isActive: true, name: { contains: name, mode: 'insensitive' } } },
         include: {
-          project: { select: { name: true } },
+          workspace: { select: { name: true } },
           units: { select: { id: true, status: true, monthlyRent: true, unitLabel: true } },
         },
       })
       if (!prop) return `No property found matching "${name}".`
       const leased = prop.units.filter(u => u.status === 'LEASED').length
       return JSON.stringify({
-        name: prop.project.name,
+        name: prop.workspace.name,
         address: prop.address,
         city: prop.city,
         state: prop.state,
@@ -333,14 +333,14 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
     }
 
     case 'list_units': {
-      const propFilter = a.propertyName ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } } : { project: { userId, type: 'PROPERTY' as const, isActive: true } }
+      const propFilter = a.propertyName ? { workspace: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } } : { workspace: { userId, type: 'PROPERTY' as const, isActive: true } }
       const units = await prisma.unit.findMany({
         where: {
           propertyProfile: propFilter,
           ...(a.status ? { status: String(a.status) as never } : {}),
         },
         include: {
-          propertyProfile: { include: { project: { select: { name: true } } } },
+          propertyProfile: { include: { workspace: { select: { name: true } } } },
           leases: {
             where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
             include: { tenant: { select: { name: true } } },
@@ -348,19 +348,19 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
             take: 1,
           },
         },
-        orderBy: [{ propertyProfile: { project: { name: 'asc' } } }, { unitLabel: 'asc' }],
+        orderBy: [{ propertyProfile: { workspace: { name: 'asc' } } }, { unitLabel: 'asc' }],
       })
       if (!units.length) return 'No units found.'
       return units.map(u => {
         const lease = u.leases[0]
-        return `${u.propertyProfile.project.name} / ${u.unitLabel} | ${u.status} | $${u.monthlyRent ? Number(u.monthlyRent) : 0}/mo | Tenant: ${lease?.tenant.name ?? 'none'} | Lease ends: ${lease?.endDate ? new Date(lease.endDate).toISOString().slice(0, 10) : 'n/a'}`
+        return `${u.propertyProfile.workspace.name} / ${u.unitLabel} | ${u.status} | $${u.monthlyRent ? Number(u.monthlyRent) : 0}/mo | Tenant: ${lease?.tenant.name ?? 'none'} | Lease ends: ${lease?.endDate ? new Date(lease.endDate).toISOString().slice(0, 10) : 'n/a'}`
       }).join('\n')
     }
 
     case 'get_occupancy_summary': {
       const propFilter = a.propertyName
-        ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
-        : { project: { userId, type: 'PROPERTY' as const, isActive: true } }
+        ? { workspace: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
+        : { workspace: { userId, type: 'PROPERTY' as const, isActive: true } }
       const units = await prisma.unit.findMany({
         where: { propertyProfile: propFilter },
         select: { status: true, monthlyRent: true },
@@ -380,8 +380,8 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         where: {
           unit: {
             propertyProfile: a.propertyName
-              ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
-              : { project: { userId, type: 'PROPERTY' as const, isActive: true } },
+              ? { workspace: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
+              : { workspace: { userId, type: 'PROPERTY' as const, isActive: true } },
           },
           ...(a.status ? { status: String(a.status) as never } : { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } }),
           ...(cutoff ? { endDate: { lte: cutoff, gte: now } } : {}),
@@ -390,14 +390,14 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
           tenant: { select: { name: true, email: true, phone: true } },
           unit: {
             include: {
-              propertyProfile: { include: { project: { select: { name: true } } } },
+              propertyProfile: { include: { workspace: { select: { name: true } } } },
             },
           },
         },
         orderBy: { endDate: 'asc' },
       })
       if (!leases.length) return 'No leases found.'
-      return leases.map(l => `${l.unit.propertyProfile.project.name} / ${l.unit.unitLabel} | Tenant: ${l.tenant.name} | Status: ${l.status} | $${Number(l.monthlyRent)}/mo | Start: ${l.startDate.toISOString().slice(0, 10)} | End: ${l.endDate.toISOString().slice(0, 10)}`).join('\n')
+      return leases.map(l => `${l.unit.propertyProfile.workspace.name} / ${l.unit.unitLabel} | Tenant: ${l.tenant.name} | Status: ${l.status} | $${Number(l.monthlyRent)}/mo | Start: ${l.startDate.toISOString().slice(0, 10)} | End: ${l.endDate.toISOString().slice(0, 10)}`).join('\n')
     }
 
     case 'get_tenant': {
@@ -408,7 +408,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
           leases: {
             where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
             include: {
-              unit: { include: { propertyProfile: { include: { project: { select: { name: true } } } } } },
+              unit: { include: { propertyProfile: { include: { workspace: { select: { name: true } } } } } },
             },
             orderBy: { startDate: 'desc' },
             take: 1,
@@ -429,7 +429,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         name: tenant.name,
         email: tenant.email,
         phone: tenant.phone,
-        property: lease?.unit.propertyProfile.project.name ?? null,
+        property: lease?.unit.propertyProfile.workspace.name ?? null,
         unit: lease?.unit.unitLabel ?? null,
         leaseStatus: lease?.status ?? 'none',
         monthlyRent: lease ? Number(lease.monthlyRent) : null,
@@ -444,11 +444,11 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       const units = await prisma.unit.findMany({
         where: {
           propertyProfile: a.propertyName
-            ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
-            : { project: { userId, type: 'PROPERTY' as const, isActive: true } },
+            ? { workspace: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
+            : { workspace: { userId, type: 'PROPERTY' as const, isActive: true } },
         },
         include: {
-          propertyProfile: { include: { project: { select: { name: true } } } },
+          propertyProfile: { include: { workspace: { select: { name: true } } } },
           leases: {
             where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
             include: {
@@ -462,7 +462,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
             take: 1,
           },
         },
-        orderBy: [{ propertyProfile: { project: { name: 'asc' } } }, { unitLabel: 'asc' }],
+        orderBy: [{ propertyProfile: { workspace: { name: 'asc' } } }, { unitLabel: 'asc' }],
       })
       if (!units.length) return 'No units found.'
       return units.map(u => {
@@ -472,7 +472,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         const paid = l ? l.invoices.reduce((s, inv) =>
           s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0) : 0
         const balance = charged - paid
-        return `${u.propertyProfile.project.name} / ${u.unitLabel} | ${u.status} | Tenant: ${l?.tenant.name ?? 'vacant'} | Rent: $${l ? Number(l.monthlyRent) : 0}/mo | Balance: $${balance} | Ends: ${l?.endDate ? l.endDate.toISOString().slice(0, 10) : 'n/a'}`
+        return `${u.propertyProfile.workspace.name} / ${u.unitLabel} | ${u.status} | Tenant: ${l?.tenant.name ?? 'vacant'} | Rent: $${l ? Number(l.monthlyRent) : 0}/mo | Balance: $${balance} | Ends: ${l?.endDate ? l.endDate.toISOString().slice(0, 10) : 'n/a'}`
       }).join('\n')
     }
 
@@ -507,7 +507,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
           lease: {
             unit: {
               propertyProfile: {
-                project: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
+                workspace: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
               },
             },
           },
@@ -539,8 +539,8 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
 
     case 'list_overdue_tenants': {
       const propFilter = a.propertyName
-        ? { unit: { propertyProfile: { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } } } }
-        : { unit: { propertyProfile: { project: { userId, type: 'PROPERTY' as const, isActive: true } } } }
+        ? { unit: { propertyProfile: { workspace: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } } } }
+        : { unit: { propertyProfile: { workspace: { userId, type: 'PROPERTY' as const, isActive: true } } } }
       const leases = await prisma.lease.findMany({
         where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] }, ...propFilter },
         include: {
@@ -549,7 +549,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
             where: { status: { not: 'VOID' } },
             include: { lineItems: true, payments: true },
           },
-          unit: { include: { propertyProfile: { include: { project: { select: { name: true } } } } } },
+          unit: { include: { propertyProfile: { include: { workspace: { select: { name: true } } } } } },
         },
       })
       const overdue = leases
@@ -558,7 +558,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
             s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
           const paid = l.invoices.reduce((s, inv) =>
             s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
-          return { name: l.tenant.name, email: l.tenant.email, property: l.unit.propertyProfile.project.name, unit: l.unit.unitLabel, balance: charged - paid }
+          return { name: l.tenant.name, email: l.tenant.email, property: l.unit.propertyProfile.workspace.name, unit: l.unit.unitLabel, balance: charged - paid }
         })
         .filter(t => t.balance > 0)
         .sort((a, b) => b.balance - a.balance)
@@ -571,21 +571,21 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         where: {
           unit: {
             propertyProfile: a.propertyName
-              ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
-              : { project: { userId, type: 'PROPERTY' as const, isActive: true } },
+              ? { workspace: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
+              : { workspace: { userId, type: 'PROPERTY' as const, isActive: true } },
           },
           ...(a.status ? { status: String(a.status) as never } : {}),
           ...(a.priority ? { priority: String(a.priority) as never } : {}),
         },
         include: {
-          unit: { include: { propertyProfile: { include: { project: { select: { name: true } } } } } },
+          unit: { include: { propertyProfile: { include: { workspace: { select: { name: true } } } } } },
           tenant: { select: { name: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 50,
       })
       if (!requests.length) return 'No maintenance requests found.'
-      return requests.map(m => `${m.unit.propertyProfile.project.name} / ${m.unit.unitLabel} | ${m.priority} | ${m.status} | ${m.title} | Tenant: ${m.tenant?.name ?? 'n/a'} | ${m.createdAt.toISOString().slice(0, 10)}`).join('\n')
+      return requests.map(m => `${m.unit.propertyProfile.workspace.name} / ${m.unit.unitLabel} | ${m.priority} | ${m.status} | ${m.title} | Tenant: ${m.tenant?.name ?? 'n/a'} | ${m.createdAt.toISOString().slice(0, 10)}`).join('\n')
     }
 
     case 'get_property_revenue': {
@@ -601,7 +601,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
           lease: {
             unit: {
               propertyProfile: {
-                project: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
+                workspace: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
               },
             },
           },
@@ -626,14 +626,14 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         where: {
           status: 'VACANT',
           propertyProfile: a.propertyName
-            ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
-            : { project: { userId, type: 'PROPERTY' as const, isActive: true } },
+            ? { workspace: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
+            : { workspace: { userId, type: 'PROPERTY' as const, isActive: true } },
         },
-        include: { propertyProfile: { include: { project: { select: { name: true } } } } },
+        include: { propertyProfile: { include: { workspace: { select: { name: true } } } } },
       })
       if (!units.length) return 'No vacant units found.'
       const monthlyLost = units.filter(u => u.monthlyRent).reduce((s, u) => s + Number(u.monthlyRent), 0)
-      const rows = units.map(u => `${u.propertyProfile.project.name} / ${u.unitLabel} | $${u.monthlyRent ? Number(u.monthlyRent) : 0}/mo`)
+      const rows = units.map(u => `${u.propertyProfile.workspace.name} / ${u.unitLabel} | $${u.monthlyRent ? Number(u.monthlyRent) : 0}/mo`)
       return `${rows.join('\n')}\n\nTotal monthly revenue lost to vacancies: $${monthlyLost.toLocaleString()}`
     }
 
@@ -648,14 +648,14 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
           ...(a.propertyName ? {
             unit: {
               propertyProfile: {
-                project: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
+                workspace: { userId, type: 'PROPERTY', isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' } },
               },
             },
           } : {}),
         },
         include: {
           tenant: { select: { name: true } },
-          unit: { include: { propertyProfile: { include: { project: { select: { name: true } } } } } },
+          unit: { include: { propertyProfile: { include: { workspace: { select: { name: true } } } } } },
         },
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -670,12 +670,12 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       const applicants = await prisma.applicant.findMany({
         where: {
           propertyProfile: a.propertyName
-            ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
-            : { project: { userId, type: 'PROPERTY' as const, isActive: true } },
+            ? { workspace: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
+            : { workspace: { userId, type: 'PROPERTY' as const, isActive: true } },
           ...(a.status ? { status: String(a.status) as never } : {}),
         },
         include: {
-          propertyProfile: { include: { project: { select: { name: true } } } },
+          propertyProfile: { include: { workspace: { select: { name: true } } } },
           unit: { select: { unitLabel: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -683,7 +683,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       })
       if (!applicants.length) return 'No applicants found.'
       return applicants.map(ap =>
-        `${ap.propertyProfile.project.name} | ${ap.name} | ${ap.email}${ap.unit ? ` | Unit: ${ap.unit.unitLabel}` : ''} | Status: ${ap.status} | Added: ${ap.createdAt.toISOString().slice(0, 10)}`
+        `${ap.propertyProfile.workspace.name} | ${ap.name} | ${ap.email}${ap.unit ? ` | Unit: ${ap.unit.unitLabel}` : ''} | Status: ${ap.status} | Added: ${ap.createdAt.toISOString().slice(0, 10)}`
       ).join('\n')
     }
 
@@ -691,8 +691,8 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       const applicants = await prisma.applicant.findMany({
         where: {
           propertyProfile: a.propertyName
-            ? { project: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
-            : { project: { userId, type: 'PROPERTY' as const, isActive: true } },
+            ? { workspace: { userId, type: 'PROPERTY' as const, isActive: true, name: { contains: String(a.propertyName), mode: 'insensitive' as const } } }
+            : { workspace: { userId, type: 'PROPERTY' as const, isActive: true } },
         },
         select: { status: true },
       })

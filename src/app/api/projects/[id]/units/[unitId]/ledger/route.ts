@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id, unitId } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId, type: 'PROPERTY' },
       include: { propertyProfile: { select: { units: { where: { id: unitId }, select: { id: true } } } } },
     })

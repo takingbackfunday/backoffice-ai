@@ -15,7 +15,7 @@ export default async function TenantDetailPage({ params }: PageParams) {
 
   const { slug, tenantId } = await params
 
-  const project = await prisma.project.findFirst({
+  const project = await prisma.workspace.findFirst({
     where: { userId, slug, type: 'PROPERTY' },
   })
   if (!project) notFound()

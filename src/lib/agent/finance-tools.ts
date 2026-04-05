@@ -44,7 +44,7 @@ function buildTransactionWhere(userId: string, p: {
       ],
     } : {}),
     ...(p.payeeNames?.length ? { payee: { name: { in: p.payeeNames } } } : {}),
-    ...(p.projectNames?.length ? { project: { name: { in: p.projectNames } } } : {}),
+    ...(p.projectNames?.length ? { workspace: { name: { in: p.projectNames } } } : {}),
     ...(p.tags?.length ? { tags: { hasSome: p.tags } } : {}),
     ...(p.descriptionContains ? { description: { contains: p.descriptionContains, mode: 'insensitive' as const } } : {}),
     ...(p.minAmount !== undefined || p.maxAmount !== undefined || p.incomeOnly || p.expensesOnly ? {
@@ -92,7 +92,7 @@ export async function query_transactions(userId: string, args: {
       category: true,
       payee: { select: { name: true } },
       account: { select: { name: true } },
-      project: { select: { name: true } },
+      workspace: { select: { name: true } },
     },
     orderBy: { [args.sortBy ?? 'date']: args.sortDir ?? 'desc' },
     take: limit,
@@ -106,7 +106,7 @@ export async function query_transactions(userId: string, args: {
     const amt = fmtAmount(Number(r.amount))
     const cat = r.categoryRef?.name ?? r.category ?? '(uncategorised)'
     const payee = r.payee?.name ?? '(no payee)'
-    const proj = r.project?.name ? ` [${r.project.name}]` : ''
+    const proj = r.workspace?.name ? ` [${r.workspace.name}]` : ''
     const tags = r.tags.length ? ` {${r.tags.join(',')}}` : ''
     const notes = r.notes ? ` // ${r.notes.slice(0, 50)}` : ''
     return `${date} | ${amt} | ${cat} | ${payee} | ${r.account.name} | ${r.description.slice(0, 70)}${proj}${tags}${notes}`
@@ -138,7 +138,7 @@ export async function aggregate_transactions(userId: string, args: {
       category: true,
       payee: { select: { name: true } },
       account: { select: { name: true } },
-      project: { select: { name: true } },
+      workspace: { select: { name: true } },
     },
     orderBy: { date: 'asc' },
   })
@@ -162,7 +162,7 @@ export async function aggregate_transactions(userId: string, args: {
       case 'category_group': key = r.categoryRef?.group?.name ?? '(no group)'; break
       case 'payee': key = r.payee?.name ?? '(no payee)'; break
       case 'account': key = r.account?.name ?? '(unknown)'; break
-      case 'project': key = r.project?.name ?? '(no project)'; break
+      case 'project': key = r.workspace?.name ?? '(no project)'; break
       case 'tag': {
         const tags = r.tags.length ? r.tags : ['(no tag)']
         for (const t of tags) {
@@ -331,7 +331,7 @@ export async function get_projects(userId: string, args: {
   dateFrom?: string
   dateTo?: string
 }): Promise<string> {
-  const projects = await prisma.project.findMany({
+  const projects = await prisma.workspace.findMany({
     where: { userId },
     select: { name: true, type: true, isActive: true, description: true },
   })
@@ -342,11 +342,11 @@ export async function get_projects(userId: string, args: {
     projects.map(async (p) => {
       const [expAgg, incAgg] = await Promise.all([
         prisma.transaction.aggregate({
-          where: { account: { userId }, project: { name: p.name }, amount: { lt: 0 }, ...dateWhere(args.dateFrom, args.dateTo) },
+          where: { account: { userId }, workspace: { name: p.name }, amount: { lt: 0 }, ...dateWhere(args.dateFrom, args.dateTo) },
           _sum: { amount: true }, _count: true,
         }),
         prisma.transaction.aggregate({
-          where: { account: { userId }, project: { name: p.name }, amount: { gt: 0 }, ...dateWhere(args.dateFrom, args.dateTo) },
+          where: { account: { userId }, workspace: { name: p.name }, amount: { gt: 0 }, ...dateWhere(args.dateFrom, args.dateTo) },
           _sum: { amount: true }, _count: true,
         }),
       ])
@@ -380,7 +380,7 @@ export async function get_rules(userId: string): Promise<string> {
       conditions: true,
       categoryRef: { select: { name: true } },
       payee: { select: { name: true } },
-      project: { select: { name: true } },
+      workspace: { select: { name: true } },
     },
     orderBy: { priority: 'desc' },
   })
@@ -391,7 +391,7 @@ export async function get_rules(userId: string): Promise<string> {
     const actions = [
       r.categoryRef ? `category→${r.categoryRef.name}` : null,
       r.payee ? `payee→${r.payee.name}` : null,
-      r.project ? `project→${r.project.name}` : null,
+      r.workspace ? `project→${r.workspace.name}` : null,
     ].filter(Boolean).join(', ')
     return `  [${r.isActive ? 'active' : 'inactive'}] ${r.name} (priority ${r.priority}) | ${actions}`
   })
@@ -455,7 +455,7 @@ export async function search_transactions(userId: string, args: {
       category: true,
       payee: { select: { name: true } },
       account: { select: { name: true } },
-      project: { select: { name: true } },
+      workspace: { select: { name: true } },
     },
     orderBy: { date: 'desc' },
     take: limit,
@@ -468,7 +468,7 @@ export async function search_transactions(userId: string, args: {
     const date = new Date(r.date).toISOString().slice(0, 10)
     const cat = r.categoryRef?.name ?? r.category ?? '(uncategorised)'
     const payee = r.payee?.name ?? '(no payee)'
-    const proj = r.project?.name ? ` [${r.project.name}]` : ''
+    const proj = r.workspace?.name ? ` [${r.workspace.name}]` : ''
     const notes = r.notes ? ` // ${r.notes.slice(0, 50)}` : ''
     return `${date} | ${fmtAmount(Number(r.amount))} | ${cat} | ${payee} | ${r.account.name} | ${r.description.slice(0, 70)}${proj}${notes}`
   })

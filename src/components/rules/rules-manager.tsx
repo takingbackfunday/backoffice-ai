@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import type { Project } from '@/generated/prisma/client'
+import type { Workspace } from '@/generated/prisma/client'
 import { RuleEditor, Toast, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
 import { RulesAgent, SuggestionCard, type PersistedSuggestion } from './rules-agent'
 import { StarterRules } from './starter-rules'
@@ -110,13 +110,13 @@ function RuleCard({
                 <span className="text-[#085041] font-medium">{rule.payee.name}</span>
               </span>
             )}
-            {rule.project && (
+            {rule.workspace && (
               <span className="text-xs px-2 py-0.5 rounded bg-[#FEF3E2]">
                 <span className="text-amber-600/80">proj </span>
-                <span className="text-amber-800 font-medium">{rule.project.name}</span>
+                <span className="text-amber-800 font-medium">{rule.workspace.name}</span>
               </span>
             )}
-            {!rule.categoryRef?.name && !rule.categoryName && !rule.payee && !rule.project && (
+            {!rule.categoryRef?.name && !rule.categoryName && !rule.payee && !rule.workspace && (
               <span className="text-xs text-muted-foreground">(no actions)</span>
             )}
           </div>
@@ -171,7 +171,7 @@ interface PaymentSuggestion {
 
 export function RulesManager({
   initialRules,
-  initialProjects,
+  initialWorkspaces,
   initialPayees,
   initialAccounts,
   initialCategoryGroups,
@@ -179,7 +179,7 @@ export function RulesManager({
   initialPaymentSuggestions,
 }: {
   initialRules?: UserRule[]
-  initialProjects?: Project[]
+  initialWorkspaces?: Workspace[]
   initialPayees?: Payee[]
   initialAccounts?: { id: string; name: string }[]
   initialCategoryGroups?: CategoryGroup[]
@@ -191,7 +191,7 @@ export function RulesManager({
   const autoNew = searchParams.get('new') === '1'
 
   const [rules, setRules] = useState<UserRule[]>(initialRules ?? [])
-  const [projects, setProjects] = useState<Project[]>(initialProjects ?? [])
+  const [projects, setWorkspaces] = useState<Workspace[]>(initialWorkspaces ?? [])
   const [payees, setPayees] = useState<Payee[]>(initialPayees ?? [])
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>(initialAccounts ?? [])
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>(initialCategoryGroups ?? [])
@@ -237,7 +237,7 @@ export function RulesManager({
       fetch('/api/invoice-payment-suggestions').then((r) => r.json()),
     ]).then(([rulesJson, projectsJson, groupsJson, payeesJson, accountsJson, suggestionsJson, paymentSuggestionsJson]) => {
       if (!rulesJson.error) setRules(rulesJson.data ?? [])
-      if (!projectsJson.error) setProjects(projectsJson.data ?? [])
+      if (!projectsJson.error) setWorkspaces(projectsJson.data ?? [])
       if (!groupsJson.error) setCategoryGroups(groupsJson.data ?? [])
       if (!payeesJson.error) setPayees(payeesJson.data ?? [])
       if (!accountsJson.error) setAccounts(accountsJson.data ?? [])
@@ -369,7 +369,7 @@ export function RulesManager({
         const outputMatch =
           (rule.categoryRef?.name ?? rule.categoryName ?? '').toLowerCase().includes(q) ||
           (rule.payee?.name ?? '').toLowerCase().includes(q) ||
-          (rule.project?.name ?? '').toLowerCase().includes(q)
+          (rule.workspace?.name ?? '').toLowerCase().includes(q)
         return inputMatch || outputMatch
       })
     : rules

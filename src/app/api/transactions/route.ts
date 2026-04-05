@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'))
     const pageSize = Math.min(200, Math.max(1, parseInt(searchParams.get('pageSize') ?? '50')))
     const accountId = searchParams.get('accountId') ?? undefined
-    const projectId = searchParams.get('projectId') ?? undefined
+    const workspaceId = searchParams.get('workspaceId') ?? undefined
     const dateFrom = searchParams.get('dateFrom') ?? undefined
     const dateTo = searchParams.get('dateTo') ?? undefined
 
@@ -44,8 +44,8 @@ export async function GET(request: Request) {
     const where = {
       account: { userId, ...(accountName ? { name: accountName } : {}) },
       ...(accountId ? { accountId } : {}),
-      // projectId from column filter takes precedence over query param
-      ...(projectId ? { projectId } : {}),
+      // workspaceId from column filter takes precedence over query param
+      ...(workspaceId ? { workspaceId } : {}),
       ...(dateFrom || dateTo ? {
         date: {
           ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
         where,
         include: {
           account: { include: { institution: true } },
-          project: true,
+          workspace: true,
           categoryRef: { include: { group: true } },
           payee: true,
         },
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     if (!userId) return unauthorized()
 
     const body = await request.json()
-    const { accountId, date, amount, description, categoryId, payeeId, projectId, notes } = body
+    const { accountId, date, amount, description, categoryId, payeeId, workspaceId, notes } = body
 
     if (!accountId || !date || amount === undefined || amount === '' || !description) {
       return badRequest('accountId, date, amount and description are required')
@@ -134,12 +134,12 @@ export async function POST(request: Request) {
           rawData: {},
           ...(categoryId ? { categoryId } : {}),
           ...(payeeId ? { payeeId } : {}),
-          ...(projectId ? { projectId } : {}),
+          ...(workspaceId ? { workspaceId } : {}),
           ...(notes ? { notes } : {}),
         },
         include: {
           account: { include: { institution: true } },
-          project: true,
+          workspace: true,
           categoryRef: { include: { group: true } },
           payee: true,
         },

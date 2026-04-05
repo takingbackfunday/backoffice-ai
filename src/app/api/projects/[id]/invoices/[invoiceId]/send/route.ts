@@ -21,13 +21,13 @@ export async function POST(request: Request, { params }: RouteParams) {
       where: {
         id: invoiceId,
         OR: [
-          { clientProfile: { project: { id, userId } } },
-          { lease: { unit: { propertyProfile: { project: { id, userId } } } } },
-          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id, userId } } } } } } },
+          { clientProfile: { workspace: { id, userId } } },
+          { lease: { unit: { propertyProfile: { workspace: { id, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id, userId } } } } } } },
         ],
       },
       include: {
-        clientProfile: { select: { email: true, contactName: true, phone: true, address: true, project: { select: { name: true, slug: true } } } },
+        clientProfile: { select: { email: true, contactName: true, phone: true, address: true, workspace: { select: { name: true, slug: true } } } },
         tenant: { select: { id: true, name: true, email: true, phone: true } },
         lease: { include: { unit: true, tenant: { select: { name: true, email: true, phone: true } } } },
         lineItems: true,
@@ -46,7 +46,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const email = cp?.email ?? leaseTenant?.email ?? directTenant?.email
     if (!email) return badRequest('No email address found for this invoice recipient')
 
-    const recipientName = cp?.contactName ?? cp?.project.name ?? leaseTenant?.name ?? directTenant?.name ?? 'Tenant'
+    const recipientName = cp?.contactName ?? cp?.workspace.name ?? leaseTenant?.name ?? directTenant?.name ?? 'Tenant'
     const clientPhone = cp?.phone ?? leaseTenant?.phone ?? directTenant?.phone
     const clientAddress = cp?.address ?? null
 
@@ -55,7 +55,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
     const paymentMethods = (prefsData.paymentMethods ?? {}) as PaymentMethods
     const invoicePaymentNote = prefsData.invoicePaymentNote as string | undefined
-    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.project.name || 'Invoice'
+    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.workspace.name || 'Invoice'
 
     const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
     const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
@@ -93,7 +93,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       fromName,
       invoiceNumber: invoice.invoiceNumber,
       invoiceId: invoice.id,
-      projectSlug: cp?.project.slug ?? id,
+      projectSlug: cp?.workspace.slug ?? id,
       total,
       currency: invoice.currency,
       dueDate: invoice.dueDate.toISOString(),

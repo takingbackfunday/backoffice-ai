@@ -37,7 +37,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const { id } = await params
 
     // Look up project regardless of type — then branch
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId },
       include: {
         clientProfile: true,
@@ -94,7 +94,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId },
       include: {
         clientProfile: true,
@@ -120,7 +120,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       }
 
       const userInvoiceCount = await prisma.invoice.count({
-        where: { clientProfile: { project: { userId } } },
+        where: { clientProfile: { workspace: { userId } } },
       })
       const invoiceNumber = `INV-${String(userInvoiceCount + 1).padStart(4, '0')}`
 

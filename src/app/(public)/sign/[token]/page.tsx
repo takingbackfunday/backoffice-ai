@@ -14,7 +14,7 @@ export default async function LeaseSignPage({ params }: { params: Promise<{ toke
       unit: {
         include: {
           propertyProfile: {
-            include: { project: { select: { name: true } } },
+            include: { workspace: { select: { name: true } } },
           },
         },
       },
@@ -42,7 +42,7 @@ export default async function LeaseSignPage({ params }: { params: Promise<{ toke
         address: lease.unit.propertyProfile.address,
         city: lease.unit.propertyProfile.city,
         state: lease.unit.propertyProfile.state,
-        project: { name: lease.unit.propertyProfile.project.name },
+        workspace: { name: lease.unit.propertyProfile.workspace.name },
       },
     },
   }

@@ -14,7 +14,7 @@ export interface CategorizationResult {
   categoryName: string
   categoryId: string | null
   payeeId: string | null
-  projectId: string | null
+  workspaceId: string | null
   notes: string | null        // set notes when rule fires
   addTags: string[]           // tags to append
   confidence: 'high' | 'medium'

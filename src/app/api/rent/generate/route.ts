@@ -34,7 +34,7 @@ export async function POST(request: Request) {
         unit: {
           include: {
             propertyProfile: {
-              include: { project: true },
+              include: { workspace: true },
             },
           },
         },

@@ -26,10 +26,10 @@ async function getInvoiceForUser(invoiceId: string, projectId: string, userId: s
     where: {
       id: invoiceId,
       OR: [
-        { clientProfile: { project: { id: projectId, userId } } },
-        { lease: { unit: { propertyProfile: { project: { id: projectId, userId } } } } },
-        { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id: projectId, userId } } } } } } },
-        { applicant: { propertyProfile: { project: { id: projectId, userId } } } },
+        { clientProfile: { workspace: { id: projectId, userId } } },
+        { lease: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } },
+        { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } } } },
+        { applicant: { propertyProfile: { workspace: { id: projectId, userId } } } },
       ],
     },
     include: {

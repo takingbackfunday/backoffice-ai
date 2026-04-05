@@ -3,6 +3,9 @@
 # Private infrastructure notes
 INFRASTRUCTURE.md
 
+# Migration data files (contain financial PII)
+prisma/gmas-transactions.json
+
 # dependencies
 /node_modules
 /.pnp

@@ -26,10 +26,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       where: {
         id: invoiceId,
         OR: [
-          { clientProfile: { project: { id, userId } } },
-          { lease: { unit: { propertyProfile: { project: { id, userId } } } } },
-          { tenant: { userId, leases: { some: { unit: { propertyProfile: { project: { id, userId } } } } } } },
-          { applicant: { propertyProfile: { project: { id, userId } } } },
+          { clientProfile: { workspace: { id, userId } } },
+          { lease: { unit: { propertyProfile: { workspace: { id, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id, userId } } } } } } },
+          { applicant: { propertyProfile: { workspace: { id, userId } } } },
         ],
       },
       include: { lineItems: true },

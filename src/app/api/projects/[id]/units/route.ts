@@ -20,7 +20,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId, type: 'PROPERTY' },
       include: { propertyProfile: true },
     })
@@ -52,7 +52,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id } = await params
 
-    const project = await prisma.project.findFirst({
+    const project = await prisma.workspace.findFirst({
       where: { id, userId, type: 'PROPERTY' },
       include: { propertyProfile: true },
     })

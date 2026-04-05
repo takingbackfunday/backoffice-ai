@@ -11,7 +11,7 @@ export default async function ApplicationPage({ params }: { params: Promise<{ sl
       unit: {
         include: {
           propertyProfile: {
-            include: { project: { select: { name: true } } },
+            include: { workspace: { select: { name: true } } },
           },
         },
       },
@@ -31,7 +31,7 @@ export default async function ApplicationPage({ params }: { params: Promise<{ sl
     unit: {
       unitLabel: listing.unit.unitLabel,
       propertyProfile: {
-        project: { name: listing.unit.propertyProfile.project.name },
+        workspace: { name: listing.unit.propertyProfile.workspace.name },
       },
     },
   }

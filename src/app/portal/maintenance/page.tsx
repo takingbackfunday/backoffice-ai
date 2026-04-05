@@ -13,7 +13,7 @@ export default async function PortalMaintenancePage() {
     include: {
       leases: {
         where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
-        include: { unit: { include: { propertyProfile: { include: { project: true } } } } },
+        include: { unit: { include: { propertyProfile: { include: { workspace: true } } } } },
         orderBy: { startDate: 'desc' },
         take: 1,
       },
@@ -37,7 +37,7 @@ export default async function PortalMaintenancePage() {
       <PortalMaintenanceClient
         tenantId={tenantId}
         unitId={activeLease?.unitId ?? null}
-        projectId={activeLease?.unit.propertyProfile?.project?.id ?? null}
+        projectId={activeLease?.unit.propertyProfile?.workspace?.id ?? null}
         requests={JSON.parse(JSON.stringify(tenant.maintenanceRequests))}
       />
     </div>

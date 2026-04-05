@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         unit: {
           include: {
             propertyProfile: {
-              include: { project: { select: { id: true, name: true, slug: true } } },
+              include: { workspace: { select: { id: true, name: true, slug: true } } },
             },
           },
         },
@@ -69,9 +69,9 @@ export async function POST(request: Request) {
     const owner = await clerk.users.getUser(listing.userId).catch(() => null)
     const ownerEmail = owner?.emailAddresses[0]?.emailAddress
     const ownerName = owner?.firstName ?? 'Property Manager'
-    const propertyName = listing.unit.propertyProfile.project.name
+    const propertyName = listing.unit.propertyProfile.workspace.name
     const unitLabel = listing.unit.unitLabel
-    const pipelineUrl = `${APP_URL}/projects/${listing.unit.propertyProfile.project.slug}/tenants`
+    const pipelineUrl = `${APP_URL}/projects/${listing.unit.propertyProfile.workspace.slug}/tenants`
 
     await Promise.allSettled([
       sendInquiryConfirmation({

@@ -47,7 +47,7 @@ export async function POST() {
         patch.category = match.categoryName
       }
       if (match.payeeId && match.payeeId !== tx.payeeId) patch.payeeId = match.payeeId
-      if (match.projectId && match.projectId !== tx.projectId) patch.projectId = match.projectId
+      if (match.workspaceId && match.workspaceId !== tx.workspaceId) patch.workspaceId = match.workspaceId
       if (match.notes && match.notes !== tx.notes) patch.notes = match.notes
       if (match.addTags?.length) {
         const merged = [...new Set([...tx.tags, ...match.addTags])]

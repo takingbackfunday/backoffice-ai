@@ -9,7 +9,7 @@ export default async function PortfolioPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const properties = await prisma.project.findMany({
+  const properties = await prisma.workspace.findMany({
     where: { userId, type: 'PROPERTY', isActive: true },
     include: {
       propertyProfile: {

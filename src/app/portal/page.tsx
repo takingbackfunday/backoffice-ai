@@ -16,7 +16,7 @@ export default async function PortalDashboardPage() {
         include: {
           unit: {
             include: {
-              propertyProfile: { include: { project: true } },
+              propertyProfile: { include: { workspace: true } },
             },
           },
           invoices: {
@@ -59,7 +59,7 @@ export default async function PortalDashboardPage() {
             <div>
               <p className="text-xs text-muted-foreground mb-1">Current lease</p>
               <p className="text-lg font-semibold">
-                {activeLease.unit.propertyProfile?.project?.name ?? activeLease.unit.unitLabel}
+                {activeLease.unit.propertyProfile?.workspace?.name ?? activeLease.unit.unitLabel}
               </p>
               {activeLease.unit.unitLabel !== 'Main' && (
                 <p className="text-sm text-muted-foreground">{activeLease.unit.unitLabel}</p>

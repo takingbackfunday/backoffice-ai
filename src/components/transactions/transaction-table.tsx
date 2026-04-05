@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import type { Project } from '@/generated/prisma/client'
+import type { Workspace } from '@/generated/prisma/client'
 import type { TransactionWithRelations } from '@/types'
 import { RuleEditor, type CategoryGroup, type Payee, type UserRule } from '@/components/rules/rule-editor'
 import { RulesAgent } from '@/components/rules/rules-agent'
@@ -9,7 +9,7 @@ import { RulesAgent } from '@/components/rules/rules-agent'
 interface Props {
   initialRows?: TransactionWithRelations[]
   initialTotal?: number
-  initialProjects?: Project[]
+  initialWorkspaces?: Workspace[]
   initialCategoryGroups?: CategoryGroup[]
   initialPayees?: Payee[]
   initialAccounts?: { id: string; name: string }[]
@@ -71,14 +71,14 @@ function TextCell({
 }
 
 // ── Inline project select ──────────────────────────────────────────
-function ProjectCell({
+function WorkspaceCell({
   value,
   projects,
   onCommit,
   onCancel,
 }: {
   value: string | null
-  projects: Project[]
+  projects: Workspace[]
   onCommit: (v: string | null) => void
   onCancel: () => void
 }) {
@@ -346,7 +346,7 @@ function MakeRulePopup({
   snap: MakeRuleSnapType
   showEditor: boolean
   anchorRowId: string | null
-  projects: Project[]
+  projects: Workspace[]
   payees: Payee[]
   accounts: { id: string; name: string }[]
   categoryGroups: CategoryGroup[]
@@ -389,7 +389,7 @@ function MakeRulePopup({
     payeeId: null,
     payee: snap.payeeName ? { id: '', name: snap.payeeName } : null,
     projectId: null,
-    project: null,
+    workspace: null,
     conditions: { all: [{ field: 'description', operator: 'contains', value: snap.description }] },
     isActive: true,
   }
@@ -918,7 +918,7 @@ function DateFilterHeader({
 // ── Main component ─────────────────────────────────────────────────
 const todayISO = new Date().toISOString().slice(0, 10)
 
-export function TransactionTable({ initialRows, initialTotal, initialProjects, initialCategoryGroups, initialPayees, initialAccounts }: Props) {
+export function TransactionTable({ initialRows, initialTotal, initialWorkspaces, initialCategoryGroups, initialPayees, initialAccounts }: Props) {
   const [localRows, setLocalRows] = useState<TransactionWithRelations[]>(initialRows ?? [])
   const [total, setTotal] = useState(initialTotal ?? 0)
   const [page, setPage] = useState(1)
@@ -1011,7 +1011,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkDeletedCount, setBulkDeletedCount] = useState(0)
 
-  const [projects, setProjects] = useState<Project[]>(initialProjects ?? [])
+  const [projects, setWorkspaces] = useState<Workspace[]>(initialWorkspaces ?? [])
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>(initialCategoryGroups ?? [])
   const [payees, setPayees] = useState<Payee[]>(initialPayees ?? [])
 
@@ -1064,11 +1064,11 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
   // Load projects, categories, payees, accounts once (skip if passed from server)
   useEffect(() => {
-    if (initialProjects && initialCategoryGroups && initialPayees) return
-    if (!initialProjects) fetch('/api/projects').then((r) => r.json()).then((j) => { if (!j.error) setProjects(j.data ?? []) }).catch(() => {})
+    if (initialWorkspaces && initialCategoryGroups && initialPayees) return
+    if (!initialWorkspaces) fetch('/api/projects').then((r) => r.json()).then((j) => { if (!j.error) setWorkspaces(j.data ?? []) }).catch(() => {})
     if (!initialCategoryGroups) fetch('/api/category-groups').then((r) => r.json()).then((j) => { if (!j.error) setCategoryGroups(j.data ?? []) }).catch(() => {})
     if (!initialPayees) fetch('/api/payees').then((r) => r.json()).then((j) => { if (!j.error) setPayees(j.data ?? []) }).catch(() => {})
-  }, [initialProjects, initialCategoryGroups, initialPayees])
+  }, [initialWorkspaces, initialCategoryGroups, initialPayees])
 
   useEffect(() => {
     if (initialAccounts) return
@@ -1452,7 +1452,7 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
 
     let displayValue: string
     if (field === 'projectId') {
-      displayValue = row.project?.name ?? '—'
+      displayValue = row.workspace?.name ?? '—'
     } else if (field === 'categoryId') {
       displayValue = row.categoryRef?.name ?? row.category ?? '—'
     } else if (field === 'payeeId') {
@@ -1479,8 +1479,8 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
       if (field === 'projectId') {
         return (
           <td key={field} className="px-3 py-0.5 min-w-[120px]">
-            <ProjectCell
-              value={row.projectId ?? null}
+            <WorkspaceCell
+              value={row.workspaceId ?? null}
               projects={projects}
               onCommit={(v) => commitEdit(row.id, 'projectId', v)}
               onCancel={cancelEdit}
@@ -1924,9 +1924,9 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                 sortable={false}
               />
 
-              {/* Project */}
+              {/* Workspace */}
               <FilterableSortHeader
-                label="Project"
+                label="Workspace"
                 field="project"
                 sortBy={sortBy}
                 sortDir={sortDir}
@@ -2035,9 +2035,9 @@ export function TransactionTable({ initialRows, initialTotal, initialProjects, i
                     className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-xs outline-none focus:ring-1 focus:ring-blue-400"
                   />
                 </td>
-                {/* Project */}
+                {/* Workspace */}
                 <td className="px-3 py-1 min-w-[120px]">
-                  <ProjectCell
+                  <WorkspaceCell
                     value={newRow.projectId || null}
                     projects={projects}
                     onCommit={(v) => setNewRow((r) => ({ ...r, projectId: v ?? '' }))}

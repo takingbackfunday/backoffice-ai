@@ -15,14 +15,14 @@ export default async function ProjectFinancialsPage({ params }: PageParams) {
 
   const { slug } = await params
 
-  const project = await prisma.project.findFirst({
+  const project = await prisma.workspace.findFirst({
     where: { userId, slug },
   })
 
   if (!project) notFound()
 
   const transactions = await prisma.transaction.findMany({
-    where: { projectId: project.id },
+    where: { workspaceId: project.id },
     include: { categoryRef: true, payee: true },
     orderBy: { date: 'desc' },
   })
