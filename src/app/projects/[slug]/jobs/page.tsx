@@ -42,6 +42,7 @@ export default async function ProjectJobsPage({ params }: PageParams) {
           <ProjectSubNav slug={slug} type={project.type} />
           <JobList
             projectId={project.id}
+            projectSlug={slug}
             jobs={JSON.parse(JSON.stringify(project.clientProfile?.jobs ?? []))}
           />
         </main>

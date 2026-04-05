@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import Link from 'next/link'
 import { Plus, MoreHorizontal } from 'lucide-react'
 import { JOB_STATUS_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
@@ -12,6 +13,7 @@ interface Job {
 
 interface Props {
   projectId: string
+  projectSlug: string
   jobs: Job[]
 }
 
@@ -23,7 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: 'bg-red-100 text-red-800',
 }
 
-function ThreeDotMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+function ThreeDotMenu({ onEdit, onDelete, estimatesHref }: { onEdit: () => void; onDelete: () => void; estimatesHref: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -49,11 +51,18 @@ function ThreeDotMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () =
         <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
       </button>
       {open && (
-        <div className="absolute right-0 z-10 mt-1 w-32 rounded-md border bg-popover shadow-md">
+        <div className="absolute right-0 z-10 mt-1 w-36 rounded-md border bg-popover shadow-md">
+          <Link
+            href={estimatesHref}
+            onClick={() => setOpen(false)}
+            className="block px-3 py-2 text-left text-sm hover:bg-muted transition-colors rounded-t-md"
+          >
+            Estimates
+          </Link>
           <button
             type="button"
             onClick={() => { setOpen(false); onEdit() }}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors rounded-t-md"
+            className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
           >
             Edit
           </button>
@@ -70,7 +79,7 @@ function ThreeDotMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () =
   )
 }
 
-export function JobList({ projectId, jobs: initial }: Props) {
+export function JobList({ projectId, projectSlug, jobs: initial }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initial)
   const [showForm, setShowForm] = useState(false)
   const [newName, setNewName] = useState('')
@@ -370,7 +379,12 @@ export function JobList({ projectId, jobs: initial }: Props) {
                 return (
                   <tr key={job.id} className="hover:bg-muted/20">
                     <td className="px-4 py-2">
-                      <p className="font-medium">{job.name}</p>
+                      <Link
+                        href={`/projects/${projectSlug}/jobs/${job.id}/estimates/new`}
+                        className="font-medium hover:underline"
+                      >
+                        {job.name}
+                      </Link>
                       {job.description && (
                         <p className="text-xs text-muted-foreground">{job.description}</p>
                       )}
@@ -397,6 +411,7 @@ export function JobList({ projectId, jobs: initial }: Props) {
                     </td>
                     <td className="px-4 py-2">
                       <ThreeDotMenu
+                        estimatesHref={`/projects/${projectSlug}/jobs/${job.id}/estimates/new`}
                         onEdit={() => startEdit(job)}
                         onDelete={() => setConfirmDeleteId(job.id)}
                       />
