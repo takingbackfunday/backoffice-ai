@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ClientProfileForm } from '@/components/projects/client-profile-form'
-import { BILLING_TYPE_LABELS } from '@/types'
 
 interface Props {
   projectId: string
@@ -50,10 +49,6 @@ export function ClientInfoEditor({ projectId, profile }: Props) {
           email: data.email || undefined,
           phone: data.phone || undefined,
           address: data.address || undefined,
-          billingType: data.billingType,
-          defaultRate: data.defaultRate ? parseFloat(data.defaultRate) : undefined,
-          currency: data.currency,
-          paymentTermDays: parseInt(data.paymentTermDays) || 30,
         },
       }),
     })
@@ -112,12 +107,6 @@ export function ClientInfoEditor({ projectId, profile }: Props) {
         {profile.email && (<><dt className="text-muted-foreground">Email</dt><dd>{profile.email}</dd></>)}
         {profile.phone && (<><dt className="text-muted-foreground">Phone</dt><dd>{profile.phone}</dd></>)}
         {profile.address && (<><dt className="text-muted-foreground">Address</dt><dd>{profile.address}</dd></>)}
-        <dt className="text-muted-foreground">Billing</dt>
-        <dd>{BILLING_TYPE_LABELS[profile.billingType] ?? profile.billingType}</dd>
-        <dt className="text-muted-foreground">Currency</dt>
-        <dd>{profile.currency}</dd>
-        <dt className="text-muted-foreground">Payment terms</dt>
-        <dd>{profile.paymentTermDays} days</dd>
       </dl>
     </div>
   )
