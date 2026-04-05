@@ -69,8 +69,13 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     })
     if (!existing) return notFound('Job not found')
 
+    const { count: invoicesUnlinked } = await prisma.invoice.updateMany({
+      where: { jobId },
+      data: { jobId: null },
+    })
+
     await prisma.job.delete({ where: { id: jobId } })
-    return ok({ deleted: true })
+    return ok({ deleted: true, invoicesUnlinked })
   } catch {
     return serverError('Failed to delete job')
   }
