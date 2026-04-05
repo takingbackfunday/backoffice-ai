@@ -68,6 +68,7 @@ interface Props {
   recentPaymentsCount?: number
   invoiceDefaults?: InvoiceDefaults
   isOnboarding?: boolean
+  hasOverheadWorkspace?: boolean
 }
 
 type View = 'open' | 'paid' | 'all'
@@ -704,7 +705,7 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
 
 type FlatInvoice = Invoice & { clientId: string; clientName: string; clientSlug: string; clientCompany: string | null }
 
-export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults, isOnboarding = false }: Props) {
+export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults, isOnboarding = false, hasOverheadWorkspace = true }: Props) {
   const router = useRouter()
   const [view, setView] = useState<View>('open')
   const [search, setSearch] = useState('')
@@ -800,6 +801,18 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           actionLabel="Add Client"
           actionHref="/projects/new?type=CLIENT"
           onSkip={() => router.replace('/studio')}
+        />
+      )}
+
+      {/* Overhead workspace prompt for existing users */}
+      {!isOnboarding && !hasOverheadWorkspace && (
+        <ActionBanner
+          icon="📌"
+          label="Track business overhead"
+          detail="Set up a shared workspace for expenses not tied to a specific client — subscriptions, equipment, office costs."
+          color="blue"
+          onClick={() => router.push('/projects/new?type=OTHER&overhead=1')}
+          cta="Set up →"
         />
       )}
 

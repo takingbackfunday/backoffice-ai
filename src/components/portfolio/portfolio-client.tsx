@@ -225,7 +225,7 @@ function filterCount(f: StatusFilter, properties: Property[]): number {
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
 
-export function PortfolioClient({ properties, kpis, isOnboarding = false }: { properties: Property[]; kpis: Kpis; isOnboarding?: boolean }) {
+export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOverheadWorkspace = true }: { properties: Property[]; kpis: Kpis; isOnboarding?: boolean; hasOverheadWorkspace?: boolean }) {
   const router = useRouter()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
@@ -369,6 +369,18 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false }: { pr
           actionLabel="Add Property"
           actionHref="/projects/new?type=PROPERTY"
           onSkip={() => router.replace('/portfolio')}
+        />
+      )}
+
+      {/* Overhead workspace prompt for existing users */}
+      {!isOnboarding && !hasOverheadWorkspace && (
+        <ActionBanner
+          icon="📌"
+          label="Track property overhead"
+          detail="Set up a shared workspace for expenses not tied to a specific property — insurance, management fees, shared maintenance costs."
+          color="blue"
+          onClick={() => router.push('/projects/new?type=OTHER&overhead=1')}
+          cta="Set up →"
         />
       )}
 

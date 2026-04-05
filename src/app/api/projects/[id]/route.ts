@@ -129,6 +129,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
     const existing = await prisma.workspace.findFirst({ where: { id, userId } })
     if (!existing) return notFound('Project not found')
+    if (existing.isDefault) return badRequest('Cannot delete the default overhead workspace')
 
     await prisma.workspace.delete({ where: { id } })
     return ok({ deleted: true })

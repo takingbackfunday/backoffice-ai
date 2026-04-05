@@ -12,6 +12,7 @@ interface Props {
   type: string
   isActive: boolean
   description?: string | null
+  isDefault?: boolean
 }
 
 const TYPE_ICONS: Record<string, React.ElementType> = {
@@ -20,7 +21,7 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   OTHER: Tag,
 }
 
-export function ProjectDetailHeader({ id, name, type, isActive, description }: Props) {
+export function ProjectDetailHeader({ id, name, type, isActive, description, isDefault = false }: Props) {
   const router = useRouter()
   const [active, setActive] = useState(isActive)
   const [toggling, setToggling] = useState(false)
@@ -147,34 +148,36 @@ export function ProjectDetailHeader({ id, name, type, isActive, description }: P
           {toggling ? '…' : active ? 'Active' : 'Inactive'}
         </button>
 
-        <div className="ml-auto flex items-center gap-2">
-          {confirmDelete ? (
-            <>
-              <span className="text-xs text-muted-foreground">Delete project?</span>
+        {!isDefault && (
+          <div className="ml-auto flex items-center gap-2">
+            {confirmDelete ? (
+              <>
+                <span className="text-xs text-muted-foreground">Delete project?</span>
+                <button
+                  onClick={deleteProject}
+                  disabled={deleting}
+                  className="rounded px-2 py-1 text-xs font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting…' : 'Yes, delete'}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="rounded px-2 py-1 text-xs font-medium border hover:bg-muted"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
               <button
-                onClick={deleteProject}
-                disabled={deleting}
-                className="rounded px-2 py-1 text-xs font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                onClick={() => setConfirmDelete(true)}
+                className="text-muted-foreground hover:text-red-600 transition-colors"
+                title="Delete project"
               >
-                {deleting ? 'Deleting…' : 'Yes, delete'}
+                <Trash2 className="h-4 w-4" />
               </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="rounded px-2 py-1 text-xs font-medium border hover:bg-muted"
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="text-muted-foreground hover:text-red-600 transition-colors"
-              title="Delete project"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
       {description && (
         <p className="text-sm text-muted-foreground ml-8">{description}</p>

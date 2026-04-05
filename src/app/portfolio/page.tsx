@@ -98,6 +98,11 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
     return charged - paid > 0
   }).length
 
+  const overheadWorkspace = await prisma.workspace.findFirst({
+    where: { userId, isDefault: true },
+    select: { id: true },
+  })
+
   const propertyProfileIds = properties.flatMap(p => p.propertyProfile ? [p.propertyProfile.id] : [])
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
@@ -189,7 +194,7 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
       <div className="flex flex-1 flex-col">
         <Header title="Properties" />
         <main className="flex-1 p-6" role="main">
-          <PortfolioClient properties={serialized} kpis={kpis} isOnboarding={isOnboarding} />
+          <PortfolioClient properties={serialized} kpis={kpis} isOnboarding={isOnboarding} hasOverheadWorkspace={!!overheadWorkspace} />
         </main>
       </div>
     </div>

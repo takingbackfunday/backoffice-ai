@@ -38,6 +38,11 @@ export default async function StudioPage({ searchParams }: PageProps) {
   const now = new Date()
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
+  const overheadWorkspace = await prisma.workspace.findFirst({
+    where: { userId, isDefault: true },
+    select: { id: true },
+  })
+
   const [prefs, pendingSuggestions, recentPaymentsCount] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId } }),
     prisma.invoicePaymentSuggestion.count({ where: { userId, status: 'PENDING' } }),
@@ -145,7 +150,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
             <h1 className="text-xl font-bold">Client Hub</h1>
             <p className="text-sm text-muted-foreground">Overview of your client projects and invoices</p>
           </div>
-          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} invoiceDefaults={invoiceDefaults} isOnboarding={isOnboarding} />
+          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} invoiceDefaults={invoiceDefaults} isOnboarding={isOnboarding} hasOverheadWorkspace={!!overheadWorkspace} />
         </main>
       </div>
     </div>

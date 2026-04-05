@@ -9,6 +9,7 @@ const CreateProjectSchema = z.object({
   type: z.enum(['CLIENT', 'PROPERTY', 'OTHER']),
   description: z.string().optional(),
   isActive: z.boolean().optional().default(true),
+  isDefault: z.boolean().optional().default(false),
   client: z.object({
     contactName: z.string().optional(),
     email: z.string().email().optional().or(z.literal('')),
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
-    const { name, type, description, isActive, client, property, units } = parsed.data
+    const { name, type, description, isActive, isDefault, client, property, units } = parsed.data
 
     if (type === 'PROPERTY' && !property?.address) {
       return badRequest('Property address is required')
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
         type,
         description,
         isActive,
+        isDefault,
         ...(type === 'CLIENT' ? {
           clientProfile: {
             create: {
