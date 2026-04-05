@@ -99,6 +99,9 @@ interface Props {
     lineItems: { id: string; description: string; quantity: number; qtyUnit?: string | null; unitPrice: number; isTaxLine: boolean }[]
     totalPaid: number
   }
+  // quote fulfillment link (optional — set when creating invoice from a quote)
+  quoteId?: string | null
+  quoteNumber?: string | null
 }
 
 /* ------------------------------------------------------------------ */
@@ -194,6 +197,8 @@ export function InvoiceEditor({
   lastInvoiceDefaults,
   existingInvoice,
   recentInvoices: initialRecentInvoices,
+  quoteId,
+  quoteNumber,
 }: Props) {
   const router = useRouter()
   const [jobs, setJobs] = useState(initialJobs)
@@ -554,6 +559,7 @@ export function InvoiceEditor({
             currency: state.currency,
             notes: state.notes || undefined,
             lineItems: lineItemsPayload,
+            quoteId: quoteId || undefined,
           }),
         })
         const json = await res.json()
@@ -609,6 +615,16 @@ export function InvoiceEditor({
       {/* ── LEFT: Form ─────────────────────────────────────────── */}
       <div className={cn('flex-1 min-w-0 transition-all duration-300', chatVisible ? 'max-w-[60%]' : 'max-w-full')}>
         <div className="pr-6">
+
+          {/* Quote link badge */}
+          {quoteNumber && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-800 flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Invoice for Quote <strong>{quoteNumber}</strong>
+            </div>
+          )}
 
           {/* Edit warnings */}
           {isSent && (

@@ -26,6 +26,8 @@ const CreateInvoiceSchema = z.object({
   currency: z.string().default('USD'),
   notes: z.string().optional(),
   lineItems: z.array(LineItemSchema).min(1, 'At least one line item is required'),
+  // quote fulfillment link (optional)
+  quoteId: z.string().optional(),
 })
 
 interface RouteParams { params: Promise<{ id: string }> }
@@ -128,6 +130,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         data: {
           clientProfileId: project.clientProfile.id,
           jobId: parsed.data.jobId ?? null,
+          quoteId: parsed.data.quoteId ?? null,
           invoiceNumber,
           dueDate: new Date(parsed.data.dueDate),
           currency: parsed.data.currency,

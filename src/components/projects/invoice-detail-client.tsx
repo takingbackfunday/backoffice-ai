@@ -58,6 +58,8 @@ interface Invoice {
   payments: InvoicePayment[]
   replacesInvoice?: InvoiceRef | null
   replacedBy?: InvoiceRef | null
+  quoteId?: string | null
+  quote?: { id: string; quoteNumber: string } | null
 }
 
 interface Props {
@@ -328,6 +330,14 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           </span>
           {invoice.job && (
             <span className="text-xs text-muted-foreground">Job: {invoice.job.name}</span>
+          )}
+          {invoice.quote && (
+            <Link
+              href={`/projects/${projectSlug}/quotes/${invoice.quote.id}`}
+              className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+            >
+              Quote: {invoice.quote.quoteNumber} →
+            </Link>
           )}
         </div>
         <div className="flex items-center gap-2">

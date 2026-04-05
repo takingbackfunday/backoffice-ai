@@ -51,6 +51,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       lease: { select: { id: true, unit: { select: { unitLabel: true } }, tenant: { select: { name: true, email: true } } } },
       replacesInvoice: { select: { id: true, invoiceNumber: true } },
       replacedBy: { select: { id: true, invoiceNumber: true } },
+      quote: { select: { id: true, quoteNumber: true } },
     },
   })
   if (!invoice) notFound()
@@ -124,6 +125,8 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     })),
     replacesInvoice: invoice.replacesInvoice ?? null,
     replacedBy: invoice.replacedBy ?? null,
+    quoteId: invoice.quoteId ?? null,
+    quote: invoice.quote ?? null,
   }
 
   return (
