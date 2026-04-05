@@ -181,7 +181,7 @@ export default async function PortfolioPage() {
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex flex-1 flex-col">
-        <Header title="Portfolio" />
+        <Header title="Properties" />
         <main className="flex-1 p-6" role="main">
           <PortfolioClient properties={serialized} kpis={kpis} />
         </main>

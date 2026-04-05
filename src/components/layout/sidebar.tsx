@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { cn } from '@/lib/utils'
+import { getTerminology, type BusinessType } from '@/lib/terminology'
 
 const FINANCE_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
@@ -22,13 +23,6 @@ const IMPORT_ITEMS = [
   { href: '/bank-accounts', label: 'Bank Accounts', icon: '🏦' },
 ]
 
-const PROJECTS_ITEMS = [
-  { href: '/projects', label: 'Add Project', icon: '📁' },
-  { href: '/portfolio', label: 'Portfolio', icon: '🏘️' },
-  { href: '/studio', label: 'Studio', icon: '🎬' },
-  { href: '/settings', label: 'Project Settings', icon: '⚙️' },
-]
-
 export function Sidebar() {
   const pathname = usePathname()
   const [pending, setPending] = useState<string | null>(null)
@@ -37,19 +31,62 @@ export function Sidebar() {
   const [moreOpen, setMoreOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(true)
   const [projectsOpen, setProjectsOpen] = useState(true)
+  const [businessType, setBusinessType] = useState<string | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
     if (stored === 'true') setCollapsed(true)
   }, [])
 
+  useEffect(() => {
+    const stored = localStorage.getItem('businessType')
+    if (stored) {
+      setBusinessType(stored)
+      return
+    }
+    fetch('/api/preferences')
+      .then(r => r.json())
+      .then(json => {
+        const bt = (json.data as Record<string, unknown>)?.businessType as string | undefined
+        if (bt) {
+          localStorage.setItem('businessType', bt)
+          setBusinessType(bt)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const projectsItems = useMemo(() => {
+    const term = getTerminology(businessType as BusinessType | null)
+    const items: { href: string; label: string; icon: string }[] = []
+
+    if (businessType === 'freelance' || businessType === 'both') {
+      items.push({ href: '/studio', label: 'Client Hub', icon: '🎯' })
+    }
+    if (businessType === 'property' || businessType === 'both') {
+      items.push({ href: '/portfolio', label: 'Properties', icon: '🏘️' })
+    }
+    if (businessType === 'personal' || !businessType) {
+      items.push({ href: '/projects', label: 'Projects', icon: '📁' })
+    }
+
+    items.push({ href: term.addHref, label: term.addLabel, icon: '➕' })
+    items.push({ href: '/settings', label: 'Settings', icon: '⚙️' })
+
+    return items
+  }, [businessType])
+
+  const sectionLabel = businessType
+    ? getTerminology(businessType as BusinessType).sidebarSectionLabel
+    : 'Projects'
+
   // Auto-open parent accordion when child route is active
   useEffect(() => {
     if (FINANCE_ITEMS.some(i => pathname.startsWith(i.href)) || MORE_ITEMS.some(i => i.href === pathname)) setFinanceOpen(true)
     if (MORE_ITEMS.some(i => i.href === pathname)) setMoreOpen(true)
     if (IMPORT_ITEMS.some(i => i.href === pathname)) setImportOpen(true)
-    if (PROJECTS_ITEMS.some(i => pathname.startsWith(i.href))) setProjectsOpen(true)
-  }, [pathname])
+    if (projectsItems.some(i => pathname.startsWith(i.href))) setProjectsOpen(true)
+  }, [pathname, projectsItems])
 
   useEffect(() => { setPending(null) }, [pathname])
 
@@ -129,7 +166,7 @@ export function Sidebar() {
   const financeChildActive = FINANCE_ITEMS.some(i => pathname.startsWith(i.href))
   const moreChildActive = MORE_ITEMS.some(i => i.href === pathname)
   const importChildActive = IMPORT_ITEMS.some(i => i.href === pathname)
-  const projectsChildActive = PROJECTS_ITEMS.some(i => pathname.startsWith(i.href)) || pathname === '/settings'
+  const projectsChildActive = projectsItems.some(i => pathname.startsWith(i.href)) || pathname === '/settings'
 
   return (
     <nav
@@ -198,15 +235,15 @@ export function Sidebar() {
 
         {!collapsed && <li className="my-0.5 border-t border-black/[0.06]" />}
 
-        {/* Projects accordion */}
+        {/* Projects/Clients/Properties accordion */}
         <AccordionToggle
-          label="Projects"
+          label={sectionLabel}
           icon="📁"
           isOpen={projectsOpen}
           onToggle={() => setProjectsOpen(v => !v)}
           isChildActive={projectsChildActive}
         />
-        {(projectsOpen || collapsed) && PROJECTS_ITEMS.map(item => (
+        {(projectsOpen || collapsed) && projectsItems.map(item => (
           <NavLink key={item.href} {...item} indent={!collapsed} />
         ))}
 

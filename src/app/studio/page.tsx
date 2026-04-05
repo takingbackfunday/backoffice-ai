@@ -133,10 +133,10 @@ export default async function StudioPage() {
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex flex-1 flex-col">
-        <Header title="Studio" />
+        <Header title="Client Hub" />
         <main className="flex-1 p-6" role="main">
           <div className="mb-6">
-            <h1 className="text-xl font-bold">Studio</h1>
+            <h1 className="text-xl font-bold">Client Hub</h1>
             <p className="text-sm text-muted-foreground">Overview of your client projects and invoices</p>
           </div>
           <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} invoiceDefaults={invoiceDefaults} />
