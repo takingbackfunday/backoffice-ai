@@ -5,7 +5,13 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { PortfolioClient } from '@/components/portfolio/portfolio-client'
 
-export default async function PortfolioPage() {
+interface PageProps {
+  searchParams: Promise<{ onboarding?: string }>
+}
+
+export default async function PortfolioPage({ searchParams }: PageProps) {
+  const params = await searchParams
+  const isOnboarding = params.onboarding === '1'
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
@@ -183,7 +189,7 @@ export default async function PortfolioPage() {
       <div className="flex flex-1 flex-col">
         <Header title="Properties" />
         <main className="flex-1 p-6" role="main">
-          <PortfolioClient properties={serialized} kpis={kpis} />
+          <PortfolioClient properties={serialized} kpis={kpis} isOnboarding={isOnboarding} />
         </main>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
 import { NewClientModal, NewJobModal } from '@/components/studio/studio-action-modals'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { ActionBanner } from '@/components/ui/action-banner'
+import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -66,6 +67,7 @@ interface Props {
   pendingSuggestions?: number
   recentPaymentsCount?: number
   invoiceDefaults?: InvoiceDefaults
+  isOnboarding?: boolean
 }
 
 type View = 'open' | 'paid' | 'all'
@@ -702,7 +704,7 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
 
 type FlatInvoice = Invoice & { clientId: string; clientName: string; clientSlug: string; clientCompany: string | null }
 
-export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults }: Props) {
+export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults, isOnboarding = false }: Props) {
   const router = useRouter()
   const [view, setView] = useState<View>('open')
   const [search, setSearch] = useState('')
@@ -790,6 +792,16 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   return (
     <div style={{ fontFamily: 'inherit', maxWidth: 960, color: '#1a1a1a' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* Onboarding banner */}
+      {isOnboarding && clients.length === 0 && (
+        <OnboardingBanner
+          message="Add your first client to start tracking invoices and jobs."
+          actionLabel="Add Client"
+          actionHref="/projects/new?type=CLIENT"
+          onSkip={() => router.replace('/studio')}
+        />
+      )}
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>

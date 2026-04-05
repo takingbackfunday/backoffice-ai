@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ProjectTypePicker } from './project-type-picker'
 import { ClientProfileForm } from './client-profile-form'
 import { PropertyProfileForm } from './property-profile-form'
@@ -12,8 +12,13 @@ type Step = 1 | 2 | 3
 
 export function ProjectCreationWizard() {
   const router = useRouter()
-  const [step, setStep] = useState<Step>(1)
-  const [type, setType] = useState<ProjectType | null>(null)
+  const searchParams = useSearchParams()
+  const rawType = searchParams.get('type')
+  const validInitialType: ProjectType | null = rawType && ['CLIENT', 'PROPERTY', 'OTHER'].includes(rawType)
+    ? (rawType as ProjectType)
+    : null
+  const [step, setStep] = useState<Step>(validInitialType ? 2 : 1)
+  const [type, setType] = useState<ProjectType | null>(validInitialType)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 

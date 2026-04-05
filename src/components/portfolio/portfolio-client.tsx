@@ -9,6 +9,7 @@ import {
   Calendar, DollarSign, MessageSquare, Send, Mail, ArrowUpDown,
 } from 'lucide-react'
 import { ActionBanner } from '@/components/ui/action-banner'
+import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
 import {
   UNIT_STATUS_COLORS, UNIT_STATUS_LABELS,
   MAINTENANCE_PRIORITY_LABELS, MAINTENANCE_PRIORITY_COLORS,
@@ -224,7 +225,7 @@ function filterCount(f: StatusFilter, properties: Property[]): number {
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
 
-export function PortfolioClient({ properties, kpis }: { properties: Property[]; kpis: Kpis }) {
+export function PortfolioClient({ properties, kpis, isOnboarding = false }: { properties: Property[]; kpis: Kpis; isOnboarding?: boolean }) {
   const router = useRouter()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
@@ -360,6 +361,16 @@ export function PortfolioClient({ properties, kpis }: { properties: Property[]; 
 
   return (
     <div className="space-y-5">
+
+      {/* Onboarding banner */}
+      {isOnboarding && properties.length === 0 && (
+        <OnboardingBanner
+          message="Add your first property to start managing units and tenants."
+          actionLabel="Add Property"
+          actionHref="/projects/new?type=PROPERTY"
+          onSkip={() => router.replace('/portfolio')}
+        />
+      )}
 
       {/* ============================================================= */}
       {/*  KPI BAR                                                       */}

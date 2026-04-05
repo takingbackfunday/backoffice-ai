@@ -5,7 +5,13 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { StudioClient } from '@/components/studio/studio-client'
 
-export default async function StudioPage() {
+interface PageProps {
+  searchParams: Promise<{ onboarding?: string }>
+}
+
+export default async function StudioPage({ searchParams }: PageProps) {
+  const params = await searchParams
+  const isOnboarding = params.onboarding === '1'
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
@@ -139,7 +145,7 @@ export default async function StudioPage() {
             <h1 className="text-xl font-bold">Client Hub</h1>
             <p className="text-sm text-muted-foreground">Overview of your client projects and invoices</p>
           </div>
-          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} invoiceDefaults={invoiceDefaults} />
+          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} invoiceDefaults={invoiceDefaults} isOnboarding={isOnboarding} />
         </main>
       </div>
     </div>
