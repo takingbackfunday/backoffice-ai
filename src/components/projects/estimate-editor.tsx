@@ -353,6 +353,12 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
         }
       )
       const json = await res.json()
+      if (!res.ok) {
+        console.error('[ai-assist] API error', res.status, json)
+        setAiMessages(prev => [...prev, { role: 'assistant', text: `Error ${res.status}: ${json.error ?? 'Request failed'}` }])
+        return
+      }
+      console.log('[ai-assist] response', json)
       const result = json.data as { text: string; actions: AiActionDef[] }
       setAiMessages(prev => [...prev, { role: 'assistant', text: result.text || 'Done.' }])
 
@@ -414,8 +420,9 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
           dispatch({ type: 'set_notes', value: action.notes })
         }
       }
-    } catch {
-      setAiMessages(prev => [...prev, { role: 'assistant', text: 'Sorry, I had trouble processing that.' }])
+    } catch (e) {
+      console.error('[ai-assist] client error', e)
+      setAiMessages(prev => [...prev, { role: 'assistant', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }])
     } finally {
       setAiLoading(false)
     }

@@ -89,7 +89,10 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     const body = await request.json()
     const parsed = RequestSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.errors[0].message)
+    if (!parsed.success) {
+      console.error('[ai-assist] validation error:', parsed.error.errors)
+      return badRequest(parsed.error.errors[0].message)
+    }
 
     const { messages, currentEstimate, clientName, projectDescription, billingType } = parsed.data
 
@@ -138,11 +141,15 @@ Rules:
 
     const MAX_ROUNDS = 3
     for (let round = 0; round < MAX_ROUNDS; round++) {
+      console.log(`[ai-assist] round ${round}, messages:`, llmMessages.length)
       const response = await openrouterWithTools(llmMessages, ESTIMATE_AI_TOOLS, 'anthropic/claude-sonnet-4.6')
+      console.log(`[ai-assist] round ${round} response: finish_reason=${response.finish_reason}, tool_calls=${response.tool_calls?.length ?? 0}, content=${response.content?.slice(0, 200)}`)
 
       if (!response.tool_calls || response.tool_calls.length === 0) {
         const text = response.content ?? ''
+        console.log('[ai-assist] final content:', text.slice(0, 500))
         const result = parseEstimateJson(text)
+        console.log('[ai-assist] parsed result:', result ? `text="${result.text?.slice(0,100)}", actions=${result.actions.length}` : 'null — parse failed')
         return ok(result ?? { text, actions: [] })
       }
 
@@ -200,7 +207,7 @@ Rules:
     return ok(parseEstimateJson(text) ?? { text, actions: [] })
 
   } catch (e) {
-    console.error('[estimate ai-assist]', e)
+    console.error('[estimate ai-assist] unhandled error:', e)
     return serverError()
   }
 }
