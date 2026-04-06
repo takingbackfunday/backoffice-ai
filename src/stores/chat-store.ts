@@ -10,6 +10,10 @@ interface ChatStore {
   hidden: boolean
   hide: () => void
   show: () => void
+  // Open and pre-load a message to auto-submit
+  openWithMessage: (message: string) => void
+  pendingMessage: string | null
+  clearPendingMessage: () => void
 
   // Conversation memory
   sessionId: string
@@ -29,6 +33,9 @@ export const useChatStore = create<ChatStore>((set) => ({
   hidden: false,
   hide: () => set({ hidden: true, open: false }),
   show: () => set({ hidden: false }),
+  pendingMessage: null,
+  openWithMessage: (message) => set({ open: true, pendingMessage: message }),
+  clearPendingMessage: () => set({ pendingMessage: null }),
 
   sessionId: makeSessionId(),
   turns: [],

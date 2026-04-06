@@ -7,6 +7,7 @@ import { ProjectDetailHeader } from '@/components/projects/project-detail-header
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceEditor } from '@/components/projects/invoice-editor'
 import { PropertyInvoiceNew } from '@/components/projects/property-invoice-new'
+import { NewInvoiceShortcuts } from '@/components/projects/new-invoice-shortcuts'
 import Link from 'next/link'
 
 interface PageParams { params: Promise<{ slug: string }> }
@@ -103,6 +104,12 @@ export default async function NewInvoicePage({ params }: PageParams) {
   if (!project.clientProfile) notFound()
   const cp = project.clientProfile
 
+  const acceptedQuotes = await prisma.quote.findMany({
+    where: { clientProfileId: cp.id, status: 'ACCEPTED' },
+    select: { id: true, quoteNumber: true, title: true, totalQuoted: true, currency: true },
+    orderBy: { createdAt: 'desc' },
+  })
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -129,6 +136,18 @@ export default async function NewInvoicePage({ params }: PageParams) {
             </Link>
             <h2 className="text-lg font-semibold">New Invoice</h2>
           </div>
+          <NewInvoiceShortcuts
+            projectId={project.id}
+            projectSlug={slug}
+            clientName={cp.contactName ?? project.name}
+            acceptedQuotes={acceptedQuotes.map(q => ({
+              id: q.id,
+              quoteNumber: q.quoteNumber,
+              title: q.title,
+              totalQuoted: q.totalQuoted ? Number(q.totalQuoted) : null,
+              currency: q.currency,
+            }))}
+          />
           <InvoiceEditor
             mode="create"
             projectId={project.id}

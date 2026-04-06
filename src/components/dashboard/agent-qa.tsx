@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useChatStore } from '@/stores/chat-store'
 import type { AgentDomain } from '@/lib/agent/types'
 
@@ -27,7 +27,16 @@ export function AgentQA() {
   const [messages, setMessages] = useState<Message[]>([])
   const esRef = useRef<AbortController | null>(null)
 
-  const { sessionId, turns, addTurn, clearHistory } = useChatStore()
+  const { sessionId, turns, addTurn, clearHistory, pendingMessage, clearPendingMessage } = useChatStore()
+
+  // Auto-submit a pending message (e.g. triggered from another page)
+  useEffect(() => {
+    if (pendingMessage) {
+      clearPendingMessage()
+      ask(pendingMessage)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function cancel() {
     esRef.current?.abort()
