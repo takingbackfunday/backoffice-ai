@@ -6,7 +6,6 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
-import { EstimateList } from '@/components/projects/estimate-list'
 import { ChevronLeft } from 'lucide-react'
 
 interface PageParams { params: Promise<{ slug: string; jobId: string }> }
@@ -31,20 +30,6 @@ export default async function JobDetailPage({ params }: PageParams) {
 
   const job = project.clientProfile.jobs[0]
   if (!job) notFound()
-
-  const estimates = await prisma.estimate.findMany({
-    where: { jobId },
-    include: {
-      sections: {
-        include: { items: { orderBy: { sortOrder: 'asc' } } },
-        orderBy: { sortOrder: 'asc' },
-      },
-      _count: { select: { quotes: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
-
-  const estimatesData = JSON.parse(JSON.stringify(estimates))
 
   return (
     <div className="flex min-h-screen">
@@ -73,12 +58,10 @@ export default async function JobDetailPage({ params }: PageParams) {
                 <p className="text-sm text-muted-foreground mt-0.5">{job.description}</p>
               )}
             </div>
-            <EstimateList
-              projectId={project.id}
-              projectSlug={slug}
-              jobId={jobId}
-              estimates={estimatesData}
-            />
+            <div className="text-sm text-muted-foreground">
+              <p>Billing type: {job.billingType ?? 'Default'}</p>
+              {job.defaultRate && <p className="mt-0.5">Default rate: {Number(job.defaultRate).toFixed(2)}/hr</p>}
+            </div>
           </div>
         </main>
       </div>

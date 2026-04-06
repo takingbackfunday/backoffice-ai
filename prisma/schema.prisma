@@ -315,6 +315,7 @@ model Workspace {
   propertyProfile     PropertyProfile?
   transactions        Transaction[]
   categorizationRules CategorizationRule[]
+  estimates           Estimate[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -376,8 +377,8 @@ model Job {
   // Actual cost for retrospective (manual entry or from tagged transactions)
   actualCost      Decimal?      @db.Decimal(12, 2)
   invoices        Invoice[]
-  estimates       Estimate[]
   quotes          Quote[]
+  estimates       Estimate[]    // legacy back-relation — new estimates use workspaceId directly
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -919,23 +920,26 @@ enum ShowingStatus {
 // ── Estimate track ───────────────────────────────────────────────────────────
 
 model Estimate {
-  id        String            @id @default(cuid())
-  jobId     String
-  job       Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  title     String
-  status    EstimateStatus    @default(DRAFT)
-  currency  String            @default("USD")
-  notes     String?
-  version   Int               @default(1)
-  parentId  String?
-  parent    Estimate?         @relation("EstimateVersions", fields: [parentId], references: [id])
-  revisions Estimate[]        @relation("EstimateVersions")
-  quotes    Quote[]
-  sections  EstimateSection[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  id          String            @id @default(cuid())
+  workspaceId String
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // Legacy: jobId kept nullable for existing data; new estimates leave this null
+  jobId       String?
+  job         Job?              @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  title       String
+  status      EstimateStatus    @default(DRAFT)
+  currency    String            @default("USD")
+  notes       String?
+  version     Int               @default(1)
+  parentId    String?
+  parent      Estimate?         @relation("EstimateVersions", fields: [parentId], references: [id])
+  revisions   Estimate[]        @relation("EstimateVersions")
+  quotes      Quote[]
+  sections    EstimateSection[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
-  @@index([jobId])
+  @@index([workspaceId])
 }
 
 enum EstimateStatus {

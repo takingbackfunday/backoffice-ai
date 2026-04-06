@@ -7,35 +7,22 @@ import { ProjectDetailHeader } from '@/components/projects/project-detail-header
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { EstimateEditor } from '@/components/projects/estimate-editor'
 
-interface PageParams { params: Promise<{ slug: string; jobId: string; estId: string }> }
+interface PageParams { params: Promise<{ slug: string; estId: string }> }
 
 export default async function EstimateDetailPage({ params }: PageParams) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const { slug, jobId, estId } = await params
+  const { slug, estId } = await params
 
   const project = await prisma.workspace.findFirst({
     where: { userId, slug, type: 'CLIENT' },
-    include: {
-      clientProfile: {
-        include: {
-          jobs: { where: { id: jobId } },
-        },
-      },
-    },
+    include: { clientProfile: true },
   })
   if (!project || !project.clientProfile) notFound()
 
-  const job = project.clientProfile.jobs[0]
-  if (!job) notFound()
-
   const estimate = await prisma.estimate.findFirst({
-    where: {
-      id: estId,
-      jobId,
-      job: { clientProfile: { workspace: { id: project.id, userId } } },
-    },
+    where: { id: estId, workspaceId: project.id },
     include: {
       sections: {
         include: { items: { orderBy: { sortOrder: 'asc' } } },
@@ -74,15 +61,13 @@ export default async function EstimateDetailPage({ params }: PageParams) {
           <ProjectSubNav slug={slug} type={project.type} />
           <div className="max-w-4xl">
             <div className="mb-2 text-sm text-muted-foreground">
-              Job: {job.name} · v{estimate.version}
+              v{estimate.version}
             </div>
             <EstimateEditor
               projectId={project.id}
               projectSlug={slug}
-              jobId={jobId}
-              jobDescription={job.description}
               clientName={project.clientProfile.contactName ?? project.name}
-              billingType={job.billingType ?? project.clientProfile.billingType}
+              billingType={project.clientProfile.billingType}
               existingEstimate={estimateData}
             />
           </div>

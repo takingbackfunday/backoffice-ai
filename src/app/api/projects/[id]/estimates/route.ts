@@ -29,29 +29,23 @@ const CreateEstimateSchema = z.object({
   sections: z.array(EstimateSectionSchema).default([]),
 })
 
-interface RouteParams { params: Promise<{ id: string; jobId: string }> }
+interface RouteParams { params: Promise<{ id: string }> }
 
-async function getJobForUser(projectId: string, jobId: string, userId: string) {
-  return prisma.job.findFirst({
-    where: {
-      id: jobId,
-      clientProfile: { workspace: { id: projectId, userId } },
-    },
-    include: { clientProfile: true },
-  })
+async function getProject(id: string, userId: string) {
+  return prisma.workspace.findFirst({ where: { id, userId } })
 }
 
 export async function GET(_request: Request, { params }: RouteParams) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
-    const { id, jobId } = await params
+    const { id } = await params
 
-    const job = await getJobForUser(id, jobId, userId)
-    if (!job) return notFound('Job not found')
+    const project = await getProject(id, userId)
+    if (!project) return notFound('Project not found')
 
     const estimates = await prisma.estimate.findMany({
-      where: { jobId },
+      where: { workspaceId: id },
       include: {
         sections: { include: { items: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
         _count: { select: { quotes: true } },
@@ -70,10 +64,10 @@ export async function POST(request: Request, { params }: RouteParams) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
-    const { id, jobId } = await params
+    const { id } = await params
 
-    const job = await getJobForUser(id, jobId, userId)
-    if (!job) return notFound('Job not found')
+    const project = await getProject(id, userId)
+    if (!project) return notFound('Project not found')
 
     const body = await request.json()
     const parsed = CreateEstimateSchema.safeParse(body)
@@ -83,7 +77,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     const estimate = await prisma.estimate.create({
       data: {
-        jobId,
+        workspaceId: id,
         title,
         currency,
         notes,

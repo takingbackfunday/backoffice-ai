@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 
 const EstimateItemSchema = z.object({
-  id: z.string().optional(),
   description: z.string().min(1),
   hours: z.number().optional().nullable(),
   costRate: z.number().optional().nullable(),
@@ -18,7 +17,6 @@ const EstimateItemSchema = z.object({
 })
 
 const EstimateSectionSchema = z.object({
-  id: z.string().optional(),
   name: z.string().min(1),
   sortOrder: z.number().int().default(0),
   items: z.array(EstimateItemSchema).default([]),
@@ -31,15 +29,11 @@ const UpdateEstimateSchema = z.object({
   sections: z.array(EstimateSectionSchema).optional(),
 })
 
-interface RouteParams { params: Promise<{ id: string; jobId: string; estId: string }> }
+interface RouteParams { params: Promise<{ id: string; estId: string }> }
 
-async function getEstimateForUser(estId: string, jobId: string, projectId: string, userId: string) {
+async function getEstimateForUser(estId: string, projectId: string, userId: string) {
   return prisma.estimate.findFirst({
-    where: {
-      id: estId,
-      jobId,
-      job: { clientProfile: { workspace: { id: projectId, userId } } },
-    },
+    where: { id: estId, workspaceId: projectId, workspace: { userId } },
     include: {
       sections: { include: { items: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
     },
@@ -50,9 +44,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
-    const { id, jobId, estId } = await params
+    const { id, estId } = await params
 
-    const estimate = await getEstimateForUser(estId, jobId, id, userId)
+    const estimate = await getEstimateForUser(estId, id, userId)
     if (!estimate) return notFound('Estimate not found')
 
     return ok(JSON.parse(JSON.stringify(estimate)))
@@ -66,9 +60,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
-    const { id, jobId, estId } = await params
+    const { id, estId } = await params
 
-    const estimate = await getEstimateForUser(estId, jobId, id, userId)
+    const estimate = await getEstimateForUser(estId, id, userId)
     if (!estimate) return notFound('Estimate not found')
 
     if (estimate.status === 'FINAL') {
@@ -82,7 +76,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const { sections, ...rest } = parsed.data
 
     const updated = await prisma.$transaction(async (tx) => {
-      // Replace sections if provided
       if (sections !== undefined) {
         await tx.estimateSection.deleteMany({ where: { estimateId: estId } })
         await tx.estimate.update({
@@ -110,9 +103,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
               })),
             },
           },
-          include: {
-            sections: { include: { items: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
-          },
         })
       } else {
         await tx.estimate.update({ where: { id: estId }, data: rest })
@@ -137,12 +127,11 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
-    const { id, jobId, estId } = await params
+    const { id, estId } = await params
 
-    const estimate = await getEstimateForUser(estId, jobId, id, userId)
+    const estimate = await getEstimateForUser(estId, id, userId)
     if (!estimate) return notFound('Estimate not found')
 
-    // Cannot delete an estimate that has quotes
     const quoteCount = await prisma.quote.count({ where: { estimateId: estId } })
     if (quoteCount > 0) {
       return badRequest('Cannot delete an estimate that has quotes. Delete the quotes first.')

@@ -36,19 +36,18 @@ const RequestSchema = z.object({
   messages: z.array(MessageSchema).min(1),
   currentEstimate: CurrentEstimateSchema.optional(),
   clientName: z.string().optional(),
-  jobDescription: z.string().optional().nullable(),
+  projectDescription: z.string().optional().nullable(),
   billingType: z.string().optional(),
 })
 
-interface RouteParams { params: Promise<{ id: string; jobId: string; estId: string }> }
+interface RouteParams { params: Promise<{ id: string; estId: string }> }
 
-// Tools available to the estimate AI
 const ESTIMATE_AI_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
       name: 'lookup_similar_estimates',
-      description: 'Look up previous estimates on other jobs for this client to use as a reference for hours and rates. Returns section names and item-level hour/rate data.',
+      description: 'Look up previous estimates on this project to use as reference for hours and rates.',
       parameters: {
         type: 'object',
         properties: {
@@ -77,28 +76,22 @@ export async function POST(request: Request, { params }: RouteParams) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
-    const { id, jobId, estId } = await params
+    const { id, estId } = await params
 
-    const job = await prisma.job.findFirst({
-      where: {
-        id: jobId,
-        clientProfile: { workspace: { id, userId } },
-      },
-      include: { clientProfile: { include: { workspace: true } } },
-    })
-    if (!job) return notFound('Job not found')
+    const project = await prisma.workspace.findFirst({ where: { id, userId } })
+    if (!project) return notFound('Project not found')
 
-    // If estId is a real ID (not 'new'), verify it belongs to this job
+    // If estId is a real ID (not 'new'), verify ownership
     if (estId !== 'new') {
-      const estimateExists = await prisma.estimate.findFirst({ where: { id: estId, jobId } })
-      if (!estimateExists) return notFound('Estimate not found')
+      const exists = await prisma.estimate.findFirst({ where: { id: estId, workspaceId: id } })
+      if (!exists) return notFound('Estimate not found')
     }
 
     const body = await request.json()
     const parsed = RequestSchema.safeParse(body)
     if (!parsed.success) return badRequest(parsed.error.errors[0].message)
 
-    const { messages, currentEstimate, clientName, jobDescription, billingType } = parsed.data
+    const { messages, currentEstimate, clientName, projectDescription, billingType } = parsed.data
 
     const currentEstimateStr = currentEstimate?.sections?.length
       ? `Current estimate state:\n${JSON.stringify(currentEstimate, null, 2)}`
@@ -107,12 +100,12 @@ export async function POST(request: Request, { params }: RouteParams) {
     const systemPrompt = `You are an estimation assistant for a freelancer or consultant. Help them build accurate internal project estimates.
 
 Client: ${clientName || 'Unknown'}
-Job description: ${jobDescription || 'Not specified'}
+Project: ${project.name}${projectDescription ? `\nDescription: ${projectDescription}` : ''}
 Billing type: ${billingType || 'Not specified'}
 
 ${currentEstimateStr}
 
-You have a tool to look up previous estimates on this client's other jobs for reference.
+You have a tool to look up previous estimates on this project for reference.
 
 Respond with JSON ONLY — no prose outside the JSON object:
 {
@@ -143,7 +136,6 @@ Rules:
       ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ]
 
-    // Tool loop — max 3 rounds
     const MAX_ROUNDS = 3
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const response = await openrouterWithTools(llmMessages, ESTIMATE_AI_TOOLS, 'anthropic/claude-sonnet-4.6')
@@ -164,41 +156,31 @@ Rules:
         try {
           if (tc.function.name === 'lookup_similar_estimates') {
             const args = JSON.parse(tc.function.arguments) as { limit?: number }
-            const limit = args.limit ?? 3
             const previousEstimates = await prisma.estimate.findMany({
-              where: {
-                job: {
-                  clientProfile: { workspace: { id, userId } },
-                  id: { not: jobId },
-                },
-              },
+              where: { workspaceId: id, id: { not: estId === 'new' ? '' : estId } },
               include: {
                 sections: {
                   include: { items: { select: { description: true, hours: true, costRate: true, unit: true, tags: true } } },
                 },
-                job: { select: { name: true } },
               },
               orderBy: { createdAt: 'desc' },
-              take: limit,
+              take: args.limit ?? 3,
             })
-            if (previousEstimates.length === 0) {
-              toolResult = 'No previous estimates found for this client.'
-            } else {
-              toolResult = JSON.stringify(previousEstimates.map(e => ({
-                job: e.job.name,
-                title: e.title,
-                sections: e.sections.map(s => ({
-                  name: s.name,
-                  items: s.items.map(i => ({
-                    description: i.description,
-                    hours: i.hours ? Number(i.hours) : null,
-                    costRate: i.costRate ? Number(i.costRate) : null,
-                    unit: i.unit,
-                    tags: i.tags,
+            toolResult = previousEstimates.length === 0
+              ? 'No previous estimates found for this project.'
+              : JSON.stringify(previousEstimates.map(e => ({
+                  title: e.title,
+                  sections: e.sections.map(s => ({
+                    name: s.name,
+                    items: s.items.map(i => ({
+                      description: i.description,
+                      hours: i.hours ? Number(i.hours) : null,
+                      costRate: i.costRate ? Number(i.costRate) : null,
+                      unit: i.unit,
+                      tags: i.tags,
+                    })),
                   })),
-                })),
-              })), null, 2)
-            }
+                })), null, 2)
           } else {
             toolResult = 'Unknown tool'
           }
@@ -206,22 +188,16 @@ Rules:
           toolResult = 'Tool execution failed'
         }
 
-        llmMessages.push({
-          role: 'tool',
-          tool_call_id: tc.id,
-          content: toolResult,
-        })
+        llmMessages.push({ role: 'tool', tool_call_id: tc.id, content: toolResult })
       }
     }
 
-    // Exhausted rounds — force final answer
     llmMessages.push({ role: 'user', content: 'Please provide your final response now as the JSON object.' })
     const text = await openrouterChat(
       llmMessages as { role: 'user' | 'assistant' | 'system'; content: string }[],
       'anthropic/claude-sonnet-4.6'
     )
-    const result = parseEstimateJson(text)
-    return ok(result ?? { text, actions: [] })
+    return ok(parseEstimateJson(text) ?? { text, actions: [] })
 
   } catch (e) {
     console.error('[estimate ai-assist]', e)

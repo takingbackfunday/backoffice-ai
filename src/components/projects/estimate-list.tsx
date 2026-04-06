@@ -32,11 +32,16 @@ interface Estimate {
   _count?: { quotes: number }
 }
 
+interface Job {
+  id: string
+  name: string
+}
+
 interface Props {
   projectId: string
-  jobId: string
   projectSlug: string
   estimates: Estimate[]
+  jobs: Job[]
 }
 
 function estimateCost(estimate: Estimate): number {
@@ -59,23 +64,26 @@ const STATUS_STYLES: Record<string, string> = {
   SUPERSEDED: 'bg-amber-100 text-amber-700',
 }
 
-export function EstimateList({ projectId, jobId, projectSlug, estimates }: Props) {
+export function EstimateList({ projectId, projectSlug, estimates, jobs }: Props) {
   const router = useRouter()
   const [generating, setGenerating] = useState<string | null>(null)
   const [duplicating, setDuplicating] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Job selector for quote generation: estimateId → selected jobId
+  const [jobSelecting, setJobSelecting] = useState<string | null>(null)
+  const [selectedJobId, setSelectedJobId] = useState<string>('')
 
   async function handleDuplicate(estimateId: string) {
     setDuplicating(estimateId)
     setError(null)
     try {
       const res = await fetch(
-        `/api/projects/${projectId}/jobs/${jobId}/estimates/${estimateId}/duplicate`,
+        `/api/projects/${projectId}/estimates/${estimateId}/duplicate`,
         { method: 'POST' }
       )
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Failed to duplicate estimate'); return }
-      router.push(`/projects/${projectSlug}/jobs/${jobId}/estimates/${json.data.id}`)
+      router.push(`/projects/${projectSlug}/estimates/${json.data.id}`)
     } catch {
       setError('Failed to duplicate estimate')
     } finally {
@@ -83,14 +91,14 @@ export function EstimateList({ projectId, jobId, projectSlug, estimates }: Props
     }
   }
 
-  async function handleGenerateQuote(estimateId: string) {
+  async function handleGenerateQuote(estimateId: string, jobId: string) {
     setGenerating(estimateId)
     setError(null)
     try {
       const res = await fetch(`/api/projects/${projectId}/quotes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estimateId }),
+        body: JSON.stringify({ estimateId, jobId }),
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Failed to generate quote'); return }
@@ -99,6 +107,8 @@ export function EstimateList({ projectId, jobId, projectSlug, estimates }: Props
       setError('Failed to generate quote')
     } finally {
       setGenerating(null)
+      setJobSelecting(null)
+      setSelectedJobId('')
     }
   }
 
@@ -108,7 +118,7 @@ export function EstimateList({ projectId, jobId, projectSlug, estimates }: Props
         <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
         <p className="text-sm text-muted-foreground mb-4">No estimates yet</p>
         <Link
-          href={`/projects/${projectSlug}/jobs/${jobId}/estimates/new`}
+          href={`/projects/${projectSlug}/estimates/new`}
           className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="w-4 h-4" /> New Estimate
@@ -122,7 +132,7 @@ export function EstimateList({ projectId, jobId, projectSlug, estimates }: Props
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">Estimates</h3>
         <Link
-          href={`/projects/${projectSlug}/jobs/${jobId}/estimates/new`}
+          href={`/projects/${projectSlug}/estimates/new`}
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <Plus className="w-3 h-3" /> New
@@ -167,18 +177,44 @@ export function EstimateList({ projectId, jobId, projectSlug, estimates }: Props
                 >
                   {duplicating === est.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
                 </button>
-                {est.status === 'FINAL' && (
+                {est.status === 'FINAL' && jobSelecting !== est.id && (
                   <button
-                    onClick={() => handleGenerateQuote(est.id)}
-                    disabled={isGenerating}
+                    onClick={() => { setJobSelecting(est.id); setSelectedJobId(jobs[0]?.id ?? '') }}
+                    disabled={!!generating}
                     className="flex items-center gap-1 text-xs px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
                   >
-                    {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                     Generate Quote
                   </button>
                 )}
+                {est.status === 'FINAL' && jobSelecting === est.id && (
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={selectedJobId}
+                      onChange={e => setSelectedJobId(e.target.value)}
+                      className="text-xs border rounded px-1.5 py-1 bg-background"
+                    >
+                      {jobs.length === 0 && <option value="">No jobs</option>}
+                      {jobs.map(j => (
+                        <option key={j.id} value={j.id}>{j.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => handleGenerateQuote(est.id, selectedJobId)}
+                      disabled={isGenerating || !selectedJobId}
+                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded border bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Go'}
+                    </button>
+                    <button
+                      onClick={() => { setJobSelecting(null); setSelectedJobId('') }}
+                      className="text-xs text-muted-foreground hover:text-foreground px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
                 <Link
-                  href={`/projects/${projectSlug}/jobs/${jobId}/estimates/${est.id}`}
+                  href={`/projects/${projectSlug}/estimates/${est.id}`}
                   className="text-muted-foreground hover:text-foreground"
                 >
                   <ChevronRight className="w-4 h-4" />

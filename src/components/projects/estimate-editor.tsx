@@ -149,8 +149,6 @@ function itemCost(item: EstimateItemInput): number {
 interface Props {
   projectId: string
   projectSlug: string
-  jobId: string
-  jobDescription?: string | null
   clientName?: string
   billingType?: string
   existingEstimate?: {
@@ -188,7 +186,7 @@ const RISK_LEVELS = ['low', 'medium', 'high']
 /*  Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, clientName, billingType, existingEstimate }: Props) {
+export function EstimateEditor({ projectId, projectSlug, clientName, billingType, existingEstimate }: Props) {
   const router = useRouter()
 
   const initialSections: EstimateSectionInput[] = existingEstimate?.sections.map(s => ({
@@ -259,8 +257,8 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
     setError(null)
     try {
       const url = existingEstimate
-        ? `/api/projects/${projectId}/jobs/${jobId}/estimates/${existingEstimate.id}`
-        : `/api/projects/${projectId}/jobs/${jobId}/estimates`
+        ? `/api/projects/${projectId}/estimates/${existingEstimate.id}`
+        : `/api/projects/${projectId}/estimates`
       const method = existingEstimate ? 'PATCH' : 'POST'
       const res = await fetch(url, {
         method,
@@ -270,7 +268,7 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Failed to save'); return }
       if (!existingEstimate) {
-        router.push(`/projects/${projectSlug}/jobs/${jobId}/estimates/${json.data.id}`)
+        router.push(`/projects/${projectSlug}/estimates/${json.data.id}`)
       }
     } catch {
       setError('Failed to save estimate')
@@ -285,7 +283,7 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
     setError(null)
     try {
       const res = await fetch(
-        `/api/projects/${projectId}/jobs/${jobId}/estimates/${existingEstimate.id}/finalize`,
+        `/api/projects/${projectId}/estimates/${existingEstimate.id}/finalize`,
         { method: 'POST' }
       )
       const json = await res.json()
@@ -304,12 +302,12 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
     setError(null)
     try {
       const res = await fetch(
-        `/api/projects/${projectId}/jobs/${jobId}/estimates/${existingEstimate.id}/revise`,
+        `/api/projects/${projectId}/estimates/${existingEstimate.id}/revise`,
         { method: 'POST' }
       )
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Failed to create revision'); return }
-      router.push(`/projects/${projectSlug}/jobs/${jobId}/estimates/${json.data.id}`)
+      router.push(`/projects/${projectSlug}/estimates/${json.data.id}`)
     } catch {
       setError('Failed to create revision')
     } finally {
@@ -326,7 +324,7 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
     try {
       const estId = existingEstimate?.id ?? 'new'
       const res = await fetch(
-        `/api/projects/${projectId}/jobs/${jobId}/estimates/${estId}/ai-assist`,
+        `/api/projects/${projectId}/estimates/${estId}/ai-assist`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -350,7 +348,6 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
               })),
             },
             clientName,
-            jobDescription,
             billingType,
           }),
         }
@@ -573,7 +570,7 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
             {!section.collapsed && (
               <div>
                 {/* Column headers */}
-                <div className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 px-4 py-1 text-xs text-muted-foreground border-b">
+                <div className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 px-4 py-1 text-xs text-muted-foreground border-b items-start">
                   <span>Description</span>
                   <span className="text-right">Hrs</span>
                   <span className="text-right">Rate</span>

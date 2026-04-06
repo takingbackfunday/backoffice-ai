@@ -36,6 +36,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
 const GenerateQuoteSchema = z.object({
   estimateId: z.string().min(1, 'Estimate ID is required'),
+  jobId: z.string().min(1, 'Job ID is required'),
   title: z.string().optional(),
 })
 
@@ -55,20 +56,22 @@ export async function POST(request: Request, { params }: RouteParams) {
     const parsed = GenerateQuoteSchema.safeParse(body)
     if (!parsed.success) return badRequest(parsed.error.errors[0].message)
 
-    const { estimateId, title } = parsed.data
+    const { estimateId, jobId, title } = parsed.data
+
+    // Verify job belongs to this project
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, clientProfile: { workspace: { id, userId } } },
+    })
+    if (!job) return notFound('Job not found')
 
     // Load estimate with all sections and items
     const estimate = await prisma.estimate.findFirst({
-      where: {
-        id: estimateId,
-        job: { clientProfile: { workspace: { id, userId } } },
-      },
+      where: { id: estimateId, workspaceId: id },
       include: {
         sections: {
           include: { items: true },
           orderBy: { sortOrder: 'asc' },
         },
-        job: true,
       },
     })
     if (!estimate) return notFound('Estimate not found')
@@ -161,7 +164,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const quote = await prisma.quote.create({
       data: {
         estimateId,
-        jobId: estimate.jobId,
+        jobId,
         clientProfileId: project.clientProfile.id,
         quoteNumber,
         title: title ?? estimate.title,

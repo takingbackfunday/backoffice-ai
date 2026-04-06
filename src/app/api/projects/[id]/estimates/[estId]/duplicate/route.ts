@@ -2,29 +2,23 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { created, unauthorized, notFound, serverError } from '@/lib/api-response'
 
-interface RouteParams { params: Promise<{ id: string; jobId: string; estId: string }> }
+interface RouteParams { params: Promise<{ id: string; estId: string }> }
 
 export async function POST(_request: Request, { params }: RouteParams) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
-    const { id, jobId, estId } = await params
+    const { id, estId } = await params
 
     const estimate = await prisma.estimate.findFirst({
-      where: {
-        id: estId,
-        jobId,
-        job: { clientProfile: { workspace: { id, userId } } },
-      },
-      include: {
-        sections: { include: { items: true } },
-      },
+      where: { id: estId, workspaceId: id, workspace: { userId } },
+      include: { sections: { include: { items: true } } },
     })
     if (!estimate) return notFound('Estimate not found')
 
     const copy = await prisma.estimate.create({
       data: {
-        jobId,
+        workspaceId: id,
         title: `${estimate.title} (copy)`,
         currency: estimate.currency,
         notes: estimate.notes,
