@@ -185,7 +185,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
           quantity: 1,
           unit: null,
           unitPrice: Math.round(totalPrice * 100) / 100,
-          isOptional: hasOptional,
+          isOptional: false, // collapsed row is never optional
           hasEstimateLink: true,
           costBasis: totalCostBasis,
           marginPercent: blended,
@@ -339,10 +339,20 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
         <div className="p-3 space-y-1.5">
           {sections.map(section => {
             const isExpanded = expandedSections[section.id]
-            const visibleItems = section.items.filter(i => !i.isOptional)
-            const optionalItems = section.items.filter(i => i.isOptional)
+            // In collapsed state, items has 1 non-optional row — use estimate to find optional info
+            const estSection = estimate.sections.find(s =>
+              s.items.some(ei => section.items[0]?.sourceItemIds.includes(ei.id))
+            ) ?? estimate.sections.find(s => s.name === section.name)
+            const estOptionalItems = estSection?.items.filter(i => i.isOptional) ?? []
+            const estOptionalCost = estOptionalItems.reduce((sum, i) => sum + itemEstimatedCost(i), 0)
+
+            // When expanded, use actual item flags
+            const visibleItems = isExpanded ? section.items.filter(i => !i.isOptional) : section.items
+            const optionalItems = isExpanded ? section.items.filter(i => i.isOptional) : []
             const sectionTotal = visibleItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
-            const optionalTotal = optionalItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
+            const optionalTotal = isExpanded
+              ? optionalItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
+              : estOptionalCost // show cost estimate as a hint when collapsed
 
             return (
               <div key={section.id} className="rounded border overflow-hidden">
@@ -361,7 +371,12 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
                   </button>
                   <div className="text-right">
                     <span className="text-xs text-muted-foreground">{fmt(sectionTotal, currency)}</span>
-                    {optionalItems.length > 0 && !isExpanded && (
+                    {estOptionalItems.length > 0 && !isExpanded && (
+                      <span className="ml-1.5 text-[10px] text-amber-600">
+                        {estOptionalItems.length} opt — expand to manage
+                      </span>
+                    )}
+                    {optionalItems.length > 0 && isExpanded && (
                       <span className="ml-1.5 text-[10px] text-amber-600">
                         +{fmt(optionalTotal, currency)} opt
                       </span>
@@ -375,8 +390,8 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
                     {/* Margin + price controls for the collapsed row */}
                     <div className="grid grid-cols-[1fr_72px_72px_56px] gap-2 items-center">
                       <div className="text-[10px] text-muted-foreground">
-                        {optionalItems.length > 0 && (
-                          <span className="text-amber-600">{optionalItems.length} optional item{optionalItems.length > 1 ? 's' : ''} excluded from total</span>
+                        {estOptionalItems.length > 0 && (
+                          <span className="text-amber-600">expand to control {estOptionalItems.length} optional item{estOptionalItems.length > 1 ? 's' : ''}</span>
                         )}
                       </div>
                       <div className="text-[10px] text-muted-foreground text-right">Margin%</div>

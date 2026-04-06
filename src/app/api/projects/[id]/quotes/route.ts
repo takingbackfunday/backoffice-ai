@@ -154,8 +154,6 @@ export async function POST(request: Request, { params }: RouteParams) {
           : 0
         const unitPrice = totalCostBasis * (1 + blendedMargin / 100)
         const sourceItemIds = section.items.map(i => i.id)
-        const hasOptional = section.items.some(i => i.isOptional)
-
         return {
           sectionName: section.name,
           sortOrder: section.sortOrder,
@@ -163,7 +161,7 @@ export async function POST(request: Request, { params }: RouteParams) {
             description: section.name,
             quantity: 1,
             unitPrice: Math.round(unitPrice * 100) / 100,
-            isOptional: hasOptional,
+            isOptional: false, // collapsed row is never optional; expand to manage per-item optionality
             hasEstimateLink: true,
             sortOrder: 0,
             costBasis: totalCostBasis,
