@@ -312,6 +312,35 @@ export function InvoiceEditor({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
+  // Listen for shortcut triggers from NewInvoiceShortcuts
+  useEffect(() => {
+    // AI prompt trigger
+    function onAiTrigger() {
+      const pending = sessionStorage.getItem('invoice-ai-prompt')
+      if (!pending) return
+      sessionStorage.removeItem('invoice-ai-prompt')
+      setChatVisible(true)
+      setTimeout(() => sendChatMessage(pending), 50)
+    }
+    // Copy picker trigger
+    function onCopyPickerTrigger() {
+      if (!sessionStorage.getItem('invoice-open-copy-picker')) return
+      sessionStorage.removeItem('invoice-open-copy-picker')
+      openCopyPicker()
+    }
+    // Also check sessionStorage on mount (in case event fired before listener attached)
+    onAiTrigger()
+    onCopyPickerTrigger()
+
+    window.addEventListener('invoice-ai-trigger', onAiTrigger)
+    window.addEventListener('invoice-copy-picker-trigger', onCopyPickerTrigger)
+    return () => {
+      window.removeEventListener('invoice-ai-trigger', onAiTrigger)
+      window.removeEventListener('invoice-copy-picker-trigger', onCopyPickerTrigger)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Derived totals
   const subtotal = calcSubtotal(state.lineItems)
   const taxAmount = calcTaxAmount(state, subtotal)
@@ -341,8 +370,8 @@ export function InvoiceEditor({
     }
   }
 
-  async function sendChatMessage() {
-    const text = chatInput.trim()
+  async function sendChatMessage(overrideText?: string) {
+    const text = (overrideText ?? chatInput).trim()
     if (!text || chatLoading) return
 
     const userMsg: ChatMessage = { role: 'user', text }
@@ -1129,7 +1158,7 @@ export function InvoiceEditor({
               />
               <button
                 type="button"
-                onClick={sendChatMessage}
+                onClick={() => sendChatMessage()}
                 disabled={!chatInput.trim() || chatLoading}
                 className="rounded-xl bg-primary p-2.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors self-end"
               >
