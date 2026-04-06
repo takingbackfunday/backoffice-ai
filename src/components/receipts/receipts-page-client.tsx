@@ -89,7 +89,6 @@ export function ReceiptsPageClient() {
         </div>
       )}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Receipts</h1>
         <Button onClick={() => setShowUpload((v) => !v)}>
           {showUpload ? 'Cancel' : '+ Upload receipt'}
         </Button>
