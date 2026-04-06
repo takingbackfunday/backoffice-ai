@@ -316,12 +316,32 @@ model Workspace {
   transactions        Transaction[]
   categorizationRules CategorizationRule[]
   estimates           Estimate[]
+  timeEntries         TimeEntry[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
   @@unique([userId, slug])
   @@index([userId])
   @@map("Project")
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  jobId       String?
+  job         Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  date        DateTime  @db.Date
+  minutes     Int
+  description String
+  billable    Boolean   @default(true)
+  rate        Decimal?  @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([workspaceId])
+  @@index([userId])
 }
 
 enum WorkspaceType {
@@ -379,6 +399,7 @@ model Job {
   invoices        Invoice[]
   quotes          Quote[]
   estimates       Estimate[]    // legacy back-relation — new estimates use workspaceId directly
+  timeEntries     TimeEntry[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
