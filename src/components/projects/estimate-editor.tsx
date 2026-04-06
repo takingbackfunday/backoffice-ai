@@ -575,122 +575,155 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
 
             {/* Items */}
             {!section.collapsed && (
-              <div>
-                {/* Column headers */}
-                <div className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 px-4 py-1 text-xs text-muted-foreground border-b">
-                  <span>Description</span>
-                  <span className="text-right">Hrs</span>
-                  <span className="text-right">Rate</span>
-                  <span className="text-right">Qty</span>
-                  <span>Unit</span>
-                  <span>Tags</span>
-                  <span>Risk / Opts</span>
-                  <span />
-                </div>
-                {section.items.map((item) => (
-                  <div key={item.id} className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 items-start px-4 py-1.5 border-b last:border-b-0 hover:bg-muted/20 group">
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <input
-                        type="text"
-                        value={item.description}
-                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'description', value: e.target.value })}
-                        placeholder="Item description"
-                        disabled={isFinalized}
-                        className="text-sm bg-transparent border-none outline-none w-full"
-                      />
-                      {!isFinalized && (
+              <table className="w-full text-sm border-collapse">
+                <colgroup>
+                  <col />
+                  <col className="w-14" />
+                  <col className="w-18" />
+                  <col className="w-14" />
+                  <col className="w-14" />
+                  <col className="w-24" />
+                  <col className="w-36" />
+                  <col className="w-5" />
+                </colgroup>
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left px-4 py-1 text-xs font-normal text-muted-foreground">Description</th>
+                    <th className="text-right px-1 py-1 text-xs font-normal text-muted-foreground">Hrs</th>
+                    <th className="text-right px-1 py-1 text-xs font-normal text-muted-foreground">Rate</th>
+                    <th className="text-right px-1 py-1 text-xs font-normal text-muted-foreground">Qty</th>
+                    <th className="px-1 py-1 text-xs font-normal text-muted-foreground">Unit</th>
+                    <th className="px-1 py-1 text-xs font-normal text-muted-foreground">Tags</th>
+                    <th className="px-1 py-1 text-xs font-normal text-muted-foreground">Risk / Opts</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.items.map((item) => (
+                    <tr key={item.id} className="border-b last:border-b-0 hover:bg-muted/20 group">
+                      <td className="px-4 py-1.5 align-top">
+                        <div className="flex flex-col gap-0.5">
+                          <input
+                            type="text"
+                            value={item.description}
+                            onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'description', value: e.target.value })}
+                            placeholder="Item description"
+                            disabled={isFinalized}
+                            className="text-sm bg-transparent border-none outline-none w-full"
+                          />
+                          {!isFinalized && (
+                            <input
+                              type="text"
+                              value={item.internalNotes}
+                              onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'internalNotes', value: e.target.value })}
+                              placeholder="Internal notes…"
+                              className="text-xs text-muted-foreground bg-transparent border-none outline-none w-full italic"
+                            />
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-1 py-1.5 align-top">
+                        <input
+                          type="number"
+                          value={item.hours}
+                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'hours', value: e.target.value })}
+                          placeholder="—"
+                          disabled={isFinalized}
+                          className="text-sm text-right bg-transparent border-none outline-none w-full"
+                        />
+                      </td>
+                      <td className="px-1 py-1.5 align-top">
+                        <input
+                          type="number"
+                          value={item.costRate}
+                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'costRate', value: e.target.value })}
+                          placeholder="—"
+                          disabled={isFinalized}
+                          className="text-sm text-right bg-transparent border-none outline-none w-full"
+                        />
+                      </td>
+                      <td className="px-1 py-1.5 align-top">
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
+                          placeholder="1"
+                          disabled={isFinalized}
+                          className="text-sm text-right bg-transparent border-none outline-none w-full"
+                        />
+                      </td>
+                      <td className="px-1 py-1.5 align-top">
                         <input
                           type="text"
-                          value={item.internalNotes}
-                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'internalNotes', value: e.target.value })}
-                          placeholder="Internal notes…"
-                          className="text-xs text-muted-foreground bg-transparent border-none outline-none w-full italic"
-                        />
-                      )}
-                    </div>
-                    <input
-                      type="number"
-                      value={item.hours}
-                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'hours', value: e.target.value })}
-                      placeholder="—"
-                      disabled={isFinalized}
-                      className="text-sm text-right bg-transparent border-none outline-none w-full pt-px"
-                    />
-                    <input
-                      type="number"
-                      value={item.costRate}
-                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'costRate', value: e.target.value })}
-                      placeholder="—"
-                      disabled={isFinalized}
-                      className="text-sm text-right bg-transparent border-none outline-none w-full pt-px"
-                    />
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
-                      placeholder="1"
-                      disabled={isFinalized}
-                      className="text-sm text-right bg-transparent border-none outline-none w-full pt-px"
-                    />
-                    <input
-                      type="text"
-                      value={item.unit}
-                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
-                      placeholder="hrs"
-                      disabled={isFinalized}
-                      className="text-sm bg-transparent border-none outline-none w-full pt-px"
-                    />
-                    <input
-                      type="text"
-                      value={item.tags}
-                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'tags', value: e.target.value })}
-                      placeholder="dev, design"
-                      disabled={isFinalized}
-                      className="text-sm bg-transparent border-none outline-none w-full text-muted-foreground pt-px"
-                    />
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap pt-px">
-                      <select
-                        value={item.riskLevel}
-                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'riskLevel', value: e.target.value })}
-                        disabled={isFinalized}
-                        className="bg-transparent text-xs"
-                      >
-                        {RISK_LEVELS.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                      <label className="flex items-center gap-1 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={item.isOptional}
-                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'isOptional', value: e.target.checked })}
+                          value={item.unit}
+                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
+                          placeholder="hrs"
                           disabled={isFinalized}
-                          className="rounded"
+                          className="text-sm bg-transparent border-none outline-none w-full"
                         />
-                        opt
-                      </label>
-                      <span className="text-muted-foreground/60">{new Intl.NumberFormat('en-US', { style: 'currency', currency: state.currency, maximumFractionDigits: 0 }).format(itemCost(item))}</span>
-                    </div>
-                    {!isFinalized ? (
-                      <button
-                        onClick={() => dispatch({ type: 'remove_item', sectionId: section.id, itemId: item.id })}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity pt-px"
-                        disabled={section.items.length === 1}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    ) : <span />}
-                  </div>
-                ))}
+                      </td>
+                      <td className="px-1 py-1.5 align-top">
+                        <input
+                          type="text"
+                          value={item.tags}
+                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'tags', value: e.target.value })}
+                          placeholder="dev, design"
+                          disabled={isFinalized}
+                          className="text-sm bg-transparent border-none outline-none w-full text-muted-foreground"
+                        />
+                      </td>
+                      <td className="px-1 py-1.5 align-top">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+                          <select
+                            value={item.riskLevel}
+                            onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'riskLevel', value: e.target.value })}
+                            disabled={isFinalized}
+                            className="bg-transparent text-xs"
+                          >
+                            {RISK_LEVELS.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                          <label className="flex items-center gap-1 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={item.isOptional}
+                              onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'isOptional', value: e.target.checked })}
+                              disabled={isFinalized}
+                              className="rounded"
+                            />
+                            opt
+                          </label>
+                          <span className="text-muted-foreground/60">{new Intl.NumberFormat('en-US', { style: 'currency', currency: state.currency, maximumFractionDigits: 0 }).format(itemCost(item))}</span>
+                        </div>
+                      </td>
+                      <td className="px-1 py-1.5 align-top">
+                        {!isFinalized ? (
+                          <button
+                            onClick={() => dispatch({ type: 'remove_item', sectionId: section.id, itemId: item.id })}
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                            disabled={section.items.length === 1}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
                 {!isFinalized && (
-                  <div className="px-4 py-1.5">
-                    <button
-                      onClick={() => dispatch({ type: 'add_item', sectionId: section.id })}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Plus className="w-3 h-3" /> Add item
-                    </button>
-                  </div>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={8} className="px-4 py-1.5">
+                        <button
+                          onClick={() => dispatch({ type: 'add_item', sectionId: section.id })}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          <Plus className="w-3 h-3" /> Add item
+                        </button>
+                      </td>
+                    </tr>
+                  </tfoot>
                 )}
-              </div>
+              </table>
             )}
           </div>
         ))}
