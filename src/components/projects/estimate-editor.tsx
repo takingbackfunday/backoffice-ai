@@ -577,7 +577,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
             {!section.collapsed && (
               <div>
                 {/* Column headers */}
-                <div className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 px-4 py-1 text-xs text-muted-foreground border-b items-start">
+                <div className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 px-4 py-1 text-xs text-muted-foreground border-b">
                   <span>Description</span>
                   <span className="text-right">Hrs</span>
                   <span className="text-right">Rate</span>
@@ -588,7 +588,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                   <span />
                 </div>
                 {section.items.map((item) => (
-                  <div key={item.id} className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 items-center px-4 py-1.5 border-b last:border-b-0 hover:bg-muted/20 group">
+                  <div key={item.id} className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 items-start px-4 py-1.5 border-b last:border-b-0 hover:bg-muted/20 group">
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <input
                         type="text"
@@ -614,7 +614,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                       onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'hours', value: e.target.value })}
                       placeholder="—"
                       disabled={isFinalized}
-                      className="text-sm text-right bg-transparent border-none outline-none w-full"
+                      className="text-sm text-right bg-transparent border-none outline-none w-full pt-px"
                     />
                     <input
                       type="number"
@@ -622,7 +622,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                       onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'costRate', value: e.target.value })}
                       placeholder="—"
                       disabled={isFinalized}
-                      className="text-sm text-right bg-transparent border-none outline-none w-full"
+                      className="text-sm text-right bg-transparent border-none outline-none w-full pt-px"
                     />
                     <input
                       type="number"
@@ -630,7 +630,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                       onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
                       placeholder="1"
                       disabled={isFinalized}
-                      className="text-sm text-right bg-transparent border-none outline-none w-full"
+                      className="text-sm text-right bg-transparent border-none outline-none w-full pt-px"
                     />
                     <input
                       type="text"
@@ -638,7 +638,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                       onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
                       placeholder="hrs"
                       disabled={isFinalized}
-                      className="text-sm bg-transparent border-none outline-none w-full"
+                      className="text-sm bg-transparent border-none outline-none w-full pt-px"
                     />
                     <input
                       type="text"
@@ -646,9 +646,9 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                       onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'tags', value: e.target.value })}
                       placeholder="dev, design"
                       disabled={isFinalized}
-                      className="text-sm bg-transparent border-none outline-none w-full text-muted-foreground"
+                      className="text-sm bg-transparent border-none outline-none w-full text-muted-foreground pt-px"
                     />
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap pt-px">
                       <select
                         value={item.riskLevel}
                         onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'riskLevel', value: e.target.value })}
@@ -672,7 +672,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                     {!isFinalized ? (
                       <button
                         onClick={() => dispatch({ type: 'remove_item', sectionId: section.id, itemId: item.id })}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity pt-px"
                         disabled={section.items.length === 1}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
