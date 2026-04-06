@@ -392,7 +392,7 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
                 id: crypto.randomUUID(),
                 name: action.name,
                 collapsed: false,
-                items: toItems(action.items ?? [newItem()]),
+                items: action.items ? toItems(action.items) : [newItem()],
               },
             ],
           })
