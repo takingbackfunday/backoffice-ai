@@ -110,38 +110,46 @@ ${currentEstimateStr}
 
 You have a tool to look up previous estimates on this project for reference.
 
-Respond with JSON ONLY — no prose outside the JSON object:
+## Field definitions for every line item:
+- description: what the work is
+- hours: hours of effort PER unit (e.g. 5 hrs per episode, 8 hrs per day) — NOT total hours
+- costRate: internal cost per HOUR (subcontractor rate or floor rate) — NEVER shown to client
+- quantity: how many units (e.g. 6 episodes, 3 days, 1 fixed fee)
+- unit: label for the quantity (e.g. "eps", "days", "sessions", "fixed") — NOT "hrs"
+- Line item cost = hours × costRate × quantity
+
+## Examples of correct field usage:
+- "Edit 5hrs per episode, 6 episodes at $80/hr" → hours:5, costRate:80, quantity:6, unit:"eps" → cost $2,400
+- "Strategy workshop, 1 day at $600/day (7.5hrs)" → hours:7.5, costRate:80, quantity:1, unit:"day" → cost $600
+- "Fixed fee deliverable" → hours:1, costRate:<total cost>, quantity:1, unit:"fixed"
+- WRONG: hours:30, quantity:1, unit:"hrs" for something repeated 6 times — use hours:5, quantity:6, unit:"eps"
+
+## Actions (respond with JSON ONLY — no prose outside the JSON object):
 {
   "text": "friendly 1-2 sentence response",
   "actions": [
-    { "type": "set_sections", "sections": [{ "name": "Section Name", "items": [{ "description": "...", "hours": 8, "costRate": 75, "quantity": 1, "unit": "hrs", "tags": ["dev"], "isOptional": false, "riskLevel": "low" }] }] },
-    { "type": "add_section", "name": "Section Name", "items": [{ "description": "...", "hours": 4, "costRate": 75, "unit": "hrs", "tags": ["dev"] }] },
-    { "type": "add_items", "sectionName": "Exact Section Name", "items": [{ "description": "...", "hours": 4, "costRate": 75, "unit": "hrs", "tags": ["dev"] }] },
+    { "type": "set_sections", "sections": [{ "name": "Section Name", "items": [{ "description": "...", "hours": 5, "costRate": 80, "quantity": 6, "unit": "eps", "tags": ["production"], "isOptional": false, "riskLevel": "low" }] }] },
+    { "type": "add_section", "name": "Section Name", "items": [{ "description": "...", "hours": 5, "costRate": 80, "quantity": 6, "unit": "eps", "tags": ["production"] }] },
+    { "type": "add_items", "sectionName": "Exact Section Name", "items": [{ "description": "...", "hours": 5, "costRate": 80, "quantity": 6, "unit": "eps", "tags": ["production"] }] },
     { "type": "set_title", "title": "..." },
     { "type": "set_notes", "notes": "..." },
     { "type": "ask_clarification", "question": "..." }
   ]
 }
 
-Rules:
-- costRate = what this work costs internally (subcontractor rate or the user's floor rate); NEVER shown to the client
-- NEVER undervalue professional work. Infer realistic market rates from context clues in the project (industry, client type, region, seniority implied):
+## Rules:
+- costRate is the hourly cost rate — NEVER shown to the client
+- NEVER undervalue professional work. Infer realistic market rates from context clues (industry, client type, region, seniority):
   - Scale rates to the seniority and specialisation implied — a senior specialist commands more than a junior generalist
-  - For well-known brands, broadcasters, or large institutions: lean toward the higher end of typical market rates for that discipline
-  - If you have no reference data and no context clues, use the estimate currency to anchor rates to that market, and err on the side of slightly higher rather than lower — it is always easier to negotiate down than to justify a higher number later
-  - If genuinely unsure, use ask_clarification to ask the user what their day/hour rate is before filling in numbers
-- Use hours × quantity correctly:
-  - hours = effort per unit (e.g. hours per episode, hours per day)
-  - quantity = number of units (e.g. number of episodes, number of days)
-  - unit = label for the quantity unit (e.g. "eps", "days", "sessions")
-  - Example: editing 10hrs/episode × 6 episodes → hours: 10, quantity: 6, unit: "eps" (NOT hours: 60, quantity: 1)
-  - This lets the client later adjust the episode count without re-estimating
-- Group work logically into sections relevant to the project type
-- Flag risky/uncertain items with riskLevel: "high"; mark optional scope with isOptional: true
-- Tags classify work: "design", "dev", "pm", "consulting", "qa", "production", "post" — these drive margin rules
+  - For well-known brands or large institutions: lean toward the higher end of typical market rates for that discipline
+  - If genuinely unsure of rate, use ask_clarification to ask the user their day/hour rate before filling in numbers
+- unit should describe what quantity counts (eps, days, sessions, rounds) — never "hrs" since hours is already its own field
+- Group work into sections relevant to the project type
+- Flag risky/uncertain items with riskLevel: "high"; mark genuinely optional scope with isOptional: true
+- Tags classify work type: "design", "dev", "pm", "consulting", "qa", "production", "post" — these drive margin rules
 - For add_items: sectionName must exactly match an existing section name
-- For set_sections: replaces all current sections — use only when starting fresh or restructuring
-- Always call lookup_similar_estimates first if previous estimates may exist for this project`
+- For set_sections: replaces all sections — use only when starting fresh or restructuring
+- Always call lookup_similar_estimates first if the project may have prior estimates`
 
     const llmMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
