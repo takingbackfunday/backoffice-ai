@@ -108,7 +108,15 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
   const [validUntil, setValidUntil] = useState(
     quote.validUntil ? quote.validUntil.slice(0, 10) : ''
   )
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({})
+  // Detect initial expanded state: >1 item, or single item whose description ≠ section name
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      quote.sections.map(s => [
+        s.id,
+        s.items.length > 1 || (s.items.length === 1 && s.items[0].description !== s.name),
+      ])
+    )
+  )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -168,14 +176,16 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
     const isExpanded = expandedSections[section.id]
 
     if (isExpanded) {
-      // Collapse: merge all items back to one section-level line
-      const totalCostBasis = section.items.reduce((sum, i) => sum + (i.costBasis ?? 0), 0)
-      const totalPrice = section.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
+      // Collapse: merge items — only include non-optional in price, but keep all source IDs
+      const includedItems = section.items.filter(i => !i.isOptional)
+      const optionalSourceIds = section.items.filter(i => i.isOptional).flatMap(i => i.sourceItemIds)
       const allSourceIds = section.items.flatMap(i => i.sourceItemIds)
-      const hasOptional = section.items.some(i => i.isOptional)
+
+      const totalCostBasis = includedItems.reduce((sum, i) => sum + (i.costBasis ?? 0), 0)
+      const totalPrice = includedItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
       const blended = totalCostBasis > 0
         ? Math.round(((totalPrice - totalCostBasis) / totalCostBasis) * 10000) / 100
-        : section.items[0]?.marginPercent ?? 0
+        : includedItems[0]?.marginPercent ?? section.items[0]?.marginPercent ?? 0
 
       setSections(prev => prev.map(s => s.id !== section.id ? s : {
         ...s,
@@ -183,9 +193,10 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
           id: crypto.randomUUID(),
           description: s.name,
           quantity: 1,
-          unit: null,
+          // Reuse unit field to store optional IDs as JSON for round-trip restore
+          unit: optionalSourceIds.length > 0 ? JSON.stringify({ optionalIds: optionalSourceIds }) : null,
           unitPrice: Math.round(totalPrice * 100) / 100,
-          isOptional: false, // collapsed row is never optional
+          isOptional: false,
           hasEstimateLink: true,
           costBasis: totalCostBasis,
           marginPercent: blended,
@@ -202,18 +213,32 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
 
       if (!estSection || estSection.items.length === 0) return
 
-      const collapsedMargin = section.items[0]?.marginPercent ?? 0
+      const collapsedItem = section.items[0]
+      const collapsedMargin = collapsedItem?.marginPercent ?? 0
+
+      // Restore optional IDs that were saved when collapsing
+      let savedOptionalIds: string[] = []
+      if (collapsedItem?.unit) {
+        try {
+          const parsed = JSON.parse(collapsedItem.unit) as { optionalIds?: string[] }
+          savedOptionalIds = parsed.optionalIds ?? []
+        } catch { /* not JSON, ignore */ }
+      }
 
       const expandedItems: QuoteLineItem[] = estSection.items.map((ei, idx) => {
         const cost = itemEstimatedCost(ei)
         const price = cost > 0 ? cost * (1 + collapsedMargin / 100) : 0
+        // Restore optional state: use saved state if available, otherwise fall back to estimate
+        const isOptional = savedOptionalIds.length > 0
+          ? savedOptionalIds.includes(ei.id)
+          : ei.isOptional
         return {
           id: crypto.randomUUID(),
           description: ei.description,
           quantity: 1,
           unit: ei.unit,
           unitPrice: Math.round(price * 100) / 100,
-          isOptional: ei.isOptional,
+          isOptional,
           hasEstimateLink: true,
           costBasis: cost,
           marginPercent: collapsedMargin,
