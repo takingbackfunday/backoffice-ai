@@ -677,40 +677,31 @@ export function InvoiceEditor({
                 </button>
               )}
               <span className="text-xs text-muted-foreground italic">(Optional — for your records only)</span>
-              {mode === 'create' && (
+              {mode === 'create' && showCopyPicker && (
                 <div className="ml-auto relative">
-                  <button
-                    type="button"
-                    onClick={openCopyPicker}
-                    className="rounded-md border border-muted-foreground/30 bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground hover:border-muted-foreground/60 transition-colors"
-                  >
-                    Start from past invoice as template
-                  </button>
-                  {showCopyPicker && (
-                    <div className="absolute top-8 right-0 z-20 w-72 rounded-xl border bg-background shadow-xl p-2">
-                      <div className="flex items-center justify-between px-2 py-1 mb-1">
-                        <span className="text-xs font-semibold">Select invoice</span>
-                        <button type="button" onClick={() => setShowCopyPicker(false)} className="text-muted-foreground hover:text-foreground">
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {loadingRecent && <p className="text-xs text-muted-foreground px-2 py-2">Loading…</p>}
-                      {!loadingRecent && recentInvoices && recentInvoices.length === 0 && (
-                        <p className="text-xs text-muted-foreground px-2 py-2">No past invoices found.</p>
-                      )}
-                      {!loadingRecent && recentInvoices && recentInvoices.map(inv => (
-                        <button
-                          key={inv.id}
-                          type="button"
-                          onClick={() => copyFromInvoice(inv.id)}
-                          className="w-full flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
-                        >
-                          <span className="font-medium">{inv.invoiceNumber}</span>
-                          <span className="text-muted-foreground">{new Intl.NumberFormat('en-US', { style: 'currency', currency: inv.currency }).format(inv.total)}</span>
-                        </button>
-                      ))}
+                  <div className="absolute top-0 right-0 z-20 w-72 rounded-xl border bg-background shadow-xl p-2">
+                    <div className="flex items-center justify-between px-2 py-1 mb-1">
+                      <span className="text-xs font-semibold">Select invoice</span>
+                      <button type="button" onClick={() => setShowCopyPicker(false)} className="text-muted-foreground hover:text-foreground">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                  )}
+                    {loadingRecent && <p className="text-xs text-muted-foreground px-2 py-2">Loading…</p>}
+                    {!loadingRecent && recentInvoices && recentInvoices.length === 0 && (
+                      <p className="text-xs text-muted-foreground px-2 py-2">No past invoices found.</p>
+                    )}
+                    {!loadingRecent && recentInvoices && recentInvoices.map(inv => (
+                      <button
+                        key={inv.id}
+                        type="button"
+                        onClick={() => copyFromInvoice(inv.id)}
+                        className="w-full flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
+                      >
+                        <span className="font-medium">{inv.invoiceNumber}</span>
+                        <span className="text-muted-foreground">{new Intl.NumberFormat('en-US', { style: 'currency', currency: inv.currency }).format(inv.total)}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
