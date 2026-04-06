@@ -7,6 +7,7 @@ import { ProjectDetailHeader } from '@/components/projects/project-detail-header
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { PropertyOverview } from '@/components/projects/property-overview'
 import { ClientInfoEditor } from '@/components/projects/client-info-editor'
+import { ClientQuickActions } from '@/components/projects/client-quick-actions'
 import { JOB_STATUS_LABELS } from '@/types'
 import Link from 'next/link'
 
@@ -22,7 +23,7 @@ export default async function ProjectDetailPage({ params }: PageParams) {
     where: { userId, slug },
     include: {
       clientProfile: {
-        include: { jobs: { orderBy: { createdAt: 'desc' }, take: 5 } },
+        include: { jobs: { where: { status: 'ACTIVE' }, orderBy: { createdAt: 'desc' } } },
       },
       propertyProfile: {
         include: {
@@ -105,6 +106,15 @@ export default async function ProjectDetailPage({ params }: PageParams) {
                   currency: project.clientProfile.currency,
                   paymentTermDays: project.clientProfile.paymentTermDays,
                 }}
+              />
+
+              {/* Quick actions */}
+              <ClientQuickActions
+                projectId={project.id}
+                projectSlug={slug}
+                jobs={serialized.clientProfile.jobs.map((j: { id: string; name: string }) => ({ id: j.id, name: j.name }))}
+                defaultRate={project.clientProfile.defaultRate ? Number(project.clientProfile.defaultRate) : null}
+                currency={project.clientProfile.currency ?? 'USD'}
               />
 
               {/* Recent jobs */}

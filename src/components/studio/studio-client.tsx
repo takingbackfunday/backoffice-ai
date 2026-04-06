@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
-import { NewClientModal, NewJobModal } from '@/components/studio/studio-action-modals'
+import { NewClientModal, NewJobModal, NewEstimateModal, NewQuoteModal, LogTimeModal } from '@/components/studio/studio-action-modals'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { ActionBanner } from '@/components/ui/action-banner'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
@@ -714,6 +714,9 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [showNewJobModal, setShowNewJobModal] = useState(false)
+  const [showNewEstimateModal, setShowNewEstimateModal] = useState(false)
+  const [showNewQuoteModal, setShowNewQuoteModal] = useState(false)
+  const [showLogTimeModal, setShowLogTimeModal] = useState(false)
   const [actionFilter, setActionFilter] = useState<((i: FlatInvoice) => boolean) | null>(null)
   const [suggestionInvoiceIds, setSuggestionInvoiceIds] = useState<Set<string>>(new Set())
   const [suggestionTxCount, setSuggestionTxCount] = useState(pendingSuggestions)
@@ -852,6 +855,27 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               >
                 <Plus size={11} />
                 New job
+              </button>
+              <button
+                onClick={() => setShowNewEstimateModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #888', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#555', cursor: 'pointer' }}
+              >
+                <Plus size={11} />
+                New estimate
+              </button>
+              <button
+                onClick={() => setShowNewQuoteModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #888', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#555', cursor: 'pointer' }}
+              >
+                <Plus size={11} />
+                New quote
+              </button>
+              <button
+                onClick={() => setShowLogTimeModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #888', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#555', cursor: 'pointer' }}
+              >
+                <Plus size={11} />
+                Log time
               </button>
             </div>
           </div>
@@ -1079,6 +1103,24 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           clients={clients.map(c => ({ id: c.id, name: c.name }))}
           onClose={() => setShowNewJobModal(false)}
           onCreated={() => { setShowNewJobModal(false); router.refresh() }}
+        />
+      )}
+      {showNewEstimateModal && (
+        <NewEstimateModal
+          clients={clients.map(c => ({ id: c.id, name: c.name, slug: c.slug }))}
+          onClose={() => setShowNewEstimateModal(false)}
+        />
+      )}
+      {showNewQuoteModal && (
+        <NewQuoteModal
+          clients={clients.map(c => ({ id: c.id, name: c.name, slug: c.slug }))}
+          onClose={() => setShowNewQuoteModal(false)}
+        />
+      )}
+      {showLogTimeModal && (
+        <LogTimeModal
+          clients={clients.map(c => ({ id: c.id, name: c.name, slug: c.slug, jobs: c.jobs }))}
+          onClose={() => setShowLogTimeModal(false)}
         />
       )}
     </div>
