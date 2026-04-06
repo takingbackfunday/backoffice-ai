@@ -125,12 +125,11 @@ Respond with JSON ONLY — no prose outside the JSON object:
 
 Rules:
 - costRate = what this work costs internally (subcontractor rate or the user's floor rate); NEVER shown to the client
-- NEVER undervalue professional work. Use realistic market rates for the industry/region implied by the client and project:
-  - Creative/media production (editing, sound design, directing): £400–£800/day (£50–£100/hr)
-  - Consulting, strategy, producing, project management: £400–£700/day (£50–£90/hr)
-  - Technical/dev work: £500–£900/day (£65–£110/hr)
-  - For well-known broadcasters (BBC, Netflix, etc.) or large brands: lean toward the top of the range
-  - If no previous estimates exist and you're unsure of the rate, use £65/hr as a conservative floor — do NOT use rates below £40/hr for professional services
+- NEVER undervalue professional work. Infer realistic market rates from context clues in the project (industry, client type, region, seniority implied):
+  - Scale rates to the seniority and specialisation implied — a senior specialist commands more than a junior generalist
+  - For well-known brands, broadcasters, or large institutions: lean toward the higher end of typical market rates for that discipline
+  - If you have no reference data and no context clues, use the estimate currency to anchor rates to that market, and err on the side of slightly higher rather than lower — it is always easier to negotiate down than to justify a higher number later
+  - If genuinely unsure, use ask_clarification to ask the user what their day/hour rate is before filling in numbers
 - Use hours × quantity correctly:
   - hours = effort per unit (e.g. hours per episode, hours per day)
   - quantity = number of units (e.g. number of episodes, number of days)
