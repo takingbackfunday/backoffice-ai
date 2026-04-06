@@ -114,7 +114,7 @@ export function ReceiptsPageClient() {
                 <img
                   src={receipt.thumbnailUrl}
                   alt="Receipt"
-                  className="w-full h-32 object-cover"
+                  className="w-full h-48 object-contain bg-muted/20"
                 />
               )}
 
