@@ -392,7 +392,7 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
                 id: crypto.randomUUID(),
                 name: action.name,
                 collapsed: false,
-                items: toItems((action as AiActionDef & { items?: AiItem[] }).items ?? [newItem()]),
+                items: toItems(action.items ?? [newItem()]),
               },
             ],
           })
@@ -746,6 +746,10 @@ interface AiItem {
 interface AiActionDef {
   type: string
   sections?: AiSection[]
+  name?: string
+  items?: AiItem[]
+  sectionName?: string
   title?: string
   notes?: string
+  question?: string
 }
