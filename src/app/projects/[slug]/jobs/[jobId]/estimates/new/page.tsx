@@ -51,6 +51,7 @@ export default async function NewEstimatePage({ params }: PageParams) {
             </div>
             <EstimateEditor
               projectId={project.id}
+              projectSlug={slug}
               jobId={jobId}
               jobDescription={job.description}
               clientName={project.clientProfile.contactName ?? project.name}

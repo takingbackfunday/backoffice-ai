@@ -45,11 +45,13 @@ export async function POST(request: Request, { params }: RouteParams) {
     })
     if (!job) return notFound('Job not found')
 
-    // Verify estimate belongs to this job
-    const estimateExists = await prisma.estimate.findFirst({
-      where: { id: estId, jobId },
-    })
-    if (!estimateExists) return notFound('Estimate not found')
+    // If estId is a real ID (not 'new'), verify the estimate belongs to this job
+    if (estId !== 'new') {
+      const estimateExists = await prisma.estimate.findFirst({
+        where: { id: estId, jobId },
+      })
+      if (!estimateExists) return notFound('Estimate not found')
+    }
 
     const body = await request.json()
     const parsed = RequestSchema.safeParse(body)

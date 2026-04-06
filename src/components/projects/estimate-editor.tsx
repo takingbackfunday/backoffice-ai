@@ -148,6 +148,7 @@ function itemCost(item: EstimateItemInput): number {
 
 interface Props {
   projectId: string
+  projectSlug: string
   jobId: string
   jobDescription?: string | null
   clientName?: string
@@ -187,7 +188,7 @@ const RISK_LEVELS = ['low', 'medium', 'high']
 /*  Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export function EstimateEditor({ projectId, jobId, jobDescription, clientName, billingType, existingEstimate }: Props) {
+export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, clientName, billingType, existingEstimate }: Props) {
   const router = useRouter()
 
   const initialSections: EstimateSectionInput[] = existingEstimate?.sections.map(s => ({
@@ -268,7 +269,7 @@ export function EstimateEditor({ projectId, jobId, jobDescription, clientName, b
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Failed to save'); return }
       if (!existingEstimate) {
-        router.push(`/projects/${projectId.replace(/^.*\//, '')}/jobs/${jobId}/estimates/${json.data.id}`)
+        router.push(`/projects/${projectSlug}/jobs/${jobId}/estimates/${json.data.id}`)
       }
     } catch {
       setError('Failed to save estimate')
