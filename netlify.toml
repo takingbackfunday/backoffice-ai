@@ -23,5 +23,11 @@
 [functions."api/rent/generate"]
   timeout = 60
 
+[functions."api/receipts/upload"]
+  timeout = 60
+
+[functions."api/receipts/*/retry"]
+  timeout = 60
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"

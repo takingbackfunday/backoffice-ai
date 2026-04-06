@@ -21,6 +21,20 @@ export const ourFileRouter = {
     .onUploadComplete(async ({ file }) => {
       return { url: file.ufsUrl }
     }),
+
+  // Receipt thumbnail (compressed WebP, max 2MB — actual size ~30-120KB)
+  receiptThumbnail: f({ image: { maxFileSize: '2MB', maxFileCount: 1 } })
+    .middleware(async () => {
+      // Auth is checked in the API route before calling upload.
+      // UploadThing middleware runs server-side, so we re-check.
+      const { auth: clerkAuth } = await import('@clerk/nextjs/server')
+      const { userId } = await clerkAuth()
+      if (!userId) throw new Error('Unauthorized')
+      return { userId }
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl }
+    }),
 } satisfies FileRouter
 
 export type OurFileRouter = typeof ourFileRouter
