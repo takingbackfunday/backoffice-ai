@@ -218,6 +218,7 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
 
   const [saving, setSaving] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
+  const [revising, setRevising] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
   const [aiInput, setAiInput] = useState('')
@@ -297,6 +298,25 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
     }
   }
 
+  async function handleRevise() {
+    if (!existingEstimate) return
+    setRevising(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/jobs/${jobId}/estimates/${existingEstimate.id}/revise`,
+        { method: 'POST' }
+      )
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Failed to create revision'); return }
+      router.push(`/projects/${projectSlug}/jobs/${jobId}/estimates/${json.data.id}`)
+    } catch {
+      setError('Failed to create revision')
+    } finally {
+      setRevising(false)
+    }
+  }
+
   async function handleAiSend() {
     if (!aiInput.trim() || aiLoading) return
     const userMsg = { role: 'user' as const, text: aiInput }
@@ -312,6 +332,23 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [...aiMessages.map(m => ({ role: m.role, content: m.text })), { role: 'user', content: aiInput }],
+            currentEstimate: {
+              title: state.title,
+              currency: state.currency,
+              sections: state.sections.map(s => ({
+                name: s.name,
+                items: s.items.map(i => ({
+                  description: i.description,
+                  hours: parseFloat(i.hours) || null,
+                  costRate: parseFloat(i.costRate) || null,
+                  quantity: parseFloat(i.quantity) || 1,
+                  unit: i.unit || null,
+                  tags: i.tags.split(',').map(t => t.trim()).filter(Boolean),
+                  isOptional: i.isOptional,
+                  riskLevel: i.riskLevel,
+                })),
+              })),
+            },
             clientName,
             jobDescription,
             billingType,
@@ -320,9 +357,21 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
       )
       const json = await res.json()
       const result = json.data as { text: string; actions: AiActionDef[] }
-      setAiMessages(prev => [...prev, { role: 'assistant', text: result.text }])
+      setAiMessages(prev => [...prev, { role: 'assistant', text: result.text || 'Done.' }])
 
-      // Apply actions
+      const toItems = (items: AiItem[]) => (items ?? []).map((i: AiItem) => ({
+        id: crypto.randomUUID(),
+        description: i.description ?? '',
+        hours: i.hours?.toString() ?? '',
+        costRate: i.costRate?.toString() ?? '',
+        quantity: (i.quantity ?? 1).toString(),
+        unit: i.unit ?? 'hrs',
+        tags: (i.tags ?? []).join(', '),
+        isOptional: i.isOptional ?? false,
+        internalNotes: i.internalNotes ?? '',
+        riskLevel: i.riskLevel ?? 'low',
+      }))
+
       for (const action of (result.actions ?? [])) {
         if (action.type === 'set_sections' && action.sections) {
           dispatch({
@@ -331,20 +380,37 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
               id: crypto.randomUUID(),
               name: s.name,
               collapsed: false,
-              items: (s.items ?? []).map((i: AiItem) => ({
-                id: crypto.randomUUID(),
-                description: i.description ?? '',
-                hours: i.hours?.toString() ?? '',
-                costRate: i.costRate?.toString() ?? '',
-                quantity: (i.quantity ?? 1).toString(),
-                unit: i.unit ?? 'hrs',
-                tags: (i.tags ?? []).join(', '),
-                isOptional: i.isOptional ?? false,
-                internalNotes: i.internalNotes ?? '',
-                riskLevel: i.riskLevel ?? 'low',
-              })),
+              items: toItems(s.items ?? []),
             })),
           })
+        } else if (action.type === 'add_section' && action.name) {
+          dispatch({
+            type: 'set_sections',
+            sections: [
+              ...state.sections,
+              {
+                id: crypto.randomUUID(),
+                name: action.name,
+                collapsed: false,
+                items: toItems((action as AiActionDef & { items?: AiItem[] }).items ?? [newItem()]),
+              },
+            ],
+          })
+        } else if (action.type === 'add_items' && action.sectionName && action.items) {
+          // Find the matching section by name (case-insensitive)
+          const targetSection = state.sections.find(
+            s => s.name.toLowerCase() === (action.sectionName as string).toLowerCase()
+          )
+          if (targetSection) {
+            dispatch({
+              type: 'set_sections',
+              sections: state.sections.map(s =>
+                s.id === targetSection.id
+                  ? { ...s, items: [...s.items, ...toItems(action.items as AiItem[])] }
+                  : s
+              ),
+            })
+          }
         } else if (action.type === 'set_title' && action.title) {
           dispatch({ type: 'set_title', value: action.title })
         } else if (action.type === 'set_notes' && action.notes) {
@@ -413,9 +479,22 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
       </div>
 
       {isFinalized && (
-        <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          This estimate is finalized. Create a revision to make changes.
+        <div className="flex items-center justify-between gap-2 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {existingEstimate?.status === 'SUPERSEDED'
+              ? 'This estimate has been superseded by a newer version.'
+              : 'This estimate is finalized. Create a revision to make changes.'}
+          </div>
+          {existingEstimate?.status === 'FINAL' && (
+            <button
+              onClick={handleRevise}
+              disabled={revising}
+              className="shrink-0 text-xs px-2.5 py-1 rounded border border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-700 disabled:opacity-50"
+            >
+              {revising ? 'Creating…' : 'Create Revision'}
+            </button>
+          )}
         </div>
       )}
 
@@ -492,20 +571,21 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
 
             {/* Items */}
             {!section.collapsed && (
-              <div className="divide-y">
+              <div>
                 {/* Column headers */}
-                <div className="grid grid-cols-[1fr_60px_80px_80px_80px_100px_24px] gap-2 px-4 py-2 text-xs text-muted-foreground">
+                <div className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 px-4 py-1 text-xs text-muted-foreground border-b">
                   <span>Description</span>
-                  <span className="text-right">Hours</span>
-                  <span className="text-right">Cost/hr</span>
+                  <span className="text-right">Hrs</span>
+                  <span className="text-right">Rate</span>
                   <span className="text-right">Qty</span>
                   <span>Unit</span>
                   <span>Tags</span>
+                  <span>Risk / Opts</span>
                   <span />
                 </div>
                 {section.items.map((item) => (
-                  <div key={item.id} className="px-4 py-3 space-y-2">
-                    <div className="grid grid-cols-[1fr_60px_80px_80px_80px_100px_24px] gap-2 items-center">
+                  <div key={item.id} className="grid grid-cols-[1fr_56px_72px_56px_56px_96px_auto_20px] gap-x-2 items-center px-4 py-1.5 border-b last:border-b-0 hover:bg-muted/20 group">
+                    <div className="flex flex-col gap-0.5 min-w-0">
                       <input
                         type="text"
                         value={item.description}
@@ -514,59 +594,66 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
                         disabled={isFinalized}
                         className="text-sm bg-transparent border-none outline-none w-full"
                       />
-                      <input
-                        type="number"
-                        value={item.hours}
-                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'hours', value: e.target.value })}
-                        placeholder="0"
-                        disabled={isFinalized}
-                        className="text-sm text-right bg-transparent border-none outline-none w-full"
-                      />
-                      <input
-                        type="number"
-                        value={item.costRate}
-                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'costRate', value: e.target.value })}
-                        placeholder="0"
-                        disabled={isFinalized}
-                        className="text-sm text-right bg-transparent border-none outline-none w-full"
-                      />
-                      <input
-                        type="number"
-                        value={item.quantity}
-                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
-                        placeholder="1"
-                        disabled={isFinalized}
-                        className="text-sm text-right bg-transparent border-none outline-none w-full"
-                      />
-                      <input
-                        type="text"
-                        value={item.unit}
-                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
-                        placeholder="hrs"
-                        disabled={isFinalized}
-                        className="text-sm bg-transparent border-none outline-none w-full"
-                      />
-                      <input
-                        type="text"
-                        value={item.tags}
-                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'tags', value: e.target.value })}
-                        placeholder="dev, design"
-                        disabled={isFinalized}
-                        className="text-sm bg-transparent border-none outline-none w-full text-muted-foreground"
-                      />
                       {!isFinalized && (
-                        <button
-                          onClick={() => dispatch({ type: 'remove_item', sectionId: section.id, itemId: item.id })}
-                          className="text-muted-foreground hover:text-destructive"
-                          disabled={section.items.length === 1}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <input
+                          type="text"
+                          value={item.internalNotes}
+                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'internalNotes', value: e.target.value })}
+                          placeholder="Internal notes…"
+                          className="text-xs text-muted-foreground bg-transparent border-none outline-none w-full italic"
+                        />
                       )}
                     </div>
-                    {/* Optional row */}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <label className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={item.hours}
+                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'hours', value: e.target.value })}
+                      placeholder="—"
+                      disabled={isFinalized}
+                      className="text-sm text-right bg-transparent border-none outline-none w-full"
+                    />
+                    <input
+                      type="number"
+                      value={item.costRate}
+                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'costRate', value: e.target.value })}
+                      placeholder="—"
+                      disabled={isFinalized}
+                      className="text-sm text-right bg-transparent border-none outline-none w-full"
+                    />
+                    <input
+                      type="number"
+                      value={item.quantity}
+                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
+                      placeholder="1"
+                      disabled={isFinalized}
+                      className="text-sm text-right bg-transparent border-none outline-none w-full"
+                    />
+                    <input
+                      type="text"
+                      value={item.unit}
+                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
+                      placeholder="hrs"
+                      disabled={isFinalized}
+                      className="text-sm bg-transparent border-none outline-none w-full"
+                    />
+                    <input
+                      type="text"
+                      value={item.tags}
+                      onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'tags', value: e.target.value })}
+                      placeholder="dev, design"
+                      disabled={isFinalized}
+                      className="text-sm bg-transparent border-none outline-none w-full text-muted-foreground"
+                    />
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+                      <select
+                        value={item.riskLevel}
+                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'riskLevel', value: e.target.value })}
+                        disabled={isFinalized}
+                        className="bg-transparent text-xs"
+                      >
+                        {RISK_LEVELS.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <label className="flex items-center gap-1 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={item.isOptional}
@@ -574,31 +661,23 @@ export function EstimateEditor({ projectId, projectSlug, jobId, jobDescription, 
                           disabled={isFinalized}
                           className="rounded"
                         />
-                        Optional
+                        opt
                       </label>
-                      <select
-                        value={item.riskLevel}
-                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'riskLevel', value: e.target.value })}
-                        disabled={isFinalized}
-                        className="bg-transparent text-xs"
-                      >
-                        {RISK_LEVELS.map(r => <option key={r} value={r}>{r} risk</option>)}
-                      </select>
-                      <span>Cost: {new Intl.NumberFormat('en-US', { style: 'currency', currency: state.currency }).format(itemCost(item))}</span>
+                      <span className="text-muted-foreground/60">{new Intl.NumberFormat('en-US', { style: 'currency', currency: state.currency, maximumFractionDigits: 0 }).format(itemCost(item))}</span>
                     </div>
-                    {!isFinalized && (
-                      <input
-                        type="text"
-                        value={item.internalNotes}
-                        onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'internalNotes', value: e.target.value })}
-                        placeholder="Internal notes (not visible to client)"
-                        className="text-xs text-muted-foreground bg-transparent border-none outline-none w-full italic"
-                      />
-                    )}
+                    {!isFinalized ? (
+                      <button
+                        onClick={() => dispatch({ type: 'remove_item', sectionId: section.id, itemId: item.id })}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                        disabled={section.items.length === 1}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    ) : <span />}
                   </div>
                 ))}
                 {!isFinalized && (
-                  <div className="px-4 py-2">
+                  <div className="px-4 py-1.5">
                     <button
                       onClick={() => dispatch({ type: 'add_item', sectionId: section.id })}
                       className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"

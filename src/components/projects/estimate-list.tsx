@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, FileText, ChevronRight, Loader2, GitBranch } from 'lucide-react'
+import { Plus, FileText, ChevronRight, Loader2, GitBranch, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface EstimateItem {
@@ -62,7 +62,26 @@ const STATUS_STYLES: Record<string, string> = {
 export function EstimateList({ projectId, jobId, projectSlug, estimates }: Props) {
   const router = useRouter()
   const [generating, setGenerating] = useState<string | null>(null)
+  const [duplicating, setDuplicating] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  async function handleDuplicate(estimateId: string) {
+    setDuplicating(estimateId)
+    setError(null)
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/jobs/${jobId}/estimates/${estimateId}/duplicate`,
+        { method: 'POST' }
+      )
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Failed to duplicate estimate'); return }
+      router.push(`/projects/${projectSlug}/jobs/${jobId}/estimates/${json.data.id}`)
+    } catch {
+      setError('Failed to duplicate estimate')
+    } finally {
+      setDuplicating(null)
+    }
+  }
 
   async function handleGenerateQuote(estimateId: string) {
     setGenerating(estimateId)
@@ -140,6 +159,14 @@ export function EstimateList({ projectId, jobId, projectSlug, estimates }: Props
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDuplicate(est.id)}
+                  disabled={!!duplicating}
+                  title="Use as template for a new estimate"
+                  className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded border hover:bg-accent disabled:opacity-50 text-muted-foreground"
+                >
+                  {duplicating === est.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
+                </button>
                 {est.status === 'FINAL' && (
                   <button
                     onClick={() => handleGenerateQuote(est.id)}
