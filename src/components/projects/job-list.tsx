@@ -25,7 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: 'bg-red-100 text-red-800',
 }
 
-function ThreeDotMenu({ onEdit, onDelete, estimatesHref }: { onEdit: () => void; onDelete: () => void; estimatesHref: string }) {
+function ThreeDotMenu({ onEdit, onDelete, jobHref }: { onEdit: () => void; onDelete: () => void; jobHref: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -53,7 +53,7 @@ function ThreeDotMenu({ onEdit, onDelete, estimatesHref }: { onEdit: () => void;
       {open && (
         <div className="absolute right-0 z-10 mt-1 w-36 rounded-md border bg-popover shadow-md">
           <Link
-            href={estimatesHref}
+            href={jobHref}
             onClick={() => setOpen(false)}
             className="block px-3 py-2 text-left text-sm hover:bg-muted transition-colors rounded-t-md"
           >
@@ -380,7 +380,7 @@ export function JobList({ projectId, projectSlug, jobs: initial }: Props) {
                   <tr key={job.id} className="hover:bg-muted/20">
                     <td className="px-4 py-2">
                       <Link
-                        href={`/projects/${projectSlug}/jobs/${job.id}/estimates/new`}
+                        href={`/projects/${projectSlug}/jobs/${job.id}`}
                         className="font-medium hover:underline"
                       >
                         {job.name}
@@ -411,7 +411,7 @@ export function JobList({ projectId, projectSlug, jobs: initial }: Props) {
                     </td>
                     <td className="px-4 py-2">
                       <ThreeDotMenu
-                        estimatesHref={`/projects/${projectSlug}/jobs/${job.id}/estimates/new`}
+                        jobHref={`/projects/${projectSlug}/jobs/${job.id}`}
                         onEdit={() => startEdit(job)}
                         onDelete={() => setConfirmDeleteId(job.id)}
                       />
