@@ -14,6 +14,11 @@ Financial management tool for freelancers, consultants, and small property manag
 
 ### Projects (CLIENT)
 - Client projects with jobs, invoices, and payment tracking
+- **Estimate → Quote → Invoice pipeline** — full lifecycle from internal costing to client commitment to payment collection
+- **Estimates**: internal costing tool with sections and line items; AI-assisted estimation via chat; finalize to lock for quoting; revise to create a new version
+- **Quotes**: client-facing quotes generated from estimates; margin rules applied per tag; side-by-side quote generator with margin sliders, grouping toggles, and inline scope editing; versioning and amendment flows; send by email with PDF attachment; quote acceptance tracking
+- **Fulfillment tracking**: quotes link to invoices via `quoteId`; fulfillment bar shows agreed vs. invoiced vs. paid; uninvoiced balance computed at query time
+- **Margin rules**: user-configurable default margins per work tag (design, dev, pm, etc.) applied automatically during quote generation
 - Invoice lifecycle: `DRAFT → SENT → PARTIAL → PAID` (or `VOID`)
 - AI-assisted invoice creation — describe the work, get a pre-filled draft
 - Send invoices by email with PDF attachment and configurable payment methods

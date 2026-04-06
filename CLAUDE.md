@@ -59,9 +59,15 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `ImportBatch` — tracks CSV import sessions; records `skippedCount` for duplicates
 - `InstitutionSchema` — global (non-user) CSV column mapping templates; `csvMapping` JSON: `{ dateCol, amountCol, descCol, dateFormat, amountSign }`
 - `Project` — client/property/job entities for tagging transactions; `ProjectType`: `CLIENT | PROPERTY | JOB | OTHER`
-- `Job` — sub-unit of a CLIENT project; `status` enum `ACTIVE | COMPLETED | CANCELLED` (no `isActive` field)
+- `Job` — sub-unit of a CLIENT project; `status` enum `ACTIVE | COMPLETED | CANCELLED` (no `isActive` field); `billingType` and `defaultRate` override the parent `ClientProfile` defaults when set
 - `ClientProfile` — contact record linked to a project; holds `email`, `contactName`
-- `Invoice` — belongs to a `ClientProfile`; `status`: `DRAFT | SENT | PARTIAL | OVERDUE | PAID | VOID`; `replacesInvoiceId` self-relation (`@unique`) enables renegotiation chain — one voided invoice maps to one replacement
+- `Estimate` — internal costing document scoped to a `Job`; never shown to the client; `status`: `DRAFT | FINAL | SUPERSEDED`; `parentId` self-relation enables version chains; sections → items hierarchy
+- `EstimateSection` — named group of `EstimateItem` rows within an `Estimate`; `sortOrder` controls display order
+- `EstimateItem` — single line in an estimate; holds `hours`, `costRate` (internal — never shown to client), `quantity`, `tags` (used for margin rule matching), `isOptional`, `internalNotes`, `riskLevel`
+- `Quote` — client-facing commitment derived from an `Estimate`; `status`: `DRAFT | SENT | ACCEPTED | REJECTED | SUPERSEDED | AMENDED`; `previousVersionId` self-relation (`@unique`) for negotiation version chain; `parentQuoteId` for post-acceptance amendments (`isAmendment: true`); `overrides` JSON stores human decisions (margins, grouping, scope edits) so they survive regeneration; `quoteNumber` auto-generated as `QTE-XXXX`
+- `QuoteSection` / `QuoteLineItem` — client-facing line items; `sourceItemIds` records which `EstimateItem` IDs were collapsed into each line; `costBasis` and `marginPercent` are internal-only; `hasEstimateLink: false` marks manually added lines
+- `MarginRule` — user-level default margin per work tag (e.g. "design" → 60%); `@@unique([userId, tag])`; applied automatically during quote generation
+- `Invoice` — belongs to a `ClientProfile`; `status`: `DRAFT | SENT | PARTIAL | OVERDUE | PAID | VOID`; `replacesInvoiceId` self-relation (`@unique`) enables renegotiation chain — one voided invoice maps to one replacement; `quoteId` optionally links the invoice to the `Quote` it fulfills (null for invoices created directly)
 - `InvoiceLineItem` — line on an invoice; `isTaxLine: true` marks tax lines (no separate tax model)
 - `InvoicePayment` — payment against an invoice; `transactionId` (`@unique`) optionally links to a bank `Transaction`; amount triggers automatic `PARTIAL` / `PAID` status update; payments can be deleted (`DELETE /payments/[paymentId]`) or moved to another open invoice (`PATCH /payments/[paymentId]`) — both recalculate invoice status atomically
 - `InvoicePaymentSuggestion` — auto-generated match between a `Transaction` and an `Invoice`; `confidence`: `HIGH | MEDIUM`; `status`: `PENDING | ACCEPTED | DISMISSED`; HIGH confidence matches are auto-applied at import time
@@ -78,6 +84,28 @@ Each resource has its own directory (e.g. `api/transactions/`, `api/rules/`). Al
 - Are protected by Clerk middleware (`src/middleware.ts`)
 - Extract `userId` via `auth()` from `@clerk/nextjs/server`
 - Return responses via helpers in `src/lib/api-response.ts`: `ok()`, `created()`, `badRequest()`, `unauthorized()`, `notFound()`, `serverError()` — all return `{ data, error, meta? }`
+
+**Estimate routes** (`api/projects/[id]/jobs/[jobId]/estimates/`):
+- `GET / POST` — list / create estimates for a job
+- `GET / PATCH / DELETE [estId]` — get / update / delete a single estimate
+- `POST [estId]/finalize` — set status to `FINAL` (locks editing; further edits must go through `/revise`)
+- `POST [estId]/revise` — create a new version (`parentId` → prior estimate, status set to `SUPERSEDED`)
+- `POST [estId]/ai-assist` — chat-based AI estimation; `estId` can be `'new'` for unsaved estimates
+
+**Quote routes** (`api/projects/[id]/quotes/`):
+- `GET / POST` — list quotes for a project; `POST` triggers quote generation from an estimate ID
+- `GET / PATCH / DELETE [quoteId]` — get / update / delete a quote
+- `POST [quoteId]/send` — email PDF to client; sets `sentAt` / `sentTo`, status → `SENT`
+- `POST [quoteId]/accept` — mark as `ACCEPTED`, records `signedAt`
+- `POST [quoteId]/revise` — create a new quote version for negotiation (`previousVersionId` chain)
+- `POST [quoteId]/amend` — create a post-acceptance amendment (`isAmendment: true`, `parentQuoteId` set)
+- `POST [quoteId]/create-invoice` — generate an `Invoice` from the quote, sets `Invoice.quoteId`
+- `GET [quoteId]/fulfillment` — compute agreed vs. invoiced vs. paid (query-time aggregation, not stored)
+- `GET [quoteId]/pdf` — generate and stream the quote PDF
+
+**Margin rule routes** (`api/margin-rules/`):
+- `GET / POST` — list / create-or-update margin rules for the current user
+- `DELETE [id]` — delete a margin rule
 
 Agent routes (`api/agent/`) stream SSE responses using `ReadableStream` with `text/event-stream`. Events are typed: `{ type: 'status' | 'answer' | 'done' | 'error', ... }`.
 
@@ -165,6 +193,34 @@ API routes (all SSE-streaming, same pattern as `api/agent/ask`):
 Nav model: `anthropic/claude-sonnet-4.6`. LLM prompt requires raw JSON output — fallback regex extracts `{...}` from prose if model wraps response. `STEP_DELAY_MS = 800ms`. Netlify timeout: 120s for both connect and sync routes.
 
 **Never log credentials** — username/password are passed as params but must never appear in `console.log`.
+
+### Estimate → Quote → Invoice Pipeline
+
+**Pages:**
+- `/projects/[slug]/jobs/[jobId]/estimates/new` — new estimate editor
+- `/projects/[slug]/jobs/[jobId]/estimates/[estId]` — existing estimate editor (view/edit)
+- `/projects/[slug]/quotes` — quote list for a project
+- `/projects/[slug]/quotes/[quoteId]` — quote detail with status, fulfillment bar, version/amendment history
+- `/projects/[slug]/quotes/[quoteId]/generate` — side-by-side quote generator
+
+**Components:**
+- `estimate-editor.tsx` — grid editor with sections/items, internal notes, cost calculation, AI chat assist; receives `projectId` (DB id for API calls) and `projectSlug` (for client-side redirect after create)
+- `estimate-list.tsx` — list of estimates per job with status badges
+- `quote-generator.tsx` — side-by-side estimate↔quote review; margin sliders, group toggles, optional item toggles, scope editing; uses `quote-generator-store.ts` Zustand store for ephemeral session state serialized into `Quote.overrides`
+- `quote-detail-client.tsx` — quote view with fulfillment bar, version chain, amendment list
+- `quote-list.tsx` — quote list per project
+- `send-quote-modal.tsx` — email + PDF send flow, mirrors `send-invoice-modal.tsx`
+- `src/lib/pdf/quote-pdf.tsx` — react-pdf/renderer quote PDF (same pattern as `invoice-pdf.ts`)
+- `src/components/settings/margin-rules-editor.tsx` — settings UI for default margin rules per tag
+- `src/stores/quote-generator-store.ts` — Zustand store for quote generator session state (margins, grouping, scope edits, optional toggles)
+
+**Key design rules:**
+- `costRate` and `internalNotes` on `EstimateItem` are **never** included in quote or invoice output
+- Quote generation collapses estimate sections to single `QuoteLineItem` rows by default; user can expand per section
+- `Quote.overrides` JSON preserves human decisions (margins, grouping, scope edits) across regenerations when the estimate changes
+- AI assist on estimates works with `estId='new'` — the route skips the DB existence check and uses only the job ownership check for auth
+- Fulfillment (`GET /fulfillment`) is computed at query time from linked invoices and payments — nothing extra is stored
+- Invoices created from quotes set `Invoice.quoteId`; invoices created directly leave it null — both paths are valid
 
 ### Invoice Detail Layout (`src/components/projects/invoice-detail-client.tsx`)
 
