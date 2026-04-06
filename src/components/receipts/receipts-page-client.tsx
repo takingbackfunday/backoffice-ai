@@ -30,6 +30,7 @@ export function ReceiptsPageClient() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [retrying, setRetrying] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const loadReceipts = useCallback(async () => {
     const res = await fetch('/api/receipts')
@@ -72,6 +73,21 @@ export function ReceiptsPageClient() {
 
   return (
     <div className="p-6 space-y-4">
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt="Receipt full view"
+            className="max-w-full max-h-full object-contain rounded"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Receipts</h1>
         <Button onClick={() => setShowUpload((v) => !v)}>
@@ -114,7 +130,8 @@ export function ReceiptsPageClient() {
                 <img
                   src={receipt.thumbnailUrl}
                   alt="Receipt"
-                  className="w-full h-48 object-contain bg-muted/20"
+                  className="w-full h-32 object-cover cursor-zoom-in"
+                  onClick={() => setLightboxUrl(receipt.thumbnailUrl!)}
                 />
               )}
 
