@@ -7,12 +7,14 @@ interface Props {
   projectId: string
   projectSlug: string
   jobs: { id: string; name: string }[]
+  estimates: { id: string; title: string; status: string }[]
 }
 
-export function NewQuoteForm({ projectId, projectSlug, jobs }: Props) {
+export function NewQuoteForm({ projectId, projectSlug, jobs, estimates }: Props) {
   const router = useRouter()
   const [title, setTitle] = useState('')
   const [jobId, setJobId] = useState(jobs[0]?.id ?? '')
+  const [estimateId, setEstimateId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -25,7 +27,11 @@ export function NewQuoteForm({ projectId, projectSlug, jobs }: Props) {
       const res = await fetch(`/api/projects/${projectId}/quotes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, title: title.trim() || undefined }),
+        body: JSON.stringify({
+          jobId,
+          title: title.trim() || undefined,
+          estimateId: estimateId || undefined,
+        }),
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Failed to create quote'); return }
@@ -64,6 +70,29 @@ export function NewQuoteForm({ projectId, projectSlug, jobs }: Props) {
           </select>
         )}
       </div>
+
+      {estimates.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Based on estimate <span className="text-muted-foreground font-normal">(optional)</span>
+          </label>
+          <select
+            value={estimateId}
+            onChange={e => setEstimateId(e.target.value)}
+            className="w-full border rounded px-3 py-2 text-sm bg-background"
+          >
+            <option value="">— none —</option>
+            {estimates.map(est => (
+              <option key={est.id} value={est.id}>
+                {est.title} ({est.status.toLowerCase()})
+              </option>
+            ))}
+          </select>
+          {estimateId && estimates.find(e => e.id === estimateId)?.status !== 'FINAL' && (
+            <p className="text-xs text-amber-600 mt-1">This estimate is not finalised — line items may be incomplete.</p>
+          )}
+        </div>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
