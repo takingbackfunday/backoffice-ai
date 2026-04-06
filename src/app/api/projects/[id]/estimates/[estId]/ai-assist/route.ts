@@ -124,15 +124,25 @@ Respond with JSON ONLY — no prose outside the JSON object:
 }
 
 Rules:
-- Be specific about hours and cost rates — internal numbers the freelancer uses for margin calculation
-- costRate = what this work costs internally (subcontractor rate or the user's floor rate)
-- Group work logically into sections: Discovery, Design, Development, QA, Project Management
+- costRate = what this work costs internally (subcontractor rate or the user's floor rate); NEVER shown to the client
+- NEVER undervalue professional work. Use realistic market rates for the industry/region implied by the client and project:
+  - Creative/media production (editing, sound design, directing): £400–£800/day (£50–£100/hr)
+  - Consulting, strategy, producing, project management: £400–£700/day (£50–£90/hr)
+  - Technical/dev work: £500–£900/day (£65–£110/hr)
+  - For well-known broadcasters (BBC, Netflix, etc.) or large brands: lean toward the top of the range
+  - If no previous estimates exist and you're unsure of the rate, use £65/hr as a conservative floor — do NOT use rates below £40/hr for professional services
+- Use hours × quantity correctly:
+  - hours = effort per unit (e.g. hours per episode, hours per day)
+  - quantity = number of units (e.g. number of episodes, number of days)
+  - unit = label for the quantity unit (e.g. "eps", "days", "sessions")
+  - Example: editing 10hrs/episode × 6 episodes → hours: 10, quantity: 6, unit: "eps" (NOT hours: 60, quantity: 1)
+  - This lets the client later adjust the episode count without re-estimating
+- Group work logically into sections relevant to the project type
 - Flag risky/uncertain items with riskLevel: "high"; mark optional scope with isOptional: true
-- Tags classify work: "design", "dev", "pm", "consulting", "qa" — these drive margin rules
+- Tags classify work: "design", "dev", "pm", "consulting", "qa", "production", "post" — these drive margin rules
 - For add_items: sectionName must exactly match an existing section name
 - For set_sections: replaces all current sections — use only when starting fresh or restructuring
-- Never invent rates without reference data — use lookup_similar_estimates or ask
-- costRate is NEVER shown to the client`
+- Always call lookup_similar_estimates first if previous estimates may exist for this project`
 
     const llmMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
