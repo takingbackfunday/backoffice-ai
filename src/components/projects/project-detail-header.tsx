@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building2, Users, Tag, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Building2, Users, Tag, Pencil, Check, X } from 'lucide-react'
 import { PROJECT_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -28,8 +28,6 @@ export function ProjectDetailHeader({ id, name, type, isActive, description, isD
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(name)
   const [savingName, setSavingName] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const Icon = TYPE_ICONS[type] ?? Tag
@@ -81,16 +79,6 @@ export function ProjectDetailHeader({ id, name, type, isActive, description, isD
   function cancelEdit() {
     setNameValue(name)
     setEditingName(false)
-  }
-
-  async function deleteProject() {
-    setDeleting(true)
-    try {
-      await fetch(`/api/projects/${id}`, { method: 'DELETE' })
-      router.push('/projects')
-    } finally {
-      setDeleting(false)
-    }
   }
 
   return (
@@ -148,36 +136,6 @@ export function ProjectDetailHeader({ id, name, type, isActive, description, isD
           {toggling ? '…' : active ? 'Active' : 'Inactive'}
         </button>
 
-        {!isDefault && (
-          <div className="ml-auto flex items-center gap-2">
-            {confirmDelete ? (
-              <>
-                <span className="text-xs text-muted-foreground">Delete project?</span>
-                <button
-                  onClick={deleteProject}
-                  disabled={deleting}
-                  className="rounded px-2 py-1 text-xs font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  {deleting ? 'Deleting…' : 'Yes, delete'}
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  className="rounded px-2 py-1 text-xs font-medium border hover:bg-muted"
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="text-muted-foreground hover:text-red-600 transition-colors"
-                title="Delete project"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        )}
       </div>
       {description && (
         <p className="text-sm text-muted-foreground ml-8">{description}</p>

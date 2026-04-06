@@ -6,6 +6,7 @@ import { ClientProfileForm } from '@/components/projects/client-profile-form'
 
 interface Props {
   projectId: string
+  isDefault?: boolean
   profile: {
     contactName: string | null
     company: string | null
@@ -19,11 +20,23 @@ interface Props {
   }
 }
 
-export function ClientInfoEditor({ projectId, profile }: Props) {
+export function ClientInfoEditor({ projectId, isDefault = false, profile }: Props) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
+      router.push('/projects')
+    } finally {
+      setDeleting(false)
+    }
+  }
   const [data, setData] = useState({
     contactName: profile.contactName ?? '',
     company: profile.company ?? '',
@@ -86,6 +99,37 @@ export function ClientInfoEditor({ projectId, profile }: Props) {
             Cancel
           </button>
         </div>
+
+        {!isDefault && (
+          <div className="mt-6 border border-destructive/30 rounded-md p-3">
+            <p className="text-xs font-medium text-destructive mb-2">Danger zone</p>
+            {confirmDelete ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">This will permanently delete the project and all its data.</span>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="rounded px-2 py-1 text-xs font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting…' : 'Yes, delete'}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="rounded px-2 py-1 text-xs font-medium border hover:bg-muted"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-xs text-destructive hover:underline"
+              >
+                Delete this project
+              </button>
+            )}
+          </div>
+        )}
       </div>
     )
   }

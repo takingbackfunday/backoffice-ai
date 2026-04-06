@@ -35,7 +35,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 }
 
 const GenerateQuoteSchema = z.object({
-  estimateId: z.string().min(1, 'Estimate ID is required'),
+  estimateId: z.string().min(1).optional(),
   jobId: z.string().min(1, 'Job ID is required'),
   title: z.string().optional(),
 })
@@ -64,19 +64,36 @@ export async function POST(request: Request, { params }: RouteParams) {
     })
     if (!job) return notFound('Job not found')
 
-    // Load estimate with all sections and items
-    const estimate = await prisma.estimate.findFirst({
-      where: { id: estimateId, workspaceId: id },
-      include: {
-        sections: {
-          include: { items: true },
-          orderBy: { sortOrder: 'asc' },
-        },
+    // Load or auto-create estimate
+    const estimateInclude = {
+      sections: {
+        include: { items: true },
+        orderBy: { sortOrder: 'asc' as const },
       },
-    })
-    if (!estimate) return notFound('Estimate not found')
-    if (estimate.status === 'DRAFT') {
-      return badRequest('Finalize the estimate before generating a quote')
+    }
+
+    let estimate
+    if (estimateId) {
+      estimate = await prisma.estimate.findFirst({
+        where: { id: estimateId, workspaceId: id },
+        include: estimateInclude,
+      })
+      if (!estimate) return notFound('Estimate not found')
+      if (estimate.status === 'DRAFT') {
+        return badRequest('Finalize the estimate before generating a quote')
+      }
+    } else {
+      // Auto-create a shell FINAL estimate for audit trail
+      estimate = await prisma.estimate.create({
+        data: {
+          workspaceId: id,
+          title: title ?? 'Untitled Quote',
+          currency: project.clientProfile.currency ?? 'USD',
+          status: 'FINAL',
+          sections: { create: [{ name: 'Services', sortOrder: 0 }] },
+        },
+        include: estimateInclude,
+      })
     }
 
     // Load user's margin rules
@@ -163,7 +180,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     const quote = await prisma.quote.create({
       data: {
-        estimateId,
+        estimateId: estimate.id,
         jobId,
         clientProfileId: project.clientProfile.id,
         quoteNumber,

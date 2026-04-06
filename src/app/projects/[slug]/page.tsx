@@ -93,6 +93,7 @@ export default async function ProjectDetailPage({ params }: PageParams) {
               {/* Client info */}
               <ClientInfoEditor
                 projectId={project.id}
+                isDefault={project.isDefault}
                 profile={{
                   contactName: project.clientProfile.contactName,
                   company: project.clientProfile.company,

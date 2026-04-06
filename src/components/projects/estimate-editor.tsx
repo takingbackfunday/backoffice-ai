@@ -146,11 +146,17 @@ function itemCost(item: EstimateItemInput): number {
 /*  Props                                                               */
 /* ------------------------------------------------------------------ */
 
+interface Job {
+  id: string
+  name: string
+}
+
 interface Props {
   projectId: string
   projectSlug: string
   clientName?: string
   billingType?: string
+  jobs?: Job[]
   existingEstimate?: {
     id: string
     title: string
@@ -186,7 +192,7 @@ const RISK_LEVELS = ['low', 'medium', 'high']
 /*  Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export function EstimateEditor({ projectId, projectSlug, clientName, billingType, existingEstimate }: Props) {
+export function EstimateEditor({ projectId, projectSlug, clientName, billingType, jobs = [], existingEstimate }: Props) {
   const router = useRouter()
 
   const initialSections: EstimateSectionInput[] = existingEstimate?.sections.map(s => ({
@@ -217,6 +223,9 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
   const [saving, setSaving] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
   const [revising, setRevising] = useState(false)
+  const [quoteJobPicking, setQuoteJobPicking] = useState(false)
+  const [quoteJobId, setQuoteJobId] = useState('')
+  const [quoteGenerating, setQuoteGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
   const [aiInput, setAiInput] = useState('')
@@ -312,6 +321,26 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
       setError('Failed to create revision')
     } finally {
       setRevising(false)
+    }
+  }
+
+  async function handleCreateQuote() {
+    if (!existingEstimate || !quoteJobId) return
+    setQuoteGenerating(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/quotes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estimateId: existingEstimate.id, jobId: quoteJobId }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Failed to create quote'); return }
+      router.push(`/projects/${projectSlug}/quotes/${json.data.id}/generate`)
+    } catch {
+      setError('Failed to create quote')
+    } finally {
+      setQuoteGenerating(false)
     }
   }
 
@@ -491,13 +520,45 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
               : 'This estimate is finalized. Create a revision to make changes.'}
           </div>
           {existingEstimate?.status === 'FINAL' && (
-            <button
-              onClick={handleRevise}
-              disabled={revising}
-              className="shrink-0 text-xs px-2.5 py-1 rounded border border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-700 disabled:opacity-50"
-            >
-              {revising ? 'Creating…' : 'Create Revision'}
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {quoteJobPicking ? (
+                <>
+                  <select
+                    value={quoteJobId}
+                    onChange={e => setQuoteJobId(e.target.value)}
+                    className="text-xs border border-amber-400 rounded px-1.5 py-1 bg-amber-50"
+                  >
+                    {jobs.length === 0 && <option value="">No active jobs</option>}
+                    {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
+                  </select>
+                  <button
+                    onClick={handleCreateQuote}
+                    disabled={quoteGenerating || !quoteJobId}
+                    className="text-xs px-2.5 py-1 rounded border border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-700 disabled:opacity-50"
+                  >
+                    {quoteGenerating ? 'Creating…' : 'Go'}
+                  </button>
+                  <button
+                    onClick={() => { setQuoteJobPicking(false); setQuoteJobId('') }}
+                    className="text-xs text-amber-600 hover:text-amber-800"
+                  >✕</button>
+                </>
+              ) : (
+                <button
+                  onClick={() => { setQuoteJobPicking(true); setQuoteJobId(jobs[0]?.id ?? '') }}
+                  className="text-xs px-2.5 py-1 rounded border border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-700"
+                >
+                  Create Quote
+                </button>
+              )}
+              <button
+                onClick={handleRevise}
+                disabled={revising}
+                className="text-xs px-2.5 py-1 rounded border border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-700 disabled:opacity-50"
+              >
+                {revising ? 'Creating…' : 'Create Revision'}
+              </button>
+            </div>
           )}
         </div>
       )}

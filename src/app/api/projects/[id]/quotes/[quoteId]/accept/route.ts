@@ -14,8 +14,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
       where: { id: quoteId, clientProfile: { workspace: { id, userId } } },
     })
     if (!quote) return notFound('Quote not found')
-    if (quote.status !== 'SENT') {
-      return badRequest('Only sent quotes can be accepted')
+    if (quote.status !== 'SENT' && quote.status !== 'DRAFT') {
+      return badRequest('Only draft or sent quotes can be accepted')
     }
 
     const updated = await prisma.quote.update({

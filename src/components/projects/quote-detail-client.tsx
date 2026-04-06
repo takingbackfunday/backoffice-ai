@@ -197,6 +197,14 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
                 {loading === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 Send
               </button>
+              <button
+                onClick={handleAccept}
+                disabled={loading === 'accept'}
+                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
+              >
+                {loading === 'accept' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Mark Accepted
+              </button>
             </>
           )}
           {quote.status === 'SENT' && (
@@ -211,7 +219,7 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
               <button
                 onClick={handleAccept}
                 disabled={loading === 'accept'}
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
               >
                 {loading === 'accept' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                 Mark Accepted

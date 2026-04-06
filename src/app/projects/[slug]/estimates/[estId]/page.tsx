@@ -21,15 +21,22 @@ export default async function EstimateDetailPage({ params }: PageParams) {
   })
   if (!project || !project.clientProfile) notFound()
 
-  const estimate = await prisma.estimate.findFirst({
-    where: { id: estId, workspaceId: project.id },
-    include: {
-      sections: {
-        include: { items: { orderBy: { sortOrder: 'asc' } } },
-        orderBy: { sortOrder: 'asc' },
+  const [estimate, jobs] = await Promise.all([
+    prisma.estimate.findFirst({
+      where: { id: estId, workspaceId: project.id },
+      include: {
+        sections: {
+          include: { items: { orderBy: { sortOrder: 'asc' } } },
+          orderBy: { sortOrder: 'asc' },
+        },
       },
-    },
-  })
+    }),
+    prisma.job.findMany({
+      where: { clientProfile: { workspaceId: project.id }, status: 'ACTIVE' },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ])
   if (!estimate) notFound()
 
   const estimateData = JSON.parse(JSON.stringify({
@@ -69,6 +76,7 @@ export default async function EstimateDetailPage({ params }: PageParams) {
               clientName={project.clientProfile.contactName ?? project.name}
               billingType={project.clientProfile.billingType}
               existingEstimate={estimateData}
+              jobs={jobs}
             />
           </div>
         </main>

@@ -109,6 +109,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
   const [validUntil, setValidUntil] = useState(
     quote.validUntil ? quote.validUntil.slice(0, 10) : ''
   )
+  // expandedSections tracks which sections have been split to item-level detail
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({})
 
   const [saving, setSaving] = useState(false)
@@ -179,6 +180,70 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
       }
     ))
   }, [])
+
+  // Toggle a section between collapsed (1 line) and expanded (1 line per estimate item)
+  const toggleSectionExpand = useCallback((section: QuoteSection) => {
+    const isExpanded = expandedSections[section.id]
+
+    if (isExpanded) {
+      // Collapse: merge all items back to one section-level line
+      const totalCostBasis = section.items.reduce((sum, i) => sum + (i.costBasis ?? 0), 0)
+      const totalPrice = section.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
+      const allSourceIds = section.items.flatMap(i => i.sourceItemIds)
+      const hasOptional = section.items.some(i => i.isOptional)
+      const blended = totalCostBasis > 0
+        ? Math.round(((totalPrice - totalCostBasis) / totalCostBasis) * 10000) / 100
+        : section.items[0]?.marginPercent ?? 0
+
+      setSections(prev => prev.map(s => s.id !== section.id ? s : {
+        ...s,
+        items: [{
+          id: crypto.randomUUID(),
+          description: s.name,
+          quantity: 1,
+          unit: null,
+          unitPrice: Math.round(totalPrice * 100) / 100,
+          isOptional: hasOptional,
+          hasEstimateLink: true,
+          costBasis: totalCostBasis,
+          marginPercent: blended,
+          sourceItemIds: allSourceIds,
+          sortOrder: 0,
+        }],
+      }))
+      setExpandedSections(prev => ({ ...prev, [section.id]: false }))
+    } else {
+      // Expand: split to one line per source estimate item
+      const estSection = estimate.sections.find(s =>
+        s.items.some(ei => section.items[0]?.sourceItemIds.includes(ei.id))
+      ) ?? estimate.sections.find(s => s.name === section.name)
+
+      if (!estSection || estSection.items.length === 0) return
+
+      const collapsedMargin = section.items[0]?.marginPercent ?? 0
+
+      const expandedItems: QuoteLineItem[] = estSection.items.map((ei, idx) => {
+        const cost = itemEstimatedCost(ei)
+        const price = cost > 0 ? cost * (1 + collapsedMargin / 100) : 0
+        return {
+          id: crypto.randomUUID(),
+          description: ei.description,
+          quantity: 1,
+          unit: ei.unit,
+          unitPrice: Math.round(price * 100) / 100,
+          isOptional: ei.isOptional,
+          hasEstimateLink: true,
+          costBasis: cost,
+          marginPercent: collapsedMargin,
+          sourceItemIds: [ei.id],
+          sortOrder: idx,
+        }
+      })
+
+      setSections(prev => prev.map(s => s.id !== section.id ? s : { ...s, items: expandedItems }))
+      setExpandedSections(prev => ({ ...prev, [section.id]: true }))
+    }
+  }, [expandedSections, estimate.sections])
 
   async function handleSave() {
     setSaving(true)
@@ -290,16 +355,19 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
         {/* Line items table */}
         {sections.map(section => {
           const isExpanded = expandedSections[section.id]
+          const sectionTotal = section.items.filter(i => !i.isOptional).reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
           return (
             <div key={section.id} className="border rounded-lg">
               <div className="flex items-center justify-between px-3 py-2 bg-muted/30 rounded-t-lg">
                 <button
-                  onClick={() => setExpandedSections(prev => ({ ...prev, [section.id]: !prev[section.id] }))}
+                  onClick={() => toggleSectionExpand(section)}
                   className="flex items-center gap-1 text-sm font-medium"
+                  title={isExpanded ? 'Collapse to section summary' : 'Expand to individual line items'}
                 >
                   {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                   {section.name}
                 </button>
+                <span className="text-xs text-muted-foreground">{fmt(sectionTotal, currency)}</span>
               </div>
 
               {/* Column headers */}
