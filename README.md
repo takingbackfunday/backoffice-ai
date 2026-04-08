@@ -28,6 +28,13 @@ Financial management tool for freelancers, consultants, and small property manag
 - Invoice renegotiation flow: void original, create replacement draft with credit line for partial payments already received; full audit trail via `replacesInvoice` / `replacedBy` links
 - Download invoice as PDF at any stage
 
+### Receipts
+- Mobile-first receipt capture: take a photo or pick from gallery; client-side Canvas compression before upload
+- Mistral OCR extracts text from receipt images; Claude structures it into JSON (vendor, total, tax, items, category)
+- Compressed WebP thumbnail stored in UploadThing; original discarded after processing
+- Lightbox viewer, retry failed receipts, link receipts to transactions
+- `/receipts` page with grid view and expand/collapse card details
+
 ### Projects (PROPERTY)
 - Units, leases, tenants, rent roll
 - Tenant payment tracking, overdue alerts
