@@ -1142,8 +1142,10 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   useEffect(() => { editingRowIdRef.current = editingRowId }, [editingRowId])
 
   // Outside-click: exit row edit when user clicks outside the editing row.
-  // Use closest() on the target so we don't depend on the tr still being
-  // in the DOM at handler time (dropdowns can unmount before the check).
+  // Use capture phase so this fires before React processes any synthetic events
+  // (including e.preventDefault() calls on dropdown items). At capture time the
+  // clicked element is still in the DOM and closest('[data-row-id]') reliably
+  // identifies which row was clicked.
   useEffect(() => {
     if (!editingRowId) return
     const rowId = editingRowId
@@ -1154,8 +1156,8 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
         exitRowEdit(rowId)
       }
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('mousedown', handler, true) // capture phase
+    return () => document.removeEventListener('mousedown', handler, true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingRowId])
 
