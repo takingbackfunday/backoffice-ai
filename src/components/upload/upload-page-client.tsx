@@ -16,7 +16,7 @@ interface Account {
   institution: { name: string }
 }
 
-const STEPS = ['select-account', 'upload', 'map & import', 'done'] as const
+const STEPS = ['upload', 'map & import', 'done'] as const
 
 type DisplayStep = typeof STEPS[number]
 
@@ -27,7 +27,7 @@ function toDisplayStep(step: string): DisplayStep {
 
 export function UploadPageClient({ initialAccounts, onboarding }: { initialAccounts?: Account[]; onboarding?: boolean }) {
   const router = useRouter()
-  const { step, setAccountId, accountId } = useUploadStore()
+  const { step } = useUploadStore()
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
   const [loadingAccounts, setLoadingAccounts] = useState(!initialAccounts)
 
@@ -86,47 +86,17 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
             ))}
           </nav>
 
-          {/* Step 1: Select account */}
-          {step === 'select-account' && (
-            <div className="max-w-md space-y-4">
-              <p className="text-sm text-muted-foreground">Choose which account this CSV belongs to.</p>
-              {loadingAccounts ? (
-                <p className="text-sm text-muted-foreground">Loading accounts…</p>
-              ) : accounts.length === 0 ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">You have no accounts yet.</p>
-                  <a
-                    href="/accounts/new"
-                    className="inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-                  >
-                    Add an account first →
-                  </a>
-                </div>
-              ) : (
-                <ul className="space-y-2" data-testid="account-picker">
-                  {accounts.map((account) => (
-                    <li key={account.id}>
-                      <button
-                        onClick={() => setAccountId(account.id)}
-                        className={`w-full text-left rounded-lg border p-4 hover:border-foreground transition-colors ${accountId === account.id ? 'border-foreground' : ''}`}
-                        data-testid={`pick-account-${account.id}`}
-                        aria-label={`Select ${account.name}`}
-                      >
-                        <p className="font-medium">{account.name}</p>
-                        <p className="text-sm text-muted-foreground">{account.institution.name} · {account.currency}</p>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {/* Step 2: Upload CSV */}
+          {/* Step 1: Upload CSV */}
           {step === 'upload' && <CsvDropzone />}
 
-          {/* Step 3: Map columns + live preview + import */}
-          {(step === 'map-columns' || step === 'preview') && <ColumnMapper />}
+          {/* Step 2: Select account + Map columns + live preview + import */}
+          {(step === 'map-columns' || step === 'preview') && (
+            <ColumnMapper
+              accounts={accounts}
+              loadingAccounts={loadingAccounts}
+              onAccountCreated={(a) => setAccounts((prev) => [...prev, a])}
+            />
+          )}
 
           {/* Done */}
           {step === 'done' && (

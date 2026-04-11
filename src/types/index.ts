@@ -37,7 +37,7 @@ export interface PreviewRow {
 
 // Upload wizard state shape
 export interface UploadState {
-  step: 'select-account' | 'upload' | 'map-columns' | 'preview' | 'done'
+  step: 'upload' | 'map-columns' | 'preview' | 'done'
   accountId: string | null
   filename: string | null
   csvHeaders: string[]

@@ -11,7 +11,7 @@ interface UploadStore extends UploadState {
 }
 
 const initialState: UploadState & { csvText: string | null } = {
-  step: 'select-account',
+  step: 'upload',
   accountId: null,
   filename: null,
   csvHeaders: [],
@@ -26,7 +26,7 @@ export const useUploadStore = create<UploadStore>((set) => ({
 
   setStep: (step) => set({ step }),
 
-  setAccountId: (accountId) => set({ accountId, step: 'upload' }),
+  setAccountId: (accountId) => set({ accountId }),
 
   setCsvData: ({ filename, headers, csvText }) =>
     set({ filename, csvHeaders: headers, csvText, step: 'map-columns' }),
