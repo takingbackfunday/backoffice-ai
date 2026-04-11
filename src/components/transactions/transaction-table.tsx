@@ -63,7 +63,7 @@ function TextCell({
         if (e.key === 'Enter') { e.preventDefault(); onCommit(draft) } // commit but stay in row
         if (e.key === 'Escape') onCancel()
       }}
-      onBlur={() => onCommit(draft)}
+      onBlur={() => { if (draft !== value) onCommit(draft) }} // only PATCH if value changed
       className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none focus:ring-1 focus:ring-blue-400"
       aria-label="Edit cell value"
     />
@@ -76,23 +76,23 @@ function WorkspaceCell({
   projects,
   onCommit,
   onCancel,
+  autoFocus = false,
 }: {
   value: string | null
   projects: Workspace[]
   onCommit: (v: string | null) => void
   onCancel: () => void
+  autoFocus?: boolean
 }) {
   const ref = useRef<HTMLSelectElement>(null)
-  const committed = useRef(false)
 
-  useEffect(() => { ref.current?.focus() }, [])
+  useEffect(() => { if (autoFocus) ref.current?.focus() }, [])
 
   return (
     <select
       ref={ref}
       defaultValue={value ?? ''}
       onChange={(e) => {
-        committed.current = true
         const scrollY = window.scrollY
         onCommit(e.target.value || null)
         requestAnimationFrame(() => { window.scrollTo({ top: scrollY, behavior: 'instant' }) })
@@ -125,6 +125,7 @@ function CategoryCell({
   amount,
   onCommit,
   onCancel,
+  autoFocus = false,
 }: {
   value: string | null
   groups: CategoryGroup[]
@@ -133,6 +134,7 @@ function CategoryCell({
   amount: number
   onCommit: (id: string | null) => void
   onCancel: () => void
+  autoFocus?: boolean
 }) {
   const allCats = groups.flatMap((g) => g.categories.map((c) => ({ ...c, groupName: g.name })))
   const current = allCats.find((c) => c.id === value)
@@ -143,7 +145,6 @@ function CategoryCell({
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
-  const committed = useRef(false)
   const fetchedRef = useRef(false)
 
   // Fetch confidence scores once on open
@@ -185,11 +186,10 @@ function CategoryCell({
     return cb - ca
   })
 
-  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select() }, [])
+  useEffect(() => { if (autoFocus) { inputRef.current?.focus(); inputRef.current?.select() } }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setActiveIdx(0) }, [query])
 
   function commit(id: string | null) {
-    committed.current = true
     setOpen(false)
     const picked = allCats.find((c) => c.id === id)
     if (picked) setQuery(picked.name)
@@ -1445,8 +1445,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
         editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
 
         // Stage the popup snap — don't show it yet.
-        // promoteIfLeft (called via setTimeout 0 below) will show it once
-        // the user has genuinely moved off this row.
+        // promoteIfLeft is called from exitRowEdit once the user leaves the row.
         pendingRuleSnapRef.current = {
           rowId: id,
           snap: {
@@ -1603,6 +1602,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
             <WorkspaceCell
               value={row.workspaceId ?? null}
               projects={projects}
+              autoFocus={isInitialField}
               onCommit={(v) => commitEdit(row.id, 'projectId', v)}
               onCancel={() => exitRowEdit(row.id)}
             />
@@ -1619,6 +1619,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
               description={row.description}
               payeeName={row.payee?.name ?? null}
               amount={Number(row.amount)}
+              autoFocus={isInitialField}
               onCommit={(v) => commitEdit(row.id, 'categoryId', v)}
               onCancel={() => exitRowEdit(row.id)}
             />
