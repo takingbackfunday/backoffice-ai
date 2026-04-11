@@ -54,41 +54,43 @@ export async function POST(request: Request) {
       return ok({ imported: 0, skipped: rows.length, batchId: null })
     }
 
-    const batch = await prisma.$transaction(async (tx) => {
-      const importBatch = await tx.importBatch.create({
-        data: {
-          accountId,
-          filename,
-          rowCount: newRows.length,
-          skippedCount: rows.length - newRows.length,
-        },
-      })
-
-      await tx.transaction.createMany({
-        data: newRows.map((row) => ({
-          accountId,
-          importBatchId: importBatch.id,
-          date: new Date(row.date),
-          amount: row.amount,
-          description: row.description,
-          notes: row.notes ?? null,
-          category: row.category ?? null,
-          categoryId: row.categoryId ?? null,
-          payeeId: row.payeeId ?? null,
-          duplicateHash: row.duplicateHash,
-          rawData: row.rawData,
-          tags: [],
-        })),
-        skipDuplicates: true,
-      })
-
-      await tx.account.update({
-        where: { id: accountId },
-        data: { lastImportAt: new Date() },
-      })
-
-      return importBatch
+    // Use sequential awaits rather than an interactive transaction — createMany on
+    // large CSVs can exceed the 5 s interactive-transaction timeout on Neon/PgBouncer.
+    // These three writes don't need to be atomic: importBatch and lastImportAt are
+    // non-critical metadata; skipDuplicates on createMany makes it safe to re-run.
+    const importBatch = await prisma.importBatch.create({
+      data: {
+        accountId,
+        filename,
+        rowCount: newRows.length,
+        skippedCount: rows.length - newRows.length,
+      },
     })
+
+    await prisma.transaction.createMany({
+      data: newRows.map((row) => ({
+        accountId,
+        importBatchId: importBatch.id,
+        date: new Date(row.date),
+        amount: row.amount,
+        description: row.description,
+        notes: row.notes ?? null,
+        category: row.category ?? null,
+        categoryId: row.categoryId ?? null,
+        payeeId: row.payeeId ?? null,
+        duplicateHash: row.duplicateHash,
+        rawData: row.rawData,
+        tags: [],
+      })),
+      skipDuplicates: true,
+    })
+
+    await prisma.account.update({
+      where: { id: accountId },
+      data: { lastImportAt: new Date() },
+    })
+
+    const batch = importBatch
 
     // Await matching before returning — fire-and-forget dies on Netlify serverless
     const importedTxs = await prisma.transaction.findMany({
