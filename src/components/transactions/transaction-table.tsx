@@ -354,10 +354,10 @@ function MakeRulePopup({
 }) {
   const [style, setStyle] = useState<React.CSSProperties>({ position: 'fixed', bottom: 80, right: 24, zIndex: 50 })
 
-  // Auto-dismiss after 5s unless the editor is open
+  // Auto-dismiss after 10s unless the editor is open
   useEffect(() => {
     if (showEditor) return
-    const t = setTimeout(onDismiss, 5000)
+    const t = setTimeout(onDismiss, 10000)
     return () => clearTimeout(t)
   }, [anchorRowId, showEditor, onDismiss])
 
@@ -1031,6 +1031,26 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   const [makeRuleSnap, setMakeRuleSnap] = useState<MakeRuleSnapType | null>(null)
   const [showMakeRuleEditor, setShowMakeRuleEditor] = useState(false)
   const [lastEditedRowId, setLastEditedRowId] = useState<string | null>(null)
+  // Pending snap accumulates edits while the user is still on the same row.
+  // It only becomes the visible popup once the user moves to a different row.
+  const pendingRuleSnapRef = useRef<{ rowId: string; snap: MakeRuleSnapType } | null>(null)
+
+  // Promote the pending snap when the user moves off the row they just edited.
+  useEffect(() => {
+    const pending = pendingRuleSnapRef.current
+    if (!pending) return
+    const activeRowId = editingCell?.id ?? null
+    if (activeRowId !== pending.rowId) {
+      // User has moved away — show the popup now
+      setMakeRuleSnap(null)
+      setShowMakeRuleEditor(false)
+      requestAnimationFrame(() => {
+        setMakeRuleSnap(pending.snap)
+        setLastEditedRowId(pending.rowId)
+        pendingRuleSnapRef.current = null
+      })
+    }
+  }, [editingCell])
 
   // ── Toolbar modals ────────────────────────────────────────────────
   const [showNewRuleModal, setShowNewRuleModal] = useState(false)
@@ -1331,20 +1351,25 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
           fireSuggestions()
         }, SUGGEST_DELAY_MS)
 
-        // Show "Make rule from this change" popup near the edited row.
-        // If the user edits a different row, close the current popup first
-        // so the auto-dismiss timer re-arms cleanly for the new row.
-        setMakeRuleSnap(null)
-        setShowMakeRuleEditor(false)
-        requestAnimationFrame(() => {
-          setMakeRuleSnap({
-            description: row.description,
-            payeeName: resolvedPayeeName,
-            categoryId: resolvedCatId,
-            categoryName: resolvedCatName,
+        // Stage the popup — don't show it yet. We wait until the user moves
+        // to a different row so we don't interrupt mid-row editing.
+        const snap: MakeRuleSnapType = {
+          description: row.description,
+          payeeName: resolvedPayeeName,
+          categoryId: resolvedCatId,
+          categoryName: resolvedCatName,
+        }
+        const pendingSnap = pendingRuleSnapRef.current
+        if (pendingSnap && pendingSnap.rowId !== id) {
+          // User jumped to a new row mid-edit — show the previous row's popup now
+          setMakeRuleSnap(null)
+          setShowMakeRuleEditor(false)
+          requestAnimationFrame(() => {
+            setMakeRuleSnap(pendingSnap.snap)
+            setLastEditedRowId(pendingSnap.rowId)
           })
-          setLastEditedRowId(id)
-        })
+        }
+        pendingRuleSnapRef.current = { rowId: id, snap }
       }
     } catch {
       // Revert on error
