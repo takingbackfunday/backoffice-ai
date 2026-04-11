@@ -111,14 +111,27 @@ function WorkspaceCell({
 }
 
 // ── Inline category combobox (type to filter) ─────────────────────
+interface CategorySuggestion {
+  id: string
+  name: string
+  groupName: string
+  confidence: number
+}
+
 function CategoryCell({
   value,
   groups,
+  description,
+  payeeName,
+  amount,
   onCommit,
   onCancel,
 }: {
   value: string | null
   groups: CategoryGroup[]
+  description: string
+  payeeName: string | null
+  amount: number
   onCommit: (id: string | null) => void
   onCancel: () => void
 }) {
@@ -127,16 +140,51 @@ function CategoryCell({
   const [query, setQuery] = useState(current?.name ?? '')
   const [open, setOpen] = useState(true)
   const [activeIdx, setActiveIdx] = useState(0)
+  const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const committed = useRef(false)
+  const fetchedRef = useRef(false)
 
-  const filtered = query.trim() === ''
+  // Fetch confidence scores once on open
+  useEffect(() => {
+    if (fetchedRef.current) return
+    fetchedRef.current = true
+    setLoadingSuggestions(true)
+    fetch('/api/llm/suggest-category', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description,
+        payeeName,
+        amount,
+        categories: allCats.map((c) => ({ id: c.id, name: c.name, groupName: c.groupName })),
+      }),
+    })
+      .then((r) => r.json())
+      .then((j) => { if (!j.error) setSuggestions(j.data?.suggestions ?? []) })
+      .catch(() => {})
+      .finally(() => setLoadingSuggestions(false))
+  // allCats is derived from groups prop — stable for the lifetime of this cell
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Build the display list: if user has typed a query, filter first then sort
+  // by confidence. If no query, sort purely by confidence (with unscored last).
+  const confidenceMap = new Map(suggestions.map((s) => [s.id, s.confidence]))
+
+  const filtered = (query.trim() === ''
     ? allCats
     : allCats.filter((c) =>
         c.name.toLowerCase().includes(query.toLowerCase()) ||
         c.groupName.toLowerCase().includes(query.toLowerCase())
       )
+  ).slice().sort((a, b) => {
+    const ca = confidenceMap.get(a.id) ?? -1
+    const cb = confidenceMap.get(b.id) ?? -1
+    return cb - ca
+  })
 
   useEffect(() => { inputRef.current?.focus(); inputRef.current?.select() }, [])
   useEffect(() => { setActiveIdx(0) }, [query])
@@ -185,7 +233,7 @@ function CategoryCell({
       {open && filtered.length > 0 && (
         <ul
           ref={listRef}
-          className="absolute z-50 top-full left-0 mt-0.5 w-52 rounded border border-black/10 bg-white shadow-lg text-xs max-h-52 overflow-y-auto"
+          className="absolute z-50 top-full left-0 mt-0.5 w-64 rounded border border-black/10 bg-white shadow-lg text-xs max-h-52 overflow-y-auto"
         >
           <li
             onMouseDown={(e) => { e.preventDefault(); commit(null) }}
@@ -193,16 +241,35 @@ function CategoryCell({
           >
             — None —
           </li>
-          {filtered.map((cat, i) => (
-            <li
-              key={cat.id}
-              onMouseDown={(e) => { e.preventDefault(); commit(cat.id) }}
-              className={`px-2 py-1 cursor-pointer ${i === activeIdx ? 'bg-blue-50' : 'hover:bg-muted/40'}`}
-            >
-              <span>{cat.name}</span>
-              <span className="ml-1.5 text-[10px] text-muted-foreground">{cat.groupName}</span>
-            </li>
-          ))}
+          {filtered.map((cat, i) => {
+            const conf = confidenceMap.get(cat.id)
+            return (
+              <li
+                key={cat.id}
+                onMouseDown={(e) => { e.preventDefault(); commit(cat.id) }}
+                className={`px-2 py-1 cursor-pointer flex items-center gap-1.5 ${i === activeIdx ? 'bg-blue-50' : 'hover:bg-muted/40'}`}
+              >
+                <span className="flex-1 truncate">{cat.name}</span>
+                <span className="text-[10px] text-muted-foreground shrink-0">{cat.groupName}</span>
+                {conf != null && (
+                  <span
+                    className={`shrink-0 text-[9px] font-medium px-1 py-0.5 rounded ${
+                      conf >= 0.7
+                        ? 'bg-green-100 text-green-700'
+                        : conf >= 0.4
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {Math.round(conf * 100)}%
+                  </span>
+                )}
+                {loadingSuggestions && conf == null && (
+                  <span className="shrink-0 w-6 h-3 bg-muted/40 rounded animate-pulse" />
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>
@@ -1035,23 +1102,6 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // It only becomes the visible popup once the user moves to a different row.
   const pendingRuleSnapRef = useRef<{ rowId: string; snap: MakeRuleSnapType } | null>(null)
 
-  // Promote the pending snap when the user moves off the row they just edited.
-  useEffect(() => {
-    const pending = pendingRuleSnapRef.current
-    if (!pending) return
-    const activeRowId = editingCell?.id ?? null
-    if (activeRowId !== pending.rowId) {
-      // User has moved away — show the popup now
-      setMakeRuleSnap(null)
-      setShowMakeRuleEditor(false)
-      requestAnimationFrame(() => {
-        setMakeRuleSnap(pending.snap)
-        setLastEditedRowId(pending.rowId)
-        pendingRuleSnapRef.current = null
-      })
-    }
-  }, [editingCell])
-
   // ── Toolbar modals ────────────────────────────────────────────────
   const [showNewRuleModal, setShowNewRuleModal] = useState(false)
   const [showAgentModal, setShowAgentModal] = useState(false)
@@ -1087,6 +1137,36 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
         setRulePromptState('error')
       })
   }, [])
+
+  // Promote the pending snap when the user moves off the row they just edited.
+  // This is also where we start the rules-agent banner + suggestion timer so
+  // neither fires while the user is still working on the same row.
+  useEffect(() => {
+    const pending = pendingRuleSnapRef.current
+    if (!pending) return
+    const activeRowId = editingCell?.id ?? null
+    if (activeRowId !== pending.rowId) {
+      // User has moved away — show the popup and activate the banner now
+      setMakeRuleSnap(null)
+      setShowMakeRuleEditor(false)
+      requestAnimationFrame(() => {
+        setMakeRuleSnap(pending.snap)
+        setLastEditedRowId(pending.rowId)
+        pendingRuleSnapRef.current = null
+      })
+
+      // Start the rules suggestion banner + debounced agent timer
+      const queueSize = editQueueRef.current.size
+      if (queueSize > 0) {
+        setWatchingEditCount(queueSize)
+        setRulePromptState('watching')
+        if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
+        suggestionTimerRef.current = setTimeout(() => {
+          fireSuggestions()
+        }, SUGGEST_DELAY_MS)
+      }
+    }
+  }, [editingCell, fireSuggestions])
 
   // Load projects, categories, payees, accounts once (skip if passed from server)
   useEffect(() => {
@@ -1342,14 +1422,9 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
         const merged = existing ? { ...existing, ...editSnapshot } : editSnapshot
         editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
 
-        const queueSize = editQueueRef.current.size
-        setWatchingEditCount(queueSize)
-        setRulePromptState('watching')
-
-        if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
-        suggestionTimerRef.current = setTimeout(() => {
-          fireSuggestions()
-        }, SUGGEST_DELAY_MS)
+        // Don't update the banner state or start the timer yet — the user may
+        // still be editing this row (payee → category → notes in one flow).
+        // Both are deferred to the pendingRuleSnap promotion (row-change effect).
 
         // Stage the popup — don't show it yet. We wait until the user moves
         // to a different row so we don't interrupt mid-row editing.
@@ -1531,6 +1606,9 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
             <CategoryCell
               value={row.categoryId ?? null}
               groups={categoryGroups}
+              description={row.description}
+              payeeName={row.payee?.name ?? null}
+              amount={Number(row.amount)}
               onCommit={(v) => commitEdit(row.id, 'categoryId', v)}
               onCancel={cancelEdit}
             />
@@ -2050,6 +2128,9 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                   <CategoryCell
                     value={newRow.categoryId || null}
                     groups={categoryGroups}
+                    description={newRow.description}
+                    payeeName={payees.find((p) => p.id === newRow.payeeId)?.name ?? null}
+                    amount={parseFloat(newRow.amount) || 0}
                     onCommit={(v) => setNewRow((r) => ({ ...r, categoryId: v ?? '' }))}
                     onCancel={() => {}}
                   />
