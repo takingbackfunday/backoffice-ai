@@ -9,13 +9,14 @@ import { CashflowWidget } from '@/components/widgets/CashflowWidget'
 import { NetWorthWidget } from '@/components/widgets/NetWorthWidget'
 import { KpiBar } from '@/components/widgets/KpiBar'
 import { AgentQA } from '@/components/dashboard/agent-qa'
+import { parsePreferences } from '@/types/preferences'
 
 export default async function DashboardPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-  const data = (prefs?.data ?? {}) as Record<string, unknown>
+  const data = parsePreferences(prefs?.data)
   if (!data.businessType) redirect('/categories')
 
   return (

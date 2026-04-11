@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
 import { generateQuotePdf } from '@/lib/pdf/quote-pdf'
+import { parsePreferences } from '@/types/preferences'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
@@ -32,8 +33,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!email) return badRequest('No email address found for this client')
 
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || quote.clientProfile.workspace.name || 'Quote'
+    const prefsData = parsePreferences(prefs?.data)
+    const fromName = prefsData.businessName || prefsData.yourName || quote.clientProfile.workspace.name || 'Quote'
     const resendApiKey = process.env.RESEND_API_KEY
     const resendFrom = process.env.RESEND_FROM || 'Backoffice <noreply@backoffice.cv>'
 

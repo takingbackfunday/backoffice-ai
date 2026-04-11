@@ -80,6 +80,17 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `ApplicantDocument` — PDF document attached to an `Applicant`; `status`: `requested | uploaded`; `fileType` is one of the standard keys in `DOC_TYPES` (or `other` with a `requestLabel`); `uploadToken` (`@unique`) is the HMAC-signed public upload token; `tokenExpiresAt` is the token TTL; `uploadedBy` is either a Clerk `userId` (manager upload) or `'applicant'` (public upload)
 - `Receipt` — photo/screenshot of a receipt; `status`: `PROCESSING | COMPLETED | FAILED`; `thumbnailUrl` points to a compressed WebP in UploadThing; `ocrMarkdown` holds raw Mistral OCR output; `extractedData` JSON holds structured `ExtractedReceiptData` (vendor, total, tax, items, etc.); `originalHash` SHA-256 of the original image (original discarded after processing); `transactionId` optional link to a `Transaction`; `Transaction` has a back-relation `receipts Receipt[]`
 
+### UserPreference data (`src/types/preferences.ts`)
+
+`UserPreference.data` is a Prisma `Json` column. All reads go through `parsePreferences(raw)` from `src/types/preferences.ts`, which returns a fully typed `UserPreferenceData` object — no inline `as Record<string, unknown>` casts anywhere in the codebase.
+
+**Adding a new preference key:**
+1. Add it to the `UserPreferenceData` interface in `src/types/preferences.ts`
+2. Write it via the `POST /api/preferences` endpoint (shallow merge) or a dedicated route using the same `{ ...parsePreferences(existing?.data), newKey: value } as never` upsert pattern
+3. Read it with `parsePreferences(prefs?.data).newKey` — no cast needed
+
+`InvoiceDefaults` is also defined in `src/types/preferences.ts` (used by `invoiceDefaults` key).
+
 ### API Routes (`src/app/api/`)
 
 Each resource has its own directory (e.g. `api/transactions/`, `api/rules/`). All routes:

@@ -2,6 +2,7 @@ import { auth, clerkClient } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { sendWelcomeEmail } from '@/lib/email'
+import { parsePreferences } from '@/types/preferences'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://backoffice.cv'
 
@@ -37,8 +38,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
     if (lease.keysHandedOverAt) return badRequest('Keys have already been handed over')
 
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-    const ownerName = (prefsData.displayName as string | undefined) ?? 'Property Manager'
+    const prefsData = parsePreferences(prefs?.data)
+    const ownerName = prefsData.displayName ?? 'Property Manager'
 
     const updated = await prisma.lease.update({
       where: { id: leaseId },

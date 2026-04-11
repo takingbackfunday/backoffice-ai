@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateLeaseContractPdf } from '@/lib/pdf/lease-contract-pdf'
 import { sendLeaseContractEmail } from '@/lib/email'
+import { parsePreferences } from '@/types/preferences'
 
 interface RouteParams { params: Promise<{ id: string; leaseId: string }> }
 
@@ -31,10 +32,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
     if (!lease.tenant.email) return badRequest('Tenant has no email address on file')
 
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-    const ownerName = (prefsData.displayName as string | undefined)
-      ?? (prefsData.businessName as string | undefined)
-      ?? 'Owner'
+    const prefsData = parsePreferences(prefs?.data)
+    const ownerName = prefsData.displayName ?? prefsData.businessName ?? 'Owner'
 
     const contractData = {
       ownerName,

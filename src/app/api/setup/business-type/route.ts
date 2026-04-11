@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { seedDefaultCategories, type BusinessType } from '@/lib/seed-categories'
+import { parsePreferences } from '@/types/preferences'
 import { generateSlug } from '@/lib/slug'
 
 const VALID_TYPES: BusinessType[] = ['freelance', 'property', 'both', 'personal']
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
 
     // Save preference
     const existing = await prisma.userPreference.findUnique({ where: { userId } })
-    const current = (existing?.data ?? {}) as Record<string, unknown>
+    const current = parsePreferences(existing?.data)
     const merged = { ...current, businessType, onboardingStep: 'accounts' }
 
     await prisma.userPreference.upsert({

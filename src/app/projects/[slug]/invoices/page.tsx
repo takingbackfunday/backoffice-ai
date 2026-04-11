@@ -6,7 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceList } from '@/components/projects/invoice-list'
-import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { parsePreferences } from '@/types/preferences'
 
 interface PageParams { params: Promise<{ slug: string }> }
 
@@ -43,7 +43,7 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
   if (!project) notFound()
 
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-  const paymentMethods = ((prefs?.data as Record<string, unknown>)?.paymentMethods ?? {}) as PaymentMethods
+  const paymentMethods = parsePreferences(prefs?.data).paymentMethods ?? {}
 
   /* ── CLIENT project ─────────────────────────────────────────────── */
   if (project.type === 'CLIENT') {

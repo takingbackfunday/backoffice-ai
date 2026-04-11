@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateLeaseContractPdf } from '@/lib/pdf/lease-contract-pdf'
 import { sendLeaseContractEmail } from '@/lib/email'
+import { parsePreferences } from '@/types/preferences'
 
 const CountersignSchema = z.object({
   signatureName: z.string().min(2, 'Signature name must be at least 2 characters'),
@@ -66,8 +67,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     // Email final countersigned lease to tenant
     try {
       const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-      const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-      const ownerName = (prefsData.displayName as string | undefined) ?? 'Property Manager'
+      const prefsData = parsePreferences(prefs?.data)
+      const ownerName = prefsData.displayName ?? 'Property Manager'
 
       const contractData = {
         ownerName,

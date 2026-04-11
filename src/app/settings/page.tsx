@@ -4,23 +4,23 @@ import { prisma } from '@/lib/prisma'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { PaymentSettingsForm } from '@/components/settings/payment-settings-form'
-import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { parsePreferences } from '@/types/preferences'
 
 export default async function SettingsPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-  const data = (prefs?.data ?? {}) as Record<string, unknown>
-  const paymentMethods = (data.paymentMethods ?? {}) as PaymentMethods
-  const businessName = (data.businessName as string) ?? ''
-  const yourName = (data.yourName as string) ?? ''
-  const invoicePaymentNote = (data.invoicePaymentNote as string) ?? ''
-  const fromEmail = (data.fromEmail as string) ?? ''
-  const fromPhone = (data.fromPhone as string) ?? ''
-  const fromAddress = (data.fromAddress as string) ?? ''
-  const fromVatNumber = (data.fromVatNumber as string) ?? ''
-  const fromWebsite = (data.fromWebsite as string) ?? ''
+  const data = parsePreferences(prefs?.data)
+  const paymentMethods = data.paymentMethods ?? {}
+  const businessName = data.businessName ?? ''
+  const yourName = data.yourName ?? ''
+  const invoicePaymentNote = data.invoicePaymentNote ?? ''
+  const fromEmail = data.fromEmail ?? ''
+  const fromPhone = data.fromPhone ?? ''
+  const fromAddress = data.fromAddress ?? ''
+  const fromVatNumber = data.fromVatNumber ?? ''
+  const fromWebsite = data.fromWebsite ?? ''
 
   return (
     <div className="flex min-h-screen">

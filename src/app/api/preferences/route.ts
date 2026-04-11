@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
+import { parsePreferences } from '@/types/preferences'
 
 export async function GET() {
   try {
@@ -8,7 +9,7 @@ export async function GET() {
     if (!userId) return unauthorized()
 
     const row = await prisma.userPreference.findUnique({ where: { userId } })
-    return ok((row?.data ?? {}) as Record<string, unknown>)
+    return ok(parsePreferences(row?.data))
   } catch (err) {
     console.error('[GET /api/preferences]', err)
     return serverError('Failed to load preferences')
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
 
     // Merge patch into existing preferences (shallow merge of top-level keys)
     const existing = await prisma.userPreference.findUnique({ where: { userId } })
-    const current = (existing?.data ?? {}) as Record<string, unknown>
+    const current = parsePreferences(existing?.data)
     const merged = { ...current, ...patch }
 
     await prisma.userPreference.upsert({

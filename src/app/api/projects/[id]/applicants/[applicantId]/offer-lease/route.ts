@@ -5,6 +5,7 @@ import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-r
 import { generateLeaseContractPdf } from '@/lib/pdf/lease-contract-pdf'
 import { sendLeaseContractEmail } from '@/lib/email'
 import { randomUUID } from 'node:crypto'
+import { parsePreferences } from '@/types/preferences'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://backoffice.cv'
 
@@ -67,8 +68,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!parsed.success) return badRequest(parsed.error.errors.map(e => e.message).join(', '))
 
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-    const ownerName = (prefsData.displayName as string | undefined) ?? 'Property Manager'
+    const prefsData = parsePreferences(prefs?.data)
+    const ownerName = prefsData.displayName ?? 'Property Manager'
 
     const unit = await prisma.unit.findUnique({ where: { id: applicant.unitId } })
     if (!unit) return notFound('Unit not found')

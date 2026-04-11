@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { STARTER_RULES, resolveCategoryName, type StarterRuleDef } from './seed-rules'
+import { parsePreferences } from '@/types/preferences'
 
 export interface ScoredStarterRule {
   def: StarterRuleDef
@@ -11,8 +12,7 @@ export interface ScoredStarterRule {
 async function getUserBusinessType(userId: string): Promise<string> {
   const pref = await prisma.userPreference.findUnique({ where: { userId } })
   if (!pref) return 'personal'
-  const data = pref.data as Record<string, unknown>
-  return typeof data.businessType === 'string' ? data.businessType : 'personal'
+  return parsePreferences(pref.data).businessType ?? 'personal'
 }
 
 export async function scoreStarterRules(userId: string): Promise<ScoredStarterRule[]> {

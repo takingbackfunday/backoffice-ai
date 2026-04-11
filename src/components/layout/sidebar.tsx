@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { getTerminology, type BusinessType } from '@/lib/terminology'
+import type { UserPreferenceData } from '@/types/preferences'
 
 const FINANCE_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
@@ -48,7 +49,7 @@ export function Sidebar() {
     fetch('/api/preferences')
       .then(r => r.json())
       .then(json => {
-        const bt = (json.data as Record<string, unknown>)?.businessType as string | undefined
+        const bt = (json.data as UserPreferenceData)?.businessType
         if (bt) {
           localStorage.setItem('businessType', bt)
           setBusinessType(bt)

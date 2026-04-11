@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateLeaseContractPdf } from '@/lib/pdf/lease-contract-pdf'
+import { parsePreferences } from '@/types/preferences'
 
 interface RouteParams { params: Promise<{ id: string; leaseId: string }> }
 
@@ -32,8 +33,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
     if (!lease) return notFound('Lease not found')
 
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-    const ownerName = (prefsData.displayName as string | undefined) ?? 'Owner'
+    const prefsData = parsePreferences(prefs?.data)
+    const ownerName = prefsData.displayName ?? 'Owner'
 
     const contractData = {
       ownerName,
@@ -98,8 +99,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (!lease) return notFound('Lease not found')
 
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-    const ownerName = (prefsData.displayName as string | undefined) ?? 'Owner'
+    const prefsData = parsePreferences(prefs?.data)
+    const ownerName = prefsData.displayName ?? 'Owner'
 
     const contractData = {
       ownerName,

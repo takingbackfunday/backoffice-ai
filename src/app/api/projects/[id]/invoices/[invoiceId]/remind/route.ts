@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
 import { sendReminderEmail } from '@/lib/email'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
-import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { parsePreferences } from '@/types/preferences'
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
 
@@ -51,10 +51,10 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     // Load user payment methods + business profile
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-    const paymentMethods = (prefsData.paymentMethods ?? {}) as PaymentMethods
-    const invoicePaymentNote = prefsData.invoicePaymentNote as string | undefined
-    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.workspace.name || 'Invoice'
+    const prefsData = parsePreferences(prefs?.data)
+    const paymentMethods = prefsData.paymentMethods ?? {}
+    const invoicePaymentNote = prefsData.invoicePaymentNote
+    const fromName = prefsData.businessName || prefsData.yourName || cp?.workspace.name || 'Invoice'
 
     const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
     const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
@@ -73,11 +73,11 @@ export async function POST(request: Request, { params }: RouteParams) {
       clientPhone: clientPhone ?? undefined,
       clientAddress: clientAddress ?? undefined,
       fromName,
-      fromEmail: prefsData.fromEmail as string | undefined,
-      fromPhone: prefsData.fromPhone as string | undefined,
-      fromAddress: prefsData.fromAddress as string | undefined,
-      fromVatNumber: prefsData.fromVatNumber as string | undefined,
-      fromWebsite: prefsData.fromWebsite as string | undefined,
+      fromEmail: prefsData.fromEmail,
+      fromPhone: prefsData.fromPhone,
+      fromAddress: prefsData.fromAddress,
+      fromVatNumber: prefsData.fromVatNumber,
+      fromWebsite: prefsData.fromWebsite,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: Number(i.quantity),

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { generateLeaseContractPdf } from '@/lib/pdf/lease-contract-pdf'
+import { parsePreferences } from '@/types/preferences'
 import { notFound } from 'next/navigation'
 
 interface RouteParams { params: Promise<{ token: string }> }
@@ -26,8 +27,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const prefs = await prisma.userPreference.findUnique({
       where: { userId: lease.unit.propertyProfile.workspace.userId },
     })
-    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-    const ownerName = (prefsData.displayName as string | undefined) ?? 'Property Manager'
+    const prefsData = parsePreferences(prefs?.data)
+    const ownerName = prefsData.displayName ?? 'Property Manager'
 
     const contractData = {
       ownerName,

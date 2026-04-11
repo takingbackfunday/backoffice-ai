@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
-import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { parsePreferences } from '@/types/preferences'
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
 
@@ -32,13 +32,13 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (!invoice) return notFound('Invoice not found')
 
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-    const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-    const paymentMethods = (prefsData.paymentMethods ?? {}) as PaymentMethods
-    const invoicePaymentNote = prefsData.invoicePaymentNote as string | undefined
+    const prefsData = parsePreferences(prefs?.data)
+    const paymentMethods = prefsData.paymentMethods ?? {}
+    const invoicePaymentNote = prefsData.invoicePaymentNote
     const cp = invoice.clientProfile
     const leaseTenant = invoice.lease?.tenant
     const directTenant = invoice.tenant
-    const fromName = (prefsData.businessName as string) || (prefsData.yourName as string) || cp?.workspace.name || 'Invoice'
+    const fromName = prefsData.businessName || prefsData.yourName || cp?.workspace.name || 'Invoice'
     const clientName = cp?.contactName ?? cp?.workspace.name ?? leaseTenant?.name ?? directTenant?.name ?? invoice.invoiceNumber
     const clientEmail = cp?.email ?? leaseTenant?.email ?? directTenant?.email
     const clientPhone = cp?.phone ?? leaseTenant?.phone ?? directTenant?.phone
@@ -58,11 +58,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
       clientPhone: clientPhone ?? undefined,
       clientAddress: clientAddress ?? undefined,
       fromName,
-      fromEmail: prefsData.fromEmail as string | undefined,
-      fromPhone: prefsData.fromPhone as string | undefined,
-      fromAddress: prefsData.fromAddress as string | undefined,
-      fromVatNumber: prefsData.fromVatNumber as string | undefined,
-      fromWebsite: prefsData.fromWebsite as string | undefined,
+      fromEmail: prefsData.fromEmail,
+      fromPhone: prefsData.fromPhone,
+      fromAddress: prefsData.fromAddress,
+      fromVatNumber: prefsData.fromVatNumber,
+      fromWebsite: prefsData.fromWebsite,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: Number(i.quantity),

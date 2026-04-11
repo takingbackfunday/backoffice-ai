@@ -6,6 +6,7 @@ import { CategoryManager } from '@/components/categories/category-manager'
 import { BusinessTypePicker } from '@/components/categories/business-type-picker'
 import { prisma } from '@/lib/prisma'
 import { getCategoryCounts } from '@/lib/seed-categories'
+import { parsePreferences } from '@/types/preferences'
 import { ResetCategoriesButton } from '@/components/categories/reset-categories-button'
 
 export default async function CategoriesPage() {
@@ -26,7 +27,7 @@ export default async function CategoriesPage() {
     prisma.userPreference.findUnique({ where: { userId } }),
   ])
 
-  const data = (prefs?.data ?? {}) as Record<string, unknown>
+  const data = parsePreferences(prefs?.data)
   const hasBusinessType = typeof data.businessType === 'string'
   const needsOnboarding = groups.length === 0 && !hasBusinessType
 

@@ -7,7 +7,7 @@ import { ProjectDetailHeader } from '@/components/projects/project-detail-header
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceDetailClient } from '@/components/projects/invoice-detail-client'
 import Link from 'next/link'
-import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { parsePreferences } from '@/types/preferences'
 
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
 
@@ -64,7 +64,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       orderBy: { createdAt: 'desc' },
     }),
   ])
-  const paymentMethods = ((prefs?.data as Record<string, unknown>)?.paymentMethods ?? {}) as PaymentMethods
+  const paymentMethods = parsePreferences(prefs?.data).paymentMethods ?? {}
 
   const suggestions = rawSuggestions.map(s => ({
     id: s.id,

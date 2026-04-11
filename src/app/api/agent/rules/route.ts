@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
+import { parsePreferences } from '@/types/preferences'
 import { openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
 import {
   RULES_TOOLS,
@@ -84,7 +85,7 @@ export async function GET() {
   // Rate limit: one analysis per user per 30 seconds
   const COOLDOWN_MS = 30_000
   const pref = await prisma.userPreference.findUnique({ where: { userId } })
-  const lastRun = (pref?.data as Record<string, unknown>)?.lastRulesAgentRun as number | undefined
+  const lastRun = parsePreferences(pref?.data).lastRulesAgentRun
   if (lastRun && Date.now() - lastRun < COOLDOWN_MS) {
     return new Response(
       `data: ${JSON.stringify({ type: 'error', error: 'Please wait 30 seconds between analyses.' })}\n\n`,
@@ -94,7 +95,7 @@ export async function GET() {
   // Update last run timestamp
   await prisma.userPreference.upsert({
     where: { userId },
-    update: { data: { ...(pref?.data as Record<string, unknown> ?? {}), lastRulesAgentRun: Date.now() } },
+    update: { data: { ...parsePreferences(pref?.data), lastRulesAgentRun: Date.now() } as never },
     create: { userId, data: { lastRulesAgentRun: Date.now() } },
   })
 

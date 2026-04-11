@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { parsePreferences } from '@/types/preferences'
 
 interface RouteParams { params: Promise<{ id: string }> }
 
@@ -102,9 +103,9 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     // Load user preferences for defaults
     const userPref = await prisma.userPreference.findUnique({ where: { userId } })
-    const prefData = (userPref?.data as Record<string, unknown>) ?? {}
-    const defaultValidityDays = (prefData.quoteValidityDays as number) ?? 30
-    const defaultTerms = (prefData.quoteTerms as string) ?? null
+    const prefData = parsePreferences(userPref?.data)
+    const defaultValidityDays = prefData.quoteValidityDays ?? 30
+    const defaultTerms = prefData.quoteTerms ?? null
 
     // Check for previous version overrides (from previousVersionId if regenerating)
     // For now, we generate fresh (overrides applied later via PATCH)

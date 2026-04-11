@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { parsePreferences } from '@/types/preferences'
 
 const LineItemSchema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -125,8 +126,8 @@ export async function POST(request: Request, { params }: RouteParams) {
         where: { clientProfile: { workspace: { userId } } },
       })
       const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-      const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-      const nameForInitials = (prefsData.businessName as string) || (prefsData.yourName as string) || ''
+      const prefsData = parsePreferences(prefs?.data)
+      const nameForInitials = prefsData.businessName || prefsData.yourName || ''
       const initials = nameForInitials
         ? nameForInitials.trim().split(/\s+/).map((w: string) => w[0].toUpperCase()).join('')
         : 'INV'

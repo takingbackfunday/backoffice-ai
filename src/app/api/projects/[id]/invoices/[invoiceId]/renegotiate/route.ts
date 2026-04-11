@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
+import { parsePreferences } from '@/types/preferences'
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
 
@@ -37,8 +38,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
         where: { clientProfile: { workspace: { userId } } },
       })
       const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-      const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-      const nameForInitials = (prefsData.businessName as string) || (prefsData.yourName as string) || ''
+      const prefsData = parsePreferences(prefs?.data)
+      const nameForInitials = prefsData.businessName || prefsData.yourName || ''
       const initials = nameForInitials
         ? nameForInitials.trim().split(/\s+/).map((w: string) => w[0].toUpperCase()).join('')
         : 'INV'

@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
+import { parsePreferences } from '@/types/preferences'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { StudioClient } from '@/components/studio/studio-client'
@@ -59,11 +60,9 @@ export default async function StudioPage({ searchParams }: PageProps) {
       },
     }),
   ])
-  const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
-  const paymentMethods = (prefsData.paymentMethods ?? {}) as import('@/lib/pdf/invoice-pdf').PaymentMethods
-  const invoiceDefaults = prefsData.invoiceDefaults as {
-    taxEnabled?: boolean; taxLabel?: string; taxMode?: 'percent' | 'flat'; taxRate?: string; currency?: string; notes?: string
-  } | undefined
+  const prefsData = parsePreferences(prefs?.data)
+  const paymentMethods = prefsData.paymentMethods ?? {}
+  const invoiceDefaults = prefsData.invoiceDefaults
 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
