@@ -124,7 +124,15 @@ export async function POST(request: Request, { params }: RouteParams) {
       const userInvoiceCount = await prisma.invoice.count({
         where: { clientProfile: { workspace: { userId } } },
       })
-      const invoiceNumber = `INV-${String(userInvoiceCount + 1).padStart(4, '0')}`
+      const prefs = await prisma.userPreference.findUnique({ where: { userId } })
+      const prefsData = (prefs?.data ?? {}) as Record<string, unknown>
+      const nameForInitials = (prefsData.businessName as string) || (prefsData.yourName as string) || ''
+      const initials = nameForInitials
+        ? nameForInitials.trim().split(/\s+/).map((w: string) => w[0].toUpperCase()).join('')
+        : 'INV'
+      const today = new Date()
+      const datePart = `${String(today.getDate()).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}${today.getFullYear()}`
+      const invoiceNumber = `${initials}_${datePart}_${String(userInvoiceCount + 1).padStart(2, '0')}`
 
       const invoice = await prisma.invoice.create({
         data: {
