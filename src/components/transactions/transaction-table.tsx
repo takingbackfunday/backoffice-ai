@@ -1141,13 +1141,16 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   const editingRowIdRef = useRef(editingRowId)
   useEffect(() => { editingRowIdRef.current = editingRowId }, [editingRowId])
 
-  // Outside-click: exit row edit when user clicks outside the editing row
+  // Outside-click: exit row edit when user clicks outside the editing row.
+  // Use closest() on the target so we don't depend on the tr still being
+  // in the DOM at handler time (dropdowns can unmount before the check).
   useEffect(() => {
     if (!editingRowId) return
     const rowId = editingRowId
     function handler(e: MouseEvent) {
-      const tr = document.querySelector(`[data-row-id="${rowId}"]`)
-      if (tr && !tr.contains(e.target as Node)) {
+      const target = e.target as Element | null
+      const clickedRowId = target?.closest('[data-row-id]')?.getAttribute('data-row-id')
+      if (clickedRowId !== rowId) {
         exitRowEdit(rowId)
       }
     }
@@ -1343,6 +1346,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   function exitRowEdit(id: string) {
     setEditingRowId(null)
     setEditingRowInitialField(null)
+    editingRowIdRef.current = null // update ref immediately so promoteIfLeft sees it
     promoteIfLeft(id)
   }
 
