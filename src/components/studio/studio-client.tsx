@@ -49,6 +49,7 @@ interface Client {
   paymentTermDays: number
   billingType: string
   jobs: { id: string; name: string }[]
+  acceptedQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string }[]
 }
 
 interface InvoiceDefaults {

@@ -29,6 +29,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
             orderBy: { createdAt: 'desc' },
           },
           jobs: { where: { status: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { createdAt: 'desc' } },
+          quotes: { where: { status: 'ACCEPTED' }, select: { id: true, quoteNumber: true, title: true, totalQuoted: true, currency: true }, orderBy: { createdAt: 'desc' } },
         },
       },
     },
@@ -97,6 +98,13 @@ export default async function StudioPage({ searchParams }: PageProps) {
         paymentTermDays: profile.paymentTermDays ?? 30,
         billingType: profile.billingType ?? 'HOURLY',
         jobs: profile.jobs,
+        acceptedQuotes: profile.quotes.map(q => ({
+          id: q.id,
+          quoteNumber: q.quoteNumber,
+          title: q.title,
+          totalQuoted: q.totalQuoted ? Number(q.totalQuoted) : null,
+          currency: q.currency,
+        })),
         invoices: invoicesWithTotals.map(({ inv, total, paid }) => ({
           id: inv.id,
           invoiceNumber: inv.invoiceNumber,

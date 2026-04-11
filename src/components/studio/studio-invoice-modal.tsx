@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Plus } from 'lucide-react'
 import { InvoiceEditor } from '@/components/projects/invoice-editor'
+import { NewInvoiceShortcuts } from '@/components/projects/new-invoice-shortcuts'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 interface ClientOption {
@@ -17,6 +18,7 @@ interface ClientOption {
   paymentTermDays: number
   billingType: string
   jobs: { id: string; name: string }[]
+  acceptedQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string }[]
 }
 
 interface InvoiceDefaults {
@@ -82,6 +84,7 @@ export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, o
         paymentTermDays: p.clientProfile?.paymentTermDays ?? 30,
         billingType: p.clientProfile?.billingType ?? 'HOURLY',
         jobs: [],
+        acceptedQuotes: [],
       }
       setAllClients(prev => [...prev, newClient])
       setSelectedClientId(p.id)
@@ -184,26 +187,34 @@ export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, o
               Select a client above to start the invoice
             </div>
           ) : (
-            <InvoiceEditor
-              key={selectedClient.id}
-              mode="create"
-              projectId={selectedClient.id}
-              projectSlug={selectedClient.slug}
-              clientName={selectedClient.contactName ?? selectedClient.name}
-              clientEmail={selectedClient.email}
-              paymentTermDays={selectedClient.paymentTermDays}
-              billingType={selectedClient.billingType}
-              company={selectedClient.company}
-              jobs={selectedClient.jobs}
-              lastInvoiceDefaults={invoiceDefaults ? {
-                taxEnabled: invoiceDefaults.taxEnabled ?? false,
-                taxLabel: invoiceDefaults.taxLabel ?? 'Tax',
-                taxMode: invoiceDefaults.taxMode ?? 'percent',
-                taxRate: invoiceDefaults.taxRate ?? '',
-                currency: invoiceDefaults.currency ?? 'USD',
-                notes: invoiceDefaults.notes ?? '',
-              } : undefined}
-            />
+            <>
+              <NewInvoiceShortcuts
+                projectId={selectedClient.id}
+                projectSlug={selectedClient.slug}
+                clientName={selectedClient.contactName ?? selectedClient.name}
+                acceptedQuotes={selectedClient.acceptedQuotes}
+              />
+              <InvoiceEditor
+                key={selectedClient.id}
+                mode="create"
+                projectId={selectedClient.id}
+                projectSlug={selectedClient.slug}
+                clientName={selectedClient.contactName ?? selectedClient.name}
+                clientEmail={selectedClient.email}
+                paymentTermDays={selectedClient.paymentTermDays}
+                billingType={selectedClient.billingType}
+                company={selectedClient.company}
+                jobs={selectedClient.jobs}
+                lastInvoiceDefaults={invoiceDefaults ? {
+                  taxEnabled: invoiceDefaults.taxEnabled ?? false,
+                  taxLabel: invoiceDefaults.taxLabel ?? 'Tax',
+                  taxMode: invoiceDefaults.taxMode ?? 'percent',
+                  taxRate: invoiceDefaults.taxRate ?? '',
+                  currency: invoiceDefaults.currency ?? 'USD',
+                  notes: invoiceDefaults.notes ?? '',
+                } : undefined}
+              />
+            </>
           )}
         </div>
       </div>
