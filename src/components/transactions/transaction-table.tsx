@@ -204,6 +204,7 @@ function CategoryCell({
     if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); return }
     if (e.key === 'Enter') {
       e.preventDefault()
+      e.stopPropagation() // don't bubble to row — selecting a category shouldn't also exit row edit
       if (query.trim() === '' && activeIdx === -1) { commit(null); return }
       const picked = filtered[activeIdx]
       if (picked) commit(picked.id)
@@ -572,6 +573,7 @@ function PayeeCell({
     if (e.key === 'Escape') { onCancel(); return }
     if (e.key === 'Enter') {
       e.preventDefault()
+      e.stopPropagation() // don't bubble to row — selecting a payee shouldn't also exit row edit
       const exact = payees.find((p) => p.name.toLowerCase() === draft.trim().toLowerCase())
       if (exact) { onCommit(exact.id); return }
       if (filtered.length === 1) { onCommit(filtered[0].id); return }
@@ -1341,6 +1343,10 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // ── Inline edit ──────────────────────────────────────────────────
   function startEdit(id: string, field: EditableField) {
     if (savingIds.has(id) || deletingIds.has(id)) return
+    // Clear any lingering "make rule" popup from a previous row
+    setMakeRuleSnap(null)
+    setShowMakeRuleEditor(false)
+    pendingRuleSnapRef.current = null
     setEditingRowId(id)
     setEditingRowInitialField(field)
   }
@@ -2234,6 +2240,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                         : 'hover:bg-muted/40',
                     ].filter(Boolean).join(' ')}
                     data-testid="transaction-row"
+                    onKeyDown={isRowEditing ? (e) => { if (e.key === 'Enter') exitRowEdit(row.id) } : undefined}
                   >
                     {/* Checkbox */}
                     <td className="px-3 py-0.5 w-8">
