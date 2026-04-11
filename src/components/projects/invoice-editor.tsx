@@ -152,7 +152,7 @@ function reducer(state: InvoiceState, action: InvoiceAction): InvoiceState {
         ),
       }
     case 'ADD_LINE_ITEM':
-      return { ...state, lineItems: [...state.lineItems, { id: uid(), description: '', quantity: '1', qtyUnit: 'units', unitPrice: '', isTaxLine: false }] }
+      return { ...state, lineItems: [...state.lineItems, { id: uid(), description: '', quantity: '1', qtyUnit: 'x', unitPrice: '', isTaxLine: false }] }
     case 'REMOVE_LINE_ITEM':
       return { ...state, lineItems: state.lineItems.filter(i => i.id !== action.id) }
     case 'SET_TAX_ENABLED':
@@ -224,7 +224,7 @@ export function InvoiceEditor({
         aiSuggestedNotes: false,
       }
     : {
-        lineItems: [{ id: uid(), description: '', quantity: '1', qtyUnit: 'units', unitPrice: '', isTaxLine: false }],
+        lineItems: [{ id: uid(), description: '', quantity: '1', qtyUnit: 'x', unitPrice: '', isTaxLine: false }],
         taxEnabled: lastInvoiceDefaults?.taxEnabled ?? false,
         taxLabel: lastInvoiceDefaults?.taxLabel ?? 'Tax',
         taxMode: lastInvoiceDefaults?.taxMode ?? 'percent',
@@ -422,7 +422,7 @@ export function InvoiceEditor({
             id: uid(),
             description: i.description,
             quantity: String(i.quantity),
-            qtyUnit: 'units',
+            qtyUnit: 'x',
             unitPrice: String(i.unitPrice),
             isTaxLine: false,
           })),
@@ -714,7 +714,7 @@ export function InvoiceEditor({
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateJob() } if (e.key === 'Escape') { setShowNewJob(false); setNewJobName('') } }}
                   placeholder="Job name…"
                   autoFocus
-                  className="flex-1 max-w-sm rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="flex-1 max-w-sm rounded-lg border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <button type="button" onClick={handleCreateJob} disabled={creatingJob || !newJobName.trim()} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50">
                   {creatingJob ? '…' : 'Create'}
@@ -725,7 +725,7 @@ export function InvoiceEditor({
               <select
                 value={state.jobId}
                 onChange={e => dispatch({ type: 'SET_JOB', jobId: e.target.value })}
-                className="w-full max-w-sm rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                className="w-full max-w-sm rounded-lg border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
               >
                 <option value="">No specific job</option>
                 {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
@@ -744,12 +744,23 @@ export function InvoiceEditor({
                   className="fixed z-50 rounded-xl border bg-background shadow-xl p-1 w-44 max-h-80 overflow-y-auto"
                   style={{ top: unitPopoverPos.top, right: unitPopoverPos.right }}
                 >
+                  <div className="pb-1.5 border-b mb-1">
+                    <input
+                      type="text"
+                      value={activeItem.qtyUnit}
+                      onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: e.target.value })}
+                      placeholder="custom unit…"
+                      className="w-full rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setUnitPopoverId(null) }}
+                      autoFocus
+                    />
+                  </div>
                   {([
                     ['Time', ['hours', 'days', 'weeks', 'months']],
                     ['Area', ['sq ft', 'sq m']],
                     ['Assets', ['assets']],
                     ['Activities', ['visits', 'inspections', 'sessions', 'revisions', 'cleanings']],
-                    ['Units', ['units', 'pieces']],
+                    ['Units', ['x', 'units', 'pieces']],
                     ['Licenses', ['licenses', 'seats', 'prints']],
                     ['Flat fee', ['flat fee']],
                   ] as [string, string[]][]).map(([group, opts]) => (
@@ -767,21 +778,11 @@ export function InvoiceEditor({
                       ))}
                     </div>
                   ))}
-                  <div className="border-t mt-1.5 pt-1.5">
-                    <input
-                      type="text"
-                      value={activeItem.qtyUnit}
-                      onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: e.target.value })}
-                      placeholder="custom…"
-                      className="w-full rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
-                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setUnitPopoverId(null) }}
-                    />
-                  </div>
                   {activeItem.qtyUnit && (
                     <button
                       type="button"
                       onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: '' }); setUnitPopoverId(null) }}
-                      className="w-full text-left px-2 py-1 text-xs text-muted-foreground hover:text-destructive rounded-md hover:bg-muted/30 mt-0.5"
+                      className="w-full text-left px-2 py-1 text-xs text-muted-foreground hover:text-destructive rounded-md hover:bg-muted/30 mt-0.5 border-t"
                     >
                       Clear
                     </button>
@@ -805,14 +806,18 @@ export function InvoiceEditor({
               {state.lineItems.map((item, idx) => {
                 const lineTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)
                 return (
-                  <div key={item.id} className="grid grid-cols-[1fr_140px_110px_100px_32px] border-t px-3 py-1.5 items-center hover:bg-muted/10 group">
-                    <input
-                      type="text"
+                  <div key={item.id} className="grid grid-cols-[1fr_140px_110px_100px_32px] border-t px-3 py-1.5 items-start hover:bg-muted/10 group">
+                    <textarea
                       value={item.description}
-                      onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'description', value: e.target.value })}
+                      rows={1}
+                      onChange={e => {
+                        dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'description', value: e.target.value })
+                        e.target.style.height = 'auto'
+                        e.target.style.height = e.target.scrollHeight + 'px'
+                      }}
                       onBlur={e => {
                         const desc = e.target.value.trim()
-                        if (!desc || item.qtyUnit !== 'units') return
+                        if (!desc || (item.qtyUnit !== 'x' && item.qtyUnit !== '')) return
                         fetch(`/api/projects/${projectId}/invoices/suggest-unit`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -821,7 +826,7 @@ export function InvoiceEditor({
                           if (j.data?.unit) dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'qtyUnit', value: j.data.unit })
                         }).catch(() => {})
                       }}
-                      className="text-sm focus:outline-none bg-transparent placeholder:text-muted-foreground/50 min-w-0"
+                      className="text-xs focus:outline-none bg-transparent placeholder:text-muted-foreground/50 min-w-0 w-full resize-none overflow-hidden leading-snug py-0.5"
                       placeholder="Description of work or service"
                       autoFocus={idx === 0 && mode === 'create' && item.description === ''}
                     />
@@ -830,7 +835,7 @@ export function InvoiceEditor({
                         type="number"
                         value={item.quantity}
                         onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'quantity', value: e.target.value })}
-                        className="text-sm text-right focus:outline-none bg-transparent tabular-nums w-12"
+                        className="text-xs text-right focus:outline-none bg-transparent tabular-nums w-12"
                         min="0"
                         step="0.001"
                       />
@@ -852,13 +857,13 @@ export function InvoiceEditor({
                         type="number"
                         value={item.unitPrice}
                         onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'unitPrice', value: e.target.value })}
-                        className="text-sm text-right focus:outline-none bg-transparent tabular-nums w-full"
+                        className="text-xs text-right focus:outline-none bg-transparent tabular-nums w-full"
                         placeholder="0.00"
                         min="0"
                         step="0.01"
                       />
                     </div>
-                    <span className="text-sm text-right tabular-nums text-muted-foreground pr-1">
+                    <span className="text-xs text-right tabular-nums text-muted-foreground pr-1">
                       {lineTotal > 0 ? fmtFull(lineTotal, state.currency) : '—'}
                     </span>
                     <button
@@ -903,13 +908,13 @@ export function InvoiceEditor({
                     type="text"
                     value={state.taxLabel}
                     onChange={e => dispatch({ type: 'SET_TAX_LABEL', label: e.target.value })}
-                    className="rounded-lg border px-2 py-1.5 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="rounded-lg border px-2 py-1.5 text-xs w-32 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="GST, VAT, Sales Tax…"
                   />
                   <select
                     value={state.taxMode}
                     onChange={e => dispatch({ type: 'SET_TAX_MODE', mode: e.target.value as 'percent' | 'flat' })}
-                    className="rounded-lg border px-2 py-1.5 text-sm focus:outline-none"
+                    className="rounded-lg border px-2 py-1.5 text-xs focus:outline-none"
                   >
                     <option value="percent">%</option>
                     <option value="flat">Flat</option>
@@ -918,7 +923,7 @@ export function InvoiceEditor({
                     type="number"
                     value={state.taxRate}
                     onChange={e => dispatch({ type: 'SET_TAX_RATE', rate: e.target.value })}
-                    className="rounded-lg border px-2 py-1.5 text-sm w-24 tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="rounded-lg border px-2 py-1.5 text-xs w-24 tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder={state.taxMode === 'percent' ? '15' : '0.00'}
                     min="0"
                     step={state.taxMode === 'percent' ? '0.1' : '0.01'}
@@ -934,19 +939,19 @@ export function InvoiceEditor({
           {/* Totals */}
           <div className="mb-6 rounded-xl border bg-muted/20 p-4">
             <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="tabular-nums font-medium">{fmtFull(subtotal, state.currency)}</span>
               </div>
               {state.taxEnabled && taxAmount > 0 && (
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">{state.taxLabel || 'Tax'}{state.taxMode === 'percent' && state.taxRate ? ` (${state.taxRate}%)` : ''}</span>
                   <span className="tabular-nums">{fmtFull(taxAmount, state.currency)}</span>
                 </div>
               )}
               <div className="flex justify-between pt-1.5 border-t">
-                <span className="text-sm font-bold">Total</span>
-                <span className="text-lg font-bold tabular-nums">{fmtFull(total, state.currency)}</span>
+                <span className="text-xs font-bold">Total</span>
+                <span className="text-sm font-bold tabular-nums">{fmtFull(total, state.currency)}</span>
               </div>
             </div>
           </div>
@@ -961,7 +966,7 @@ export function InvoiceEditor({
                 type="date"
                 value={state.dueDate}
                 onChange={e => dispatch({ type: 'SET_DUE_DATE', value: e.target.value })}
-                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                 required
               />
             </div>
@@ -971,7 +976,7 @@ export function InvoiceEditor({
                 type="date"
                 value={state.issueDate}
                 onChange={e => dispatch({ type: 'SET_ISSUE_DATE', value: e.target.value })}
-                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
               />
             </div>
             <div>
@@ -979,7 +984,7 @@ export function InvoiceEditor({
               <select
                 value={state.currency}
                 onChange={e => dispatch({ type: 'SET_CURRENCY', value: e.target.value })}
-                className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
               >
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -1000,14 +1005,14 @@ export function InvoiceEditor({
               value={state.notes}
               onChange={e => dispatch({ type: 'SET_NOTES', value: e.target.value })}
               rows={3}
-              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+              className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
               placeholder="Payment instructions, late fee policy, thank-you note…"
             />
           </div>
 
           {/* Save errors */}
           {saveError && (
-            <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {saveError}
             </div>
           )}
@@ -1017,7 +1022,7 @@ export function InvoiceEditor({
             <button
               type="button"
               onClick={() => router.back()}
-              className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+              className="rounded-lg border px-4 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
             >
               Cancel
             </button>
@@ -1026,7 +1031,7 @@ export function InvoiceEditor({
               type="button"
               onClick={handleFinalize}
               disabled={finalizing}
-              className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-40 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-40 transition-colors"
             >
               <Sparkles className="h-3.5 w-3.5" />
               {finalizing ? 'Reviewing…' : 'AI Finalize'}
@@ -1038,7 +1043,7 @@ export function InvoiceEditor({
               type="button"
               onClick={() => handleSave(false)}
               disabled={saving}
-              className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 transition-colors"
+              className="rounded-lg border px-4 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50 transition-colors"
             >
               {saving ? 'Saving…' : mode === 'create' ? 'Save as draft' : 'Save changes'}
             </button>
@@ -1049,7 +1054,7 @@ export function InvoiceEditor({
                 onClick={() => handleSave(true)}
                 disabled={saving}
                 title={undefined}
-                className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 <Eye className="h-3.5 w-3.5" />
                 {saving ? 'Saving…' : 'Create & review'}
