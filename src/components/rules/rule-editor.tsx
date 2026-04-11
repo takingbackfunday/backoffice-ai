@@ -230,8 +230,8 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
   const hiddenCount = matchCount - visible.length
 
   return (
-    <div className="mx-0 rounded-lg bg-[#f7f7f6] px-3 py-2.5">
-      <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#999] mb-1.5">
+    <div className="mx-0 rounded bg-[#f7f7f6] px-2.5 py-1.5">
+      <p className="text-[10px] font-medium uppercase tracking-[0.04em] text-[#999] mb-1">
         {loading ? 'Checking…' : (
           <>Live preview <span className="font-normal normal-case tracking-normal">· {matchCount} matching</span></>
         )}
@@ -327,15 +327,15 @@ export function ConditionRow({
       : 'value…'
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
+    <div className="flex items-center gap-1 flex-wrap">
       {index > 0 && (
         <button type="button" onClick={onToggleOp}
-          className="text-[11px] font-semibold text-[#0C447C] uppercase tracking-wide px-1.5 py-0.5 rounded hover:bg-[#d0e6f8] transition-colors shrink-0"
+          className="text-[10px] font-semibold text-[#0C447C] uppercase tracking-wide px-1 py-0.5 rounded hover:bg-[#d0e6f8] transition-colors shrink-0"
           title="Click to toggle AND / OR">
           {op}
         </button>
       )}
-      <div className="flex items-center gap-1.5 bg-[#E6F1FB] rounded-lg px-2.5 py-1.5 flex-wrap flex-1 min-w-0">
+      <div className="flex items-center gap-1.5 bg-[#E6F1FB] rounded px-2 py-1 flex-wrap flex-1 min-w-0">
         <select
           value={cond.field}
           onChange={(e) => handleFieldChange(e.target.value as ConditionField)}
@@ -413,8 +413,8 @@ export function OutputRow({
   const s = OUTPUT_STYLES[action.type]
 
   return (
-    <div className={`flex items-center gap-2 ${s.bg} rounded-lg px-2.5 py-1.5`}>
-      <span className={`text-[11px] ${s.label} shrink-0 w-14`}>{OUTPUT_LABELS[action.type]}</span>
+    <div className={`flex items-center gap-1.5 ${s.bg} rounded px-2 py-1`}>
+      <span className={`text-[10px] ${s.label} shrink-0 w-12`}>{OUTPUT_LABELS[action.type]}</span>
       {action.type === 'project' ? (
         <select value={action.value} onChange={(e) => onChange({ ...action, value: e.target.value })}
           className={`bg-transparent text-[13px] ${s.text} ${s.value} border-none outline-none cursor-pointer flex-1`}
@@ -606,16 +606,16 @@ export function RuleEditor({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border border-black/[0.1] bg-white overflow-hidden" data-testid="rule-editor">
+    <form onSubmit={handleSubmit} className="rounded-lg border border-black/[0.1] bg-white overflow-hidden" data-testid="rule-editor">
       {/* Optional card header (e.g. suggestion metadata) */}
       {cardHeader}
 
       {/* When → Then */}
-      <div className="flex gap-3 px-4 py-3.5 items-start">
+      <div className="flex gap-2 px-3 py-2 items-start">
         {/* WHEN */}
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[#0C447C] mb-1.5">When</p>
-          <div className="space-y-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[#0C447C] mb-1">When</p>
+          <div className="space-y-1">
             {conditions.map((cond, i) => (
               <ConditionRow key={i} cond={cond} index={i} op={op} isOnly={conditions.length === 1}
                 onChange={(c) => updateCondition(i, c)}
@@ -625,22 +625,22 @@ export function RuleEditor({
             ))}
           </div>
           <button type="button" onClick={() => setConditions((prev) => [...prev, defaultCondition()])}
-            className="text-[12px] text-[#999] hover:text-[#555] mt-1.5 block">
+            className="text-[11px] text-[#999] hover:text-[#555] mt-1 block">
             + add condition
           </button>
         </div>
 
         {/* Arrow */}
-        <div className="flex items-center pt-[26px] shrink-0 px-1">
-          <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
+        <div className="flex items-center pt-[22px] shrink-0">
+          <svg width="16" height="12" viewBox="0 0 20 14" fill="none">
             <path d="M12 1L18 7M18 7L12 13M18 7H2" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
 
         {/* THEN */}
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[#666] mb-1.5">Then</p>
-          <div className="space-y-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[#666] mb-1">Then</p>
+          <div className="space-y-1">
             {outputs.map((action, i) => (
               <OutputRow key={action.type} action={action} projects={projects} payees={payees}
                 categoryGroups={categoryGroups} onChange={(a) => updateOutput(i, a)}
@@ -649,9 +649,9 @@ export function RuleEditor({
             ))}
           </div>
           {availableToAdd.length > 0 && (
-            <div className="relative inline-block mt-1.5">
+            <div className="relative inline-block mt-1">
               <button type="button" onClick={() => setAddOutputOpen((v) => !v)}
-                className="text-[12px] text-[#999] hover:text-[#555]">
+                className="text-[11px] text-[#999] hover:text-[#555]">
                 + add output
               </button>
               {addOutputOpen && (
@@ -659,7 +659,7 @@ export function RuleEditor({
                   {availableToAdd.map((t) => (
                     <button key={t} type="button"
                       onClick={() => { setOutputs((prev) => [...prev, { type: t, value: '' }]); setAddOutputOpen(false) }}
-                      className="block w-full text-left px-3 py-1.5 text-[13px] hover:bg-muted">
+                      className="block w-full text-left px-3 py-1 text-[12px] hover:bg-muted">
                       {OUTPUT_TYPE_LABELS[t]}
                     </button>
                   ))}
@@ -671,37 +671,37 @@ export function RuleEditor({
       </div>
 
       {/* Live preview */}
-      <div className="px-3 pb-3">
+      <div className="px-3 pb-2">
         <LivePreview conditions={conditions} op={op} outputs={outputs} categoryGroups={categoryGroups} projects={projects} />
       </div>
 
-      {error && <p className="text-xs text-red-600 px-4 pb-2" role="alert">{error}</p>}
+      {error && <p className="text-xs text-red-600 px-3 pb-1.5" role="alert">{error}</p>}
 
       {/* Action bar */}
-      <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-black/[0.07]">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-black/[0.07]">
+        <div className="flex items-center gap-1.5">
           {(!editingRule || showSaveAndApply) && (
             <button type="submit" disabled={saving}
               onClick={() => { applyAfterSaveRef.current = true }}
-              className="rounded-lg bg-[#085041] text-[#E1F5EE] px-4 py-1.5 text-[13px] font-medium disabled:opacity-50 hover:opacity-90">
+              className="rounded bg-[#085041] text-[#E1F5EE] px-3 py-1 text-[12px] font-medium disabled:opacity-50 hover:opacity-90">
               {saving ? 'Saving…' : (saveLabel ? `${saveLabel} & apply` : (editingRule ? 'Update & apply' : 'Save & apply'))}
             </button>
           )}
           <button type="submit" disabled={saving}
             onClick={() => { applyAfterSaveRef.current = false }}
-            className="rounded-lg border border-black/20 text-[#555] px-4 py-1.5 text-[13px] disabled:opacity-50 hover:bg-muted">
+            className="rounded border border-black/20 text-[#555] px-3 py-1 text-[12px] disabled:opacity-50 hover:bg-muted">
             {saving ? 'Saving…' : (saveLabel ?? (editingRule ? 'Update & apply' : 'Save rule'))}
           </button>
           <button type="button" onClick={onCancel}
-            className="text-[#999] px-3 py-1.5 text-[13px] hover:text-[#555]">
+            className="text-[#999] px-2 py-1 text-[12px] hover:text-[#555]">
             {cancelLabel ?? 'Cancel'}
           </button>
         </div>
-        <label className="flex items-center gap-1.5 text-[11px] text-[#999]">
+        <label className="flex items-center gap-1 text-[10px] text-[#999]">
           Priority
           <input type="number" min={1} max={99} value={priority}
             onChange={(e) => setPriority(Number(e.target.value))}
-            className="w-10 text-center text-[12px] text-[#333] rounded border border-black/15 px-1 py-0.5" />
+            className="w-9 text-center text-[11px] text-[#333] rounded border border-black/15 px-1 py-0.5" />
         </label>
       </div>
     </form>

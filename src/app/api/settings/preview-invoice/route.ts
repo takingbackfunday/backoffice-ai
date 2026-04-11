@@ -25,9 +25,16 @@ export async function POST(req: NextRequest) {
   const due = new Date(today)
   due.setDate(due.getDate() + 30)
 
+  const nameForInitials = body.businessName || body.yourName || ''
+  const initials = nameForInitials
+    ? nameForInitials.trim().split(/\s+/).map((w: string) => w[0].toUpperCase()).join('')
+    : 'INV'
+  const datePart = `${String(today.getDate()).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}${today.getFullYear()}`
+  const previewInvoiceNumber = `${initials}_${datePart}_01`
+
   const pdfBuffer = await generateInvoicePdf(
     {
-      invoiceNumber: 'INV-0001',
+      invoiceNumber: previewInvoiceNumber,
       status: 'DRAFT',
       issueDate: today.toISOString(),
       dueDate: due.toISOString(),
