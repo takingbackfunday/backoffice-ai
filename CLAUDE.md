@@ -72,7 +72,7 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `InvoiceLineItem` — line on an invoice; `isTaxLine: true` marks tax lines (no separate tax model)
 - `InvoicePayment` — payment against an invoice; `transactionId` (`@unique`) optionally links to a bank `Transaction`; amount triggers automatic `PARTIAL` / `PAID` status update; payments can be deleted (`DELETE /payments/[paymentId]`) or moved to another open invoice (`PATCH /payments/[paymentId]`) — both recalculate invoice status atomically
 - `InvoicePaymentSuggestion` — auto-generated match between a `Transaction` and an `Invoice`; `confidence`: `HIGH | MEDIUM`; `status`: `PENDING | ACCEPTED | DISMISSED`; HIGH confidence matches are auto-applied at import time
-- `UserPreference` — one row per user, `data` JSON for arbitrary UI state
+- `UserPreference` — one row per user, `data` JSON for arbitrary UI state. Known keys: `businessName`, `yourName`, `fromEmail`, `fromPhone`, `fromAddress`, `fromVatNumber`, `fromWebsite` (sender details on invoices), `paymentMethods` (bank/PayPal/Stripe/custom), `invoicePaymentNote`, `invoiceDefaults` (tax, currency, notes), `lastRulesAgentRun`
 - `BankPlaybook` — stores discovered browser automation steps for each connected bank account; `steps` JSON contains `PlaybookStep[]` array; `twoFaType` tracks 2FA method; `status` indicates verification state
 - `EncryptedCredential` — AES-256-GCM encrypted bank login credentials (username:password); scoped per account with unique IV and auth tag
 - `SyncJob` — tracks bank sync operations with status progression: `PENDING` → `CONNECTING` → `DOWNLOADING` → `IMPORTING` → `COMPLETE/FAILED`
@@ -245,8 +245,8 @@ Compact layout designed to fit without scrolling:
 
 ### Transaction Table & Rules UI (`src/components/transactions/transaction-table.tsx`)
 
-- **Make-rule popup** — `MakeRulePopup` renders at a fixed position anchored to the edited row via `getBoundingClientRect()` on the `<tr data-row-id="...">` element; flips above the row if the popup would clip the viewport bottom
-- **Toolbar modals** — "Create rule" and "Run rules agent" are buttons in the toolbar that open inline modals (no page navigation); both share the same purple header style as `MakeRulePopup`; "Create rule" reuses `RuleEditor`; "Run rules agent" embeds `RulesAgent` in a scrollable modal
+- **Make-rule inline prompt** — after the user finishes editing a row and moves away, a compact 💡 "Make rule / ✕" prompt appears in the last `<td>` of that row (where "Done" was). Clicking "Make rule" inserts a full-width `<tr>` directly below the edited row containing `RuleEditor`, pre-filled from the edit. The prompt persists until dismissed or the page reloads — no auto-dismiss timer. Rows are wrapped in `React.Fragment` (keyed) to allow the sibling sub-row. No `position: fixed` or `getBoundingClientRect` involved.
+- **Toolbar modals** — "Create rule" and "Run rules agent" are buttons in the toolbar that open inline modals (no page navigation); "Create rule" reuses `RuleEditor`; "Run rules agent" embeds `RulesAgent` in a scrollable modal
 
 ### Chat Overlay (`src/components/chat/chat-overlay.tsx`)
 
@@ -329,6 +329,10 @@ Valid values are `"1MB"`, `"2MB"`, `"4MB"`, `"8MB"`, `"16MB"`, etc. `"10MB"` is 
 
 `ApplicantDocument.uploadToken` is nulled out after a successful upload (`POST /api/public/docs`). A second attempt with the same token returns `400 Invalid token`. This is intentional.
 
+### Invoice number format
+
+Invoice numbers are generated as `{INITIALS}_{DDMMYYYY}_{SEQ}` — e.g. `AMC_04112026_01`. Initials come from `UserPreference.data.businessName` (preferred) or `yourName`, falling back to `INV` if neither is set. Each whitespace-separated word contributes its first uppercase letter. Sequence is a 2-digit zero-padded count of the user's existing invoices + 1. Both the create route (`POST api/projects/[id]/invoices`) and renegotiate route use this logic. The settings preview invoice (`POST /api/settings/preview-invoice`) also uses it so the number shown in the preview matches real invoices.
+
 ### PDF generation
 
-`GET /api/projects/[id]/invoices/[invoiceId]/pdf` generates a PDF via `generateInvoicePdf` (react-pdf/renderer, `src/lib/pdf/invoice-pdf.ts`). The response must wrap the buffer in `new Uint8Array(pdfBuffer)` — passing a `Buffer` directly fails TypeScript (`Buffer` is not assignable to `BodyInit`).
+`GET /api/projects/[id]/invoices/[invoiceId]/pdf` generates a PDF via `generateInvoicePdf` (react-pdf/renderer, `src/lib/pdf/invoice-pdf.tsx`). The response must wrap the buffer in `new Uint8Array(pdfBuffer)` — passing a `Buffer` directly fails TypeScript (`Buffer` is not assignable to `BodyInit`). `PdfInvoice` includes sender fields (`fromEmail`, `fromPhone`, `fromAddress`, `fromVatNumber`, `fromWebsite`) read from `UserPreference.data` at PDF generation time.
