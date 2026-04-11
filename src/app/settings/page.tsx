@@ -15,6 +15,12 @@ export default async function SettingsPage() {
   const paymentMethods = (data.paymentMethods ?? {}) as PaymentMethods
   const businessName = (data.businessName as string) ?? ''
   const yourName = (data.yourName as string) ?? ''
+  const invoicePaymentNote = (data.invoicePaymentNote as string) ?? ''
+  const fromEmail = (data.fromEmail as string) ?? ''
+  const fromPhone = (data.fromPhone as string) ?? ''
+  const fromAddress = (data.fromAddress as string) ?? ''
+  const fromVatNumber = (data.fromVatNumber as string) ?? ''
+  const fromWebsite = (data.fromWebsite as string) ?? ''
 
   return (
     <div className="flex min-h-screen">
@@ -26,7 +32,17 @@ export default async function SettingsPage() {
           <p className="text-sm text-muted-foreground mb-6">
             Your business profile and payment details appear on every invoice you send.
           </p>
-          <PaymentSettingsForm initial={paymentMethods} initialBusinessName={businessName} initialYourName={yourName} />
+          <PaymentSettingsForm
+            initial={paymentMethods}
+            initialBusinessName={businessName}
+            initialYourName={yourName}
+            initialPaymentNote={invoicePaymentNote}
+            initialEmail={fromEmail}
+            initialPhone={fromPhone}
+            initialAddress={fromAddress}
+            initialVatNumber={fromVatNumber}
+            initialWebsite={fromWebsite}
+          />
         </main>
       </div>
     </div>

@@ -32,6 +32,11 @@ export interface PdfInvoice {
   clientAddress?: string | null
   clientPhone?: string | null
   fromName: string
+  fromEmail?: string | null
+  fromPhone?: string | null
+  fromAddress?: string | null
+  fromVatNumber?: string | null
+  fromWebsite?: string | null
   lineItems: PdfLineItem[]
   totalPaid?: number
   payments?: PdfPayment[]
@@ -157,6 +162,11 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
         <View style={S.header}>
           <View>
             <Text style={S.fromName}>{invoice.fromName}</Text>
+            {invoice.fromAddress && <Text style={[S.metaValue, { color: '#555', marginTop: 3 }]}>{invoice.fromAddress}</Text>}
+            {invoice.fromEmail && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.fromEmail}</Text>}
+            {invoice.fromPhone && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.fromPhone}</Text>}
+            {invoice.fromWebsite && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.fromWebsite}</Text>}
+            {invoice.fromVatNumber && <Text style={[S.metaValue, { color: '#888', marginTop: 2 }]}>VAT: {invoice.fromVatNumber}</Text>}
           </View>
           <View style={S.headerRight}>
             <Text style={S.invoiceLabel}>INVOICE</Text>

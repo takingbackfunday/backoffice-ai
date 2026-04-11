@@ -73,6 +73,11 @@ export async function POST(request: Request, { params }: RouteParams) {
       clientPhone: clientPhone ?? undefined,
       clientAddress: clientAddress ?? undefined,
       fromName,
+      fromEmail: prefsData.fromEmail as string | undefined,
+      fromPhone: prefsData.fromPhone as string | undefined,
+      fromAddress: prefsData.fromAddress as string | undefined,
+      fromVatNumber: prefsData.fromVatNumber as string | undefined,
+      fromWebsite: prefsData.fromWebsite as string | undefined,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: Number(i.quantity),
