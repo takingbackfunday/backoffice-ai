@@ -1138,35 +1138,36 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
       })
   }, [])
 
-  // Promote the pending snap when the user moves off the row they just edited.
-  // This is also where we start the rules-agent banner + suggestion timer so
-  // neither fires while the user is still working on the same row.
-  useEffect(() => {
-    const pending = pendingRuleSnapRef.current
-    if (!pending) return
-    const activeRowId = editingCell?.id ?? null
-    if (activeRowId !== pending.rowId) {
-      // User has moved away — show the popup and activate the banner now
-      setMakeRuleSnap(null)
-      setShowMakeRuleEditor(false)
-      requestAnimationFrame(() => {
-        setMakeRuleSnap(pending.snap)
-        setLastEditedRowId(pending.rowId)
-        pendingRuleSnapRef.current = null
-      })
+  // Called after commitEdit (via setTimeout 0) and from cancelEdit.
+  // By the time this runs, any same-row cell click has already called
+  // setEditingCell({id, field}), so editingCell.current reflects the true
+  // next focused row. We read it via a ref to avoid stale closure issues.
+  const editingCellRef = useRef(editingCell)
+  useEffect(() => { editingCellRef.current = editingCell }, [editingCell])
 
-      // Start the rules suggestion banner + debounced agent timer
-      const queueSize = editQueueRef.current.size
-      if (queueSize > 0) {
-        setWatchingEditCount(queueSize)
-        setRulePromptState('watching')
-        if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
-        suggestionTimerRef.current = setTimeout(() => {
-          fireSuggestions()
-        }, SUGGEST_DELAY_MS)
-      }
+  const promoteIfLeft = useCallback((fromRowId: string) => {
+    const pending = pendingRuleSnapRef.current
+    if (!pending || pending.rowId !== fromRowId) return
+    const nextRowId = editingCellRef.current?.id ?? null
+    if (nextRowId === fromRowId) return // still on same row
+
+    // User has genuinely left — show popup and start banner
+    setMakeRuleSnap(null)
+    setShowMakeRuleEditor(false)
+    requestAnimationFrame(() => {
+      setMakeRuleSnap(pending.snap)
+      setLastEditedRowId(pending.rowId)
+      pendingRuleSnapRef.current = null
+    })
+
+    const queueSize = editQueueRef.current.size
+    if (queueSize > 0) {
+      setWatchingEditCount(queueSize)
+      setRulePromptState('watching')
+      if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
+      suggestionTimerRef.current = setTimeout(fireSuggestions, SUGGEST_DELAY_MS)
     }
-  }, [editingCell, fireSuggestions])
+  }, [fireSuggestions])
 
   // Load projects, categories, payees, accounts once (skip if passed from server)
   useEffect(() => {
@@ -1422,29 +1423,23 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
         const merged = existing ? { ...existing, ...editSnapshot } : editSnapshot
         editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
 
-        // Don't update the banner state or start the timer yet — the user may
-        // still be editing this row (payee → category → notes in one flow).
-        // Both are deferred to the pendingRuleSnap promotion (row-change effect).
+        // Stage the popup snap — don't show it yet.
+        // promoteIfLeft (called via setTimeout 0 below) will show it once
+        // the user has genuinely moved off this row.
+        pendingRuleSnapRef.current = {
+          rowId: id,
+          snap: {
+            description: row.description,
+            payeeName: resolvedPayeeName,
+            categoryId: resolvedCatId,
+            categoryName: resolvedCatName,
+          },
+        }
 
-        // Stage the popup — don't show it yet. We wait until the user moves
-        // to a different row so we don't interrupt mid-row editing.
-        const snap: MakeRuleSnapType = {
-          description: row.description,
-          payeeName: resolvedPayeeName,
-          categoryId: resolvedCatId,
-          categoryName: resolvedCatName,
-        }
-        const pendingSnap = pendingRuleSnapRef.current
-        if (pendingSnap && pendingSnap.rowId !== id) {
-          // User jumped to a new row mid-edit — show the previous row's popup now
-          setMakeRuleSnap(null)
-          setShowMakeRuleEditor(false)
-          requestAnimationFrame(() => {
-            setMakeRuleSnap(pendingSnap.snap)
-            setLastEditedRowId(pendingSnap.rowId)
-          })
-        }
-        pendingRuleSnapRef.current = { rowId: id, snap }
+        // Defer: by the time this fires, any same-row cell click will have
+        // already updated editingCellRef, so promoteIfLeft can tell the
+        // difference between "stayed on row" and "left the table entirely".
+        setTimeout(() => promoteIfLeft(id), 0)
       }
     } catch {
       // Revert on error
@@ -1459,7 +1454,9 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   }
 
   function cancelEdit() {
+    const leavingId = editingCell?.id
     setEditingCell(null)
+    if (leavingId) setTimeout(() => promoteIfLeft(leavingId), 0)
   }
 
   // ── New row handlers ──────────────────────────────────────────────

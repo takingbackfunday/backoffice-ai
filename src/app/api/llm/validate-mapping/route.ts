@@ -67,7 +67,7 @@ Rules:
 - For dateFormat: inspect the sample date values. "normal" date formats: MM/DD/YYYY (e.g. 12/31/2024), DD/MM/YYYY (e.g. 31/12/2024), YYYY-MM-DD (e.g. 2024-12-31). Pick the best match.
 - For amountSign: "normal" means expenses are negative (e.g. -45.00), "inverted" means expenses are positive (e.g. 45.00 for a debit). Look at the sample amounts — if typical purchases/debits appear as positive numbers, use "inverted".`
 
-    const raw = await openrouterChat([{ role: 'user', content: prompt }])
+    const raw = await openrouterChat([{ role: 'user', content: prompt }], 'mistralai/mistral-small-2603')
 
     // Strip markdown fences if present
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
