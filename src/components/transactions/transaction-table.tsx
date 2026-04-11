@@ -389,124 +389,12 @@ function RulePromptPanel({
   )
 }
 
-// ── Floating "Make rule from this change" popup ───────────────────
+// ── Inline "Make rule from this change" — row-level ──────────────
 interface MakeRuleSnapType {
   description: string
   payeeName: string | null
   categoryId: string | null
   categoryName: string | null
-}
-
-function MakeRulePopup({
-  snap,
-  showEditor,
-  anchorRowId,
-  projects,
-  payees,
-  accounts,
-  categoryGroups,
-  onOpenEditor,
-  onDismiss,
-}: {
-  snap: MakeRuleSnapType
-  showEditor: boolean
-  anchorRowId: string | null
-  projects: Workspace[]
-  payees: Payee[]
-  accounts: { id: string; name: string }[]
-  categoryGroups: CategoryGroup[]
-  onOpenEditor: () => void
-  onDismiss: () => void
-}) {
-  const [style, setStyle] = useState<React.CSSProperties>({ position: 'fixed', bottom: 80, right: 24, zIndex: 50 })
-
-  // Auto-dismiss after 10s unless the editor is open
-  useEffect(() => {
-    if (showEditor) return
-    const t = setTimeout(onDismiss, 10000)
-    return () => clearTimeout(t)
-  }, [anchorRowId, showEditor, onDismiss])
-
-  useEffect(() => {
-    if (!anchorRowId) return
-    const row = document.querySelector(`[data-row-id="${anchorRowId}"]`)
-    if (!row) return
-
-    const rect = row.getBoundingClientRect()
-    const popupWidth = showEditor ? 560 : 340
-    const popupHeight = showEditor ? 480 : 52
-    const viewportW = window.innerWidth
-    const viewportH = window.innerHeight
-
-    // Prefer below the row, aligned to its right edge
-    let top = rect.bottom + 6
-    let left = Math.min(rect.right - popupWidth, viewportW - popupWidth - 16)
-    left = Math.max(16, left)
-
-    // If below would clip the bottom, show above instead
-    if (top + popupHeight > viewportH - 16) {
-      top = Math.max(16, rect.top - popupHeight - 6)
-    }
-
-    setStyle({ position: 'fixed', top, left, zIndex: 50, width: popupWidth })
-  }, [anchorRowId, showEditor])
-
-  const prebuiltRule: UserRule = {
-    id: '',
-    name: '',
-    priority: 50,
-    categoryName: snap.categoryName ?? '',
-    categoryId: snap.categoryId ?? null,
-    categoryRef: null,
-    payeeId: null,
-    payee: snap.payeeName ? { id: '', name: snap.payeeName } : null,
-    projectId: null,
-    workspace: null,
-    conditions: { all: [{ field: 'description', operator: 'contains', value: snap.description }] },
-    isActive: true,
-  }
-
-  if (!showEditor) {
-    return (
-      <div style={style} className="flex items-center gap-3 rounded-lg border border-[#534AB7]/25 bg-white shadow-lg px-3 py-2 text-xs">
-        <span className="text-[13px]">💡</span>
-        <span className="text-[#3C3489] font-medium flex-1 whitespace-nowrap">Make a rule based on this change?</span>
-        <button
-          onClick={onOpenEditor}
-          className="rounded-md bg-[#534AB7] px-2.5 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
-        >
-          Create rule
-        </button>
-        <button
-          onClick={onDismiss}
-          className="text-muted-foreground hover:text-foreground leading-none px-0.5"
-          aria-label="Dismiss"
-        >✕</button>
-      </div>
-    )
-  }
-
-  return (
-    <div style={style} className="rounded-xl border border-[#534AB7]/25 bg-white shadow-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-[#534AB7]/10 bg-[#EEEDFE]/30">
-        <span className="text-[13px]">💡</span>
-        <span className="text-xs font-medium text-[#3C3489] flex-1">New rule from this change</span>
-        <button onClick={onDismiss} className="text-muted-foreground hover:text-foreground leading-none">✕</button>
-      </div>
-      <div className="p-4 overflow-y-auto max-h-[70vh]">
-        <RuleEditor
-          projects={projects}
-          payees={payees}
-          accounts={accounts}
-          categoryGroups={categoryGroups}
-          editingRule={prebuiltRule}
-          onSave={onDismiss}
-          onCancel={onDismiss}
-          showSaveAndApply={true}
-        />
-      </div>
-    </div>
-  )
 }
 
 // ── Inline payee combobox (type to filter or create new) ──────────
@@ -1888,21 +1776,6 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
         </div>
       )}
 
-      {/* Make rule from this change — fixed popup near the edited row */}
-      {makeRuleSnap && (
-        <MakeRulePopup
-          snap={makeRuleSnap}
-          showEditor={showMakeRuleEditor}
-          anchorRowId={lastEditedRowId}
-          projects={projects}
-          payees={payees}
-          accounts={accounts}
-          categoryGroups={categoryGroups}
-          onOpenEditor={() => setShowMakeRuleEditor(true)}
-          onDismiss={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
-        />
-      )}
-
       {/* Table */}
       <div className="overflow-auto rounded-lg border">
         <table className="w-full text-[11px]" aria-label="Transactions">
@@ -2229,8 +2102,8 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                 const isRowEditing = editingRowId === row.id
 
                 return (
+                  <React.Fragment key={row.id}>
                   <tr
-                    key={row.id}
                     data-row-id={row.id}
                     className={[
                       'border-t transition-colors',
@@ -2275,10 +2148,67 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                           Done
                         </button>
                       </td>
+                    ) : makeRuleSnap && lastEditedRowId === row.id && !showMakeRuleEditor ? (
+                      <td className="px-2 py-0.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[11px]">💡</span>
+                          <button
+                            onClick={() => setShowMakeRuleEditor(true)}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#534AB7] text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
+                          >
+                            Make rule
+                          </button>
+                          <button
+                            onClick={() => { setMakeRuleSnap(null) }}
+                            className="text-muted-foreground hover:text-foreground leading-none text-[11px] px-0.5"
+                            aria-label="Dismiss"
+                          >✕</button>
+                        </div>
+                      </td>
                     ) : (
                       <td />
                     )}
                   </tr>
+                  {/* Rule editor sub-row — appears below the edited row */}
+                  {makeRuleSnap && lastEditedRowId === row.id && showMakeRuleEditor && (
+                    <tr className="border-t border-[#534AB7]/15 bg-[#EEEDFE]/20">
+                      <td colSpan={13} className="px-4 py-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[11px]">💡</span>
+                          <span className="text-xs font-medium text-[#3C3489]">New rule from this change</span>
+                          <button
+                            onClick={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
+                            className="ml-auto text-muted-foreground hover:text-foreground leading-none text-sm"
+                            aria-label="Dismiss"
+                          >✕</button>
+                        </div>
+                        <RuleEditor
+                          projects={projects}
+                          payees={payees}
+                          accounts={accounts}
+                          categoryGroups={categoryGroups}
+                          editingRule={{
+                            id: '',
+                            name: '',
+                            priority: 50,
+                            categoryName: makeRuleSnap.categoryName ?? '',
+                            categoryId: makeRuleSnap.categoryId ?? null,
+                            categoryRef: null,
+                            payeeId: null,
+                            payee: makeRuleSnap.payeeName ? { id: '', name: makeRuleSnap.payeeName } : null,
+                            projectId: null,
+                            workspace: null,
+                            conditions: { all: [{ field: 'description', operator: 'contains', value: makeRuleSnap.description }] },
+                            isActive: true,
+                          }}
+                          onSave={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
+                          onCancel={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
+                          showSaveAndApply={true}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 )
               })
             )}
