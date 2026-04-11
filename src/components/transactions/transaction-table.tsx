@@ -209,7 +209,7 @@ function CategoryCell({
   )
 }
 
-// ── Floating: edit-monitor / analysing / ready panel ──────────────
+// ── Top-of-page rule prompt banner ────────────────────────────────
 const SUGGEST_DELAY_MS = 30000
 
 type RulePromptState = 'watching' | 'analysing' | 'ready' | 'error' | 'idle'
@@ -239,58 +239,65 @@ function RulePromptPanel({
     return () => clearInterval(interval)
   }, [state, editCount])
 
-  // Auto-dismiss ready after 10s — errors stay until manually dismissed
-  useEffect(() => {
-    if (state !== 'ready') return
-    const t = setTimeout(onDismiss, 10000)
-    return () => clearTimeout(t)
-  }, [state, onDismiss])
+  // ready state is persistent — user must dismiss manually
+  // error state also stays until dismissed
 
   if (state === 'idle') return null
 
+  if (state === 'ready') {
+    return (
+      <div className="mb-3 flex items-center gap-3 rounded-lg border border-[#534AB7]/30 bg-[#EEEDFE]/60 px-4 py-2.5 text-sm">
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#534AB7] opacity-60" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#534AB7]" />
+        </span>
+        <span className="flex-1 text-[#3C3489] font-medium">
+          Backoffice AI has some rules for you to review
+        </span>
+        <a
+          href="/rules"
+          className="shrink-0 rounded-md bg-[#534AB7] px-3 py-1 text-xs text-white font-medium hover:bg-[#4338CA] transition-colors"
+        >
+          Review rules
+        </a>
+        <button
+          onClick={onDismiss}
+          className="shrink-0 text-[#534AB7]/50 hover:text-[#534AB7] leading-none"
+          aria-label="Dismiss"
+        >✕</button>
+      </div>
+    )
+  }
+
   return (
-    <div className={`fixed bottom-24 right-6 z-50 flex items-center gap-3 rounded-xl border bg-white shadow-lg px-3 py-2.5 text-xs max-w-[270px] transition-all ${
-      state === 'error' ? 'border-red-300 bg-red-50' : 'border-black/10'
+    <div className={`mb-3 flex items-center gap-3 rounded-lg border px-4 py-2 text-xs ${
+      state === 'error' ? 'border-red-200 bg-red-50' : 'border-black/8 bg-muted/40'
     }`}>
 
       {/* Icon / spinner */}
       {state === 'watching' && (
-        <span className="relative flex h-2.5 w-2.5 shrink-0">
+        <span className="relative flex h-2 w-2 shrink-0">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#534AB7] opacity-60" />
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#534AB7]" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#534AB7]" />
         </span>
       )}
       {state === 'analysing' && (
         <span className="shrink-0 w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" />
       )}
-      {state === 'ready' && <span className="shrink-0 text-sm">💡</span>}
-      {state === 'error' && <span className="shrink-0 text-sm">⚠️</span>}
+      {state === 'error' && <span className="shrink-0">⚠️</span>}
 
       {/* Text */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 flex items-center gap-1.5 min-w-0">
         {state === 'watching' && (
-          <>
-            <p className="font-medium text-foreground leading-tight">Watching {editCount} edit{editCount !== 1 ? 's' : ''}</p>
-            <p className="text-muted-foreground mt-0.5 leading-tight">Suggesting rules in {secondsLeft}s…</p>
-          </>
+          <span className="text-muted-foreground">
+            Watching <span className="font-medium text-foreground">{editCount} edit{editCount !== 1 ? 's' : ''}</span> — suggesting rules in {secondsLeft}s
+          </span>
         )}
         {state === 'analysing' && (
-          <>
-            <p className="font-medium text-foreground leading-tight">Analysing edits…</p>
-            <p className="text-muted-foreground mt-0.5 leading-tight">Looking for rule patterns</p>
-          </>
-        )}
-        {state === 'ready' && (
-          <>
-            <p className="font-medium text-[#3C3489] leading-tight">Rule suggestions ready</p>
-            <p className="text-[#534AB7]/70 mt-0.5 leading-tight">Based on your recent edits</p>
-          </>
+          <span className="text-muted-foreground">Analysing edits for rule patterns…</span>
         )}
         {state === 'error' && (
-          <>
-            <p className="font-medium text-red-600 leading-tight">Analysis failed</p>
-            <p className="text-red-500/70 mt-0.5 leading-tight">Try editing a transaction again to retry</p>
-          </>
+          <span className="text-red-600">Analysis failed — edit a transaction again to retry</span>
         )}
       </div>
 
@@ -298,18 +305,10 @@ function RulePromptPanel({
       {state === 'watching' && (
         <button
           onClick={onAnalyseNow}
-          className="shrink-0 rounded-md bg-[#534AB7] px-2 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
+          className="shrink-0 rounded-md bg-[#534AB7] px-2.5 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
         >
-          Now
+          Analyse now
         </button>
-      )}
-      {state === 'ready' && (
-        <a
-          href="/rules"
-          className="shrink-0 rounded-md bg-[#534AB7] px-2.5 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors"
-        >
-          View
-        </a>
       )}
 
       {/* Dismiss — not shown while analysing */}
@@ -354,6 +353,13 @@ function MakeRulePopup({
   onDismiss: () => void
 }) {
   const [style, setStyle] = useState<React.CSSProperties>({ position: 'fixed', bottom: 80, right: 24, zIndex: 50 })
+
+  // Auto-dismiss after 5s unless the editor is open
+  useEffect(() => {
+    if (showEditor) return
+    const t = setTimeout(onDismiss, 5000)
+    return () => clearTimeout(t)
+  }, [anchorRowId, showEditor, onDismiss])
 
   useEffect(() => {
     if (!anchorRowId) return
@@ -1325,15 +1331,20 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
           fireSuggestions()
         }, SUGGEST_DELAY_MS)
 
-        // Show "Make rule from this change" popup near the edited row
-        setMakeRuleSnap({
-          description: row.description,
-          payeeName: resolvedPayeeName,
-          categoryId: resolvedCatId,
-          categoryName: resolvedCatName,
-        })
-        setLastEditedRowId(id)
+        // Show "Make rule from this change" popup near the edited row.
+        // If the user edits a different row, close the current popup first
+        // so the auto-dismiss timer re-arms cleanly for the new row.
+        setMakeRuleSnap(null)
         setShowMakeRuleEditor(false)
+        requestAnimationFrame(() => {
+          setMakeRuleSnap({
+            description: row.description,
+            payeeName: resolvedPayeeName,
+            categoryId: resolvedCatId,
+            categoryName: resolvedCatName,
+          })
+          setLastEditedRowId(id)
+        })
       }
     } catch {
       // Revert on error
@@ -1574,6 +1585,14 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="space-y-3" data-testid="transaction-table">
+      {/* Rule prompt — watching / analysing / ready / error */}
+      <RulePromptPanel
+        state={rulePromptState}
+        editCount={watchingEditCount}
+        onAnalyseNow={fireSuggestions}
+        onDismiss={() => setRulePromptState('idle')}
+      />
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <p className="text-xs text-muted-foreground mr-auto">
@@ -1746,14 +1765,6 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
           <button onClick={clearAiSearch} className="ml-auto text-purple-500 hover:text-purple-700">✕</button>
         </div>
       )}
-
-      {/* Rule prompt — watching / analysing / ready / error */}
-      <RulePromptPanel
-        state={rulePromptState}
-        editCount={watchingEditCount}
-        onAnalyseNow={fireSuggestions}
-        onDismiss={() => setRulePromptState('idle')}
-      />
 
       {/* Make rule from this change — fixed popup near the edited row */}
       {makeRuleSnap && (

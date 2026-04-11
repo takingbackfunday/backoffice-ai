@@ -273,12 +273,14 @@ Zustand stores in `src/stores/`:
 
 ### New Invoice Shortcuts (`src/components/projects/new-invoice-shortcuts.tsx`)
 
-Rendered above `InvoiceEditor` on the new invoice page. Three quick-create actions:
+Rendered above `InvoiceEditor` wherever a new invoice can be created — the dedicated `/invoices/new` page **and** the Studio invoice modal. Three quick-create actions:
 - **From accepted quote** — dropdown of ACCEPTED quotes; on select + confirm calls `POST /api/projects/[id]/quotes/[quoteId]/create-invoice` and redirects
 - **From transactions** — writes prompt to `sessionStorage('invoice-ai-prompt')` and fires `CustomEvent('invoice-ai-trigger')`; `InvoiceEditor` listens and auto-submits to its own AI chat panel
 - **Start from past invoice** — writes to `sessionStorage('invoice-open-copy-picker')` and fires `CustomEvent('invoice-copy-picker-trigger')`; `InvoiceEditor` opens the copy picker
 
 `InvoiceEditor` checks `sessionStorage` on mount AND listens for the custom events (in case components mount in different order).
+
+**Accepted quotes data flow**: callers must fetch ACCEPTED quotes server-side and pass them as `acceptedQuotes` prop. In `StudioPage`, quotes are fetched in the same Prisma query as the project and threaded through `StudioClient → StudioInvoiceModal → NewInvoiceShortcuts`. Projects created on-the-fly in the modal default to `acceptedQuotes: []`.
 
 Server data fetching uses standard Next.js patterns (server components + `fetch` in client components). Shared types live in `src/types/index.ts` and `src/types/widgets.ts`.
 
