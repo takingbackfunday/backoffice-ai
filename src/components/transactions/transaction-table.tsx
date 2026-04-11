@@ -98,7 +98,6 @@ function WorkspaceCell({
         requestAnimationFrame(() => { window.scrollTo({ top: scrollY, behavior: 'instant' }) })
       }}
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
-      onBlur={() => { if (!committed.current) onCancel() }}
       className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none focus:ring-1 focus:ring-blue-400"
       aria-label="Select project"
     >
@@ -224,7 +223,6 @@ function CategoryCell({
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
         onFocus={() => setOpen(true)}
-        onBlur={() => { if (!committed.current) onCancel() }}
         placeholder="Type to filter…"
         className="w-full rounded border border-blue-400 bg-white px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-400"
         aria-label="Select category"
@@ -581,16 +579,16 @@ function PayeeCell({
     }
   }
 
-  // Close on outside click
+  // Close dropdown on outside click — just commit best match; row-level
+  // outside-click handler owns the actual "exit row" logic.
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
         setOpen(false)
-        // Commit best match or cancel
         const exact = payees.find((p) => p.name.toLowerCase() === draft.trim().toLowerCase())
         if (exact) onCommit(exact.id)
         else if (draft.trim() === '') onCommit(null)
-        else onCancel()
+        // If no match, leave as-is — don't call onCancel (that would exit row edit)
       }
     }
     document.addEventListener('mousedown', handler)
