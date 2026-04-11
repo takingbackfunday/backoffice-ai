@@ -19,11 +19,6 @@ type SortField = 'date' | 'amount' | 'description' | 'category'
 type SortDir = 'asc' | 'desc'
 type EditableField = 'description' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount' | 'date'
 
-interface EditingCell {
-  id: string
-  field: EditableField
-}
-
 interface ColumnFilters {
   description?: string
   accountName?: string
@@ -42,16 +37,21 @@ function TextCell({
   onCommit,
   onCancel,
   type = 'text',
+  autoFocus = true,
 }: {
   value: string
   onCommit: (v: string) => void
   onCancel: () => void
   type?: 'text' | 'number' | 'date'
+  autoFocus?: boolean
 }) {
   const ref = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(value)
 
-  useEffect(() => { ref.current?.focus(); ref.current?.select() }, [])
+  useEffect(() => {
+    if (autoFocus) { ref.current?.focus(); ref.current?.select() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <input
@@ -60,7 +60,7 @@ function TextCell({
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onCommit(draft)
+        if (e.key === 'Enter') { e.preventDefault(); onCommit(draft) } // commit but stay in row
         if (e.key === 'Escape') onCancel()
       }}
       onBlur={() => onCommit(draft)}
@@ -1073,7 +1073,8 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   const [sortBy, setSortBy] = useState<SortField>('date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  const [editingCell, setEditingCell] = useState<EditingCell | null>(null)
+  const [editingRowId, setEditingRowId] = useState<string | null>(null)
+  const [editingRowInitialField, setEditingRowInitialField] = useState<EditableField | null>(null)
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
   const [errorIds, setErrorIds] = useState<Set<string>>(new Set())
 
@@ -1138,18 +1139,29 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
       })
   }, [])
 
-  // Called after commitEdit (via setTimeout 0) and from cancelEdit.
-  // By the time this runs, any same-row cell click has already called
-  // setEditingCell({id, field}), so editingCell.current reflects the true
-  // next focused row. We read it via a ref to avoid stale closure issues.
-  const editingCellRef = useRef(editingCell)
-  useEffect(() => { editingCellRef.current = editingCell }, [editingCell])
+  // Tracks the current editingRowId in a ref to avoid stale closure issues.
+  const editingRowIdRef = useRef(editingRowId)
+  useEffect(() => { editingRowIdRef.current = editingRowId }, [editingRowId])
+
+  // Outside-click: exit row edit when user clicks outside the editing row
+  useEffect(() => {
+    if (!editingRowId) return
+    const rowId = editingRowId
+    function handler(e: MouseEvent) {
+      const tr = document.querySelector(`[data-row-id="${rowId}"]`)
+      if (tr && !tr.contains(e.target as Node)) {
+        exitRowEdit(rowId)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingRowId])
 
   const promoteIfLeft = useCallback((fromRowId: string) => {
     const pending = pendingRuleSnapRef.current
     if (!pending || pending.rowId !== fromRowId) return
-    const nextRowId = editingCellRef.current?.id ?? null
-    if (nextRowId === fromRowId) return // still on same row
+    if (editingRowIdRef.current === fromRowId) return // still editing same row
 
     // User has genuinely left — show popup and start banner
     setMakeRuleSnap(null)
@@ -1326,12 +1338,17 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // ── Inline edit ──────────────────────────────────────────────────
   function startEdit(id: string, field: EditableField) {
     if (savingIds.has(id) || deletingIds.has(id)) return
-    setEditingCell({ id, field })
+    setEditingRowId(id)
+    setEditingRowInitialField(field)
+  }
+
+  function exitRowEdit(id: string) {
+    setEditingRowId(null)
+    setEditingRowInitialField(null)
+    promoteIfLeft(id)
   }
 
   async function commitEdit(id: string, field: EditableField, rawValue: string | null, freshPayee?: Payee) {
-    setEditingCell(null)
-
     const row = localRows.find((r) => r.id === id)
     if (!row) return
 
@@ -1436,10 +1453,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
           },
         }
 
-        // Defer: by the time this fires, any same-row cell click will have
-        // already updated editingCellRef, so promoteIfLeft can tell the
-        // difference between "stayed on row" and "left the table entirely".
-        setTimeout(() => promoteIfLeft(id), 0)
+        // promoteIfLeft is called from exitRowEdit — no deferred call here.
       }
     } catch {
       // Revert on error
@@ -1451,12 +1465,6 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
     } finally {
       setSavingIds((s) => { const n = new Set(s); n.delete(id); return n })
     }
-  }
-
-  function cancelEdit() {
-    const leavingId = editingCell?.id
-    setEditingCell(null)
-    if (leavingId) setTimeout(() => promoteIfLeft(leavingId), 0)
   }
 
   // ── New row handlers ──────────────────────────────────────────────
@@ -1554,7 +1562,8 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
 
   // ── Cell renderer ─────────────────────────────────────────────────
   function renderEditableCell(row: TransactionWithRelations, field: EditableField) {
-    const isEditing = editingCell?.id === row.id && editingCell.field === field
+    const isEditing = editingRowId === row.id
+    const isInitialField = editingRowInitialField === field
     const isSaving = savingIds.has(row.id)
     const hasError = errorIds.has(row.id)
 
@@ -1591,7 +1600,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
               value={row.workspaceId ?? null}
               projects={projects}
               onCommit={(v) => commitEdit(row.id, 'projectId', v)}
-              onCancel={cancelEdit}
+              onCancel={() => exitRowEdit(row.id)}
             />
           </td>
         )
@@ -1607,7 +1616,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
               payeeName={row.payee?.name ?? null}
               amount={Number(row.amount)}
               onCommit={(v) => commitEdit(row.id, 'categoryId', v)}
-              onCancel={cancelEdit}
+              onCancel={() => exitRowEdit(row.id)}
             />
           </td>
         )
@@ -1620,7 +1629,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
               value={row.payeeId ?? null}
               payees={payees}
               onCommit={(v) => commitEdit(row.id, 'payeeId', v)}
-              onCancel={cancelEdit}
+              onCancel={() => exitRowEdit(row.id)}
               onNewPayee={(p) => {
                 setPayees((prev) => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))
                 commitEdit(row.id, 'payeeId', p.id, p)
@@ -1637,8 +1646,9 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
             <TextCell
               value={isoDate}
               type="date"
+              autoFocus={isInitialField}
               onCommit={(v) => commitEdit(row.id, 'date', v)}
-              onCancel={cancelEdit}
+              onCancel={() => exitRowEdit(row.id)}
             />
           </td>
         )
@@ -1654,8 +1664,9 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
           <TextCell
             value={rawVal as string}
             type={field === 'amount' ? 'number' : 'text'}
+            autoFocus={isInitialField}
             onCommit={(v) => commitEdit(row.id, field, v)}
-            onCancel={cancelEdit}
+            onCancel={() => exitRowEdit(row.id)}
           />
         </td>
       )
@@ -1665,7 +1676,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
       <td
         key={field}
         className={cellClass}
-        onClick={() => startEdit(row.id, field)}
+        onClick={() => { if (!isEditing) startEdit(row.id, field) }}
         title="Click to edit"
         data-testid={`cell-${field}`}
       >
@@ -2051,6 +2062,8 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                 filterOptions={projects.map((p) => ({ value: p.id, label: p.name }))}
                 sortable={false}
               />
+              {/* Done button column spacer */}
+              <th className="w-16" />
             </tr>
           </thead>
           <tbody>
@@ -2187,7 +2200,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
 
             {loading && localRows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground" aria-live="polite">
+                <td colSpan={13} className="px-4 py-8 text-center text-muted-foreground" aria-live="polite">
                   <span className="inline-flex items-center gap-2">
                     <span className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
                     Loading from database…
@@ -2196,12 +2209,13 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
               </tr>
             ) : !loading && localRows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">No transactions found.</td>
+                <td colSpan={13} className="px-4 py-8 text-center text-muted-foreground">No transactions found.</td>
               </tr>
             ) : (
               localRows.map((row) => {
                 const isDeleting = deletingIds.has(row.id)
                 const isSelected = selectedIds.has(row.id)
+                const isRowEditing = editingRowId === row.id
 
                 return (
                   <tr
@@ -2209,7 +2223,10 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                     data-row-id={row.id}
                     className={[
                       'border-t transition-colors',
-                      isDeleting ? 'opacity-50 bg-red-50' : isSelected ? 'bg-blue-50' : 'hover:bg-muted/40',
+                      isDeleting ? 'opacity-50 bg-red-50'
+                        : isRowEditing ? 'bg-indigo-50/60 ring-1 ring-inset ring-indigo-200'
+                        : isSelected ? 'bg-blue-50'
+                        : 'hover:bg-muted/40',
                     ].filter(Boolean).join(' ')}
                     data-testid="transaction-row"
                   >
@@ -2237,6 +2254,18 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                     </td>
                     {renderEditableCell(row, 'notes')}
                     {renderEditableCell(row, 'projectId')}
+                    {isRowEditing ? (
+                      <td className="px-2 py-0.5 whitespace-nowrap">
+                        <button
+                          onMouseDown={(e) => { e.preventDefault(); exitRowEdit(row.id) }}
+                          className="text-xs px-2 py-0.5 rounded bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors"
+                        >
+                          Done
+                        </button>
+                      </td>
+                    ) : (
+                      <td />
+                    )}
                   </tr>
                 )
               })
