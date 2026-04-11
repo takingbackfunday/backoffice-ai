@@ -38,6 +38,16 @@ export interface ReceiptData {
   transaction?: unknown
 }
 
+interface ReviewFields {
+  vendor: string
+  date: string
+  total: string
+  subtotal: string
+  tax: string
+  paymentMethod: string
+  rawCategory: string
+}
+
 interface ReceiptUploadProps {
   onSuccess?: (receipt: ReceiptData) => void
 }
@@ -49,6 +59,21 @@ const STEPS = [
   'Saving receipt...',
 ]
 
+function toReviewFields(extracted: Record<string, unknown> | null): ReviewFields {
+  return {
+    vendor: String(extracted?.vendor ?? ''),
+    date: String(extracted?.date ?? ''),
+    total: extracted?.total != null ? String(extracted.total) : '',
+    subtotal: extracted?.subtotal != null ? String(extracted.subtotal) : '',
+    tax: extracted?.tax != null ? String(extracted.tax) : '',
+    paymentMethod: String(extracted?.paymentMethod ?? ''),
+    rawCategory: String(extracted?.rawCategory ?? ''),
+  }
+}
+
+const inputClass =
+  'w-full border border-border rounded px-2 py-1 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring'
+
 export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
@@ -57,10 +82,13 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showOcr, setShowOcr] = useState(false)
+  const [fields, setFields] = useState<ReviewFields | null>(null)
+  const [confirming, setConfirming] = useState(false)
 
   async function handleFile(file: File) {
     setError(null)
     setReceipt(null)
+    setFields(null)
     setIsProcessing(true)
     setCurrentStep(0)
 
@@ -83,8 +111,9 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
         return
       }
 
-      setReceipt(json.data)
-      onSuccess?.(json.data)
+      const uploaded = json.data as ReceiptData
+      setReceipt(uploaded)
+      setFields(toReviewFields(uploaded.extractedData))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -95,21 +124,51 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) handleFile(file)
-    // Reset so same file can be re-selected
     e.target.value = ''
   }
 
-  // Cast Json field to a typed shape for rendering
-  const extracted = receipt?.extractedData as {
-    vendor?: string | null
-    currency?: string | null
-    total?: number | null
-    date?: string | null
-    subtotal?: number | null
-    tax?: number | null
-    paymentMethod?: string | null
-    rawCategory?: string | null
-  } | null
+  function setField(key: keyof ReviewFields, value: string) {
+    setFields((prev) => (prev ? { ...prev, [key]: value } : prev))
+  }
+
+  async function handleConfirm() {
+    if (!receipt || !fields) return
+    setConfirming(true)
+    setError(null)
+    try {
+      const original = (receipt.extractedData ?? {}) as Record<string, unknown>
+      const updated: Record<string, unknown> = {
+        ...original,
+        vendor: fields.vendor || null,
+        date: fields.date || null,
+        total: fields.total !== '' ? parseFloat(fields.total) : null,
+        subtotal: fields.subtotal !== '' ? parseFloat(fields.subtotal) : null,
+        tax: fields.tax !== '' ? parseFloat(fields.tax) : null,
+        paymentMethod: fields.paymentMethod || null,
+        rawCategory: fields.rawCategory || null,
+      }
+
+      const res = await fetch(`/api/receipts/${receipt.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extractedData: updated, confirmed: true }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'Failed to confirm receipt')
+        return
+      }
+      const confirmed = json.data as ReceiptData
+      setReceipt(confirmed)
+      onSuccess?.(confirmed)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  const needsReview = receipt?.status === 'NEEDS_REVIEW'
 
   return (
     <div className="space-y-4">
@@ -144,14 +203,14 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
             disabled={isProcessing}
             onClick={() => cameraRef.current?.click()}
           >
-            📷 Take photo
+            Take photo
           </Button>
           <Button
             variant="outline"
             disabled={isProcessing}
             onClick={() => galleryRef.current?.click()}
           >
-            🖼 Choose from gallery
+            Choose from gallery
           </Button>
         </div>
       </div>
@@ -169,67 +228,189 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
         <div className="text-sm text-destructive p-3 bg-destructive/10 rounded-lg">{error}</div>
       )}
 
-      {/* Result preview */}
-      {receipt && (
+      {/* Review / result panel */}
+      {receipt && fields && (
         <div className="border rounded-lg overflow-hidden">
           <div className="flex items-center justify-between p-3 bg-muted/40 border-b">
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  'text-xs px-2 py-0.5 rounded-full font-medium',
-                  receipt.status === 'COMPLETED'
-                    ? 'bg-green-100 text-green-700'
-                    : receipt.status === 'FAILED'
-                      ? 'bg-red-100 text-red-700'
+            <span
+              className={cn(
+                'text-xs px-2 py-0.5 rounded-full font-medium',
+                receipt.status === 'COMPLETED'
+                  ? 'bg-green-100 text-green-700'
+                  : receipt.status === 'FAILED'
+                    ? 'bg-red-100 text-red-700'
+                    : receipt.status === 'NEEDS_REVIEW'
+                      ? 'bg-amber-100 text-amber-700'
                       : 'bg-yellow-100 text-yellow-700'
-                )}
-              >
-                {receipt.status}
-              </span>
-              {extracted?.vendor != null && (
-                <span className="text-sm font-medium">{String(extracted.vendor)}</span>
               )}
-            </div>
-            {extracted?.total && (
-              <span className="text-sm font-semibold">
-                {extracted.currency ? String(extracted.currency) + ' ' : ''}
-                {String(extracted.total)}
-              </span>
+            >
+              {receipt.status === 'NEEDS_REVIEW' ? 'Review required' : receipt.status}
+            </span>
+            {receipt.status === 'COMPLETED' && (
+              <span className="text-xs text-green-600 font-medium">Confirmed</span>
             )}
           </div>
 
-          <div className="p-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            {extracted?.date && (
-              <>
-                <span className="text-muted-foreground">Date</span>
-                <span>{String(extracted.date)}</span>
-              </>
-            )}
-            {extracted?.subtotal !== null && extracted?.subtotal !== undefined && (
-              <>
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{String(extracted.subtotal)}</span>
-              </>
-            )}
-            {extracted?.tax !== null && extracted?.tax !== undefined && (
-              <>
-                <span className="text-muted-foreground">Tax</span>
-                <span>{String(extracted.tax)}</span>
-              </>
-            )}
-            {extracted?.paymentMethod && (
-              <>
-                <span className="text-muted-foreground">Payment</span>
-                <span className="capitalize">{String(extracted.paymentMethod).replace('_', ' ')}</span>
-              </>
-            )}
-            {extracted?.rawCategory && (
-              <>
-                <span className="text-muted-foreground">Category</span>
-                <span className="capitalize">{String(extracted.rawCategory).replace('_', ' ')}</span>
-              </>
-            )}
-          </div>
+          {needsReview ? (
+            // Editable review form
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Check the extracted data below and correct any errors before confirming.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Vendor</label>
+                  <input
+                    className={inputClass}
+                    value={fields.vendor}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setField('vendor', e.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Date (YYYY-MM-DD)</label>
+                  <input
+                    className={inputClass}
+                    value={fields.date}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setField('date', e.target.value)
+                    }
+                    placeholder="YYYY-MM-DD"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Total</label>
+                  <input
+                    className={inputClass}
+                    type="number"
+                    step="0.01"
+                    value={fields.total}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setField('total', e.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Subtotal</label>
+                  <input
+                    className={inputClass}
+                    type="number"
+                    step="0.01"
+                    value={fields.subtotal}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setField('subtotal', e.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Tax</label>
+                  <input
+                    className={inputClass}
+                    type="number"
+                    step="0.01"
+                    value={fields.tax}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setField('tax', e.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Payment method</label>
+                  <input
+                    className={inputClass}
+                    value={fields.paymentMethod}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setField('paymentMethod', e.target.value)
+                    }
+                    placeholder="cash, visa, mastercard..."
+                  />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <label className="text-xs text-muted-foreground">Category</label>
+                  <input
+                    className={inputClass}
+                    value={fields.rawCategory}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setField('rawCategory', e.target.value)
+                    }
+                    placeholder="groceries, dining, transport..."
+                  />
+                </div>
+              </div>
+
+              {/* Items read-only */}
+              {Array.isArray(receipt.extractedData?.items) &&
+                (receipt.extractedData.items as unknown[]).length > 0 && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground mb-1">Line items (read-only)</p>
+                    <div className="space-y-0.5">
+                      {(
+                        receipt.extractedData.items as Array<{
+                          name: string
+                          totalPrice: number | null
+                        }>
+                      ).map((item, i) => (
+                        <div key={i} className="flex justify-between text-xs">
+                          <span className="truncate">{item.name}</span>
+                          <span className="shrink-0 ml-2">{item.totalPrice ?? '—'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              <Button className="w-full" disabled={confirming} onClick={handleConfirm}>
+                {confirming ? 'Saving...' : 'Confirm & save'}
+              </Button>
+            </div>
+          ) : (
+            // Read-only completed view
+            <div className="p-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              {fields.vendor && (
+                <>
+                  <span className="text-muted-foreground">Vendor</span>
+                  <span>{fields.vendor}</span>
+                </>
+              )}
+              {fields.date && (
+                <>
+                  <span className="text-muted-foreground">Date</span>
+                  <span>{fields.date}</span>
+                </>
+              )}
+              {fields.total && (
+                <>
+                  <span className="text-muted-foreground">Total</span>
+                  <span>{fields.total}</span>
+                </>
+              )}
+              {fields.subtotal && (
+                <>
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{fields.subtotal}</span>
+                </>
+              )}
+              {fields.tax && (
+                <>
+                  <span className="text-muted-foreground">Tax</span>
+                  <span>{fields.tax}</span>
+                </>
+              )}
+              {fields.paymentMethod && (
+                <>
+                  <span className="text-muted-foreground">Payment</span>
+                  <span className="capitalize">{fields.paymentMethod.replace('_', ' ')}</span>
+                </>
+              )}
+              {fields.rawCategory && (
+                <>
+                  <span className="text-muted-foreground">Category</span>
+                  <span className="capitalize">{fields.rawCategory.replace('_', ' ')}</span>
+                </>
+              )}
+            </div>
+          )}
 
           {receipt.thumbnailUrl && (
             <div className="p-3 border-t">

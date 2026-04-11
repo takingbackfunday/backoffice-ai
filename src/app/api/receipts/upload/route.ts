@@ -99,11 +99,11 @@ export async function POST(request: Request) {
         thumbnailUrl = uploadResult.data.ufsUrl
       }
 
-      // Step 4: Update receipt with all extracted data
+      // Step 4: Update receipt with all extracted data — lands in NEEDS_REVIEW for human confirmation
       const updated = await prisma.receipt.update({
         where: { id: receipt.id },
         data: {
-          status: 'COMPLETED',
+          status: 'NEEDS_REVIEW',
           ocrMarkdown,
           extractedData,
           thumbnailUrl,

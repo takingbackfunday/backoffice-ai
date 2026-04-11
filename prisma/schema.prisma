@@ -1123,6 +1123,7 @@ model Receipt {
 
 enum ReceiptStatus {
   PROCESSING
+  NEEDS_REVIEW
   COMPLETED
   FAILED
 }

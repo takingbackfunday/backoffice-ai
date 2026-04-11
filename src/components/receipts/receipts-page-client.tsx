@@ -23,6 +23,43 @@ interface Receipt {
   transaction: Transaction | null
 }
 
+interface ReviewFields {
+  vendor: string
+  date: string
+  total: string
+  subtotal: string
+  tax: string
+  paymentMethod: string
+  rawCategory: string
+}
+
+function toReviewFields(extracted: Record<string, unknown> | null): ReviewFields {
+  return {
+    vendor: String(extracted?.vendor ?? ''),
+    date: String(extracted?.date ?? ''),
+    total: extracted?.total != null ? String(extracted.total) : '',
+    subtotal: extracted?.subtotal != null ? String(extracted.subtotal) : '',
+    tax: extracted?.tax != null ? String(extracted.tax) : '',
+    paymentMethod: String(extracted?.paymentMethod ?? ''),
+    rawCategory: String(extracted?.rawCategory ?? ''),
+  }
+}
+
+function statusBadgeClass(status: string) {
+  if (status === 'COMPLETED') return 'bg-green-100 text-green-700'
+  if (status === 'FAILED') return 'bg-red-100 text-red-700'
+  if (status === 'NEEDS_REVIEW') return 'bg-amber-100 text-amber-700'
+  return 'bg-yellow-100 text-yellow-700'
+}
+
+function statusLabel(status: string) {
+  if (status === 'NEEDS_REVIEW') return 'Review'
+  return status
+}
+
+const inputClass =
+  'w-full border border-border rounded px-2 py-1 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-ring'
+
 export function ReceiptsPageClient() {
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,6 +68,10 @@ export function ReceiptsPageClient() {
   const [retrying, setRetrying] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const [reviewingId, setReviewingId] = useState<string | null>(null)
+  const [reviewFields, setReviewFields] = useState<ReviewFields | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [reviewError, setReviewError] = useState<string | null>(null)
 
   const loadReceipts = useCallback(async () => {
     const res = await fetch('/api/receipts')
@@ -58,6 +99,10 @@ export function ReceiptsPageClient() {
     const res = await fetch(`/api/receipts/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setReceipts((prev) => prev.filter((r) => r.id !== id))
+      if (reviewingId === id) {
+        setReviewingId(null)
+        setReviewFields(null)
+      }
     }
     setDeleting(null)
   }
@@ -65,6 +110,59 @@ export function ReceiptsPageClient() {
   function handleUploadSuccess(receipt: ReceiptData) {
     setReceipts((prev) => [receipt as Receipt, ...prev])
     setShowUpload(false)
+  }
+
+  function openReview(receipt: Receipt) {
+    setReviewingId(receipt.id)
+    setReviewFields(toReviewFields(receipt.extractedData))
+    setReviewError(null)
+  }
+
+  function closeReview() {
+    setReviewingId(null)
+    setReviewFields(null)
+    setReviewError(null)
+  }
+
+  function setReviewField(key: keyof ReviewFields, value: string) {
+    setReviewFields((prev) => (prev ? { ...prev, [key]: value } : prev))
+  }
+
+  async function handleConfirm(receiptId: string) {
+    if (!reviewFields) return
+    setConfirming(true)
+    setReviewError(null)
+    try {
+      const receipt = receipts.find((r) => r.id === receiptId)
+      const original = (receipt?.extractedData ?? {}) as Record<string, unknown>
+      const updated: Record<string, unknown> = {
+        ...original,
+        vendor: reviewFields.vendor || null,
+        date: reviewFields.date || null,
+        total: reviewFields.total !== '' ? parseFloat(reviewFields.total) : null,
+        subtotal: reviewFields.subtotal !== '' ? parseFloat(reviewFields.subtotal) : null,
+        tax: reviewFields.tax !== '' ? parseFloat(reviewFields.tax) : null,
+        paymentMethod: reviewFields.paymentMethod || null,
+        rawCategory: reviewFields.rawCategory || null,
+      }
+
+      const res = await fetch(`/api/receipts/${receiptId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extractedData: updated, confirmed: true }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setReviewError(json.error ?? 'Failed to confirm receipt')
+        return
+      }
+      setReceipts((prev) => prev.map((r) => (r.id === receiptId ? json.data : r)))
+      closeReview()
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setConfirming(false)
+    }
   }
 
   if (loading) {
@@ -120,6 +218,7 @@ export function ReceiptsPageClient() {
             items?: Array<{ name: string; totalPrice: number | null }>
           } | null
           const isExpanded = expandedId === receipt.id
+          const isReviewing = reviewingId === receipt.id
 
           return (
             <div key={receipt.id} className="border rounded-lg overflow-hidden bg-card">
@@ -157,14 +256,10 @@ export function ReceiptsPageClient() {
                     <span
                       className={cn(
                         'text-xs px-1.5 py-0.5 rounded-full font-medium',
-                        receipt.status === 'COMPLETED'
-                          ? 'bg-green-100 text-green-700'
-                          : receipt.status === 'FAILED'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-yellow-100 text-yellow-700'
+                        statusBadgeClass(receipt.status)
                       )}
                     >
-                      {receipt.status}
+                      {statusLabel(receipt.status)}
                     </span>
                   </div>
                 </div>
@@ -177,7 +272,15 @@ export function ReceiptsPageClient() {
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {receipt.status === 'NEEDS_REVIEW' && (
+                    <button
+                      className="text-xs text-amber-600 font-medium underline"
+                      onClick={() => (isReviewing ? closeReview() : openReview(receipt))}
+                    >
+                      {isReviewing ? 'Cancel' : 'Review'}
+                    </button>
+                  )}
                   <button
                     className="text-xs text-muted-foreground underline"
                     onClick={() => setExpandedId(isExpanded ? null : receipt.id)}
@@ -201,6 +304,95 @@ export function ReceiptsPageClient() {
                     {deleting === receipt.id ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
+
+                {/* Inline review panel */}
+                {isReviewing && reviewFields && (
+                  <div className="pt-2 border-t space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      Correct any errors then confirm.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Vendor</label>
+                        <input
+                          className={inputClass}
+                          value={reviewFields.vendor}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setReviewField('vendor', e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Date</label>
+                        <input
+                          className={inputClass}
+                          value={reviewFields.date}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setReviewField('date', e.target.value)
+                          }
+                          placeholder="YYYY-MM-DD"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Total</label>
+                        <input
+                          className={inputClass}
+                          type="number"
+                          step="0.01"
+                          value={reviewFields.total}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setReviewField('total', e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Tax</label>
+                        <input
+                          className={inputClass}
+                          type="number"
+                          step="0.01"
+                          value={reviewFields.tax}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setReviewField('tax', e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Payment</label>
+                        <input
+                          className={inputClass}
+                          value={reviewFields.paymentMethod}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setReviewField('paymentMethod', e.target.value)
+                          }
+                          placeholder="cash, visa..."
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Category</label>
+                        <input
+                          className={inputClass}
+                          value={reviewFields.rawCategory}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setReviewField('rawCategory', e.target.value)
+                          }
+                          placeholder="groceries, dining..."
+                        />
+                      </div>
+                    </div>
+                    {reviewError && (
+                      <p className="text-xs text-destructive">{reviewError}</p>
+                    )}
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      disabled={confirming}
+                      onClick={() => handleConfirm(receipt.id)}
+                    >
+                      {confirming ? 'Saving...' : 'Confirm & save'}
+                    </Button>
+                  </div>
+                )}
 
                 {/* Expanded details */}
                 {isExpanded && extracted && (

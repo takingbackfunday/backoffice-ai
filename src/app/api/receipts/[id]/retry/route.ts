@@ -31,7 +31,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
       const updated = await prisma.receipt.update({
         where: { id },
         data: {
-          status: 'COMPLETED',
+          status: 'NEEDS_REVIEW',
           ocrMarkdown: ocr.markdown,
           // JSON round-trip widens ExtractedReceiptData to Prisma's InputJsonValue
           extractedData: JSON.parse(JSON.stringify(extracted)),

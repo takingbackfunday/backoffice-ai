@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
+import { Prisma } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 
@@ -10,6 +11,8 @@ interface RouteParams {
 const PatchSchema = z
   .object({
     transactionId: z.string().nullable().optional(),
+    extractedData: z.record(z.unknown()).optional(),
+    confirmed: z.boolean().optional(),
   })
   .strict()
 
@@ -29,7 +32,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (!parsed.success)
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
 
-    const { transactionId } = parsed.data
+    const { transactionId, extractedData, confirmed } = parsed.data
 
     // Validate transaction ownership if linking
     if (transactionId) {
@@ -44,6 +47,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       where: { id },
       data: {
         ...(transactionId !== undefined ? { transactionId } : {}),
+        ...(extractedData !== undefined ? { extractedData: extractedData as Prisma.InputJsonValue } : {}),
+        ...(confirmed ? { status: 'COMPLETED' } : {}),
       },
     })
 
