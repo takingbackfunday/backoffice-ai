@@ -1,9 +1,9 @@
 import { PrismaClient } from '@/generated/prisma/client'
-import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaNeon } from '@prisma/adapter-neon'
 
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL!
-  const adapter = new PrismaPg({ connectionString })
+  const adapter = new PrismaNeon(connectionString)
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],

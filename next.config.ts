@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: ['sharp', 'playwright-core', '@react-pdf/renderer', 'prisma'],
 };
 
 export default nextConfig;
