@@ -256,6 +256,25 @@ Compact layout designed to fit without scrolling:
 - Each payment row has a three-dot SVG menu with **Remove** (DELETE) and **Move to invoice…** (PATCH) actions
 - The `...` menu registers its close listener via `setTimeout(0)` so the opening click does not immediately re-fire the document listener and close the menu
 
+### Client Hub (`/studio`, `src/app/studio/page.tsx`, `src/components/studio/studio-client.tsx`)
+
+Server component (`page.tsx`) fetches all active CLIENT workspaces with their invoices, jobs, and quotes (status `ACCEPTED` or `SENT`). Quotes include `_count.invoices` so the client can tell whether an accepted quote has already been invoiced.
+
+`StudioClient` is the client component. Key layout from top to bottom:
+
+1. **Unified KPI + pipeline row** — single 6-cell grid: Quotes accepted | Outstanding | Overdue | Collected | Earned this month | Clients. Outstanding and Overdue are clickable: set `clientFilter` state, auto-expand the first matching client card, and scroll to the cards section.
+
+2. **3-column strip** — `gridTemplateColumns: 'auto 1fr 1fr'`:
+   - **Take action** — 2-column pill grid: col 1 = New client, New job, Log time; col 2 = Draft invoice, New quote, New estimate.
+   - **Take notice** — smart banners derived from `notices` useMemo. Invoice banners: overdue, unsent drafts. Quote banners: awaiting acceptance (SENT quotes), accepted but not yet invoiced (ACCEPTED quotes with `hasInvoice: false`). Invoice banners click to set `clientFilter` ('overdue' or 'unsent') and scroll to client cards. Quote banners navigate to the first affected project's quotes page. Active filter highlighted.
+   - **Recent activity** — top-6 invoice events sorted by date desc.
+
+3. **Client cards** — expandable accordion per client. `clientFilter` state ('outstanding' | 'overdue' | 'unsent' | null) is combined with `clientSearch` to filter the list. Filter pill shows above cards; clicking ✕ clears the filter.
+
+**Data shapes passed to `StudioClient`:**
+- `client.acceptedQuotes` — `{ id, quoteNumber, title, totalQuoted, currency, hasInvoice }` (ACCEPTED only)
+- `client.sentQuotes` — `{ id, quoteNumber, title, totalQuoted, currency, sentAt }` (SENT only)
+
 ### Transaction Table & Rules UI (`src/components/transactions/transaction-table.tsx`)
 
 - **Make-rule inline prompt** — after the user finishes editing a row and moves away, a compact 💡 "Make rule / ✕" prompt appears in the last `<td>` of that row (where "Done" was). Clicking "Make rule" inserts a full-width `<tr>` directly below the edited row containing `RuleEditor`, pre-filled from the edit. The prompt persists until dismissed or the page reloads — no auto-dismiss timer. Rows are wrapped in `React.Fragment` (keyed) to allow the sibling sub-row. No `position: fixed` or `getBoundingClientRect` involved.
