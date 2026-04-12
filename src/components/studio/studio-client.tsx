@@ -152,6 +152,140 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
 }
 
 /* ------------------------------------------------------------------ */
+/*  PipelineStrip                                                       */
+/* ------------------------------------------------------------------ */
+
+interface PipelineStage {
+  label: string
+  amount: number
+  count: number
+  color: string
+  textColor: string
+}
+
+function PipelineStrip({ clients, flat }: { clients: Client[]; flat: (Invoice & { clientId: string })[] }) {
+  const stages = useMemo((): PipelineStage[] => {
+    const acceptedQuotesTotal = clients.reduce((s, c) => s + c.acceptedQuotes.reduce((qs, q) => qs + (q.totalQuoted ?? 0), 0), 0)
+    const acceptedQuotesCount = clients.reduce((s, c) => s + c.acceptedQuotes.length, 0)
+
+    const invoiced = flat.filter(i => {
+      const s = getDisplayStatus(i)
+      return s === 'DRAFT' || s === 'SENT' || s === 'PARTIAL'
+    })
+    const overdue = flat.filter(i => getDisplayStatus(i) === 'OVERDUE')
+    const collected = flat.filter(i => getDisplayStatus(i) === 'PAID')
+
+    return [
+      {
+        label: 'Accepted quotes',
+        amount: acceptedQuotesTotal,
+        count: acceptedQuotesCount,
+        color: '#eeedfe',
+        textColor: '#534AB7',
+      },
+      {
+        label: 'Invoiced',
+        amount: invoiced.reduce((s, i) => s + (i.total - i.paid), 0),
+        count: invoiced.length,
+        color: '#fef3c7',
+        textColor: '#a16207',
+      },
+      {
+        label: 'Overdue',
+        amount: overdue.reduce((s, i) => s + (i.total - i.paid), 0),
+        count: overdue.length,
+        color: '#fee2e2',
+        textColor: '#dc2626',
+      },
+      {
+        label: 'Collected',
+        amount: collected.reduce((s, i) => s + i.paid, 0),
+        count: collected.length,
+        color: '#d1fae5',
+        textColor: '#065f46',
+      },
+    ]
+  }, [clients, flat])
+
+  const hasAnyData = stages.some(s => s.count > 0)
+  if (!hasAnyData) return null
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 1, marginBottom: 20, borderRadius: 14, overflow: 'hidden', border: '1px solid #e8e6df' }}>
+      {stages.map((stage, i) => (
+        <div
+          key={stage.label}
+          style={{
+            background: stage.count > 0 ? stage.color : '#fafaf8',
+            padding: '14px 18px',
+            borderRight: i < 3 ? '1px solid #e8e6df' : 'none',
+            opacity: stage.count === 0 ? 0.5 : 1,
+          }}
+        >
+          <p style={{ fontSize: 10, fontWeight: 700, color: stage.count > 0 ? stage.textColor : '#bbb', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 6px' }}>{stage.label}</p>
+          <p style={{ fontSize: 20, fontWeight: 700, color: stage.count > 0 ? stage.textColor : '#ccc', fontVariantNumeric: 'tabular-nums', margin: '0 0 2px', lineHeight: 1.1 }}>
+            {stage.amount > 0 ? fmt(stage.amount) : '—'}
+          </p>
+          <p style={{ fontSize: 10, color: stage.count > 0 ? stage.textColor : '#ccc', margin: 0, opacity: 0.7 }}>
+            {stage.count} {stage.count === 1 ? (stage.label === 'Collected' ? 'invoice' : stage.label === 'Accepted quotes' ? 'quote' : 'invoice') : (stage.label === 'Accepted quotes' ? 'quotes' : 'invoices')}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  RecentActivity                                                      */
+/* ------------------------------------------------------------------ */
+
+interface ActivityItem {
+  time: string
+  event: string
+  clientName: string
+  clientSlug: string
+  color: string
+}
+
+function deriveRecentActivity(clients: Client[], flat: (Invoice & { clientId: string; clientName: string; clientSlug: string })[]): ActivityItem[] {
+  const items: (ActivityItem & { _date: Date })[] = []
+
+  // Build a color map for clients
+  const clientColors = ['#534AB7', '#1D9E75', '#D85A30', '#D4537E', '#378ADD', '#BA7517']
+  const colorMap: Record<string, string> = {}
+  clients.forEach((c, i) => { colorMap[c.id] = clientColors[i % clientColors.length] })
+
+  for (const inv of flat) {
+    const issueDate = new Date(inv.issueDate)
+    const clientName = inv.clientName
+    const clientSlug = inv.clientSlug
+    const color = colorMap[inv.clientId] ?? '#888'
+
+    if (inv.status === 'DRAFT') {
+      items.push({ _date: issueDate, time: formatRelativeDate(issueDate), event: `Invoice ${inv.invoiceNumber} drafted`, clientName, clientSlug, color })
+    } else if (inv.status === 'SENT' || inv.status === 'PARTIAL') {
+      items.push({ _date: issueDate, time: formatRelativeDate(issueDate), event: `Invoice ${inv.invoiceNumber} sent`, clientName, clientSlug, color })
+    } else if (inv.status === 'PAID') {
+      items.push({ _date: issueDate, time: formatRelativeDate(issueDate), event: `Invoice ${inv.invoiceNumber} paid`, clientName, clientSlug, color })
+    }
+  }
+
+  // Sort by date desc, take top 6
+  items.sort((a, b) => b._date.getTime() - a._date.getTime())
+  return items.slice(0, 6).map(({ _date: _d, ...rest }) => rest)
+}
+
+function formatRelativeDate(date: Date): string {
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffDays = Math.floor(diffMs / 86400000)
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/* ------------------------------------------------------------------ */
 /*  AgingBar                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -828,9 +962,12 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         <KpiCard label="Clients"            value={kpis.activeClients}          sub="active" color="neutral" />
       </div>
 
-      {/* Take action + Aging */}
-      <div style={{ display: 'grid', gridTemplateColumns: kpis.totalOutstanding > 0 ? '1fr 1fr' : '1fr', gap: 12, marginBottom: 20 }}>
-        {/* Left column */}
+      {/* Pipeline */}
+      <PipelineStrip clients={clients} flat={flat} />
+
+      {/* Actions + Recent activity */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+        {/* Left: Take action + Take notice */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Take action */}
           <div>
@@ -913,7 +1050,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
             </div>
           )}
 
-          {/* Clear filter — shown below the banners when active */}
+          {/* Clear filter */}
           {actionFilter && (
             <button
               onClick={() => setActionFilter(null)}
@@ -924,12 +1061,36 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           )}
         </div>
 
-        {kpis.totalOutstanding > 0 && (
-          <div>
-            <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Money owed to you</p>
-            <AgingBar invoices={flat} />
+        {/* Right: Recent activity */}
+        <div>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Recent activity</p>
+          <div style={{ borderRadius: 14, border: '1px solid #e8e6df', background: '#fff', overflow: 'hidden' }}>
+            {(() => {
+              const activity = deriveRecentActivity(clients, flat)
+              if (activity.length === 0) {
+                return (
+                  <div style={{ padding: '24px 18px', textAlign: 'center' }}>
+                    <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No recent activity</p>
+                  </div>
+                )
+              }
+              return activity.map((item, i) => (
+                <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 16px', borderBottom: i < activity.length - 1 ? '1px solid #f5f4f0' : 'none' }}>
+                  <span style={{ fontSize: 11, color: '#bbb', minWidth: 62, paddingTop: 1, flexShrink: 0 }}>{item.time}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, fontWeight: 500, margin: 0, lineHeight: 1.4, color: '#1a1a1a' }}>{item.event}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                      <Link href={`/projects/${item.clientSlug}`} style={{ fontSize: 11, color: '#888', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
+                        {item.clientName}
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))
+            })()}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Tabs + Search */}
