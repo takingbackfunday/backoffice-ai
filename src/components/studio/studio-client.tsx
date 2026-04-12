@@ -143,10 +143,12 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
   }
   const c = colors[color]
   return (
-    <div style={{ borderRadius: 14, border: `1px solid ${c.border}`, background: c.bg, padding: '16px 18px' }}>
-      <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</p>
-      <p style={{ fontSize: 24, fontWeight: 800, color: c.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1, margin: 0 }}>{value}</p>
-      {sub && <p style={{ fontSize: 10, color: '#aaa', marginTop: 4, marginBottom: 0 }}>{sub}</p>}
+    <div style={{ borderRadius: 10, border: `1px solid ${c.border}`, background: c.bg, padding: '10px 14px', display: 'flex', alignItems: 'baseline', gap: 10 }}>
+      <p style={{ fontSize: 18, fontWeight: 700, color: c.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1, margin: 0, flexShrink: 0 }}>{value}</p>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: '#888', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</p>
+        {sub && <p style={{ fontSize: 10, color: '#aaa', margin: 0 }}>{sub}</p>}
+      </div>
     </div>
   )
 }
@@ -845,6 +847,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [previewInv, setPreviewInv] = useState<FlatInvoice | null>(null)
   const [kpis, setKpis] = useState(initialKpis)
   const [expandedClient, setExpandedClient] = useState<string | null>(null)
+  const [clientSearch, setClientSearch] = useState('')
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [showNewJobModal, setShowNewJobModal] = useState(false)
@@ -921,125 +924,116 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         <KpiCard label="Clients"            value={kpis.activeClients}          sub="active" color="neutral" />
       </div>
 
-      {/* Actions + Recent activity */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
-        {/* Left: Take action + Take notice */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div>
-            <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take action</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              <button
-                onClick={() => setShowInvoiceModal(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: 'none', background: '#534AB7', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#fff', cursor: 'pointer' }}
-              >
-                <Plus size={11} />
-                Draft new invoice
-              </button>
-              <button
-                onClick={() => setShowNewClientModal(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #534AB7', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#534AB7', cursor: 'pointer' }}
-              >
-                <Plus size={11} />
-                New client
-              </button>
-              <button
-                onClick={() => setShowNewJobModal(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #888', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#555', cursor: 'pointer' }}
-              >
-                <Plus size={11} />
-                New job
-              </button>
-              <button
-                onClick={() => setShowNewEstimateModal(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #888', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#555', cursor: 'pointer' }}
-              >
-                <Plus size={11} />
-                New estimate
-              </button>
-              <button
-                onClick={() => setShowNewQuoteModal(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #888', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#555', cursor: 'pointer' }}
-              >
-                <Plus size={11} />
-                New quote
-              </button>
-              <button
-                onClick={() => setShowLogTimeModal(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, border: '1.5px solid #888', background: 'transparent', padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#555', cursor: 'pointer' }}
-              >
-                <Plus size={11} />
-                Log time
-              </button>
-            </div>
-          </div>
+      {/* 3-col strip: Take action | Take notice | Recent activity */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
 
-          {(actions.length > 0 || pendingSuggestions > 0 || recentPaymentsCount > 0) && (
-            <div>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Take notice</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {actions.map((a, i) => (
-                  <ActionBanner key={i} {...a} onClick={() => {}} />
-                ))}
-                {pendingSuggestions > 0 && (
-                  <ActionBanner
-                    icon="💳"
-                    label={`${suggestionTxCount} payment match${suggestionTxCount !== 1 ? 'es' : ''} to review`}
-                    detail="Open the relevant invoice to accept or dismiss"
-                    color="blue"
-                    onClick={() => {}}
-                  />
-                )}
-                {recentPaymentsCount > 0 && (
-                  <ActionBanner
-                    icon="✅"
-                    label={`${recentPaymentsCount} payment${recentPaymentsCount !== 1 ? 's' : ''} received in the last 7 days`}
-                    detail="Check the client cards below to confirm everything looks right"
-                    color="blue"
-                    onClick={() => {}}
-                  />
-                )}
-              </div>
+        {/* Take action — compact pill buttons, no card */}
+        <div>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Take action</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {[
+              { label: 'Draft invoice',  onClick: () => setShowInvoiceModal(true),     primary: true },
+              { label: 'New client',     onClick: () => setShowNewClientModal(true),   primary: false },
+              { label: 'New job',        onClick: () => setShowNewJobModal(true),      primary: false },
+              { label: 'New estimate',   onClick: () => setShowNewEstimateModal(true), primary: false },
+              { label: 'New quote',      onClick: () => setShowNewQuoteModal(true),    primary: false },
+              { label: 'Log time',       onClick: () => setShowLogTimeModal(true),     primary: false },
+            ].map(item => (
+              <button
+                key={item.label}
+                onClick={item.onClick}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, whiteSpace: 'nowrap',
+                  border: item.primary ? 'none' : '1.5px solid #e0ddd5',
+                  background: item.primary ? '#534AB7' : 'transparent',
+                  padding: '5px 12px', fontSize: 11, fontWeight: 600,
+                  color: item.primary ? '#fff' : '#555', cursor: 'pointer',
+                }}
+              >
+                <Plus size={11} />
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Take notice — dense, no extra padding */}
+        <div>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Take notice</p>
+          {(actions.length > 0 || pendingSuggestions > 0 || recentPaymentsCount > 0) ? (
+            <div style={{ borderRadius: 10, border: '1px solid #e8e6df', background: '#fff', overflow: 'hidden' }}>
+              {[
+                ...actions.map((a, i) => ({ key: `a${i}`, dot: a.color === 'red' ? '#ef4444' : a.color === 'amber' ? '#f59e0b' : '#3b82f6', label: a.label, detail: a.detail })),
+                ...(pendingSuggestions > 0 ? [{ key: 'sug', dot: '#3b82f6', label: `${suggestionTxCount} payment match${suggestionTxCount !== 1 ? 'es' : ''} to review`, detail: 'Open the relevant invoice to accept or dismiss' }] : []),
+                ...(recentPaymentsCount > 0 ? [{ key: 'pay', dot: '#16a34a', label: `${recentPaymentsCount} payment${recentPaymentsCount !== 1 ? 's' : ''} in the last 7 days`, detail: 'Check client cards below' }] : []),
+              ].map((item, i, arr) => (
+                <div key={item.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', borderBottom: i < arr.length - 1 ? '1px solid #f5f4f0' : 'none' }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.dot, flexShrink: 0, marginTop: 4 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, margin: 0, lineHeight: 1.3, color: '#1a1a1a' }}>{item.label}</p>
+                    <p style={{ fontSize: 11, color: '#888', margin: '1px 0 0', lineHeight: 1.3 }}>{item.detail}</p>
+                  </div>
+                </div>
+              ))}
             </div>
+          ) : (
+            <p style={{ fontSize: 12, color: '#bbb', paddingLeft: 2, margin: 0 }}>All clear</p>
           )}
         </div>
 
-        {/* Right: Recent activity */}
+        {/* Recent activity — dense, no extra padding */}
         <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 4 }}>Recent activity</p>
-          <div style={{ borderRadius: 14, border: '1px solid #e8e6df', background: '#fff', overflow: 'hidden' }}>
-            {(() => {
-              const activity = deriveRecentActivity(clients, flat)
-              if (activity.length === 0) {
-                return (
-                  <div style={{ padding: '24px 18px', textAlign: 'center' }}>
-                    <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No recent activity</p>
-                  </div>
-                )
-              }
-              return activity.map((item, i) => (
-                <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 16px', borderBottom: i < activity.length - 1 ? '1px solid #f5f4f0' : 'none' }}>
-                  <span style={{ fontSize: 11, color: '#bbb', minWidth: 62, paddingTop: 1, flexShrink: 0 }}>{item.time}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 12, fontWeight: 500, margin: 0, lineHeight: 1.4, color: '#1a1a1a' }}>{item.event}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
-                      <Link href={`/projects/${item.clientSlug}`} style={{ fontSize: 11, color: '#888', textDecoration: 'none' }}>
-                        {item.clientName}
-                      </Link>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Recent activity</p>
+          {(() => {
+            const activity = deriveRecentActivity(clients, flat)
+            if (activity.length === 0) return <p style={{ fontSize: 12, color: '#bbb', paddingLeft: 2, margin: 0 }}>No activity yet</p>
+            return (
+              <div style={{ borderRadius: 10, border: '1px solid #e8e6df', background: '#fff', overflow: 'hidden' }}>
+                {activity.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', borderBottom: i < activity.length - 1 ? '1px solid #f5f4f0' : 'none' }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.color, flexShrink: 0, marginTop: 4 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 12, fontWeight: 500, margin: 0, lineHeight: 1.3, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.event}</p>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 1 }}>
+                        <Link href={`/projects/${item.clientSlug}`} style={{ fontSize: 11, color: '#888', textDecoration: 'none' }}>{item.clientName}</Link>
+                        <span style={{ fontSize: 11, color: '#ccc' }}>·</span>
+                        <span style={{ fontSize: 11, color: '#bbb' }}>{item.time}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
-            })()}
-          </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
       </div>
 
       {/* Client cards */}
       <div>
-        <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, paddingLeft: 4 }}>Client accounts</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, margin: 0, paddingLeft: 4 }}>Client accounts</p>
+          <div style={{ position: 'relative' }}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: '#bbb', pointerEvents: 'none' }}>
+              <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <input
+              value={clientSearch}
+              onChange={e => setClientSearch(e.target.value)}
+              placeholder="Search clients, invoices, quotes…"
+              style={{ paddingLeft: 28, paddingRight: 10, paddingTop: 6, paddingBottom: 6, borderRadius: 8, border: '1px solid #e8e6df', background: '#fafaf8', fontSize: 12, outline: 'none', width: 240, color: '#1a1a1a' }}
+            />
+          </div>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {clients.map(client => {
+          {clients.filter(client => {
+            if (!clientSearch.trim()) return true
+            const q = clientSearch.toLowerCase()
+            const nameMatch = client.name.toLowerCase().includes(q) || (client.company ?? '').toLowerCase().includes(q) || (client.contactName ?? '').toLowerCase().includes(q)
+            const invoiceMatch = client.invoices.some(i => i.invoiceNumber.toLowerCase().includes(q) || (i.jobName ?? '').toLowerCase().includes(q))
+            const quoteMatch = client.acceptedQuotes.some(q2 => q2.title.toLowerCase().includes(q) || q2.quoteNumber.toLowerCase().includes(q))
+            return nameMatch || invoiceMatch || quoteMatch
+          }).map(client => {
             const isExpanded = expandedClient === client.id
             const clientInvoices = flat.filter(i => i.clientId === client.id)
             const openInvs = clientInvoices.filter(i => { const s = getDisplayStatus(i); return s !== 'PAID' && s !== 'VOID' })
