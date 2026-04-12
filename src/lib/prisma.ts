@@ -3,7 +3,7 @@ import { PrismaNeonHttp } from '@prisma/adapter-neon'
 
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL!
-  const adapter = new PrismaNeonHttp(connectionString)
+  const adapter = new PrismaNeonHttp(connectionString, {})
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],

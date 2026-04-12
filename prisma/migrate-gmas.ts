@@ -23,7 +23,7 @@ import { createHash } from 'crypto'
 import { readFileSync } from 'fs'
 import path from 'path'
 
-const adapter = new PrismaNeonHttp(process.env.DATABASE_URL!)
+const adapter = new PrismaNeonHttp(process.env.DATABASE_URL!, {})
 const prisma = new PrismaClient({ adapter })
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
