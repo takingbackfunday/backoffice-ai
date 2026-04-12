@@ -924,46 +924,57 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         />
       )}
 
-      {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-        <KpiCard label="Earned this month" value={fmt(kpis.revenueThisMonth)} color="green" />
-        <KpiCard
-          label="Outstanding" value={fmt(kpis.totalOutstanding)} sub={`${kpis.openInvoices} open`}
-          color={kpis.totalOutstanding > 0 ? 'amber' : 'neutral'}
-          active={clientFilter === 'outstanding'}
-          onClick={kpis.totalOutstanding > 0 ? () => {
-            const next = clientFilter === 'outstanding' ? null : 'outstanding'
-            setClientFilter(next)
-            if (next) {
-              const first = clients.find(c => c.outstanding > 0)
-              if (first) setExpandedClient(first.id)
-            } else {
-              setExpandedClient(null)
-            }
-            setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-          } : undefined}
-        />
-        <KpiCard
-          label="Overdue" value={kpis.overdueCount} sub={kpis.overdueCount > 0 ? 'Needs attention' : ''}
-          color={kpis.overdueCount > 0 ? 'red' : 'neutral'}
-          active={clientFilter === 'overdue'}
-          onClick={kpis.overdueCount > 0 ? () => {
-            const next = clientFilter === 'overdue' ? null : 'overdue'
-            setClientFilter(next)
-            if (next) {
-              const first = clients.find(c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE'))
-              if (first) setExpandedClient(first.id)
-            } else {
-              setExpandedClient(null)
-            }
-            setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-          } : undefined}
-        />
-        <KpiCard label="Clients" value={kpis.activeClients} sub="active" color="neutral" />
-      </div>
-
-      {/* Pipeline bar */}
-      <PipelineStrip clients={clients} flat={flat} />
+      {/* Unified KPI + pipeline row */}
+      {(() => {
+        const acceptedQuotesTotal = clients.reduce((s, c) => s + c.acceptedQuotes.reduce((qs, q) => qs + (q.totalQuoted ?? 0), 0), 0)
+        const acceptedQuotesCount = clients.reduce((s, c) => s + c.acceptedQuotes.length, 0)
+        const invoiced = flat.filter(i => { const s = getDisplayStatus(i); return s === 'DRAFT' || s === 'SENT' || s === 'PARTIAL' })
+        const overdueInvs = flat.filter(i => getDisplayStatus(i) === 'OVERDUE')
+        const collected = flat.filter(i => getDisplayStatus(i) === 'PAID')
+        const invoicedTotal = invoiced.reduce((s, i) => s + (i.total - i.paid), 0)
+        const overdueTotal = overdueInvs.reduce((s, i) => s + (i.total - i.paid), 0)
+        const collectedTotal = collected.reduce((s, i) => s + i.paid, 0)
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr', gap: 8, marginBottom: 20 }}>
+            <KpiCard label="Quotes accepted" value={acceptedQuotesCount > 0 ? fmt(acceptedQuotesTotal) : '—'} sub={acceptedQuotesCount > 0 ? `${acceptedQuotesCount} quote${acceptedQuotesCount !== 1 ? 's' : ''}` : 'none active'} color="neutral" />
+            <KpiCard
+              label="Outstanding" value={invoicedTotal > 0 ? fmt(invoicedTotal) : '—'} sub={`${invoiced.length} open`}
+              color={invoicedTotal > 0 ? 'amber' : 'neutral'}
+              active={clientFilter === 'outstanding'}
+              onClick={kpis.totalOutstanding > 0 ? () => {
+                const next = clientFilter === 'outstanding' ? null : 'outstanding'
+                setClientFilter(next)
+                if (next) {
+                  const first = clients.find(c => c.outstanding > 0)
+                  if (first) setExpandedClient(first.id)
+                } else {
+                  setExpandedClient(null)
+                }
+                setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+              } : undefined}
+            />
+            <KpiCard
+              label="Overdue" value={overdueTotal > 0 ? fmt(overdueTotal) : '—'} sub={overdueInvs.length > 0 ? `${overdueInvs.length} invoice${overdueInvs.length !== 1 ? 's' : ''}` : ''}
+              color={overdueInvs.length > 0 ? 'red' : 'neutral'}
+              active={clientFilter === 'overdue'}
+              onClick={overdueInvs.length > 0 ? () => {
+                const next = clientFilter === 'overdue' ? null : 'overdue'
+                setClientFilter(next)
+                if (next) {
+                  const first = clients.find(c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE'))
+                  if (first) setExpandedClient(first.id)
+                } else {
+                  setExpandedClient(null)
+                }
+                setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+              } : undefined}
+            />
+            <KpiCard label="Collected" value={collectedTotal > 0 ? fmt(collectedTotal) : '—'} sub={collected.length > 0 ? `${collected.length} paid` : ''} color={collectedTotal > 0 ? 'green' : 'neutral'} />
+            <KpiCard label="Earned this month" value={fmt(kpis.revenueThisMonth)} color="green" />
+            <KpiCard label="Clients" value={kpis.activeClients} sub="active" color="neutral" />
+          </div>
+        )
+      })()}
 
       {/* 3-col strip: Take action | Take notice | Recent activity */}
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
