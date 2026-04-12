@@ -18,12 +18,12 @@
  */
 
 import { PrismaClient, AccountType } from '../src/generated/prisma/client'
-import { PrismaNeon } from '@prisma/adapter-neon'
+import { PrismaNeonHttp } from '@prisma/adapter-neon'
 import { createHash } from 'crypto'
 import { readFileSync } from 'fs'
 import path from 'path'
 
-const adapter = new PrismaNeon(process.env.DATABASE_URL!)
+const adapter = new PrismaNeonHttp(process.env.DATABASE_URL!)
 const prisma = new PrismaClient({ adapter })
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
