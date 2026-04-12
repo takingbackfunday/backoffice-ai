@@ -49,7 +49,8 @@ interface Client {
   paymentTermDays: number
   billingType: string
   jobs: { id: string; name: string }[]
-  acceptedQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string }[]
+  acceptedQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; hasInvoice: boolean }[]
+  sentQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; sentAt: string | null }[]
 }
 
 interface InvoiceDefaults {
@@ -854,7 +855,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [kpis, setKpis] = useState(initialKpis)
   const [expandedClient, setExpandedClient] = useState<string | null>(null)
   const [clientSearch, setClientSearch] = useState('')
-  const [clientFilter, setClientFilter] = useState<'outstanding' | 'overdue' | null>(null)
+  const [clientFilter, setClientFilter] = useState<'outstanding' | 'overdue' | 'unsent' | null>(null)
   const cardsRef = useRef<HTMLDivElement>(null)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [showNewClientModal, setShowNewClientModal] = useState(false)
@@ -877,14 +878,67 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
     [clients]
   )
 
-  const actions = useMemo(() => {
-    const items: { icon: string; label: string; detail: string; color: 'red' | 'amber' | 'blue' }[] = []
+  const notices = useMemo(() => {
+    const items: { dot: string; label: string; detail: string; onClick: () => void }[] = []
+
+    // Invoice: overdue
     const overdue = flat.filter(i => getDisplayStatus(i) === 'OVERDUE')
-    if (overdue.length > 0) items.push({ icon: '⚠️', label: `${overdue.length} overdue invoice${overdue.length !== 1 ? 's' : ''}`, detail: `${fmt(overdue.reduce((s, i) => s + (i.total - i.paid), 0))} needs collecting`, color: 'red' })
+    if (overdue.length > 0) items.push({
+      dot: '#ef4444',
+      label: `Invoice — ${overdue.length} overdue`,
+      detail: `${fmt(overdue.reduce((s, i) => s + (i.total - i.paid), 0))} uncollected`,
+      onClick: () => {
+        const next: typeof clientFilter = clientFilter === 'overdue' ? null : 'overdue'
+        setClientFilter(next)
+        if (next) {
+          const first = clients.find(c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE'))
+          if (first) setExpandedClient(first.id)
+        } else setExpandedClient(null)
+        setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+      },
+    })
+
+    // Invoice: unsent drafts
     const drafts = flat.filter(i => i.status === 'DRAFT')
-    if (drafts.length > 0) items.push({ icon: '📨', label: `${drafts.length} draft${drafts.length !== 1 ? 's' : ''} ready to send`, detail: `${fmt(drafts.reduce((s, i) => s + i.total, 0))} in unsent invoices`, color: 'blue' })
+    if (drafts.length > 0) items.push({
+      dot: '#3b82f6',
+      label: `Invoice — ${drafts.length} draft${drafts.length !== 1 ? 's' : ''} unsent`,
+      detail: `${fmt(drafts.reduce((s, i) => s + i.total, 0))} waiting to be sent`,
+      onClick: () => {
+        const next: typeof clientFilter = clientFilter === 'unsent' ? null : 'unsent'
+        setClientFilter(next)
+        if (next) {
+          const first = clients.find(c => flat.some(i => i.clientId === c.id && i.status === 'DRAFT'))
+          if (first) setExpandedClient(first.id)
+        } else setExpandedClient(null)
+        setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+      },
+    })
+
+    // Quote: awaiting client acceptance (sent, no response)
+    const awaitingAcceptance = clients.flatMap(c => c.sentQuotes.map(q => ({ ...q, clientSlug: c.slug, clientName: c.name })))
+    if (awaitingAcceptance.length > 0) items.push({
+      dot: '#a78bfa',
+      label: `Quote — ${awaitingAcceptance.length} awaiting acceptance`,
+      detail: awaitingAcceptance.length === 1
+        ? `${awaitingAcceptance[0].quoteNumber} sent to ${awaitingAcceptance[0].clientName}`
+        : `Across ${new Set(awaitingAcceptance.map(q => q.clientSlug)).size} client${new Set(awaitingAcceptance.map(q => q.clientSlug)).size !== 1 ? 's' : ''}`,
+      onClick: () => router.push(`/projects/${awaitingAcceptance[0].clientSlug}/quotes`),
+    })
+
+    // Quote: accepted but not yet invoiced
+    const uninvoiced = clients.flatMap(c => c.acceptedQuotes.filter(q => !q.hasInvoice).map(q => ({ ...q, clientSlug: c.slug, clientName: c.name })))
+    if (uninvoiced.length > 0) items.push({
+      dot: '#10b981',
+      label: `Quote — ${uninvoiced.length} accepted, not yet invoiced`,
+      detail: uninvoiced.length === 1
+        ? `${uninvoiced[0].quoteNumber} for ${uninvoiced[0].clientName}`
+        : `${fmt(uninvoiced.reduce((s, q) => s + (q.totalQuoted ?? 0), 0))} ready to bill`,
+      onClick: () => router.push(`/projects/${uninvoiced[0].clientSlug}/quotes`),
+    })
+
     return items
-  }, [flat])
+  }, [flat, clients, clientFilter, router])
 
   if (clients.length === 0) {
     return (
@@ -979,27 +1033,26 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       {/* 3-col strip: Take action | Take notice | Recent activity */}
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
 
-        {/* Take action — compact pill buttons, no card */}
+        {/* Take action — 2-column pill buttons */}
         <div>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Take action</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
             {[
-              { label: 'Draft invoice',  onClick: () => setShowInvoiceModal(true),     primary: true },
-              { label: 'New client',     onClick: () => setShowNewClientModal(true),   primary: false },
-              { label: 'New job',        onClick: () => setShowNewJobModal(true),      primary: false },
-              { label: 'New estimate',   onClick: () => setShowNewEstimateModal(true), primary: false },
-              { label: 'New quote',      onClick: () => setShowNewQuoteModal(true),    primary: false },
-              { label: 'Log time',       onClick: () => setShowLogTimeModal(true),     primary: false },
+              { label: 'New client',   onClick: () => setShowNewClientModal(true) },
+              { label: 'Draft invoice', onClick: () => setShowInvoiceModal(true) },
+              { label: 'New job',      onClick: () => setShowNewJobModal(true) },
+              { label: 'New quote',    onClick: () => setShowNewQuoteModal(true) },
+              { label: 'Log time',     onClick: () => setShowLogTimeModal(true) },
+              { label: 'New estimate', onClick: () => setShowNewEstimateModal(true) },
             ].map(item => (
               <button
                 key={item.label}
                 onClick={item.onClick}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, whiteSpace: 'nowrap',
-                  border: item.primary ? 'none' : '1.5px solid #e0ddd5',
-                  background: item.primary ? '#534AB7' : 'transparent',
+                  border: '1.5px solid #e0ddd5', background: 'transparent',
                   padding: '5px 12px', fontSize: 11, fontWeight: 600,
-                  color: item.primary ? '#fff' : '#555', cursor: 'pointer',
+                  color: '#555', cursor: 'pointer',
                 }}
               >
                 <Plus size={11} />
@@ -1012,21 +1065,34 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         {/* Take notice — dense, no extra padding */}
         <div>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Take notice</p>
-          {(actions.length > 0 || pendingSuggestions > 0 || recentPaymentsCount > 0) ? (
+          {(notices.length > 0 || pendingSuggestions > 0 || recentPaymentsCount > 0) ? (
             <div style={{ borderRadius: 10, border: '1px solid #e8e6df', background: '#fff', overflow: 'hidden' }}>
               {[
-                ...actions.map((a, i) => ({ key: `a${i}`, dot: a.color === 'red' ? '#ef4444' : a.color === 'amber' ? '#f59e0b' : '#3b82f6', label: a.label, detail: a.detail })),
-                ...(pendingSuggestions > 0 ? [{ key: 'sug', dot: '#3b82f6', label: `${suggestionTxCount} payment match${suggestionTxCount !== 1 ? 'es' : ''} to review`, detail: 'Open the relevant invoice to accept or dismiss' }] : []),
-                ...(recentPaymentsCount > 0 ? [{ key: 'pay', dot: '#16a34a', label: `${recentPaymentsCount} payment${recentPaymentsCount !== 1 ? 's' : ''} in the last 7 days`, detail: 'Check client cards below' }] : []),
-              ].map((item, i, arr) => (
-                <div key={item.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', borderBottom: i < arr.length - 1 ? '1px solid #f5f4f0' : 'none' }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.dot, flexShrink: 0, marginTop: 4 }} />
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, margin: 0, lineHeight: 1.3, color: '#1a1a1a' }}>{item.label}</p>
-                    <p style={{ fontSize: 11, color: '#888', margin: '1px 0 0', lineHeight: 1.3 }}>{item.detail}</p>
+                ...notices.map((n, i) => ({ key: `n${i}`, dot: n.dot, label: n.label, detail: n.detail, onClick: n.onClick })),
+                ...(pendingSuggestions > 0 ? [{ key: 'sug', dot: '#3b82f6', label: `${suggestionTxCount} payment match${suggestionTxCount !== 1 ? 'es' : ''} to review`, detail: 'Open the relevant invoice to accept or dismiss', onClick: undefined as (() => void) | undefined }] : []),
+                ...(recentPaymentsCount > 0 ? [{ key: 'pay', dot: '#16a34a', label: `${recentPaymentsCount} payment${recentPaymentsCount !== 1 ? 's' : ''} in the last 7 days`, detail: 'Check client cards below', onClick: undefined as (() => void) | undefined }] : []),
+              ].map((item, i, arr) => {
+                const isActive = (item.label.startsWith('Invoice — ') && (
+                  (item.label.includes('overdue') && clientFilter === 'overdue') ||
+                  (item.label.includes('unsent') && clientFilter === 'unsent')
+                ))
+                return (
+                  <div
+                    key={item.key}
+                    onClick={item.onClick}
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', borderBottom: i < arr.length - 1 ? '1px solid #f5f4f0' : 'none', cursor: item.onClick ? 'pointer' : 'default', background: isActive ? '#f8f7fd' : 'transparent', transition: 'background 0.1s' }}
+                    onMouseEnter={e => { if (item.onClick) (e.currentTarget as HTMLDivElement).style.background = isActive ? '#f0eef9' : '#fafaf8' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isActive ? '#f8f7fd' : 'transparent' }}
+                  >
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.dot, flexShrink: 0, marginTop: 4 }} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, margin: 0, lineHeight: 1.3, color: '#1a1a1a' }}>{item.label}</p>
+                      <p style={{ fontSize: 11, color: '#888', margin: '1px 0 0', lineHeight: 1.3 }}>{item.detail}</p>
+                    </div>
+                    {item.onClick && <span style={{ fontSize: 10, color: '#bbb', flexShrink: 0, marginTop: 3 }}>→</span>}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <p style={{ fontSize: 12, color: '#bbb', paddingLeft: 2, margin: 0 }}>All clear</p>
@@ -1068,9 +1134,9 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
             {clientFilter && (
               <button
                 onClick={() => setClientFilter(null)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, color: clientFilter === 'overdue' ? '#dc2626' : '#a16207', background: clientFilter === 'overdue' ? '#fef2f2' : '#fffbeb', border: `1px solid ${clientFilter === 'overdue' ? '#fecaca' : '#fde68a'}`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, color: clientFilter === 'overdue' ? '#dc2626' : clientFilter === 'unsent' ? '#1d4ed8' : '#a16207', background: clientFilter === 'overdue' ? '#fef2f2' : clientFilter === 'unsent' ? '#eff6ff' : '#fffbeb', border: `1px solid ${clientFilter === 'overdue' ? '#fecaca' : clientFilter === 'unsent' ? '#bfdbfe' : '#fde68a'}`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer' }}
               >
-                {clientFilter === 'overdue' ? 'Overdue' : 'Outstanding'} ✕
+                {clientFilter === 'overdue' ? 'Overdue' : clientFilter === 'unsent' ? 'Unsent drafts' : 'Outstanding'} ✕
               </button>
             )}
           </div>
@@ -1089,7 +1155,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {clients.filter(client => {
-            // KPI filter
+            // KPI / notice filter
             if (clientFilter === 'outstanding') {
               if (client.outstanding <= 0) return false
             }
@@ -1097,12 +1163,17 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               const clientFlat = flat.filter(i => i.clientId === client.id)
               if (!clientFlat.some(i => getDisplayStatus(i) === 'OVERDUE')) return false
             }
+            if (clientFilter === 'unsent') {
+              const clientFlat = flat.filter(i => i.clientId === client.id)
+              if (!clientFlat.some(i => i.status === 'DRAFT')) return false
+            }
             // Omni search
             if (!clientSearch.trim()) return true
             const q = clientSearch.toLowerCase()
             const nameMatch = client.name.toLowerCase().includes(q) || (client.company ?? '').toLowerCase().includes(q) || (client.contactName ?? '').toLowerCase().includes(q)
             const invoiceMatch = client.invoices.some(i => i.invoiceNumber.toLowerCase().includes(q) || (i.jobName ?? '').toLowerCase().includes(q))
             const quoteMatch = client.acceptedQuotes.some(q2 => q2.title.toLowerCase().includes(q) || q2.quoteNumber.toLowerCase().includes(q))
+              || client.sentQuotes.some(q2 => q2.title.toLowerCase().includes(q) || q2.quoteNumber.toLowerCase().includes(q))
             return nameMatch || invoiceMatch || quoteMatch
           }).map(client => {
             const isExpanded = expandedClient === client.id
