@@ -134,7 +134,7 @@ function StatusBadge({ status }: { status: string }) {
 /*  KpiCard                                                             */
 /* ------------------------------------------------------------------ */
 
-function KpiCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: 'green' | 'amber' | 'red' | 'neutral' }) {
+function KpiCard({ label, value, sub, color, onClick, active }: { label: string; value: string | number; sub?: string; color: 'green' | 'amber' | 'red' | 'neutral'; onClick?: () => void; active?: boolean }) {
   const colors = {
     green:   { border: '#bbf7d0', bg: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)', text: '#15803d' },
     amber:   { border: '#fde68a', bg: 'linear-gradient(135deg, #fffbeb 0%, #fefce8 100%)', text: '#a16207' },
@@ -143,12 +143,18 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
   }
   const c = colors[color]
   return (
-    <div style={{ borderRadius: 10, border: `1px solid ${c.border}`, background: c.bg, padding: '10px 14px', display: 'flex', alignItems: 'baseline', gap: 10 }}>
+    <div
+      onClick={onClick}
+      style={{ borderRadius: 10, border: `1.5px solid ${active ? c.text : c.border}`, background: c.bg, padding: '10px 14px', display: 'flex', alignItems: 'baseline', gap: 10, cursor: onClick ? 'pointer' : 'default', transition: 'border-color 0.15s, box-shadow 0.15s', boxShadow: active ? `0 0 0 3px ${c.text}18` : 'none' }}
+      onMouseEnter={e => { if (onClick) (e.currentTarget as HTMLDivElement).style.borderColor = c.text }}
+      onMouseLeave={e => { if (onClick && !active) (e.currentTarget as HTMLDivElement).style.borderColor = c.border }}
+    >
       <p style={{ fontSize: 18, fontWeight: 700, color: c.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1, margin: 0, flexShrink: 0 }}>{value}</p>
       <div style={{ minWidth: 0 }}>
         <p style={{ fontSize: 11, fontWeight: 600, color: '#888', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</p>
         {sub && <p style={{ fontSize: 10, color: '#aaa', margin: 0 }}>{sub}</p>}
       </div>
+      {onClick && <span style={{ marginLeft: 'auto', fontSize: 10, color: c.text, opacity: 0.6, flexShrink: 0 }}>↓</span>}
     </div>
   )
 }
@@ -848,6 +854,8 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [kpis, setKpis] = useState(initialKpis)
   const [expandedClient, setExpandedClient] = useState<string | null>(null)
   const [clientSearch, setClientSearch] = useState('')
+  const [clientFilter, setClientFilter] = useState<'outstanding' | 'overdue' | null>(null)
+  const cardsRef = useRef<HTMLDivElement>(null)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [showNewJobModal, setShowNewJobModal] = useState(false)
@@ -917,12 +925,45 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       )}
 
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-        <KpiCard label="Earned this month"  value={fmt(kpis.revenueThisMonth)}  color="green" />
-        <KpiCard label="Outstanding"        value={fmt(kpis.totalOutstanding)}  sub={`${kpis.openInvoices} open`} color={kpis.totalOutstanding > 0 ? 'amber' : 'neutral'} />
-        <KpiCard label="Overdue"            value={kpis.overdueCount}           sub={kpis.overdueCount > 0 ? 'Needs attention' : ''} color={kpis.overdueCount > 0 ? 'red' : 'neutral'} />
-        <KpiCard label="Clients"            value={kpis.activeClients}          sub="active" color="neutral" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <KpiCard label="Earned this month" value={fmt(kpis.revenueThisMonth)} color="green" />
+        <KpiCard
+          label="Outstanding" value={fmt(kpis.totalOutstanding)} sub={`${kpis.openInvoices} open`}
+          color={kpis.totalOutstanding > 0 ? 'amber' : 'neutral'}
+          active={clientFilter === 'outstanding'}
+          onClick={kpis.totalOutstanding > 0 ? () => {
+            const next = clientFilter === 'outstanding' ? null : 'outstanding'
+            setClientFilter(next)
+            if (next) {
+              const first = clients.find(c => c.outstanding > 0)
+              if (first) setExpandedClient(first.id)
+            } else {
+              setExpandedClient(null)
+            }
+            setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+          } : undefined}
+        />
+        <KpiCard
+          label="Overdue" value={kpis.overdueCount} sub={kpis.overdueCount > 0 ? 'Needs attention' : ''}
+          color={kpis.overdueCount > 0 ? 'red' : 'neutral'}
+          active={clientFilter === 'overdue'}
+          onClick={kpis.overdueCount > 0 ? () => {
+            const next = clientFilter === 'overdue' ? null : 'overdue'
+            setClientFilter(next)
+            if (next) {
+              const first = clients.find(c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE'))
+              if (first) setExpandedClient(first.id)
+            } else {
+              setExpandedClient(null)
+            }
+            setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+          } : undefined}
+        />
+        <KpiCard label="Clients" value={kpis.activeClients} sub="active" color="neutral" />
       </div>
+
+      {/* Pipeline bar */}
+      <PipelineStrip clients={clients} flat={flat} />
 
       {/* 3-col strip: Take action | Take notice | Recent activity */}
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
@@ -1009,9 +1050,19 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       </div>
 
       {/* Client cards */}
-      <div>
+      <div ref={cardsRef}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, margin: 0, paddingLeft: 4 }}>Client accounts</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, margin: 0, paddingLeft: 4 }}>Client accounts</p>
+            {clientFilter && (
+              <button
+                onClick={() => setClientFilter(null)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, color: clientFilter === 'overdue' ? '#dc2626' : '#a16207', background: clientFilter === 'overdue' ? '#fef2f2' : '#fffbeb', border: `1px solid ${clientFilter === 'overdue' ? '#fecaca' : '#fde68a'}`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer' }}
+              >
+                {clientFilter === 'overdue' ? 'Overdue' : 'Outstanding'} ✕
+              </button>
+            )}
+          </div>
           <div style={{ position: 'relative' }}>
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: '#bbb', pointerEvents: 'none' }}>
               <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/>
@@ -1027,6 +1078,15 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {clients.filter(client => {
+            // KPI filter
+            if (clientFilter === 'outstanding') {
+              if (client.outstanding <= 0) return false
+            }
+            if (clientFilter === 'overdue') {
+              const clientFlat = flat.filter(i => i.clientId === client.id)
+              if (!clientFlat.some(i => getDisplayStatus(i) === 'OVERDUE')) return false
+            }
+            // Omni search
             if (!clientSearch.trim()) return true
             const q = clientSearch.toLowerCase()
             const nameMatch = client.name.toLowerCase().includes(q) || (client.company ?? '').toLowerCase().includes(q) || (client.contactName ?? '').toLowerCase().includes(q)
