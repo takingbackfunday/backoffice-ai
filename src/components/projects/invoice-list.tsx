@@ -329,7 +329,7 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
         </div>
       ) : (
         <div className="rounded-xl border overflow-hidden">
-          <div className="grid grid-cols-[110px_1fr_110px_110px_130px_110px_80px] bg-muted/40 px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="grid grid-cols-[minmax(140px,auto)_1fr_110px_110px_130px_90px_80px] bg-muted/40 px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
             <span>Invoice</span>
             <span>Job</span>
             <span className="text-right">Total</span>
@@ -352,13 +352,13 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
               <div
                 key={inv.id}
                 className={cn(
-                  'grid grid-cols-[110px_1fr_110px_110px_130px_110px_80px] border-t px-4 py-3 items-center hover:bg-muted/10 cursor-pointer transition-colors',
+                  'grid grid-cols-[minmax(140px,auto)_1fr_110px_110px_130px_90px_80px] border-t px-4 py-3 items-center hover:bg-muted/10 cursor-pointer transition-colors',
                   idx % 2 === 0 ? '' : 'bg-muted/5'
                 )}
                 onClick={() => setPreview(inv)}
               >
-                <span className="text-sm font-medium text-primary">{inv.invoiceNumber}</span>
-                <span className="text-sm text-muted-foreground truncate pr-2">{inv.job?.name ?? '—'}</span>
+                <span className="text-sm font-medium text-primary whitespace-nowrap">{inv.invoiceNumber}</span>
+                <span className="text-sm text-muted-foreground truncate min-w-0 pr-2">{inv.job?.name ?? '—'}</span>
                 <span className="text-sm tabular-nums text-right">{fmt(total, inv.currency)}</span>
                 <span className={cn('text-sm tabular-nums text-right', balance > 0 && isOverdue ? 'text-red-600 font-medium' : '')}>
                   {balance > 0 ? fmt(balance, inv.currency) : <span className="text-green-600 font-medium">Paid</span>}
