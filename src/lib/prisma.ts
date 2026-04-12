@@ -1,9 +1,10 @@
 import { PrismaClient } from '@/generated/prisma/client'
-import { PrismaNeonHttp } from '@prisma/adapter-neon'
+import { PrismaNeon } from '@prisma/adapter-neon'
 
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL!
-  const adapter = new PrismaNeonHttp(connectionString, {})
+  // PrismaNeon uses @neondatabase/serverless WebSocket transport, which supports transactions
+  const adapter = new PrismaNeon({ connectionString })
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
