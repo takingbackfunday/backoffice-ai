@@ -47,7 +47,7 @@ Required in `.env.local`:
 
 **Stack:** Next.js App Router, TypeScript, PostgreSQL (Neon) + Prisma, Clerk auth, Tailwind CSS 4, shadcn/ui (base-nova), Zustand, Recharts, date-fns, decimal.js.
 
-**Database driver:** `@prisma/adapter-neon` (`PrismaNeonHttp`) — HTTP transport, no TLS handshake on cold start. `pg` / `@types/pg` are not in the project. `next.config.ts` lists `sharp`, `playwright-core`, `@react-pdf/renderer`, and `prisma` in `serverExternalPackages` to keep function bundle sizes small.
+**Database driver:** `@prisma/adapter-neon` (`PrismaNeon`) with `@neondatabase/serverless` — WebSocket transport, no TLS handshake on cold start, and full transaction support. `pg` / `@types/pg` are not in the project. `next.config.ts` lists `sharp`, `playwright-core`, `@react-pdf/renderer`, and `prisma` in `serverExternalPackages` to keep function bundle sizes small.
 
 ### Data Model
 
@@ -310,15 +310,16 @@ import { PrismaClient } from '@/generated/prisma/client'
 
 `src/generated/` is gitignored. On deploy Netlify runs `prisma generate` automatically. Locally, run it manually with `DATABASE_URL` prefixed (see Commands above).
 
-### Prisma adapter — PrismaNeonHttp
+### Prisma adapter — PrismaNeon (WebSocket)
 
-The project uses `@prisma/adapter-neon` (`PrismaNeonHttp`) for HTTP transport to Neon — no `pg` package. The `options` second argument is required by the type signature even though all its fields are optional; always pass `{}`:
+The project uses `@prisma/adapter-neon` (`PrismaNeon`) with `@neondatabase/serverless` — WebSocket transport. This supports Prisma interactive transactions (`$transaction`) and batch transactions, unlike `PrismaNeonHttp` which only supports HTTP and does **not** support transactions at all.
 
 ```ts
-const adapter = new PrismaNeonHttp(connectionString, {})
+import { PrismaNeon } from '@prisma/adapter-neon'
+const adapter = new PrismaNeon({ connectionString })
 ```
 
-Do **not** use `PrismaPg` or `@prisma/adapter-pg` — those packages are not installed.
+Do **not** use `PrismaNeonHttp`, `PrismaPg`, or `@prisma/adapter-pg` — `PrismaNeonHttp` breaks on any `$transaction` call (including Prisma nested writes), and `pg`/`adapter-pg` are not installed.
 
 ### Job model has no `isActive` field
 
