@@ -19,6 +19,7 @@ Financial management tool for freelancers, consultants, and small property manag
 - **Quotes**: client-facing quotes generated from estimates; job is selected at quote generation time (not locked to the estimate); margin rules applied per tag; side-by-side quote generator with margin sliders, grouping toggles, and inline scope editing; versioning and amendment flows; send by email with PDF attachment; quote acceptance tracking
 - **Fulfillment tracking**: quotes link to invoices via `quoteId`; fulfillment bar shows agreed vs. invoiced vs. paid; uninvoiced balance computed at query time
 - **Margin rules**: user-configurable default margins per work tag (design, dev, pm, etc.) applied automatically during quote generation
+- **Client Hub dashboard** (`/studio`): KPI strip (earned, outstanding, overdue, active clients), pipeline funnel (accepted quotes → invoiced → overdue → collected), action buttons, attention banners, and recent activity — all derived from existing invoice/quote data with no extra fetching
 - Invoice lifecycle: `DRAFT → SENT → PARTIAL → PAID` (or `VOID`)
 - AI-assisted invoice creation — describe the work, get a pre-filled draft
 - Send invoices by email with PDF attachment and configurable payment methods
@@ -56,7 +57,7 @@ Financial management tool for freelancers, consultants, and small property manag
 
 - **Framework**: Next.js App Router, TypeScript
 - **Auth**: Clerk
-- **Database**: PostgreSQL (Neon) via Prisma 7
+- **Database**: PostgreSQL (Neon) via Prisma 7 + `@prisma/adapter-neon` (HTTP transport, no `pg`)
 - **Styling**: Tailwind CSS 4 + shadcn/ui (base-nova)
 - **AI**: OpenRouter (`anthropic/claude-sonnet-4.6` for reasoning, Gemini Flash Lite for classification)
 - **PDF**: react-pdf/renderer
@@ -102,6 +103,10 @@ DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm prisma generate
 ```
 
 `src/generated/` is gitignored — rebuilt automatically at Netlify deploy time.
+
+### Prisma adapter — PrismaNeonHttp
+
+Uses `@prisma/adapter-neon` (HTTP transport). The `options` second argument must be passed even though all fields are optional — `new PrismaNeonHttp(connectionString, {})`. `pg` / `@prisma/adapter-pg` are not installed.
 
 ### Netlify serverless — no fire-and-forget
 
