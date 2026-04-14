@@ -4,27 +4,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Git Workflow
 
-**Commit without pushing** during development. Never run `git push` unless the user explicitly asks. This avoids triggering Netlify deploys on every change.
+**Commit without pushing** during development. Never run `git push` unless the user explicitly asks. Pushing to `main` triggers a Fly.io deploy via GitHub Actions. To deploy manually without pushing: `fly deploy`.
 
 ## Commands
 
 ```bash
 pnpm dev          # Start development server
-pnpm build        # Build for production
+pnpm build        # Build for production (includes prisma generate)
 pnpm lint         # Run ESLint
 pnpm db:push      # Push Prisma schema changes to database
 pnpm db:seed      # Seed database with initial data
 pnpm db:studio    # Open Prisma Studio (DB browser)
+fly deploy        # Deploy to Fly.io
+fly logs          # Tail production logs
+fly ssh console   # SSH into the running container
 ```
 
-**IMPORTANT — always prefix DB commands with DATABASE_URL:**
+**IMPORTANT — DB CLI commands use `DIRECT_URL` (non-pooled connection):**
 
 ```bash
-DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm db:push
-DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm prisma generate
+DIRECT_URL="<direct-connection-string>" pnpm db:push
+DIRECT_URL="<direct-connection-string>" pnpm prisma generate
 ```
 
-Prisma's config loader does not read `.env.local` for CLI commands.
+Prisma's config loader does not read `.env.local` for CLI commands. `DIRECT_URL` must be the non-pooled Neon connection string (no `-pooler` in hostname). `DATABASE_URL` (pooled) is used by the running app.
 
 There are no automated tests in this project.
 
@@ -40,7 +43,8 @@ Required in `.env.local`:
 - `PLAID_CLIENT_ID`, `PLAID_SECRET` — Plaid API credentials (US bank sync); `PLAID_ENV`: `sandbox | development | production` (default: `sandbox`)
 - `FINEXER_CLIENT_ID`, `FINEXER_CLIENT_SECRET` — Finexer Open Banking credentials (UK bank sync)
 - `ENABLE_BANKING_CLIENT_ID`, `ENABLE_BANKING_CLIENT_SECRET` — Enable Banking credentials (EU bank sync, 29 countries); `ENABLE_BANKING_BASE_URL` optional (defaults to production)
-- `UPLOADTHING_TOKEN` — Uploadthing API token for file storage (set in Netlify env + `.env.local`)
+- `DIRECT_URL` — Neon PostgreSQL **non-pooled** connection string (no `-pooler` in hostname); used by Prisma CLI only
+- `UPLOADTHING_TOKEN` — Uploadthing API token for file storage
 - `MISTRAL_API_KEY` — Mistral API key for receipt OCR (`mistral-ocr-latest`); get from https://console.mistral.ai/
 - `RESEND_API_KEY` — Resend transactional email (document request emails, invoice emails); optional — skipped gracefully if absent
 - `RESEND_FROM` — sender address, e.g. `Backoffice <noreply@backoffice.cv>`; defaults to that value if unset
@@ -48,9 +52,11 @@ Required in `.env.local`:
 
 ## Architecture
 
-**Stack:** Next.js App Router, TypeScript, PostgreSQL (Neon) + Prisma, Clerk auth, Tailwind CSS 4, shadcn/ui (base-nova), Zustand, Recharts, date-fns, decimal.js.
+**Stack:** Next.js App Router (`output: "standalone"`), TypeScript, PostgreSQL (Neon) + Prisma 7 (via `@prisma/adapter-neon` WebSocket transport), Clerk auth, Tailwind CSS 4, shadcn/ui (base-nova), Zustand, Recharts, date-fns, decimal.js.
 
-**Database driver:** `@prisma/adapter-neon` (`PrismaNeon`) with `@neondatabase/serverless` — WebSocket transport, no TLS handshake on cold start, and full transaction support. `pg` / `@types/pg` are not in the project. `next.config.ts` lists `sharp`, `playwright-core`, `@react-pdf/renderer`, and `prisma` in `serverExternalPackages` to keep function bundle sizes small.
+**Hosting:** Fly.io (shared-cpu-1x, 1GB RAM, single persistent container, `fra` region — matches Neon EU Central 1). Deployed via `fly deploy` or GitHub Actions on push to `main`. VM suspends after ~5 min idle and resumes in ~300ms.
+
+**Database driver:** `@prisma/adapter-neon` (`PrismaNeon`) with `@neondatabase/serverless` — WebSocket transport, full transaction support. `pg` / `@types/pg` are not in the project. `next.config.ts` lists `sharp`, `playwright-core`, `@react-pdf/renderer`, and `prisma` in `serverExternalPackages`.
 
 ### Data Model
 
@@ -381,9 +387,9 @@ Tax is stored as a regular line item with `isTaxLine: true`. This avoids a separ
 
 All `useState` and `useReducer` calls must be declared at the top level of the component function — never inside helper functions, shims, or conditional branches. The linter enforces `react-hooks/rules-of-hooks`.
 
-### Invoice matching runs synchronously — no fire-and-forget
+### Background work after response
 
-Netlify serverless kills the process immediately after the response is sent. Matching functions (`matchInvoicePayments`, `matchTenantPayments`) must be `await`ed before returning — use `await Promise.allSettled([...])`. Fire-and-forget `.then().catch()` chains will silently never run.
+On Fly.io the Node process persists, so fire-and-forget patterns work. However, `await Promise.allSettled([...])` is still preferred for critical work (invoice matching via `matchInvoicePayments`, tenant matching via `matchTenantPayments`) to ensure errors are caught and logged.
 
 ### Invoice renegotiation flow
 
@@ -404,3 +410,15 @@ Invoice numbers are generated as `{INITIALS}_{DDMMYYYY}_{SEQ}` — e.g. `AMC_041
 ### PDF generation
 
 `GET /api/projects/[id]/invoices/[invoiceId]/pdf` generates a PDF via `generateInvoicePdf` (react-pdf/renderer, `src/lib/pdf/invoice-pdf.tsx`). The response must wrap the buffer in `new Uint8Array(pdfBuffer)` — passing a `Buffer` directly fails TypeScript (`Buffer` is not assignable to `BodyInit`). `PdfInvoice` includes sender fields (`fromEmail`, `fromPhone`, `fromAddress`, `fromVatNumber`, `fromWebsite`) read from `UserPreference.data` at PDF generation time.
+
+### Fly.io — build-time vs runtime env vars
+
+`NEXT_PUBLIC_*` variables are baked into the JS bundle at build time. They are set as `[build.args]` in `fly.toml`. Runtime secrets (`DATABASE_URL`, `CLERK_SECRET_KEY`, etc.) are set via `fly secrets set` and injected at runtime — never in the Docker image.
+
+If you add a new `NEXT_PUBLIC_*` variable, add it to both:
+1. `fly.toml` under `[build.args]`
+2. The `ARG` / `ENV` declarations in the Dockerfile builder stage
+
+### Fly.io — Prisma adapter uses pooled DATABASE_URL
+
+`DATABASE_URL` should be the **pooled** Neon connection string (has `-pooler` in hostname) — used by the running app. `DIRECT_URL` (non-pooled, no `-pooler`) is used only by Prisma CLI commands (`db:push`, `prisma generate`). The split is configured in `prisma.config.ts` which prefers `DIRECT_URL` when set.

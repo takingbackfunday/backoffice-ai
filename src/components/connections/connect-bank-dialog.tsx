@@ -6,7 +6,7 @@ import type { ConnectionInitResponse } from '@/types/bank-providers'
 
 interface ConnectBankDialogProps {
   accountId: string
-  onConnected: (result: { connectionId: string; imported: number; skipped: number; provider: string }) => void
+  onConnected: (result: { connectionId: string; imported: number; skipped: number; provider: 'PLAID' | 'ENABLE_BANKING' | 'BROWSER_AGENT' }) => void
   onCancel: () => void
 }
 

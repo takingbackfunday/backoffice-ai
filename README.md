@@ -5,7 +5,7 @@ Financial management tool for freelancers, consultants, and small property manag
 ## Features
 
 ### Transactions & Categorisation
-- Import bank transactions via CSV upload or automated bank sync (Browserless.io + Playwright)
+- Import bank transactions via CSV upload or automated bank sync (Open Banking APIs)
 - Duplicate detection via SHA-256 hash over `(account, date, amount, description)`
 - Auto-categorise at import using a priority-ordered rules engine (regex, amount ranges, payee match, etc.)
 - AI rules agent suggests new rules based on transaction edits; "Run rules agent" and "Create rule" open inline modals from the transactions toolbar (no page navigation)
@@ -49,19 +49,22 @@ Financial management tool for freelancers, consultants, and small property manag
 - Conversation memory across turns within a session
 
 ### Bank Sync
-- LLM-guided browser automation discovers the CSV download flow for any bank
-- Saves a playbook per account; subsequent syncs replay it automatically
-- AES-256-GCM encrypted credential storage per user
+- **US** → Plaid (cursor-based incremental sync via PlaidLink)
+- **GB** → Finexer (UK Open Banking, 99% coverage, OAuth redirect)
+- **EU** → Enable Banking (PSD2/Berlin Group, 2,500+ banks across 29 countries, OAuth redirect)
+- Browser-agent fallback (Playwright + Browserless.io) for institutions not covered by Open Banking APIs
+- AES-256-GCM encrypted token storage per user
 
 ## Stack
 
-- **Framework**: Next.js App Router, TypeScript
+- **Framework**: Next.js App Router (`output: standalone`), TypeScript
+- **Hosting**: Fly.io (shared-cpu-1x, 1GB RAM, `fra` region, suspend-when-idle)
 - **Auth**: Clerk
 - **Database**: PostgreSQL (Neon) via Prisma 7 + `@prisma/adapter-neon` + `@neondatabase/serverless` (WebSocket transport, full transaction support, no `pg`)
 - **Styling**: Tailwind CSS 4 + shadcn/ui (base-nova)
 - **AI**: OpenRouter (`anthropic/claude-sonnet-4.6` for reasoning, Gemini Flash Lite for classification)
 - **PDF**: react-pdf/renderer
-- **Bank automation**: playwright-core + Browserless.io
+- **Bank sync**: Plaid (US), Finexer (GB), Enable Banking (EU); playwright-core + Browserless.io as fallback
 
 ## Development
 
@@ -70,7 +73,19 @@ pnpm install
 pnpm dev
 ```
 
-Requires a `.env.local` with Clerk, Neon, OpenRouter, Browserless, and encryption secret. See CLAUDE.md for the full variable list.
+Requires a `.env.local` with Clerk, Neon, OpenRouter, and encryption secret. See CLAUDE.md for the full variable list.
+
+## Deployment
+
+Hosted on Fly.io. Push to `main` triggers a deploy via GitHub Actions.
+
+```bash
+fly deploy        # Manual deploy
+fly logs          # Tail production logs
+fly ssh console   # SSH into the container
+```
+
+Requires a `FLY_API_TOKEN` secret in GitHub repo settings.
 
 ## Pending setup
 

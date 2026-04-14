@@ -111,9 +111,6 @@ importers:
         specifier: ^5.0.11
         version: 5.0.11(@types/react@19.2.14)(immer@11.1.4)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
     devDependencies:
-      '@netlify/plugin-nextjs':
-        specifier: ^5.15.9
-        version: 5.15.9
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.2.1
@@ -888,10 +885,6 @@ packages:
   '@neondatabase/serverless@1.0.2':
     resolution: {integrity: sha512-I5sbpSIAHiB+b6UttofhrN/UJXII+4tZPAq1qugzwCwLIL8EZLV7F/JyHUrEIiGgQpEXzpnjlJ+zwcEhheGvCw==}
     engines: {node: '>=19.0.0'}
-
-  '@netlify/plugin-nextjs@5.15.9':
-    resolution: {integrity: sha512-4kJvV+wrt4/ncehfaOXfhv1FYKCv9EFjq6/tgXXYSlqPDcbsuTXR0DTz9IvyZ/CpPRadRD/zzIqD9wXgCmA2lg==}
-    engines: {node: '>=18.0.0'}
 
   '@next/env@16.1.6':
     resolution: {integrity: sha512-N1ySLuZjnAtN3kFnwhAwPvZah8RJxKasD7x1f8shFqhncnWZn4JMfg37diLNuoHsLAlrDfM3g4mawVdtAG8XLQ==}
@@ -4961,8 +4954,6 @@ snapshots:
     dependencies:
       '@types/node': 22.19.17
       '@types/pg': 8.20.0
-
-  '@netlify/plugin-nextjs@5.15.9': {}
 
   '@next/env@16.1.6': {}
 
