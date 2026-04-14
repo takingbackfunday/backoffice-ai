@@ -49,12 +49,28 @@ export async function POST(
     })
 
     const adapter = getAdapter(connection.provider)
-    const externalAccountId = connection.tellerAccountId || connection.plaidAccountId || ''
 
     let allTransactions: NormalizedTransaction[] = []
     let newCursor: string | undefined
 
-    if (connection.provider === 'TELLER') {
+    if (connection.provider === 'PLAID') {
+      // Plaid uses cursor-based incremental sync
+      let cursor = connection.lastSyncCursor || ''
+      let hasMore = true
+      while (hasMore) {
+        const result = await adapter.fetchTransactions(
+          accessToken,
+          connection.plaidAccountId || '',
+          { cursor, count: 500 }
+        )
+        allTransactions = [...allTransactions, ...result.transactions]
+        cursor = result.cursor || ''
+        hasMore = result.hasMore
+        newCursor = cursor
+      }
+    } else {
+      // Enable Banking uses date-range sync
+      const externalAccountId = connection.enableBankingAccountId || ''
       const startDate = connection.lastSyncAt
         ? subDays(connection.lastSyncAt, 10).toISOString().split('T')[0]
         : undefined
@@ -65,20 +81,6 @@ export async function POST(
         endDate,
       })
       allTransactions = result.transactions
-      newCursor = result.cursor
-    } else {
-      let cursor = connection.lastSyncCursor || ''
-      let hasMore = true
-      while (hasMore) {
-        const result = await adapter.fetchTransactions(accessToken, externalAccountId, {
-          cursor,
-          count: 500,
-        })
-        allTransactions = [...allTransactions, ...result.transactions]
-        cursor = result.cursor || ''
-        hasMore = result.hasMore
-        newCursor = cursor
-      }
     }
 
     const syncResult = await importNormalizedTransactions({

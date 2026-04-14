@@ -39,7 +39,7 @@ export default async function BankAccountsPage({
     institution: { name: a.institution.name },
     bankConnection: a.bankConnection ? {
       id: a.bankConnection.id,
-      provider: a.bankConnection.provider as 'TELLER' | 'PLAID' | 'BROWSER_AGENT',
+      provider: a.bankConnection.provider as 'PLAID' | 'ENABLE_BANKING' | 'BROWSER_AGENT',
       status: a.bankConnection.status as 'ACTIVE' | 'DISCONNECTED' | 'DEGRADED' | 'REVOKED',
       lastSyncAt: a.bankConnection.lastSyncAt?.toISOString() ?? null,
       disconnectReason: a.bankConnection.disconnectReason,

@@ -35,8 +35,11 @@ Required in `.env.local`:
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` — Clerk auth
 - `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL`
 - `OPENROUTER_API_KEY` — for AI features
-- `BROWSERLESS_TOKEN` — Browserless.io API token for cloud browser sessions
+- `BROWSERLESS_TOKEN` — Browserless.io API token for cloud browser sessions (browser-agent fallback only)
 - `ENCRYPTION_SECRET` — derives AES-256 keys for encrypted bank credentials; also used as HMAC secret for document upload tokens
+- `PLAID_CLIENT_ID`, `PLAID_SECRET` — Plaid API credentials (US bank sync); `PLAID_ENV`: `sandbox | development | production` (default: `sandbox`)
+- `FINEXER_CLIENT_ID`, `FINEXER_CLIENT_SECRET` — Finexer Open Banking credentials (UK bank sync)
+- `ENABLE_BANKING_CLIENT_ID`, `ENABLE_BANKING_CLIENT_SECRET` — Enable Banking credentials (EU bank sync, 29 countries); `ENABLE_BANKING_BASE_URL` optional (defaults to production)
 - `UPLOADTHING_TOKEN` — Uploadthing API token for file storage (set in Netlify env + `.env.local`)
 - `MISTRAL_API_KEY` — Mistral API key for receipt OCR (`mistral-ocr-latest`); get from https://console.mistral.ai/
 - `RESEND_API_KEY` — Resend transactional email (document request emails, invoice emails); optional — skipped gracefully if absent
@@ -196,25 +199,47 @@ Uploadthing route handler at `src/app/api/uploadthing/route.ts`. Client helpers 
 3. Applicant clicks link → `/apply/docs/[token]` page → `DocUploadClient` fetches metadata via `GET /api/public/docs?token=...`, uploads PDF via `adHocDocUploader`, then `POST /api/public/docs` saves the URL and consumes the token
 4. Applicant detail sidebar refreshes and shows the doc with `Uploaded` badge and a View link
 
-### Bank Agent (`src/lib/bank-agent/`, `src/app/api/bank-agent/`)
+### Open Banking providers (`src/lib/bank-providers/`)
 
-Cloud-browser automation for syncing bank transactions. Uses `playwright-core` (NOT `playwright` — no local browser) connecting to Browserless.io via WebSocket CDP.
+Primary bank sync uses real Open Banking APIs routed by institution country:
 
-- `src/lib/bank-agent/worker.ts` — core automation: `connectBank()` for first-time LLM-guided login + CSV discovery, `syncBank()` for replaying saved playbooks. Uses `safeLocatorAction()` to handle Playwright strict mode violations (falls back to `.first()`). `captureDownload()` handles both file download events and navigation-based CSV responses.
-- `src/lib/bank-agent/crypto.ts` — AES-256-GCM encryption; key is derived per-user as `sha256(ENCRYPTION_SECRET + userId)` so one server secret yields unique per-user keys.
-- `src/types/bank-agent.ts` — `PlaybookStep`, `PageElement`, `SyncJobEvent` types.
+- **US** → Plaid (`src/lib/bank-providers/plaid.ts`) — cursor-based incremental sync via `transactionsSync`; public-token exchange via PlaidLink widget
+- **UK** → Finexer (`src/lib/bank-providers/finexer.ts`) — UK Open Banking (99% coverage); OAuth redirect to `/connect/callback`; date-range sync against `/open-banking/v3.1/aisp/`
+- **EU** → Enable Banking (`src/lib/bank-providers/enable-banking.ts`) — PSD2/Berlin Group (2,500+ banks, 29 countries); OAuth redirect; date-range sync against `/v2/accounts/`
 
-API routes (all SSE-streaming, same pattern as `api/agent/ask`):
-- `POST /api/bank-agent/connect` — first-time connection: runs LLM browser agent, saves `BankPlaybook` + `EncryptedCredential`, imports CSV
-- `POST /api/bank-agent/sync` — replay saved playbook, re-import
-- `GET /api/bank-agent/status?accountId=X` — playbook status + last 10 sync jobs
-- `POST /api/bank-agent/disconnect` — deletes playbook, credentials, sync jobs
+All three implement `BankProviderAdapter` (`src/types/bank-providers.ts`) and feed into the shared `importNormalizedTransactions` pipeline (`src/lib/bank-providers/sync-engine.ts`).
 
-2FA: passive by default (agent waits for user to approve push/SMS on their device). OTP-input fallback uses Browserless `liveURL` (requires paid plan). Free tier covers normal 2FA flows.
+**OAuth callback flow (Finexer + Enable Banking):**
+1. `POST /api/connections/init` builds the provider auth URL (with encrypted `state` = `{accountId, userId}`) and returns it
+2. `connect-bank-dialog.tsx` redirects `window.location.href` to the provider
+3. Provider redirects back to `/api/connections/finexer/callback` or `/api/connections/enable-banking/callback` (GET) with `?code=&state=`
+4. Callback decrypts state, exchanges code for tokens, encrypts and stores them, runs initial 90-day sync, redirects to `/connect/callback` (the UI landing page)
+5. `/connect/callback` (Next.js page) reads result query params and shows success/warning/error
 
-Nav model: `anthropic/claude-sonnet-4.6`. LLM prompt requires raw JSON output — fallback regex extracts `{...}` from prose if model wraps response. `STEP_DELAY_MS = 800ms`. Netlify timeout: 120s for both connect and sync routes.
+**Webhook routes:**
+- `POST /api/webhooks/plaid` — `TRANSACTIONS.SYNC_UPDATES_AVAILABLE` triggers incremental sync
+- `POST /api/webhooks/finexer` — `transactions.updated`, `consent.revoked`, `consent.expired`
+- `POST /api/webhooks/enable-banking` — `transactions.available`, `session.expired`, `session.revoked`
 
-**Never log credentials** — username/password are passed as params but must never appear in `console.log`.
+**Scheduled sync** (`POST /api/sync/scheduled`) — runs every 6h; covers `PLAID | FINEXER | ENABLE_BANKING` connections with stale `lastSyncAt`.
+
+**Token storage:** access tokens encrypted with AES-256-GCM (`src/lib/bank-agent/crypto.ts`). Finexer and Enable Banking also store a refresh token (`refreshCiphertext/Iv/AuthTag`) and `tokenExpiresAt`.
+
+### Browser Agent fallback (`src/lib/bank-agent/`, `src/app/api/bank-agent/`)
+
+Fallback for institutions not covered by the Open Banking providers. Uses `playwright-core` (NOT `playwright`) connecting to Browserless.io via WebSocket CDP.
+
+- `src/lib/bank-agent/worker.ts` — LLM-guided login + CSV discovery; saves `BankPlaybook` + `EncryptedCredential`
+- `src/lib/bank-agent/crypto.ts` — AES-256-GCM; key = `sha256(ENCRYPTION_SECRET + userId)`
+- `src/types/bank-agent.ts` — `PlaybookStep`, `PageElement`, `SyncJobEvent`
+
+API routes (SSE-streaming):
+- `POST /api/bank-agent/connect` — first-time LLM-guided setup
+- `POST /api/bank-agent/sync` — replay saved playbook
+- `GET /api/bank-agent/status?accountId=X`
+- `POST /api/bank-agent/disconnect`
+
+**Never log credentials** — username/password must never appear in `console.log`.
 
 ### Estimate → Quote → Invoice Pipeline
 

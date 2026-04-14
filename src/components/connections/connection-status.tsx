@@ -4,7 +4,7 @@ import { formatDistanceToNow } from 'date-fns'
 
 interface ConnectionStatusProps {
   status: 'ACTIVE' | 'DISCONNECTED' | 'DEGRADED' | 'REVOKED'
-  provider: 'TELLER' | 'PLAID' | 'BROWSER_AGENT'
+  provider: 'PLAID' | 'ENABLE_BANKING' | 'BROWSER_AGENT'
   lastSyncAt: string | null
   disconnectReason: string | null
   connectionId: string
@@ -22,7 +22,10 @@ export function ConnectionStatus({
   onSync,
   onDisconnect,
 }: ConnectionStatusProps) {
-  const providerLabel = provider === 'TELLER' ? 'Teller' : provider === 'PLAID' ? 'Plaid' : 'Browser Agent'
+  const providerLabel =
+    provider === 'PLAID' ? 'Plaid' :
+    provider === 'ENABLE_BANKING' ? 'Enable Banking' :
+    'Browser Agent'
 
   const statusColors: Record<string, string> = {
     ACTIVE: 'bg-emerald-100 text-emerald-800',

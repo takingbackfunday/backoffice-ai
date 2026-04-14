@@ -1,8 +1,9 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
-import { decrypt } from '@/lib/bank-agent/crypto'
+import { decrypt, encrypt } from '@/lib/bank-agent/crypto'
 import { PlaidAdapter } from '@/lib/bank-providers'
+import { buildEnableBankingAuthUrl } from '@/lib/bank-providers/enable-banking'
 
 export async function POST(
   _request: Request,
@@ -16,20 +17,15 @@ export async function POST(
 
     const connection = await prisma.bankConnection.findFirst({
       where: { id, userId },
+      include: { account: { include: { institution: true } } },
     })
     if (!connection) return notFound('Connection not found')
     if (connection.status === 'ACTIVE') {
       return badRequest('Connection is already active')
     }
 
-    if (connection.provider === 'TELLER') {
-      return ok({
-        mode: 'teller_connect',
-        tellerAppId: process.env.TELLER_APP_ID,
-        tellerEnvironment: process.env.TELLER_ENVIRONMENT || 'sandbox',
-        enrollmentId: connection.tellerEnrollmentId,
-      })
-    }
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://backoffice.cv'
+    const redirectUri = `${appUrl}/connect/callback`
 
     if (connection.provider === 'PLAID') {
       if (!connection.tokenCiphertext || !connection.tokenIv || !connection.tokenAuthTag) {
@@ -43,10 +39,16 @@ export async function POST(
       )
       const plaid = new PlaidAdapter()
       const linkToken = await plaid.createUpdateLinkToken(userId, accessToken)
-      return ok({
-        mode: 'plaid_link',
-        plaidLinkToken: linkToken,
-      })
+      return ok({ mode: 'plaid_link', plaidLinkToken: linkToken })
+    }
+
+    if (connection.provider === 'ENABLE_BANKING') {
+      const statePayload = JSON.stringify({ accountId: connection.accountId, userId })
+      const { ciphertext, iv, authTag } = encrypt(statePayload, userId)
+      const state = Buffer.from(JSON.stringify({ c: ciphertext, i: iv, a: authTag })).toString('base64url')
+      const aspspId = connection.account.institution.enableBankingAspspId ?? ''
+      const oauthUrl = buildEnableBankingAuthUrl({ aspspId, redirectUri, state })
+      return ok({ mode: 'oauth_redirect', oauthUrl })
     }
 
     return badRequest('Browser agent connections cannot be re-authenticated via API')

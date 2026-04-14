@@ -3,22 +3,18 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { encrypt } from '@/lib/bank-agent/crypto'
-import { getAdapter, PlaidAdapter } from '@/lib/bank-providers'
+import { PlaidAdapter } from '@/lib/bank-providers'
 import { importNormalizedTransactions } from '@/lib/bank-providers/sync-engine'
 import type { NormalizedTransaction } from '@/types/bank-providers'
 
+// Plaid uses a public-token exchange (browser → server).
+// Enable Banking completes via its own OAuth callback route:
+//   GET /api/connections/enable-banking/callback
+
 const CreateConnectionSchema = z.object({
   accountId: z.string().min(1),
-  provider: z.enum(['TELLER', 'PLAID']),
-
-  // Teller fields
-  tellerAccessToken: z.string().optional(),
-  tellerEnrollmentId: z.string().optional(),
-  tellerAccountId: z.string().optional(),
-  tellerInstitutionId: z.string().optional(),
-
-  // Plaid fields
-  plaidPublicToken: z.string().optional(),
+  provider: z.literal('PLAID'),
+  plaidPublicToken: z.string().min(1),
   plaidAccountId: z.string().optional(),
   plaidInstitutionId: z.string().optional(),
 })
@@ -41,34 +37,9 @@ export async function POST(request: Request) {
     })
     if (!account) return notFound('Account not found')
 
-    let accessToken: string
-    let connectionData: Record<string, unknown> = {}
-
-    if (data.provider === 'TELLER') {
-      if (!data.tellerAccessToken || !data.tellerEnrollmentId) {
-        return badRequest('Teller access token and enrollment ID are required')
-      }
-      accessToken = data.tellerAccessToken
-      connectionData = {
-        tellerEnrollmentId: data.tellerEnrollmentId,
-        tellerAccountId: data.tellerAccountId,
-        tellerInstitutionId: data.tellerInstitutionId,
-      }
-    } else if (data.provider === 'PLAID') {
-      if (!data.plaidPublicToken) {
-        return badRequest('Plaid public token is required')
-      }
-      const plaid = new PlaidAdapter()
-      const exchange = await plaid.exchangePublicToken(data.plaidPublicToken)
-      accessToken = exchange.accessToken
-      connectionData = {
-        plaidItemId: exchange.itemId,
-        plaidAccountId: data.plaidAccountId,
-        plaidInstitutionId: data.plaidInstitutionId,
-      }
-    } else {
-      return badRequest('Invalid provider')
-    }
+    const plaid = new PlaidAdapter()
+    const exchange = await plaid.exchangePublicToken(data.plaidPublicToken)
+    const accessToken = exchange.accessToken
 
     const enc = encrypt(accessToken, userId)
 
@@ -76,19 +47,21 @@ export async function POST(request: Request) {
       data: {
         accountId: data.accountId,
         userId,
-        provider: data.provider,
+        provider: 'PLAID',
         status: 'ACTIVE',
         tokenCiphertext: enc.ciphertext,
         tokenIv: enc.iv,
         tokenAuthTag: enc.authTag,
-        ...connectionData,
+        plaidItemId: exchange.itemId,
+        plaidAccountId: data.plaidAccountId,
+        plaidInstitutionId: data.plaidInstitutionId,
       },
     })
 
     const syncJob = await prisma.syncJob.create({
       data: {
         accountId: data.accountId,
-        provider: data.provider,
+        provider: 'PLAID',
         bankConnectionId: connection.id,
         status: 'DOWNLOADING',
         triggeredBy: 'initial-connect',
@@ -96,24 +69,15 @@ export async function POST(request: Request) {
     })
 
     try {
-      const adapter = getAdapter(data.provider)
-      const externalAccountId = data.provider === 'TELLER'
-        ? data.tellerAccountId!
-        : data.plaidAccountId!
-
-      const result = await adapter.fetchTransactions(accessToken, externalAccountId, {
-        count: 500,
-      })
+      const externalAccountId = data.plaidAccountId ?? ''
+      const result = await plaid.fetchTransactions(accessToken, externalAccountId, { count: 500 })
 
       let allTransactions: NormalizedTransaction[] = [...result.transactions]
       let cursor = result.cursor
       let hasMore = result.hasMore
 
       while (hasMore && cursor) {
-        const page = await adapter.fetchTransactions(accessToken, externalAccountId, {
-          cursor,
-          count: 500,
-        })
+        const page = await plaid.fetchTransactions(accessToken, externalAccountId, { cursor, count: 500 })
         allTransactions = [...allTransactions, ...page.transactions]
         cursor = page.cursor
         hasMore = page.hasMore
@@ -122,33 +86,30 @@ export async function POST(request: Request) {
       const syncResult = await importNormalizedTransactions({
         userId,
         accountId: data.accountId,
-        provider: data.provider,
+        provider: 'PLAID',
         transactions: allTransactions,
         syncJobId: syncJob.id,
       })
 
       await prisma.bankConnection.update({
         where: { id: connection.id },
-        data: {
-          lastSyncAt: new Date(),
-          lastSyncCursor: cursor,
-        },
+        data: { lastSyncAt: new Date(), lastSyncCursor: cursor },
       })
 
       await prisma.institutionSchema.update({
         where: { id: account.institutionSchemaId },
-        data: { preferredProvider: data.provider },
+        data: { preferredProvider: 'PLAID' },
       }).catch(() => {})
 
       return created({
         connectionId: connection.id,
-        provider: data.provider,
+        provider: 'PLAID',
         imported: syncResult.imported,
         skipped: syncResult.skipped,
       })
 
     } catch (syncErr) {
-      console.error('[connections] initial sync failed:', syncErr)
+      console.error('[connections] initial Plaid sync failed:', syncErr)
       await prisma.syncJob.update({
         where: { id: syncJob.id },
         data: {
@@ -160,7 +121,7 @@ export async function POST(request: Request) {
 
       return created({
         connectionId: connection.id,
-        provider: data.provider,
+        provider: 'PLAID',
         imported: 0,
         skipped: 0,
         warning: 'Connection saved but initial sync failed. You can retry from the sync page.',

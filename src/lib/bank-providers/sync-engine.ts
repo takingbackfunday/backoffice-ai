@@ -89,7 +89,7 @@ export async function importNormalizedTransactions(params: {
 
       if (!categoryId && !categoryName && original.providerCategory) {
         const mapped = mapProviderCategory(
-          provider as 'TELLER' | 'PLAID',
+          provider as 'PLAID' | 'ENABLE_BANKING',
           original.providerCategory
         )
         if (mapped) {

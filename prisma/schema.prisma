@@ -10,18 +10,18 @@ datasource db {
 // ── Existing models (UNCHANGED) ─────────────────────────────────────────────
 
 model InstitutionSchema {
-  id                  String        @id @default(cuid())
-  name                String
-  country             String
-  isGlobal            Boolean       @default(true)
-  createdByUserId     String?
-  csvMapping          Json
-  accounts            Account[]
-  preferredProvider   BankProvider?
-  tellerInstitutionId String?
-  plaidInstitutionId  String?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  id                       String        @id @default(cuid())
+  name                     String
+  country                  String
+  isGlobal                 Boolean       @default(true)
+  createdByUserId          String?
+  csvMapping               Json
+  accounts                 Account[]
+  preferredProvider        BankProvider?
+  plaidInstitutionId       String?
+  enableBankingAspspId     String?
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 }
 
 model Account {
@@ -249,8 +249,8 @@ model SyncJob {
 }
 
 enum BankProvider {
-  TELLER
   PLAID
+  ENABLE_BANKING
   BROWSER_AGENT
 }
 
@@ -262,33 +262,41 @@ enum ConnectionStatus {
 }
 
 model BankConnection {
-  id                  String           @id @default(cuid())
-  accountId           String           @unique
-  account             Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  userId              String
-  provider            BankProvider
-  status              ConnectionStatus @default(ACTIVE)
-  tellerEnrollmentId  String?
-  tellerAccountId     String?
-  tellerInstitutionId String?
-  plaidItemId         String?
-  plaidAccountId      String?
-  plaidInstitutionId  String?
-  tokenCiphertext     String?
-  tokenIv             String?
-  tokenAuthTag        String?
-  lastSyncAt          DateTime?
-  lastSyncCursor      String?
-  errorCount          Int              @default(0)
-  disconnectReason    String?
-  metadata            Json             @default("{}")
-  syncJobs            SyncJob[]
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  id                       String           @id @default(cuid())
+  accountId                String           @unique
+  account                  Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId                   String
+  provider                 BankProvider
+  status                   ConnectionStatus @default(ACTIVE)
+  // Plaid
+  plaidItemId              String?
+  plaidAccountId           String?
+  plaidInstitutionId       String?
+  // Enable Banking (UK + EU PSD2)
+  enableBankingSessionId   String?
+  enableBankingAccountId   String?
+  enableBankingAspspId     String?
+  // Shared encrypted token storage
+  tokenCiphertext          String?
+  tokenIv                  String?
+  tokenAuthTag             String?
+  // Refresh token (Finexer + Enable Banking use OAuth refresh)
+  refreshCiphertext        String?
+  refreshIv                String?
+  refreshAuthTag           String?
+  tokenExpiresAt           DateTime?
+  lastSyncAt               DateTime?
+  lastSyncCursor           String?
+  errorCount               Int              @default(0)
+  disconnectReason         String?
+  metadata                 Json             @default("{}")
+  syncJobs                 SyncJob[]
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 
   @@index([userId])
-  @@index([tellerEnrollmentId])
   @@index([plaidItemId])
+  @@index([enableBankingSessionId])
 }
 
 enum SyncJobStatus {

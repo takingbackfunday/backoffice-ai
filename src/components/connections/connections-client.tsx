@@ -11,7 +11,7 @@ interface AccountData {
   institution: { name: string }
   bankConnection: {
     id: string
-    provider: 'TELLER' | 'PLAID' | 'BROWSER_AGENT'
+    provider: 'PLAID' | 'ENABLE_BANKING' | 'BROWSER_AGENT'
     status: 'ACTIVE' | 'DISCONNECTED' | 'DEGRADED' | 'REVOKED'
     lastSyncAt: string | null
     disconnectReason: string | null
@@ -94,7 +94,7 @@ export function ConnectionsClient({ accounts }: { accounts: AccountData[] }) {
       )}
 
       <p className="text-sm text-muted-foreground mb-6">
-        Connect bank accounts to automatically sync transactions via Teller or Plaid.
+        Connect bank accounts to automatically sync transactions via Plaid (US) or Enable Banking (UK + EU).
       </p>
 
       <div className="flex flex-col gap-4">
@@ -131,7 +131,7 @@ export function ConnectionsClient({ accounts }: { accounts: AccountData[] }) {
                         ...prev,
                         [account.id]: {
                           id: result.connectionId,
-                          provider: 'TELLER',
+                          provider: result.provider,
                           status: 'ACTIVE',
                           lastSyncAt: new Date().toISOString(),
                           disconnectReason: null,

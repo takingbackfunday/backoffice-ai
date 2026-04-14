@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const connections = await prisma.bankConnection.findMany({
       where: {
         status: 'ACTIVE',
-        provider: { in: ['TELLER', 'PLAID'] },
+        provider: { in: ['PLAID', 'ENABLE_BANKING'] },
         OR: [
           { lastSyncAt: null },
           { lastSyncAt: { lt: staleThreshold } },
@@ -37,12 +37,27 @@ export async function POST(request: Request) {
       try {
         const accessToken = decrypt(conn.tokenCiphertext, conn.tokenIv, conn.tokenAuthTag, conn.userId)
         const adapter = getAdapter(conn.provider)
-        const externalAccountId = conn.tellerAccountId || conn.plaidAccountId || ''
 
         let allTransactions: NormalizedTransaction[] = []
         let newCursor: string | undefined
 
-        if (conn.provider === 'TELLER') {
+        if (conn.provider === 'PLAID') {
+          let cursor = conn.lastSyncCursor || ''
+          let hasMore = true
+          while (hasMore) {
+            const result = await adapter.fetchTransactions(
+              accessToken,
+              conn.plaidAccountId || '',
+              { cursor, count: 500 }
+            )
+            allTransactions = [...allTransactions, ...result.transactions]
+            cursor = result.cursor || ''
+            hasMore = result.hasMore
+            newCursor = cursor
+          }
+        } else {
+          // Enable Banking: date-range
+          const externalAccountId = conn.enableBankingAccountId || ''
           const startDate = conn.lastSyncAt
             ? subDays(conn.lastSyncAt, 10).toISOString().split('T')[0]
             : subDays(new Date(), 30).toISOString().split('T')[0]
@@ -51,20 +66,6 @@ export async function POST(request: Request) {
             endDate: new Date().toISOString().split('T')[0],
           })
           allTransactions = result.transactions
-          newCursor = result.cursor
-        } else {
-          let cursor = conn.lastSyncCursor || ''
-          let hasMore = true
-          while (hasMore) {
-            const result = await adapter.fetchTransactions(accessToken, externalAccountId, {
-              cursor,
-              count: 500,
-            })
-            allTransactions = [...allTransactions, ...result.transactions]
-            cursor = result.cursor || ''
-            hasMore = result.hasMore
-            newCursor = cursor
-          }
         }
 
         if (allTransactions.length > 0) {

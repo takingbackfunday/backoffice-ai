@@ -21,7 +21,7 @@ interface AccountData {
   institution: { name: string }
   bankConnection: {
     id: string
-    provider: 'TELLER' | 'PLAID' | 'BROWSER_AGENT'
+    provider: 'PLAID' | 'ENABLE_BANKING' | 'BROWSER_AGENT'
     status: 'ACTIVE' | 'DISCONNECTED' | 'DEGRADED' | 'REVOKED'
     lastSyncAt: string | null
     disconnectReason: string | null
@@ -210,7 +210,7 @@ function AutoSyncTab({ accounts }: { accounts: AccountData[] }) {
                         ...prev,
                         [account.id]: {
                           id: result.connectionId,
-                          provider: 'TELLER',
+                          provider: result.provider as 'PLAID' | 'ENABLE_BANKING' | 'BROWSER_AGENT',
                           status: 'ACTIVE',
                           lastSyncAt: new Date().toISOString(),
                           disconnectReason: null,

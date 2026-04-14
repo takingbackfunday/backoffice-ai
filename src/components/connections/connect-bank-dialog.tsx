@@ -1,13 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { TellerConnectButton } from './teller-connect'
 import { PlaidLinkButton } from './plaid-link'
 import type { ConnectionInitResponse } from '@/types/bank-providers'
 
 interface ConnectBankDialogProps {
   accountId: string
-  onConnected: (result: { connectionId: string; imported: number; skipped: number }) => void
+  onConnected: (result: { connectionId: string; imported: number; skipped: number; provider: string }) => void
   onCancel: () => void
 }
 
@@ -31,40 +30,18 @@ export function ConnectBankDialog({ accountId, onConnected, onCancel }: ConnectB
         setStatus('error')
         return
       }
-      setInitData(json.data)
+      const data = json.data as ConnectionInitResponse
+
+      // OAuth redirect providers: navigate immediately
+      if (data.provider === 'ENABLE_BANKING' && data.oauthUrl) {
+        window.location.href = data.oauthUrl
+        return
+      }
+
+      setInitData(data)
       setStatus('provider_ready')
     } catch {
       setError('Network error')
-      setStatus('error')
-    }
-  }
-
-  async function handleTellerSuccess(enrollment: {
-    accessToken: string
-    enrollmentId: string
-    institution: { name: string }
-  }) {
-    setStatus('connecting')
-    try {
-      const res = await fetch('/api/connections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountId,
-          provider: 'TELLER',
-          tellerAccessToken: enrollment.accessToken,
-          tellerEnrollmentId: enrollment.enrollmentId,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.error) {
-        setError(json.error || 'Failed to save connection')
-        setStatus('error')
-        return
-      }
-      onConnected(json.data)
-    } catch {
-      setError('Network error saving connection')
       setStatus('error')
     }
   }
@@ -92,7 +69,7 @@ export function ConnectBankDialog({ accountId, onConnected, onCancel }: ConnectB
         setStatus('error')
         return
       }
-      onConnected(json.data)
+      onConnected({ ...json.data, provider: 'PLAID' })
     } catch {
       setError('Network error saving connection')
       setStatus('error')
@@ -138,17 +115,6 @@ export function ConnectBankDialog({ accountId, onConnected, onCancel }: ConnectB
   }
 
   if (status === 'provider_ready' && initData) {
-    if (initData.provider === 'TELLER' && initData.tellerAppId) {
-      return (
-        <TellerConnectButton
-          appId={initData.tellerAppId}
-          environment={initData.tellerEnvironment}
-          onSuccess={handleTellerSuccess}
-          onExit={onCancel}
-        />
-      )
-    }
-
     if (initData.provider === 'PLAID' && initData.plaidLinkToken) {
       return (
         <PlaidLinkButton
@@ -166,10 +132,7 @@ export function ConnectBankDialog({ accountId, onConnected, onCancel }: ConnectB
             This institution isn&apos;t supported by our banking APIs.
             You can use manual browser-based connection instead.
           </p>
-          <a
-            href="/bank-sync"
-            className="text-sm text-blue-600 underline"
-          >
+          <a href="/bank-sync" className="text-sm text-blue-600 underline">
             Go to manual bank sync →
           </a>
         </div>
