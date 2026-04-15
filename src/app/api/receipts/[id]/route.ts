@@ -11,6 +11,7 @@ interface RouteParams {
 const PatchSchema = z
   .object({
     transactionId: z.string().nullable().optional(),
+    workspaceId: z.string().nullable().optional(),
     extractedData: z.record(z.unknown()).optional(),
     confirmed: z.boolean().optional(),
   })
@@ -32,7 +33,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (!parsed.success)
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
 
-    const { transactionId, extractedData, confirmed } = parsed.data
+    const { transactionId, workspaceId, extractedData, confirmed } = parsed.data
 
     // Validate transaction ownership if linking
     if (transactionId) {
@@ -43,12 +44,26 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       if (!txn) return badRequest('Transaction not found or does not belong to you')
     }
 
+    // Validate workspace ownership if linking
+    if (workspaceId) {
+      const ws = await prisma.workspace.findFirst({
+        where: { id: workspaceId, userId },
+        select: { id: true },
+      })
+      if (!ws) return badRequest('Workspace not found or does not belong to you')
+    }
+
     const updated = await prisma.receipt.update({
       where: { id },
       data: {
         ...(transactionId !== undefined ? { transactionId } : {}),
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
         ...(extractedData !== undefined ? { extractedData: extractedData as Prisma.InputJsonValue } : {}),
-        ...(confirmed ? { status: 'COMPLETED' } : {}),
+        ...(confirmed ? { status: 'READY' } : {}),
+      },
+      include: {
+        workspace: { select: { id: true, name: true } },
+        transaction: { select: { id: true, date: true, amount: true, description: true, category: true } },
       },
     })
 

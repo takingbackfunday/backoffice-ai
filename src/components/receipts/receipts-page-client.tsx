@@ -5,6 +5,11 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ReceiptUpload, type ReceiptData } from './receipt-upload'
 
+interface Workspace {
+  id: string
+  name: string
+}
+
 interface Transaction {
   id: string
   date: string
@@ -21,6 +26,8 @@ interface Receipt {
   extractedData: Record<string, unknown> | null
   createdAt: string
   transaction: Transaction | null
+  workspace: Workspace | null
+  workspaceId: string | null
 }
 
 interface ReviewFields {
@@ -46,7 +53,8 @@ function toReviewFields(extracted: Record<string, unknown> | null): ReviewFields
 }
 
 function statusBadgeClass(status: string) {
-  if (status === 'COMPLETED') return 'bg-green-100 text-green-700'
+  if (status === 'READY') return 'bg-green-100 text-green-700'
+  if (status === 'INVOICED') return 'bg-blue-100 text-blue-700'
   if (status === 'FAILED') return 'bg-red-100 text-red-700'
   if (status === 'NEEDS_REVIEW') return 'bg-amber-100 text-amber-700'
   return 'bg-yellow-100 text-yellow-700'
@@ -54,13 +62,15 @@ function statusBadgeClass(status: string) {
 
 function statusLabel(status: string) {
   if (status === 'NEEDS_REVIEW') return 'Review'
+  if (status === 'READY') return 'Ready to bill'
+  if (status === 'INVOICED') return 'Invoiced'
   return status
 }
 
 const inputClass =
   'w-full border border-border rounded px-2 py-1 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-ring'
 
-export function ReceiptsPageClient() {
+export function ReceiptsPageClient({ workspaces }: { workspaces: Workspace[] }) {
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
   const [showUpload, setShowUpload] = useState(false)
@@ -72,6 +82,7 @@ export function ReceiptsPageClient() {
   const [reviewFields, setReviewFields] = useState<ReviewFields | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
+  const [assigningId, setAssigningId] = useState<string | null>(null)
 
   const loadReceipts = useCallback(async () => {
     const res = await fetch('/api/receipts')
@@ -163,6 +174,20 @@ export function ReceiptsPageClient() {
     } finally {
       setConfirming(false)
     }
+  }
+
+  async function handleAssignWorkspace(receiptId: string, workspaceId: string | null) {
+    setAssigningId(receiptId)
+    const res = await fetch(`/api/receipts/${receiptId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId }),
+    })
+    const json = await res.json()
+    if (res.ok) {
+      setReceipts((prev) => prev.map((r) => (r.id === receiptId ? json.data : r)))
+    }
+    setAssigningId(null)
   }
 
   if (loading) {
@@ -269,6 +294,44 @@ export function ReceiptsPageClient() {
                   <p className="text-xs text-muted-foreground truncate">
                     Linked: {receipt.transaction.description}
                   </p>
+                )}
+
+                {/* Workspace assignment — shown on READY and INVOICED receipts */}
+                {(receipt.status === 'READY' || receipt.status === 'INVOICED') && (
+                  <div className="flex items-center gap-1.5">
+                    {receipt.workspace ? (
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="text-xs text-muted-foreground shrink-0">Client:</span>
+                        <span className="text-xs font-medium truncate">{receipt.workspace.name}</span>
+                        {receipt.status === 'READY' && (
+                          <button
+                            className="text-xs text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-50"
+                            disabled={assigningId === receipt.id}
+                            onClick={() => handleAssignWorkspace(receipt.id, null)}
+                            title="Unassign client"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ) : workspaces.length > 0 ? (
+                      <select
+                        className="text-xs border border-border rounded px-1.5 py-0.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                        defaultValue=""
+                        disabled={assigningId === receipt.id}
+                        onChange={(e) => {
+                          if (e.target.value) handleAssignWorkspace(receipt.id, e.target.value)
+                        }}
+                      >
+                        <option value="" disabled>Assign client…</option>
+                        {workspaces.map((ws) => (
+                          <option key={ws.id} value={ws.id}>{ws.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">No clients yet</span>
+                    )}
+                  </div>
                 )}
 
                 {/* Actions */}

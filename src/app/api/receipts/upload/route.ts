@@ -17,6 +17,8 @@ const UploadSchema = z.object({
   image: z.string().min(100),
   /** Optional: link to an existing transaction */
   transactionId: z.string().optional(),
+  /** Optional: assign to a client workspace at upload time */
+  workspaceId: z.string().optional(),
 })
 
 export async function POST(request: Request) {
@@ -30,7 +32,7 @@ export async function POST(request: Request) {
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
-    const { image, transactionId } = parsed.data
+    const { image, transactionId, workspaceId } = parsed.data
 
     // ── Validate data URI format ──────────────────────────────────────────
     const dataUriMatch = image.match(/^data:(image\/\w+);base64,(.+)$/)
@@ -55,6 +57,15 @@ export async function POST(request: Request) {
       if (!txn) return badRequest('Transaction not found or does not belong to you')
     }
 
+    // ── Validate workspace ownership if provided ──────────────────────────
+    if (workspaceId) {
+      const ws = await prisma.workspace.findFirst({
+        where: { id: workspaceId, userId },
+        select: { id: true },
+      })
+      if (!ws) return badRequest('Workspace not found or does not belong to you')
+    }
+
     // ── Hash original for integrity ───────────────────────────────────────
     const originalHash = createHash('sha256').update(imageBuffer).digest('hex')
     const originalSizeKb = Math.round(imageBuffer.length / 1024)
@@ -64,6 +75,7 @@ export async function POST(request: Request) {
       data: {
         userId,
         transactionId: transactionId ?? null,
+        workspaceId: workspaceId ?? null,
         status: 'PROCESSING',
         originalHash,
         originalSizeKb,

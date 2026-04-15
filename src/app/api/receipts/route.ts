@@ -19,6 +19,9 @@ export async function GET() {
             category: true,
           },
         },
+        workspace: {
+          select: { id: true, name: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
