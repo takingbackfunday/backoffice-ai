@@ -77,15 +77,25 @@ Requires a `.env.local` with Clerk, Neon, OpenRouter, and encryption secret. See
 
 ## Deployment
 
-Hosted on Fly.io. Push to `main` triggers a deploy via GitHub Actions.
+Hosted on Fly.io. Push to `main` triggers a deploy via GitHub Actions (`.github/workflows/deploy.yml`).
 
 ```bash
-fly deploy        # Manual deploy
+fly deploy        # Manual deploy (bypasses GitHub Actions)
 fly logs          # Tail production logs
-fly ssh console   # SSH into the container
+fly ssh console   # SSH into the running container
 ```
 
-Requires a `FLY_API_TOKEN` secret in GitHub repo settings.
+**GitHub Actions setup:** The deploy workflow requires `FLY_API_TOKEN` stored as a **repository secret** (not an environment secret) at `https://github.com/takingbackfunday/backoffice-ai/settings/secrets/actions`. Generate the token with:
+
+```bash
+fly tokens create deploy -a backoffice-ai
+```
+
+**Schema changes:** Run `db:push` against the production Neon DB before (or immediately after) pushing a commit that changes the Prisma schema. Schema drift causes a `P2022` crash at runtime. Use the non-pooled `DIRECT_URL`:
+
+```bash
+DIRECT_URL="$(fly ssh console -C 'printenv DIRECT_URL')" npx prisma db push --accept-data-loss
+```
 
 ## Pending setup
 

@@ -358,7 +358,7 @@ import { PrismaClient } from '@/generated/prisma/client'
 // NOT: '@/generated/prisma'  ← breaks in v7
 ```
 
-`src/generated/` is gitignored. On deploy Netlify runs `prisma generate` automatically. Locally, run it manually with `DATABASE_URL` prefixed (see Commands above).
+`src/generated/` is gitignored. On deploy, the build step runs `prisma generate` automatically (see `package.json` build script). Locally, run it manually with `DIRECT_URL` prefixed (see Commands above).
 
 ### Prisma adapter — PrismaNeon (WebSocket)
 
@@ -422,3 +422,30 @@ If you add a new `NEXT_PUBLIC_*` variable, add it to both:
 ### Fly.io — Prisma adapter uses pooled DATABASE_URL
 
 `DATABASE_URL` should be the **pooled** Neon connection string (has `-pooler` in hostname) — used by the running app. `DIRECT_URL` (non-pooled, no `-pooler`) is used only by Prisma CLI commands (`db:push`, `prisma generate`). The split is configured in `prisma.config.ts` which prefers `DIRECT_URL` when set.
+
+### Fly.io — GitHub Actions deploy requires a repository secret
+
+The deploy workflow (`.github/workflows/deploy.yml`) reads `FLY_API_TOKEN` from GitHub secrets. It must be stored as a **repository secret**, not an environment secret — environment secrets are scoped to a named environment and won't be injected into workflows that don't declare `environment:`. Generate the token with `fly tokens create deploy -a backoffice-ai` and save it at `https://github.com/takingbackfunday/backoffice-ai/settings/secrets/actions`.
+
+### Fly.io — `prisma generate` during local build needs DIRECT_URL
+
+`pnpm build` runs `prisma generate` first. `prisma.config.ts` calls `env('DIRECT_URL')` which throws if the variable is absent (even with a `?? env('DATABASE_URL')` fallback — the `env()` helper throws rather than returning null). If neither URL is in `.env.local`, pass a dummy value to unblock local builds:
+
+```bash
+DIRECT_URL="postgresql://x:x@localhost/x" pnpm build
+```
+
+Or just run `prisma generate` separately before `next build`.
+
+### Schema drift — db:push before deploying new models
+
+If a Prisma model or enum value is added locally but `db:push` is not run against Neon before deploying, the running app will crash with Prisma error `P2022: The column does not exist`. Always run `db:push` before or immediately after pushing schema changes.
+
+When dropping or renaming an enum value that may already have rows in prod, you must migrate existing rows first — `db:push` will refuse if live data uses the old value. Approach:
+
+1. Add the new enum values to the DB first via raw SQL (using `@neondatabase/serverless`):
+   ```js
+   sql`ALTER TYPE "EnumName" ADD VALUE IF NOT EXISTS 'NEW_VALUE'`
+   ```
+2. Migrate existing rows to the new value.
+3. Run `db:push --accept-data-loss` to drop the old value.
