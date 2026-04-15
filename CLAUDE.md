@@ -443,9 +443,10 @@ If a Prisma model or enum value is added locally but `db:push` is not run agains
 
 When dropping or renaming an enum value that may already have rows in prod, you must migrate existing rows first — `db:push` will refuse if live data uses the old value. Approach:
 
-1. Add the new enum values to the DB first via raw SQL (using `@neondatabase/serverless`):
+1. Ask the user to provide the `DIRECT_URL` (non-pooled Neon connection string, available from the Neon dashboard). Note: it should be rotated before onboarding real users.
+2. Add the new enum values to the DB first via raw SQL (using `@neondatabase/serverless`):
    ```js
    sql`ALTER TYPE "EnumName" ADD VALUE IF NOT EXISTS 'NEW_VALUE'`
    ```
-2. Migrate existing rows to the new value.
-3. Run `db:push --accept-data-loss` to drop the old value.
+3. Migrate existing rows to the new value.
+4. Run `npx prisma db push --accept-data-loss` with `DIRECT_URL` set.

@@ -91,11 +91,13 @@ fly ssh console   # SSH into the running container
 fly tokens create deploy -a backoffice-ai
 ```
 
-**Schema changes:** Run `db:push` against the production Neon DB before (or immediately after) pushing a commit that changes the Prisma schema. Schema drift causes a `P2022` crash at runtime. Use the non-pooled `DIRECT_URL`:
+**Schema changes:** Run `db:push` against the production Neon DB before (or immediately after) pushing a commit that changes the Prisma schema. Schema drift causes a `P2022` crash at runtime. Use the non-pooled `DIRECT_URL` from Neon (the connection string without `-pooler` in the hostname):
 
 ```bash
-DIRECT_URL="$(fly ssh console -C 'printenv DIRECT_URL')" npx prisma db push --accept-data-loss
+DIRECT_URL="<neon-direct-connection-string>" npx prisma db push --accept-data-loss
 ```
+
+The `DIRECT_URL` value is in the Neon dashboard under your project's connection strings. Note: rotate this credential before onboarding real users.
 
 ## Pending setup
 
