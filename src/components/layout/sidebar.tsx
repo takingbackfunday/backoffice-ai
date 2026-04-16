@@ -21,7 +21,6 @@ const MORE_ITEMS = [
 
 const IMPORT_ITEMS = [
   { href: '/upload', label: 'Upload CSV', icon: '⬆' },
-  { href: '/receipts', label: 'Receipts', icon: '🧾' },
   { href: '/bank-accounts', label: 'Bank Accounts', icon: '🏦' },
 ]
 
@@ -71,6 +70,7 @@ export function Sidebar() {
       items.push({ href: '/projects', label: 'Projects', icon: '📁' })
     }
 
+    items.push({ href: '/receipts', label: 'Receipts', icon: '🧾' })
     items.push({ href: '/settings', label: 'Settings', icon: '⚙️' })
 
     return items
