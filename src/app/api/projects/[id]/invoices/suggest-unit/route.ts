@@ -30,7 +30,7 @@ Respond with raw JSON only, no markdown.`,
         role: 'user',
         content: description,
       },
-    ])
+    ], 'mistralai/mistral-small-2603')
 
     let unit: string | null = null
     let confidence: 'high' | 'low' = 'low'
