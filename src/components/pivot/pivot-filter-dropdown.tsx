@@ -13,6 +13,9 @@ interface PivotFilterDropdownProps {
   isOpen: boolean
   onOpen: () => void
   onClose: () => void
+  // When provided, the dropdown anchors to this external element instead of
+  // rendering its own trigger button (used when the trigger lives in FieldPill)
+  anchorRef?: React.RefObject<HTMLButtonElement | null>
 }
 
 export function PivotFilterDropdown({
@@ -25,23 +28,20 @@ export function PivotFilterDropdown({
   isOpen,
   onOpen,
   onClose,
+  anchorRef,
 }: PivotFilterDropdownProps) {
-  const triggerRef = useRef<HTMLButtonElement>(null)
+  const internalTriggerRef = useRef<HTMLButtonElement>(null)
+  const triggerRef = anchorRef ?? internalTriggerRef
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [position, setPosition] = useState({ top: 0, left: 0 })
 
   const isFiltered = activeValues.length > 0
 
-  // Initialize checked state when opening
+  // Initialize checked state and position when opening
   useEffect(() => {
     if (isOpen) {
-      if (activeValues.length === 0) {
-        setChecked(new Set(uniqueValues))
-      } else {
-        setChecked(new Set(activeValues))
-      }
-      // Position dropdown
+      setChecked(activeValues.length === 0 ? new Set(uniqueValues) : new Set(activeValues))
       if (triggerRef.current) {
         const rect = triggerRef.current.getBoundingClientRect()
         setPosition({
@@ -50,9 +50,8 @@ export function PivotFilterDropdown({
         })
       }
     }
-  }, [isOpen, activeValues, uniqueValues])
+  }, [isOpen, activeValues, uniqueValues]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Close on outside click
   const handleOutsideClick = useCallback((e: MouseEvent) => {
     if (
       dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
@@ -60,7 +59,7 @@ export function PivotFilterDropdown({
     ) {
       onClose()
     }
-  }, [onClose])
+  }, [onClose, triggerRef])
 
   useEffect(() => {
     if (isOpen) {
@@ -93,17 +92,11 @@ export function PivotFilterDropdown({
         )}
       </div>
       <div className="flex gap-2 mb-2">
-        <button
-          onClick={() => setChecked(new Set(uniqueValues))}
-          className="text-xs text-blue-600 hover:underline"
-        >
+        <button onClick={() => setChecked(new Set(uniqueValues))} className="text-xs text-blue-600 hover:underline">
           Select All
         </button>
         <span className="text-muted-foreground">|</span>
-        <button
-          onClick={() => setChecked(new Set())}
-          className="text-xs text-blue-600 hover:underline"
-        >
+        <button onClick={() => setChecked(new Set())} className="text-xs text-blue-600 hover:underline">
           None
         </button>
       </div>
@@ -134,10 +127,15 @@ export function PivotFilterDropdown({
     </div>
   ) : null
 
+  // When anchorRef is provided, we only render the portal (no internal trigger button)
+  if (anchorRef) {
+    return typeof window !== 'undefined' && dropdown ? createPortal(dropdown, document.body) : null
+  }
+
   return (
     <>
       <button
-        ref={triggerRef}
+        ref={internalTriggerRef}
         onClick={isOpen ? onClose : onOpen}
         className={`ml-1 text-xs leading-none px-0.5 rounded transition-colors ${isFiltered ? 'text-indigo-600' : 'text-muted-foreground hover:text-foreground'}`}
         aria-label={`Filter ${fieldLabel}`}

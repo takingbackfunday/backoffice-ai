@@ -23,6 +23,7 @@ export async function GET(request: Request) {
 
     // Global search
     const search = searchParams.get('search') ?? undefined
+    const searchAsNumber = search !== undefined ? parseFloat(search) : NaN
 
     // Targeted column filters
     const description = searchParams.get('description') ?? undefined
@@ -66,6 +67,7 @@ export async function GET(request: Request) {
           { payee: { is: { name: { contains: search, mode: 'insensitive' as const } } } },
           { account: { name: { contains: search, mode: 'insensitive' as const } } },
           { categoryRef: { is: { name: { contains: search, mode: 'insensitive' as const } } } },
+          ...(!isNaN(searchAsNumber) ? [{ amount: searchAsNumber }, { amount: -searchAsNumber }] : []),
         ],
       } : {}),
       ...(amountMin !== undefined && !isNaN(amountMin) ? { amount: { gte: amountMin } } : {}),

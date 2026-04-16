@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { FIELD_DEFINITIONS } from '@/lib/pivot/field-definitions'
 import { FieldPill } from './field-pill'
 import { DropZone } from './drop-zone'
-import { PivotFilterDropdown } from './pivot-filter-dropdown'
 import type { FieldDef } from '@/lib/pivot/types'
 import { cn } from '@/lib/utils'
 
@@ -33,7 +32,6 @@ export function PivotFieldBar({
   onClearFilter,
   uniqueValues,
 }: PivotFieldBarProps) {
-  const [openFilterField, setOpenFilterField] = useState<string | null>(null)
   const [fieldsOpen, setFieldsOpen] = useState(true)
 
   const usedKeys = new Set([...rows, ...cols, ...reportFilters])
@@ -47,7 +45,7 @@ export function PivotFieldBar({
 
   return (
     <div className="border-b bg-background">
-      {/* Available Fields — collapsible accordion, groups stacked vertically */}
+      {/* Available Fields — collapsible accordion */}
       <div className="border-b">
         <button
           type="button"
@@ -64,11 +62,11 @@ export function PivotFieldBar({
         </button>
 
         {fieldsOpen && (
-          <div className="px-4 pb-3 pt-1">
+          <div className="px-4 pb-2 pt-1">
             {availableFields.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">All fields in use</p>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
                 {FIELD_GROUP_ORDER.filter(g => grouped[g]?.length).map(groupName => (
                   <div key={groupName} className="flex items-start gap-2">
                     <span className="text-xs text-muted-foreground w-28 shrink-0 pt-0.5">{groupName}</span>
@@ -94,16 +92,19 @@ export function PivotFieldBar({
       </div>
 
       {/* Drop Zones */}
-      <div className="px-4 py-3 grid grid-cols-3 gap-3">
+      <div className="px-3 py-2 grid grid-cols-3 gap-2">
         <DropZone
           zone="rows"
           label="Rows"
           fields={rows}
           fieldDefs={FIELD_DEFINITIONS}
           filterValues={filterValues}
+          uniqueValues={uniqueValues}
           onDrop={(key, from) => onDrop(key, from, 'rows')}
           onRemove={key => onRemove(key, 'rows')}
           onFieldDragStart={() => {}}
+          onFilter={onSetFilter}
+          onClearFilter={onClearFilter}
         />
         <DropZone
           zone="cols"
@@ -111,9 +112,12 @@ export function PivotFieldBar({
           fields={cols}
           fieldDefs={FIELD_DEFINITIONS}
           filterValues={filterValues}
+          uniqueValues={uniqueValues}
           onDrop={(key, from) => onDrop(key, from, 'cols')}
           onRemove={key => onRemove(key, 'cols')}
           onFieldDragStart={() => {}}
+          onFilter={onSetFilter}
+          onClearFilter={onClearFilter}
         />
         <DropZone
           zone="reportFilters"
@@ -121,47 +125,14 @@ export function PivotFieldBar({
           fields={reportFilters}
           fieldDefs={FIELD_DEFINITIONS}
           filterValues={filterValues}
+          uniqueValues={uniqueValues}
           onDrop={(key, from) => onDrop(key, from, 'reportFilters')}
           onRemove={key => onRemove(key, 'reportFilters')}
           onFieldDragStart={() => {}}
+          onFilter={onSetFilter}
+          onClearFilter={onClearFilter}
         />
       </div>
-
-      {/* Report Filter selectors — same multi-select dropdown as table headers */}
-      {reportFilters.length > 0 && (
-        <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
-          {reportFilters.map(key => {
-            const fd = FIELD_DEFINITIONS.find(f => f.key === key)
-            const activeValues = filterValues[key] ?? []
-            const isFiltered = activeValues.length > 0
-            return (
-              <div key={key} className="flex items-center gap-1">
-                <span className="text-sm text-muted-foreground">{fd?.label ?? key}:</span>
-                <div className="relative inline-flex items-center">
-                  <button
-                    className={`inline-flex items-center gap-1 px-2 py-1 text-sm border rounded-md bg-background hover:bg-muted transition-colors ${isFiltered ? 'border-indigo-400 text-indigo-700 font-medium' : 'text-foreground'}`}
-                    onClick={() => setOpenFilterField(openFilterField === key ? null : key)}
-                  >
-                    {isFiltered ? `${activeValues.length} selected` : '(All)'}
-                    <span className="text-xs">{isFiltered ? '▼' : '▽'}</span>
-                  </button>
-                  <PivotFilterDropdown
-                    fieldKey={key}
-                    fieldLabel={fd?.label ?? key}
-                    uniqueValues={uniqueValues[key] ?? []}
-                    activeValues={activeValues}
-                    onApply={v => onSetFilter(key, v)}
-                    onClear={() => onClearFilter(key)}
-                    isOpen={openFilterField === key}
-                    onOpen={() => setOpenFilterField(key)}
-                    onClose={() => setOpenFilterField(null)}
-                  />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }

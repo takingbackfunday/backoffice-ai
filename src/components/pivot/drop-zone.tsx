@@ -10,9 +10,12 @@ interface DropZoneProps {
   fields: string[]
   fieldDefs: FieldDef[]
   filterValues: Record<string, string[]>
+  uniqueValues: Record<string, string[]>
   onDrop: (key: string, from: string) => void
   onRemove: (key: string) => void
   onFieldDragStart: (key: string, from: string) => void
+  onFilter: (key: string, values: string[]) => void
+  onClearFilter: (key: string) => void
 }
 
 const ZONE_BORDER: Record<string, string> = {
@@ -27,14 +30,17 @@ const ZONE_HIGHLIGHT: Record<string, string> = {
   reportFilters: 'border-amber-500 bg-amber-100/60',
 }
 
-export function DropZone({ zone, label, fields, fieldDefs, filterValues, onDrop, onRemove, onFieldDragStart }: DropZoneProps) {
+export function DropZone({
+  zone, label, fields, fieldDefs, filterValues, uniqueValues,
+  onDrop, onRemove, onFieldDragStart, onFilter, onClearFilter,
+}: DropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false)
 
   const getLabel = (key: string) => fieldDefs.find(f => f.key === key)?.label ?? key
 
   return (
     <div
-      className={`rounded-lg border-2 border-dashed p-3 min-h-[80px] transition-colors ${isDragOver ? ZONE_HIGHLIGHT[zone] : ZONE_BORDER[zone]}`}
+      className={`rounded-md border-2 border-dashed px-2 py-1.5 min-h-[52px] transition-colors ${isDragOver ? ZONE_HIGHLIGHT[zone] : ZONE_BORDER[zone]}`}
       onDragOver={e => { e.preventDefault(); setIsDragOver(true) }}
       onDragLeave={() => setIsDragOver(false)}
       onDrop={e => {
@@ -46,9 +52,9 @@ export function DropZone({ zone, label, fields, fieldDefs, filterValues, onDrop,
         } catch {}
       }}
     >
-      <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">{label}</div>
+      <div className="text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wide">{label}</div>
       {fields.length === 0 ? (
-        <p className="text-xs text-muted-foreground italic">Drag fields here</p>
+        <p className="text-[10px] text-muted-foreground/60 italic">Drag fields here</p>
       ) : (
         <div className="flex flex-wrap gap-1">
           {fields.map(key => (
@@ -63,6 +69,10 @@ export function DropZone({ zone, label, fields, fieldDefs, filterValues, onDrop,
                 e.dataTransfer.setData('text/plain', JSON.stringify({ key, from: zone }))
                 onFieldDragStart(key, zone)
               }}
+              uniqueValues={uniqueValues[key] ?? []}
+              activeFilterValues={filterValues[key] ?? []}
+              onFilter={values => onFilter(key, values)}
+              onClearFilter={() => onClearFilter(key)}
             />
           ))}
         </div>
