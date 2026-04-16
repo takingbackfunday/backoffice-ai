@@ -46,9 +46,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Local Netlify folder
-.netlify
-
 # Prisma generated client
 src/generated/
 prisma/generated/

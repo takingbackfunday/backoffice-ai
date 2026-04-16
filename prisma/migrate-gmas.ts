@@ -2,7 +2,7 @@
  * Migration script for gmasproperties@outlook.com (Pop)
  *
  * Run with:
- *   DATABASE_URL="$(netlify env:get DATABASE_URL)" npx tsx prisma/migrate-gmas.ts
+ *   DIRECT_URL="<neon-direct-url>" npx tsx prisma/migrate-gmas.ts
  *
  * What it does:
  *   1. Resolves the Clerk userId for gmasproperties@outlook.com
@@ -203,7 +203,7 @@ async function main() {
       '    Find the Clerk userId for gmasproperties@outlook.com at:\n' +
       '    https://dashboard.clerk.com → Users → search gmasproperties\n' +
       '    Then run:\n' +
-      '    GMAS_USER_ID=user_xxxx DATABASE_URL="$(netlify env:get DATABASE_URL)" npx tsx prisma/migrate-gmas.ts\n'
+      '    GMAS_USER_ID=user_xxxx DIRECT_URL="<neon-direct-url>" npx tsx prisma/migrate-gmas.ts\n'
     )
     process.exit(1)
   }

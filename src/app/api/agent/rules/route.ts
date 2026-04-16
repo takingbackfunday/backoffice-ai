@@ -111,7 +111,7 @@ export async function GET() {
         controller.enqueue(new TextEncoder().encode(': ping\n\n'))
       }, 5000)
 
-      // Hard timeout — close the stream gracefully before Netlify kills the function
+      // Hard timeout — close the stream gracefully if analysis runs too long
       const HARD_TIMEOUT_MS = 55_000
       let hardTimedOut = false
       const hardTimeout = setTimeout(() => {

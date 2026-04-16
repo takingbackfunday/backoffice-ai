@@ -106,9 +106,10 @@ Invoice sending and message notifications are implemented but disabled until Res
 
 1. Create an account at [resend.com](https://resend.com)
 2. Verify the domain `backoffice.cv`
-3. Add to Netlify environment variables:
-   - `RESEND_API_KEY` — from Resend dashboard
-   - `RESEND_FROM` — `Backoffice <noreply@backoffice.cv>`
+3. Add to Fly.io secrets:
+   ```bash
+   fly secrets set RESEND_API_KEY=re_... RESEND_FROM="Backoffice <noreply@backoffice.cv>"
+   ```
 
 Without these vars the app works fine — email sending is silently skipped.
 
@@ -122,22 +123,22 @@ Prisma 7 uses the `prisma-client` generator which outputs to `src/generated/pris
 import { PrismaClient } from '@/generated/prisma/client'
 ```
 
-DB CLI commands require an explicit `DATABASE_URL` prefix — Prisma's config loader does not read `.env.local`:
+DB CLI commands require an explicit `DIRECT_URL` prefix — Prisma's config loader does not read `.env.local`:
 
 ```bash
-DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm db:push
-DATABASE_URL="$(netlify env:get DATABASE_URL)" pnpm prisma generate
+DIRECT_URL="<neon-direct-connection-string>" pnpm db:push
+DIRECT_URL="<neon-direct-connection-string>" pnpm prisma generate
 ```
 
-`src/generated/` is gitignored — rebuilt automatically at Netlify deploy time.
+`src/generated/` is gitignored — rebuilt automatically at deploy time (`pnpm build` runs `prisma generate`).
 
 ### Prisma adapter — PrismaNeon (WebSocket)
 
 Uses `@prisma/adapter-neon` (`PrismaNeon`) with `@neondatabase/serverless` for WebSocket transport. This is required for `$transaction` support — `PrismaNeonHttp` (HTTP mode) does **not** support transactions and will throw at runtime on any `$transaction` call, including Prisma nested writes. `pg` / `@prisma/adapter-pg` are not installed.
 
-### Netlify serverless — no fire-and-forget
+### Fire-and-forget patterns
 
-Async work (invoice matching, tenant matching) must be `await`ed before returning a response. The process is killed the moment the response is sent — `.then().catch()` background chains never run. Use `await Promise.allSettled([...])`.
+On Fly.io the Node process persists across requests, so fire-and-forget works. However, `await Promise.allSettled([...])` is still preferred for critical background work (invoice matching, tenant matching) to ensure errors are caught and logged.
 
 ### Invoice AI models
 

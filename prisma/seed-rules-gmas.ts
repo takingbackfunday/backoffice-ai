@@ -3,8 +3,8 @@
  *
  * Run with:
  *   GMAS_USER_ID=user_3BijUlphbynJ8JSjCE478qt9uBy \
- *   OPENROUTER_API_KEY="$(netlify env:get OPENROUTER_API_KEY)" \
- *   DATABASE_URL="$(netlify env:get DATABASE_URL)" \
+ *   OPENROUTER_API_KEY="..." \
+ *   DIRECT_URL="<neon-direct-url>" \
  *   npx tsx prisma/seed-rules-gmas.ts
  *
  * How it works:

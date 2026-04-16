@@ -93,7 +93,7 @@ export async function POST(request: Request) {
 
     const batch = importBatch
 
-    // Await matching before returning — fire-and-forget dies on Netlify serverless
+    // Await matching before returning — ensures errors are caught and logged
     const importedTxs = await prisma.transaction.findMany({
       where: { importBatchId: batch.id },
       select: { id: true },

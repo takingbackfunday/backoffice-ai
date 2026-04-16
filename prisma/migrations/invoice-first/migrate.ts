@@ -2,7 +2,7 @@
  * Invoice-first migration: migrate TenantCharge + TenantPayment → Invoice / InvoiceLineItem / InvoicePayment
  *
  * Run with:
- *   DATABASE_URL="$(netlify env:get DATABASE_URL)" npx tsx prisma/migrations/invoice-first/migrate.ts
+ *   DIRECT_URL="<neon-direct-url>" npx tsx prisma/migrations/invoice-first/migrate.ts
  *
  * This script is idempotent — safe to re-run.
  */

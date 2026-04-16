@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Commit without pushing** during development. Never run `git push` unless the user explicitly asks. Pushing to `main` triggers a Fly.io deploy via GitHub Actions. To deploy manually without pushing: `fly deploy`.
 
+**After pushing**, always verify the deploy succeeded via GitHub Actions:
+```bash
+gh run list --repo takingbackfunday/backoffice-ai --limit 3
+```
+The top entry should show `completed / success` for the commit just pushed. Do not use `fly logs` for this — it streams indefinitely and blocks.
+
 ## Commands
 
 ```bash
@@ -129,7 +135,7 @@ Each resource has its own directory (e.g. `api/transactions/`, `api/rules/`). Al
 - `GET [quoteId]/pdf` — generate and stream the quote PDF
 
 **Receipt routes** (`api/receipts/`):
-- `POST upload` — full pipeline: Mistral OCR → Claude extraction → Sharp WebP compression → UploadThing upload → Prisma upsert; accepts `{ image: dataURI, transactionId? }`; all steps are `await`ed (no fire-and-forget — Netlify kills process after response)
+- `POST upload` — full pipeline: Mistral OCR → Claude extraction → Sharp WebP compression → UploadThing upload → Prisma upsert; accepts `{ image: dataURI, transactionId? }`; all steps are `await`ed
 - `GET /` — list all receipts for user, includes linked transaction
 - `PATCH / DELETE [id]` — link/unlink transaction, delete receipt
 - `POST [id]/retry` — re-run OCR+extraction on a FAILED receipt using its thumbnail URL

@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       },
     })
 
-    // ── Run pipeline (all awaited — no fire-and-forget on Netlify) ────────
+    // ── Run pipeline ──────────────────────────────────────────────────────
     let ocrMarkdown = ''
     let extractedData = {}
     let thumbnailUrl: string | null = null

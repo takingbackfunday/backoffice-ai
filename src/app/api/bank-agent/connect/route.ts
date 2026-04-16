@@ -68,12 +68,12 @@ export async function POST(request: Request) {
       try {
         // Check env vars up front — fail fast with a clear message
         if (!process.env.BROWSERLESS_TOKEN) {
-          send({ type: 'error', error: 'BROWSERLESS_TOKEN is not set. Add it to Netlify environment variables.' })
+          send({ type: 'error', error: 'BROWSERLESS_TOKEN is not set. Add it via: fly secrets set BROWSERLESS_TOKEN=...' })
           console.error('[bank-agent/connect] BROWSERLESS_TOKEN missing')
           return
         }
         if (!process.env.ENCRYPTION_SECRET) {
-          send({ type: 'error', error: 'ENCRYPTION_SECRET is not set. Add it to Netlify environment variables.' })
+          send({ type: 'error', error: 'ENCRYPTION_SECRET is not set. Add it via: fly secrets set ENCRYPTION_SECRET=...' })
           console.error('[bank-agent/connect] ENCRYPTION_SECRET missing')
           return
         }
