@@ -30,6 +30,7 @@ export default async function ProjectListingsPage({ params }: PageParams) {
   })
 
   if (!project) notFound()
+  if (!project.propertyProfile) redirect(`/projects/${slug}`)
 
   const unitIds = project.propertyProfile?.units.map(u => u.id) ?? []
 

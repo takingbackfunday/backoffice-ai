@@ -537,6 +537,14 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
             )
           })}
         </div>
+
+        <Link
+          href="/projects/new?type=PROPERTY"
+          className="sm:ml-auto inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors whitespace-nowrap self-start"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add property
+        </Link>
       </div>
 
       {/* ============================================================= */}

@@ -108,7 +108,7 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
 
   /* ── PROPERTY project ────────────────────────────────────────────── */
   if (project.type === 'PROPERTY') {
-    if (!project.propertyProfile) notFound()
+    if (!project.propertyProfile) redirect(`/projects/${slug}`)
 
     const unitIds = project.propertyProfile.units.map(u => u.id)
     const propertyProfileId = project.propertyProfile.id

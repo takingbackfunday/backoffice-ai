@@ -38,6 +38,7 @@ export default async function ProjectUnitsPage({ params }: PageParams) {
   })
 
   if (!project) notFound()
+  if (!project.propertyProfile) redirect(`/projects/${slug}`)
 
   return (
     <div className="flex min-h-screen">

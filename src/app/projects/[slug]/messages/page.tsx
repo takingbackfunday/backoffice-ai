@@ -19,7 +19,8 @@ export default async function ProjectMessagesPage({ params }: PageParams) {
     where: { userId, slug, type: 'PROPERTY' },
     include: { propertyProfile: { include: { units: { select: { id: true } } } } },
   })
-  if (!project || !project.propertyProfile) notFound()
+  if (!project) notFound()
+  if (!project.propertyProfile) redirect(`/projects/${slug}`)
 
   const unitIds = project.propertyProfile.units.map(u => u.id)
 

@@ -29,13 +29,17 @@ export function PivotPageClient() {
 
   // Fetch data
   useEffect(() => {
-    fetch('/api/pivot/')
+    const controller = new AbortController()
+    fetch('/api/pivot/', { signal: controller.signal })
       .then(r => r.json())
       .then(res => {
         if (res.data) setData(res.data)
       })
-      .catch(console.error)
+      .catch(err => {
+        if (err.name !== 'AbortError') console.error(err)
+      })
       .finally(() => setLoading(false))
+    return () => controller.abort()
   }, [])
 
   // Restore preferences on mount
@@ -43,16 +47,22 @@ export function PivotPageClient() {
     fetch('/api/preferences')
       .then(r => r.json())
       .then(res => {
-        if (res.data?.pivotConfig && !didRestorePrefs.current) {
+        if (!didRestorePrefs.current) {
           didRestorePrefs.current = true
-          setConfig({ ...DEFAULT_CONFIG, ...res.data.pivotConfig })
+          if (res.data?.pivotConfig) {
+            setConfig({ ...DEFAULT_CONFIG, ...res.data.pivotConfig })
+          }
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        // Mark as restored so config changes are still persisted
+        didRestorePrefs.current = true
+      })
   }, [])
 
-  // Debounced config persistence
+  // Debounced config persistence — only after preferences have been restored
   useEffect(() => {
+    if (!didRestorePrefs.current) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       fetch('/api/preferences', {

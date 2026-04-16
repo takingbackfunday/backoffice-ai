@@ -1,4 +1,5 @@
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import type { PivotConfig } from '@/lib/pivot/types'
 
 export interface InvoiceDefaults {
   taxEnabled?: boolean
@@ -35,6 +36,9 @@ export interface UserPreferenceData {
   // Internal / system
   lastRulesAgentRun?: number
   onboardingStep?: string
+
+  // Pivot table
+  pivotConfig?: Partial<PivotConfig>
 }
 
 export function parsePreferences(raw: unknown): UserPreferenceData {

@@ -1,7 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
-import { format, getMonth, getYear } from 'date-fns'
 import type { PivotRow } from '@/lib/pivot/types'
 
 // TODO: Future optimization: server-side aggregation via Prisma groupBy or raw SQL
@@ -32,8 +31,8 @@ function mapAccountType(type: string): string {
 }
 
 function buildQuarter(date: Date): string {
-  const month = getMonth(date) // 0-indexed
-  const year = getYear(date)
+  const month = date.getUTCMonth() // 0-indexed
+  const year = date.getUTCFullYear()
   const q = Math.ceil((month + 1) / 3)
   return `Q${q} ${year}`
 }
@@ -70,15 +69,24 @@ export async function GET(request: Request) {
       orderBy: { date: 'asc' },
     })
 
+    const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
     const rows: PivotRow[] = transactions.map(tx => {
       const date = tx.date
+      const y = date.getUTCFullYear()
+      const mo = date.getUTCMonth() // 0-indexed
+      const d = date.getUTCDate()
+      const dow = date.getUTCDay() // 0 = Sunday
+      const mm = String(mo + 1).padStart(2, '0')
+      const dd = String(d).padStart(2, '0')
       return {
         id: tx.id,
-        date: format(date, 'yyyy-MM-dd'),
-        month: format(date, 'MMM yyyy'),
+        date: `${y}-${mm}-${dd}`,
+        month: `${MONTH_NAMES[mo]} ${y}`,
         quarter: buildQuarter(date),
-        year: String(getYear(date)),
-        dayOfWeek: format(date, 'EEEE'),
+        year: String(y),
+        dayOfWeek: DAY_NAMES[dow],
         category: tx.categoryRef?.name ?? 'Uncategorized',
         categoryGroup: tx.categoryRef?.group?.name ?? 'Uncategorized',
         taxSchedule: mapScheduleRef(tx.categoryRef?.group?.scheduleRef),

@@ -8,6 +8,7 @@ import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { PropertyOverview } from '@/components/projects/property-overview'
 import { ClientInfoEditor } from '@/components/projects/client-info-editor'
 import { ClientQuickActions } from '@/components/projects/client-quick-actions'
+import { PropertySetupForm } from '@/components/projects/property-setup-form'
 import { JOB_STATUS_LABELS } from '@/types'
 import Link from 'next/link'
 
@@ -139,6 +140,11 @@ export default async function ProjectDetailPage({ params }: PageParams) {
                 )}
               </div>
             </div>
+          )}
+
+          {/* PROPERTY — missing profile (migrated without going through wizard) */}
+          {project.type === 'PROPERTY' && !project.propertyProfile && (
+            <PropertySetupForm projectId={project.id} />
           )}
 
           {/* PROPERTY overview */}
