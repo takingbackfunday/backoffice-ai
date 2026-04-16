@@ -255,6 +255,7 @@ export function InvoiceEditor({
   const [showCopyPicker, setShowCopyPicker] = useState(false)
   const [unitPopoverId, setUnitPopoverId] = useState<string | null>(null)
   const [unitPopoverPos, setUnitPopoverPos] = useState<{ top: number; right: number } | null>(null)
+  const [unitSuggestions, setUnitSuggestions] = useState<Record<string, string>>({})
   const [recentInvoices, setRecentInvoices] = useState(initialRecentInvoices ?? null as null | typeof initialRecentInvoices)
   const [loadingRecent, setLoadingRecent] = useState(false)
 
@@ -737,6 +738,7 @@ export function InvoiceEditor({
           {unitPopoverId && unitPopoverPos && (() => {
             const activeItem = state.lineItems.find(i => i.id === unitPopoverId)
             if (!activeItem) return null
+            const suggestedUnit = unitSuggestions[unitPopoverId] ?? null
             return (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setUnitPopoverId(null)} aria-hidden="true" />
@@ -755,6 +757,18 @@ export function InvoiceEditor({
                       autoFocus
                     />
                   </div>
+                  {suggestedUnit && (
+                    <div className="pb-1 border-b mb-1">
+                      <p className="text-[9px] font-semibold text-amber-500 uppercase tracking-wide px-2 pt-1 pb-0.5">Suggested</p>
+                      <button
+                        type="button"
+                        onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: suggestedUnit }); setUnitSuggestions(prev => { const next = { ...prev }; delete next[unitPopoverId]; return next }); setUnitPopoverId(null) }}
+                        className={`w-full text-left px-2 py-1 text-xs rounded-md transition-colors bg-amber-50 text-amber-700 hover:bg-amber-100 ${activeItem.qtyUnit === suggestedUnit ? 'font-semibold' : ''}`}
+                      >
+                        {suggestedUnit}
+                      </button>
+                    </div>
+                  )}
                   {([
                     ['Time', ['hours', 'days', 'weeks', 'months']],
                     ['Area', ['sq ft', 'sq m']],
@@ -770,10 +784,11 @@ export function InvoiceEditor({
                         <button
                           key={u}
                           type="button"
-                          onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: u }); setUnitPopoverId(null) }}
-                          className={`w-full text-left px-2 py-1 text-xs rounded-md hover:bg-muted/50 transition-colors ${activeItem.qtyUnit === u ? 'font-semibold text-primary bg-primary/5' : ''}`}
+                          onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: u }); setUnitSuggestions(prev => { const next = { ...prev }; delete next[unitPopoverId]; return next }); setUnitPopoverId(null) }}
+                          className={`w-full text-left px-2 py-1 text-xs rounded-md hover:bg-muted/50 transition-colors ${activeItem.qtyUnit === u ? 'font-semibold text-primary bg-primary/5' : ''} ${suggestedUnit === u && activeItem.qtyUnit !== u ? 'text-amber-600' : ''}`}
                         >
                           {u}
+                          {suggestedUnit === u && activeItem.qtyUnit !== u && <span className="ml-1 text-[9px] text-amber-400">●</span>}
                         </button>
                       ))}
                     </div>
@@ -817,13 +832,17 @@ export function InvoiceEditor({
                       }}
                       onBlur={e => {
                         const desc = e.target.value.trim()
-                        if (!desc || (item.qtyUnit !== 'x' && item.qtyUnit !== '')) return
+                        if (!desc) return
                         fetch(`/api/projects/${projectId}/invoices/suggest-unit`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ description: desc }),
                         }).then(r => r.json()).then(j => {
-                          if (j.data?.unit) dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'qtyUnit', value: j.data.unit })
+                          if (j.data?.unit && j.data?.confidence === 'high') {
+                            setUnitSuggestions(prev => ({ ...prev, [item.id]: j.data.unit }))
+                          } else {
+                            setUnitSuggestions(prev => { const next = { ...prev }; delete next[item.id]; return next })
+                          }
                         }).catch(() => {})
                       }}
                       className="text-xs focus:outline-none bg-transparent placeholder:text-muted-foreground/50 min-w-0 w-full resize-none overflow-hidden leading-snug py-0.5"
@@ -847,9 +866,13 @@ export function InvoiceEditor({
                           setUnitPopoverPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
                           setUnitPopoverId(item.id)
                         }}
-                        className={`text-[10px] rounded px-1 py-0.5 border transition-colors ${item.qtyUnit ? 'border-primary/40 text-primary bg-primary/5' : 'border-dashed border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/60'}`}
+                        className={`relative text-[10px] rounded px-1 py-0.5 border transition-colors ${item.qtyUnit ? 'border-primary/40 text-primary bg-primary/5' : 'border-dashed border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/60'}`}
+                        title={unitSuggestions[item.id] ? `Suggested: ${unitSuggestions[item.id]}` : undefined}
                       >
                         {item.qtyUnit || 'unit'}
+                        {unitSuggestions[item.id] && (
+                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400 border border-background" />
+                        )}
                       </button>
                     </div>
                     <div className="flex items-center justify-end">
