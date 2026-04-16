@@ -124,11 +124,50 @@ interface NewJobModalProps {
   onCreated: (job: { id: string; name: string; projectId: string }) => void
 }
 
-export function NewJobModal({ clients, onClose, onCreated }: NewJobModalProps) {
-  const [clientId, setClientId] = useState(clients.length === 1 ? clients[0].id : '')
+export function NewJobModal({ clients: initialClients, onClose, onCreated }: NewJobModalProps) {
+  const [clients, setClients] = useState(initialClients)
+  const [clientId, setClientId] = useState(initialClients.length === 1 ? initialClients[0].id : '')
   const [jobName, setJobName] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Inline new-client form state
+  const [creatingClient, setCreatingClient] = useState(false)
+  const [newClientName, setNewClientName] = useState('')
+  const [savingClient, setSavingClient] = useState(false)
+  const [clientError, setClientError] = useState<string | null>(null)
+
+  function handleClientChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value
+    if (val === '__new__') {
+      setCreatingClient(true)
+      setClientId('')
+    } else {
+      setClientId(val)
+    }
+  }
+
+  async function handleCreateClient() {
+    if (!newClientName.trim()) return
+    setSavingClient(true)
+    setClientError(null)
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newClientName.trim(), type: 'CLIENT', client: {} }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) { setClientError(json.error ?? 'Failed to create client'); return }
+      const created = { id: json.data.id, name: json.data.name }
+      setClients(prev => [...prev, created])
+      setClientId(created.id)
+      setCreatingClient(false)
+      setNewClientName('')
+    } finally {
+      setSavingClient(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -149,6 +188,8 @@ export function NewJobModal({ clients, onClose, onCreated }: NewJobModalProps) {
     }
   }
 
+  const inputCls = 'w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30'
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-sm rounded-xl bg-background border shadow-xl p-5 space-y-4">
@@ -161,16 +202,49 @@ export function NewJobModal({ clients, onClose, onCreated }: NewJobModalProps) {
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="block text-xs font-medium mb-1">Client <span className="text-destructive">*</span></label>
-            <select
-              required
-              value={clientId}
-              onChange={e => setClientId(e.target.value)}
-              autoFocus
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">Select client…</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            {!creatingClient ? (
+              <select
+                required
+                value={clientId}
+                onChange={handleClientChange}
+                autoFocus
+                className={inputCls}
+              >
+                <option value="">Select client…</option>
+                <option value="__new__">+ New client</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={newClientName}
+                    onChange={e => setNewClientName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateClient() } if (e.key === 'Escape') { setCreatingClient(false); setNewClientName('') } }}
+                    placeholder="Client / business name"
+                    className={inputCls}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateClient}
+                    disabled={savingClient || !newClientName.trim()}
+                    className="shrink-0 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {savingClient ? '…' : 'Add'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCreatingClient(false); setNewClientName('') }}
+                    className="shrink-0 rounded-md border px-2 py-2 text-xs hover:bg-muted transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+                {clientError && <p className="text-xs text-destructive">{clientError}</p>}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium mb-1">Job name <span className="text-destructive">*</span></label>
@@ -180,7 +254,7 @@ export function NewJobModal({ clients, onClose, onCreated }: NewJobModalProps) {
               value={jobName}
               onChange={e => setJobName(e.target.value)}
               placeholder="Brand redesign, Q2 retainer…"
-              className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className={inputCls}
             />
           </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
