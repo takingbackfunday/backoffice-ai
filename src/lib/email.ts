@@ -96,7 +96,7 @@ export async function sendTenantMessageNotification({
 
 export async function sendInvoiceEmail({
   toEmail, toName, fromName, invoiceNumber, invoiceId, projectSlug,
-  total, currency, dueDate, notes, message, paymentMethods, paymentNote, pdfBuffer,
+  total, currency, dueDate, notes, message, paymentMethods, paymentNote, pdfBuffer, receiptAttachments,
 }: {
   toEmail: string
   toName: string
@@ -112,6 +112,7 @@ export async function sendInvoiceEmail({
   paymentMethods?: PaymentMethods
   paymentNote?: string
   pdfBuffer?: Buffer
+  receiptAttachments?: { filename: string; content: string }[]
 }) {
   const resend = getResend()
   if (!resend) return
@@ -150,10 +151,10 @@ export async function sendInvoiceEmail({
         <p style="color:#999;font-size:11px;margin-top:32px">The invoice PDF is attached to this email. Sent via Backoffice AI.</p>
       </div>
     `,
-    attachments: pdfBuffer ? [{
-      filename: `${invoiceNumber}.pdf`,
-      content: pdfBuffer.toString('base64'),
-    }] : [],
+    attachments: [
+      ...(pdfBuffer ? [{ filename: `${invoiceNumber}.pdf`, content: pdfBuffer.toString('base64') }] : []),
+      ...(receiptAttachments ?? []),
+    ],
   })
 }
 

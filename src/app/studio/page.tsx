@@ -49,6 +49,16 @@ export default async function StudioPage({ searchParams }: PageProps) {
     select: { id: true },
   })
 
+  const projectIds = projects.map(p => p.id)
+  const receiptCounts = await prisma.receipt.groupBy({
+    by: ['workspaceId'],
+    where: { userId, workspaceId: { in: projectIds } },
+    _count: { id: true },
+  })
+  const receiptCountMap = Object.fromEntries(
+    receiptCounts.map(r => [r.workspaceId, r._count.id])
+  )
+
   const [prefs, pendingSuggestions, recentPaymentsCount] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId } }),
     prisma.invoicePaymentSuggestion.count({ where: { userId, status: 'PENDING' } }),
@@ -132,6 +142,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
           paid,
           jobName: inv.job?.name ?? null,
         })),
+        receiptCount: receiptCountMap[p.id] ?? 0,
       }
     })
 

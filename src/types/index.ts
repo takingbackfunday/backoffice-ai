@@ -61,6 +61,7 @@ export type TransactionWithRelations = Transaction & {
   workspace: Workspace | null
   categoryRef: (Category & { group: CategoryGroup }) | null
   payee: Payee | null
+  receipts: { id: string }[]
 }
 
 export type { BankConnection } from '@/generated/prisma/client'

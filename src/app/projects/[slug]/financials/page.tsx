@@ -21,11 +21,17 @@ export default async function ProjectFinancialsPage({ params }: PageParams) {
 
   if (!project) notFound()
 
-  const transactions = await prisma.transaction.findMany({
-    where: { workspaceId: project.id },
-    include: { categoryRef: true, payee: true },
-    orderBy: { date: 'desc' },
-  })
+  const [transactions, receipts] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { workspaceId: project.id },
+      include: { categoryRef: true, payee: true },
+      orderBy: { date: 'desc' },
+    }),
+    prisma.receipt.findMany({
+      where: { workspaceId: project.id, userId },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ])
 
   const totalIncome = transactions
     .filter(t => new Decimal(t.amount.toString()).greaterThan(0))
@@ -106,6 +112,97 @@ export default async function ProjectFinancialsPage({ params }: PageParams) {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Receipts section */}
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold">Receipts</h2>
+              <a
+                href={`/receipts?workspaceId=${project.id}`}
+                className="text-xs text-muted-foreground hover:underline"
+              >
+                View all →
+              </a>
+            </div>
+            {receipts.length === 0 ? (
+              <div className="rounded-lg border px-4 py-8 text-center text-sm text-muted-foreground">
+                No receipts linked to this project.{' '}
+                <a href={`/receipts?upload=1&workspaceId=${project.id}`} className="underline">
+                  Add one
+                </a>
+              </div>
+            ) : (
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium w-16">Photo</th>
+                      <th className="text-left px-4 py-2 font-medium">Vendor</th>
+                      <th className="text-left px-4 py-2 font-medium">Date</th>
+                      <th className="text-right px-4 py-2 font-medium">Total</th>
+                      <th className="text-left px-4 py-2 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {receipts.map(r => {
+                      const data = r.extractedData as Record<string, unknown> | null
+                      const vendor = data?.vendor ? String(data.vendor) : null
+                      const total = data?.total != null ? Number(data.total) : null
+                      const dateStr = data?.date ? String(data.date) : null
+                      const STATUS_LABELS: Record<string, string> = {
+                        PROCESSING: 'Processing',
+                        NEEDS_REVIEW: 'Needs review',
+                        READY: 'Ready',
+                        INVOICED: 'Invoiced',
+                        FAILED: 'Failed',
+                      }
+                      const STATUS_COLORS: Record<string, string> = {
+                        PROCESSING: 'text-amber-700',
+                        NEEDS_REVIEW: 'text-amber-700',
+                        READY: 'text-green-700',
+                        INVOICED: 'text-blue-700',
+                        FAILED: 'text-red-700',
+                      }
+                      return (
+                        <tr key={r.id} className="hover:bg-muted/20">
+                          <td className="px-4 py-2">
+                            {r.thumbnailUrl ? (
+                              <img
+                                src={r.thumbnailUrl}
+                                alt="Receipt"
+                                width={40}
+                                height={40}
+                                className="rounded object-cover"
+                                style={{ width: 40, height: 40 }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-muted flex items-center justify-center text-muted-foreground text-xs">
+                                —
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-2">{vendor ?? <span className="text-muted-foreground">—</span>}</td>
+                          <td className="px-4 py-2 text-muted-foreground">
+                            {dateStr
+                              ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                              : '—'}
+                          </td>
+                          <td className="px-4 py-2 text-right font-medium">
+                            {total != null
+                              ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total)
+                              : <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className={`px-4 py-2 text-xs font-medium ${STATUS_COLORS[r.status] ?? 'text-muted-foreground'}`}>
+                            {STATUS_LABELS[r.status] ?? r.status}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </main>
       </div>

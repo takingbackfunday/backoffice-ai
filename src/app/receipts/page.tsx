@@ -7,9 +7,15 @@ import { prisma } from '@/lib/prisma'
 
 export const metadata = { title: 'Receipts — Backoffice AI' }
 
-export default async function ReceiptsPage() {
+interface PageProps {
+  searchParams: Promise<{ workspaceId?: string; upload?: string }>
+}
+
+export default async function ReceiptsPage({ searchParams }: PageProps) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
+
+  const { workspaceId, upload } = await searchParams
 
   const workspaces = await prisma.workspace.findMany({
     where: { userId, type: 'CLIENT', isActive: true },
@@ -23,7 +29,7 @@ export default async function ReceiptsPage() {
       <div className="flex flex-1 flex-col">
         <Header title="Receipts" />
         <main className="flex-1" role="main">
-          <ReceiptsPageClient workspaces={workspaces} />
+          <ReceiptsPageClient workspaces={workspaces} initialWorkspaceId={workspaceId} initialShowUpload={upload === '1'} />
         </main>
       </div>
     </div>

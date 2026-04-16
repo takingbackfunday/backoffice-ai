@@ -15,6 +15,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     const body = await request.json().catch(() => ({}))
     const message: string | undefined = body.message
+    const receiptIds: string[] = Array.isArray(body.receiptIds) ? body.receiptIds : []
 
     // Look up invoice — could be CLIENT (via clientProfile) or PROPERTY (via lease/tenant)
     const invoice = await prisma.invoice.findFirst({
@@ -92,6 +93,30 @@ export async function POST(request: Request, { params }: RouteParams) {
       })),
     }, paymentMethods, invoicePaymentNote)
 
+    // Fetch and attach selected receipts
+    let receiptAttachments: { filename: string; content: string }[] = []
+    if (receiptIds.length > 0) {
+      const receipts = await prisma.receipt.findMany({
+        where: { id: { in: receiptIds }, userId },
+        select: { id: true, thumbnailUrl: true, extractedData: true },
+      })
+      const fetched = await Promise.allSettled(
+        receipts
+          .filter(r => r.thumbnailUrl)
+          .map(async (r, i) => {
+            const res = await fetch(r.thumbnailUrl!)
+            if (!res.ok) return null
+            const buf = Buffer.from(await res.arrayBuffer())
+            const vendor = (r.extractedData as Record<string, unknown> | null)?.vendor
+            const name = vendor ? `Receipt-${String(vendor).replace(/[^a-zA-Z0-9]/g, '_')}-${i + 1}.webp` : `Receipt-${i + 1}.webp`
+            return { filename: name, content: buf.toString('base64') }
+          })
+      )
+      receiptAttachments = fetched
+        .filter((r): r is PromiseFulfilledResult<{ filename: string; content: string }> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value)
+    }
+
     await sendInvoiceEmail({
       toEmail: email,
       toName: recipientName,
@@ -107,6 +132,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       paymentMethods,
       paymentNote: invoicePaymentNote,
       pdfBuffer,
+      receiptAttachments,
     })
 
     const updated = await prisma.invoice.update({

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { buildDuplicateHash } from '@/lib/dedup'
 import { matchInvoicePayments } from '@/lib/invoice-matching'
+import { matchReceiptTransactions } from '@/lib/receipt-matching'
 
 const SORT_FIELDS = ['date', 'amount', 'description', 'category'] as const
 type SortField = typeof SORT_FIELDS[number]
@@ -85,6 +86,7 @@ export async function GET(request: Request) {
           workspace: true,
           categoryRef: { include: { group: true } },
           payee: true,
+          receipts: { select: { id: true } },
         },
         orderBy: { [sortBy]: sortDir },
         skip: (page - 1) * pageSize,
@@ -144,9 +146,9 @@ export async function POST(request: Request) {
           payee: true,
         },
       })
-      // Await matching before returning — fire-and-forget dies on Netlify serverless
       await Promise.allSettled([
         matchInvoicePayments(userId, [transaction.id]),
+        matchReceiptTransactions(userId, [transaction.id]),
       ])
       return created(transaction)
     } catch (e: unknown) {

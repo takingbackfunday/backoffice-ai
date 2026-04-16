@@ -51,6 +51,7 @@ interface Client {
   jobs: { id: string; name: string }[]
   acceptedQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; hasInvoice: boolean }[]
   sentQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; sentAt: string | null }[]
+  receiptCount: number
 }
 
 interface InvoiceDefaults {
@@ -1300,6 +1301,23 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                         {clientInvoices.length === 0 && client.acceptedQuotes.length === 0 && (
                           <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No invoices or quotes yet</p>
                         )}
+
+                        {/* Receipts link */}
+                        <div>
+                          <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Receipts</p>
+                          <Link
+                            href={`/receipts?workspaceId=${client.id}`}
+                            onClick={e => e.stopPropagation()}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 10, background: '#fff', border: '1px solid #e8e6df', textDecoration: 'none', fontSize: 12, color: '#555', transition: 'border-color 0.15s' }}
+                            onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8'}
+                            onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df'}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                            </svg>
+                            View receipts →
+                          </Link>
+                        </div>
                       </div>
 
                       {/* Right: quick actions */}
@@ -1311,6 +1329,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                             { label: 'New estimate', action: () => setShowNewEstimateModal(true) },
                             { label: 'New quote', action: () => setShowNewQuoteModal(true) },
                             { label: 'Log time', action: () => setShowLogTimeModal(true) },
+                            { label: 'Add receipt', action: () => router.push(`/receipts?upload=1&workspaceId=${client.id}`) },
                             { label: 'View project →', action: () => router.push(`/projects/${client.slug}`) },
                           ].map(item => (
                             <button

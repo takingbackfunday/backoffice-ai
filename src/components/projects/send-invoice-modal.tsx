@@ -24,6 +24,14 @@ interface Props {
   onSent: (newStatus: string) => void
 }
 
+interface ReceiptOption {
+  id: string
+  vendor: string | null
+  total: number | null
+  currency: string | null
+  thumbnailUrl: string | null
+}
+
 const fmt = (n: number, currency: string) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 
@@ -55,6 +63,8 @@ export function SendInvoiceModal({
   const [error, setError] = useState<string | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [pdfLoading, setPdfLoading] = useState(true)
+  const [receipts, setReceipts] = useState<ReceiptOption[]>([])
+  const [selectedReceiptIds, setSelectedReceiptIds] = useState<Set<string>>(new Set())
   const readyRef = useRef(false)
   useEffect(() => { readyRef.current = true }, [])
 
@@ -78,6 +88,40 @@ export function SendInvoiceModal({
     }
   }, [projectId, invoiceId])
 
+  // Fetch READY receipts for this project/workspace
+  useEffect(() => {
+    async function loadReceipts() {
+      try {
+        const res = await fetch(`/api/receipts?workspaceId=${projectId}`)
+        if (!res.ok) return
+        const json = await res.json()
+        const data: Array<{ id: string; status: string; extractedData: Record<string, unknown> | null; thumbnailUrl: string | null }> = json.data ?? []
+        const ready = data
+          .filter(r => r.status === 'READY' || r.status === 'INVOICED')
+          .map(r => ({
+            id: r.id,
+            vendor: r.extractedData?.vendor ? String(r.extractedData.vendor) : null,
+            total: r.extractedData?.total != null ? Number(r.extractedData.total) : null,
+            currency: r.extractedData?.currency ? String(r.extractedData.currency) : null,
+            thumbnailUrl: r.thumbnailUrl,
+          }))
+        setReceipts(ready)
+      } catch {
+        // non-critical — receipts section simply won't show
+      }
+    }
+    loadReceipts()
+  }, [projectId])
+
+  function toggleReceipt(id: string) {
+    setSelectedReceiptIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   async function handleSend() {
     setSending(true)
     setError(null)
@@ -89,7 +133,10 @@ export function SendInvoiceModal({
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({
+          message,
+          receiptIds: Array.from(selectedReceiptIds),
+        }),
       })
       const json = await res.json()
       if (!res.ok || json.error) {
@@ -186,6 +233,51 @@ export function SendInvoiceModal({
                 <Paperclip className="h-3.5 w-3.5" />
                 <span>{invoiceNumber}.pdf will be attached automatically</span>
               </div>
+
+              {/* Receipt attachments */}
+              {receipts.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                    Attach receipts
+                  </label>
+                  <div className="space-y-1.5">
+                    {receipts.map(r => (
+                      <label
+                        key={r.id}
+                        className="flex items-center gap-2.5 cursor-pointer rounded-lg border px-3 py-2 hover:bg-muted/30 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedReceiptIds.has(r.id)}
+                          onChange={() => toggleReceipt(r.id)}
+                          className="rounded"
+                        />
+                        {r.thumbnailUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={r.thumbnailUrl}
+                            alt=""
+                            className="w-7 h-7 object-cover rounded shrink-0"
+                          />
+                        )}
+                        <span className="text-xs flex-1 truncate">
+                          {r.vendor ?? 'Unknown vendor'}
+                        </span>
+                        {r.total != null && (
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {r.currency ? `${r.currency} ` : ''}{r.total}
+                          </span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                  {selectedReceiptIds.size > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {selectedReceiptIds.size} receipt{selectedReceiptIds.size > 1 ? 's' : ''} will be attached
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Payment methods preview */}
               <PaymentSummary pm={paymentMethods} />

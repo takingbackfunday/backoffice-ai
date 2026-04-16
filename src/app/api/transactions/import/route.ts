@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { matchInvoicePayments } from '@/lib/invoice-matching'
+import { matchReceiptTransactions } from '@/lib/receipt-matching'
 
 const nullableString = z.union([z.string(), z.null()]).transform((v) => v ?? '')
 const optionalNullableString = z.union([z.string(), z.null()]).transform((v) => (v && v.trim()) ? v.trim() : null).optional()
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
     const importedIds = importedTxs.map(t => t.id)
     await Promise.allSettled([
       matchInvoicePayments(userId, importedIds),
+      matchReceiptTransactions(userId, importedIds),
     ])
 
     return ok({

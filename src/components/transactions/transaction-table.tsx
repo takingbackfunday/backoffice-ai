@@ -1583,8 +1583,27 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
           <span className={displayValue !== '—' ? 'text-[10px] rounded-full bg-blue-100 text-blue-700 px-1.5 py-px max-w-[120px] truncate block' : ''}>
             {displayValue}
           </span>
+        ) : field === 'notes' ? (
+          <span className="flex items-center gap-1 max-w-[200px]">
+            {(row.receipts?.length ?? 0) > 0 && (
+              <a
+                href="/receipts"
+                onClick={(e) => e.stopPropagation()}
+                title={`${row.receipts.length} receipt${row.receipts.length > 1 ? 's' : ''} attached`}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+                {(row.receipts?.length ?? 0) > 1 && (
+                  <span className="text-[10px] ml-0.5">{row.receipts.length}</span>
+                )}
+              </a>
+            )}
+            <span className="truncate block">{displayValue}</span>
+          </span>
         ) : (
-          <span className={field === 'notes' || field === 'description' ? 'max-w-[180px] truncate block' : ''}>
+          <span className={field === 'description' ? 'max-w-[180px] truncate block' : ''}>
             {displayValue}
           </span>
         )}
