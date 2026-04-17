@@ -365,6 +365,14 @@ Server data fetching uses standard Next.js patterns (server components + `fetch`
 
 ## Known Gotchas
 
+### Neon client timezone mangling for `timestamptz`
+
+`@neondatabase/serverless` serialises `timestamptz` columns using the Neon server's local timezone (UTC+1 in production) when converting to ISO strings. JS `Date` objects built from those strings have an epoch 1 hour behind the stored value. Calling `getUTCFullYear/Month/Date` on them returns the wrong day for rows near midnight UTC.
+
+**Fix**: avoid JS `Date` math on `timestamptz` columns. Instead, use a `$queryRaw` with `to_char(col AT TIME ZONE 'UTC', 'YYYY-MM-DD')` so Postgres formats the date before it touches the JS layer. See `src/app/api/pivot/route.ts`.
+
+Similarly, the CSV processor (`src/lib/csv-processor.ts`) must strip bare datetime strings (e.g. `"2025-01-01T00:00:00"`) down to `YYYY-MM-DD` before passing them to `new Date()` — bare datetime strings without a timezone suffix are parsed as local time by V8, which on a UTC+1 server stores them 1 hour early.
+
 ### Prisma v7 generated client path
 
 Prisma 7 (`prisma-client` generator) outputs to `src/generated/prisma/` **without** an `index.ts`. The entry point is `client.ts`. All imports must use:
