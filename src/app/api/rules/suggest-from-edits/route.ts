@@ -67,6 +67,8 @@ export async function POST(request: Request) {
       categoryId: string | null
       payeeName: string | null
       payeeId: string | null
+      workspaceId: string | null
+      workspaceName: string | null
       confidence: 'high' | 'medium'
       impact: string
       reasoning: string
@@ -85,6 +87,8 @@ export async function POST(request: Request) {
             categoryId: event.rule.categoryId,
             payeeName: event.rule.payeeName,
             payeeId: event.rule.payeeId,
+            workspaceId: event.rule.workspaceId ?? null,
+            workspaceName: event.rule.workspaceName ?? null,
             confidence: event.rule.confidence,
             impact: event.rule.impact,
             reasoning: event.rule.reasoning,
@@ -220,6 +224,8 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
             categoryId: s.categoryId ?? null,
             payeeName: s.payeeName ?? null,
             payeeId: s.payeeId ?? null,
+            workspaceId: s.workspaceId ?? null,
+            workspaceName: s.workspaceName ?? null,
             confidence: s.confidence,
             impact: s.impact,
             reasoning: s.reasoning,

@@ -21,7 +21,7 @@ function encode(event: RulesSseEvent): Uint8Array {
 
 const SYSTEM_PROMPT = `You are an expert financial categorisation assistant. Your job is to analyse the user's transaction data and suggest high-quality automation rules.
 
-ALL data is pre-loaded in the user message. Do NOT call get_rules, get_categories, get_uncategorised_transactions, get_no_payee_transactions, or get_payees — the data is already there.
+ALL data is pre-loaded in the user message. Do NOT call get_rules, get_categories, get_uncategorised_transactions, get_no_payee_transactions, get_payees, get_ruleless_patterns, or get_project_transactions — the data is already there.
 
 CRITICAL — CATEGORY NAMES:
 - The user message contains an "AVAILABLE CATEGORIES" section. Read it FIRST before doing anything else.
@@ -32,10 +32,17 @@ CRITICAL — CATEGORY NAMES:
 
 Workflow:
 1. Read the AVAILABLE CATEGORIES list carefully — identify the exact category name for each merchant group
-2. Call record_plan FIRST — before any other tool. List your TOP 20 merchant groups in ONE LINE EACH: "merchant → category (payee: PayeeName)" or "merchant → SKIP (reason)". Do NOT add explanatory notes, transaction counts, or reasoning — just the one-line mapping per merchant. The execution model copies payee names directly from this plan, so spell them correctly. Do NOT call query_transactions before record_plan.
+2. Call record_plan FIRST — before any other tool. List your TOP 20 merchant groups in ONE LINE EACH: "merchant → category (payee: PayeeName) [project: ProjectName]" or "merchant → SKIP (reason)". Only include [project: X] when the pattern clearly belongs to one project. Do NOT add explanatory notes, transaction counts, or reasoning — just the one-line mapping per merchant. The execution model copies payee and project names directly from this plan, so spell them correctly. Do NOT call query_transactions before record_plan.
 3. Emit ALL suggestions in a SINGLE round by calling emit_rule_suggestion multiple times in one response — do NOT spread them across multiple rounds
-4. If any suggestion is rejected for a bad categoryName, look at the full list in the rejection message and resubmit with the correct name immediately
+4. If any suggestion is rejected for a bad categoryName or workspaceName, look at the full list in the rejection message and resubmit with the correct name immediately
 5. Call finish_analysis
+
+SOURCES OF PATTERNS — SELF-LEARNING:
+The user message contains FOUR sources of patterns. Treat all four equally:
+1. UNCATEGORISED TRANSACTIONS — no category yet; suggest a category + payee rule
+2. TRANSACTIONS WITH CATEGORY BUT NO PAYEE — already categorised; suggest a payee-assignment rule that reinforces the user's manual work
+3. ALREADY-LABELLED PATTERNS WITHOUT A RULE — the user manually tagged these; create rules to automate future occurrences. Use the "category" field shown to confirm the right category name
+4. PROJECT-TAGGED TRANSACTIONS WITHOUT A PROJECT RULE — the user assigned these to a project; create rules so future similar transactions are auto-assigned. Set workspaceName from the "project" field shown
 
 PAYEE ASSIGNMENT — CRITICAL:
 - ALWAYS set payeeName on every suggestion where the merchant/counterparty is identifiable — this means nearly every suggestion should have a payee
@@ -45,6 +52,12 @@ PAYEE ASSIGNMENT — CRITICAL:
 - Only leave payeeName null if the counterparty is genuinely ambiguous (e.g. "Bank transfer ref 12345", "OZAN OZYUKSEL" when it could be a personal transfer with no consistent payee name)
 - Check the EXISTING PAYEES list first — if the payee already exists there, use the exact same spelling
 - When executing suggestions, copy the payee name EXACTLY from the record_plan output. If the plan says "payee: Sharenow", set payeeName to "Sharenow". Do not drop payees that were identified in the plan.
+
+PROJECT ASSIGNMENT:
+- workspaceName MUST be copied VERBATIM from the AVAILABLE PROJECTS list — do not invent or abbreviate
+- Only set workspaceName when the pattern unambiguously belongs to one project (e.g. all transactions with "Acme Ltd" in the description go to the Acme project)
+- Do NOT set workspaceName for generic merchants (e.g. "Starbucks" → no project; "Acme Ltd Payment" → project "Acme Ltd" if that project exists)
+- Leave workspaceName null when you are not confident
 
 RULE CONDITIONS — CRITICAL:
 - Valid fields: description, payeeName, amount, accountName. Do NOT use "date" — it is not a valid field and will be rejected.
@@ -59,11 +72,12 @@ RULE CONDITIONS — CRITICAL:
 - NEVER use payment processor names as keywords: Adyen, Stripe, PayPal, Square, SumUp, Mollie, Klarna, Mangopay, Braintree. These appear in descriptions as the payment rail ("Urban Sports Gmbh by Adyen") — the keyword must be the actual merchant name, not the processor.
 
 RULE QUALITY:
-- The "descriptions" field in the uncategorised data shows the actual raw transaction text — use it to pick the right keyword for a description contains condition
+- The "descriptions" field in the data shows the actual raw transaction text — use it to pick the right keyword for a description contains condition
 - 2+ matching transactions = high confidence; 1 or world-knowledge = medium
 - 1 sentence reasoning referencing the specific pattern observed
 - Aim for 5–20 suggestions prioritised by financial impact (highest absolute spend first)
 - SKIP any merchant that appears in the EXISTING RULES list — a rule already covers it
+- For ALREADY-LABELLED PATTERNS, the "category" and "payee" fields tell you what the user already set — use exactly those values
 
 TRANSACTION ANALYSIS — LOOK AT INDIVIDUAL AMOUNTS:
 - Each description now shows its individual amount in parentheses. ALWAYS examine these before suggesting a rule for a group.
@@ -166,13 +180,20 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
 
         // Pre-fetch all data the LLM would normally call tools to get.
         send({ type: 'status', message: 'Fetching transaction data…' })
-        const [uncatData, catsData, noPayeeData, payeesData, rulesData] = await Promise.all([
+        const [uncatData, catsData, noPayeeData, payeesData, rulesData, rulelessData, projectTxData] = await Promise.all([
           dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 25 }, ctx),
           dispatchRulesTool(userId, 'get_categories', {}, ctx),
           dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 15 }, ctx),
           dispatchTool(userId, 'get_payees', {}),
           dispatchRulesTool(userId, 'get_rules', {}, ctx),
+          dispatchRulesTool(userId, 'get_ruleless_patterns', { topN: 20 }, ctx),
+          dispatchRulesTool(userId, 'get_project_transactions', { topN: 15 }, ctx),
         ])
+
+        // Build available projects list from workspaceMap
+        const projectsList = preloaded.workspaceMap.size > 0
+          ? [...preloaded.workspaceMap.keys()].map((n) => `  ${n}`).join('\n')
+          : '  (no projects set up)'
 
         // ── Step 3: single LLM round to emit suggestions ──────────────────
         console.log(`[rules-agent:${runId}] context`, JSON.stringify({
@@ -181,6 +202,8 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
           payeesLen: payeesData.length,
           rulesLen: rulesData.length,
           noPayeeLen: noPayeeData.length,
+          rulelessLen: rulelessData.length,
+          projectTxLen: projectTxData.length,
           // Log the first 800 chars of the categories list so we can see what the LLM has
           categoriesPreview: catsData.slice(0, 800),
           // Log the first 600 chars of uncategorised groups
@@ -194,6 +217,9 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
 --- AVAILABLE CATEGORIES (copy names VERBATIM from this list) ---
 ${catsData}
 
+--- AVAILABLE PROJECTS (copy names VERBATIM when setting workspaceName) ---
+${projectsList}
+
 --- EXISTING PAYEES (reuse exact spelling if the merchant matches) ---
 ${payeesData}
 
@@ -206,8 +232,16 @@ ${uncatData}
 --- TRANSACTIONS WITH CATEGORY BUT NO PAYEE (top 15) ---
 ${noPayeeData}
 
+--- ALREADY-LABELLED PATTERNS WITHOUT A RULE (top 20 by count) ---
+These transactions were manually tagged by the user. Formalise them as rules so future transactions are auto-labelled. Use the "category" and "payee" fields shown — do NOT change what the user already decided.
+${rulelessData}
+
+--- PROJECT-TAGGED TRANSACTIONS WITHOUT A PROJECT RULE (top 15) ---
+These transactions already have a project assigned. Create rules so future similar transactions are automatically assigned to the same project. Set workspaceName using the "project" field shown (copy VERBATIM from AVAILABLE PROJECTS).
+${projectTxData}
+
 Instructions:
-1. Call record_plan listing every merchant group you spotted → category → payee
+1. Call record_plan listing every merchant group you spotted → category → payee → [project if applicable]
 2. Emit ALL suggestions in ONE response (call emit_rule_suggestion multiple times at once)
 3. Use the "descriptions" field to pick the right keyword for each condition
 4. If a suggestion is rejected, fix and resubmit immediately
@@ -291,7 +325,7 @@ Instructions:
             }
 
             // Block pre-loaded tools — data is already in the user message
-            const PRELOADED = ['get_rules', 'get_categories', 'get_uncategorised_transactions', 'get_no_payee_transactions', 'get_payees']
+            const PRELOADED = ['get_rules', 'get_categories', 'get_uncategorised_transactions', 'get_no_payee_transactions', 'get_payees', 'get_ruleless_patterns', 'get_project_transactions']
             if (PRELOADED.includes(toolName)) {
               const msg = `This data is already pre-loaded in the user message above. Do not call ${toolName} again — use the data already provided and emit your suggestions.`
               messages.push({ role: 'tool', tool_call_id: tc.id, content: msg })

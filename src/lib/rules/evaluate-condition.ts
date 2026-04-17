@@ -97,16 +97,16 @@ export function evaluateOperator(
 
 export function matchesConditions(
   conditions: { all?: ConditionDef[]; any?: ConditionDef[] },
-  tx: { description: string; payeeName: string | null; amount: number; accountName: string | null }
+  tx: Parameters<typeof getFieldValue>[0]
 ): boolean {
   if (conditions.all) {
     return conditions.all.every((cond) =>
-      evaluateOperator(getFieldValue(tx as Parameters<typeof getFieldValue>[0], cond.field), cond.operator, cond.value)
+      evaluateOperator(getFieldValue(tx, cond.field), cond.operator, cond.value)
     )
   }
   if (conditions.any) {
     return conditions.any.some((cond) =>
-      evaluateOperator(getFieldValue(tx as Parameters<typeof getFieldValue>[0], cond.field), cond.operator, cond.value)
+      evaluateOperator(getFieldValue(tx, cond.field), cond.operator, cond.value)
     )
   }
   return false

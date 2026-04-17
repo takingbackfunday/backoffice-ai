@@ -30,8 +30,10 @@ export async function POST(
     const categoryId = (overrides.categoryId as string | null | undefined) ?? suggestion.categoryId ?? null
     const payeeId = (overrides.payeeId as string | null | undefined) ?? suggestion.payeeId ?? null
     const payeeName = (overrides.payeeName as string | null | undefined) ?? suggestion.payeeName
+    const workspaceId = (overrides.workspaceId as string | null | undefined) ?? suggestion.workspaceId ?? null
+    const workspaceName = suggestion.workspaceName ?? null
 
-    const ruleName = `${categoryName}${payeeName ? ` — ${payeeName}` : ''} (suggested)`
+    const ruleName = `${categoryName}${payeeName ? ` — ${payeeName}` : ''}${workspaceName ? ` [${workspaceName}]` : ''} (suggested)`
 
     const [rule] = await prisma.$transaction([
       prisma.categorizationRule.create({
@@ -43,6 +45,7 @@ export async function POST(
           categoryName,
           categoryId,
           payeeId,
+          workspaceId,
           isActive: true,
         },
         include: {

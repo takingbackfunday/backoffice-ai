@@ -11,19 +11,24 @@ export interface TxSnapshot {
   id: string
   amount: number
   description: string
+  rawDescription?: string
   payeeName: string | null
   categoryId: string | null
   accountName: string | null
+  currency?: string
+  workspaceId: string | null
+  tags: string[]
 }
 
 export interface RulesContext {
   send: (event: RulesSseEvent) => void
   transactions: TxSnapshot[]
-  categoryMap: Map<string, string>   // name.toLowerCase() → id
-  payeeMap: Map<string, string>      // name.toLowerCase() → id
+  categoryMap: Map<string, string>    // name.toLowerCase() → id
+  payeeMap: Map<string, string>       // name.toLowerCase() → id
+  workspaceMap: Map<string, string>   // name.toLowerCase() → id
   coveredByExisting: Set<string>
   coveredThisRun: Set<string>
-  sourceEditIds?: Set<string>        // tx IDs that triggered this run — exempt from reclassification guard
+  sourceEditIds?: Set<string>         // tx IDs that triggered this run — exempt from reclassification guard
 }
 
 export type RuleImpact = 'low' | 'medium' | 'high'
@@ -48,6 +53,8 @@ export interface RulesSseEvent {
     categoryId: string | null
     payeeName: string | null
     payeeId: string | null
+    workspaceId: string | null
+    workspaceName: string | null
     confidence: 'high' | 'medium'
     impact: RuleImpact
     reasoning: string
@@ -238,6 +245,7 @@ export async function emit_rule_suggestion(
     conditions: { all?: ConditionDef[]; any?: ConditionDef[] }
     categoryName: string
     payeeName: string | null
+    workspaceName?: string | null
     confidence: 'high' | 'medium'
     reasoning: string
   },
@@ -281,10 +289,10 @@ export async function emit_rule_suggestion(
   const hasNonAmount = defs.some((d) => d.field !== 'amount')
   if (!hasNonAmount) return 'Rejected: must have at least one non-amount condition. Add a description or payeeName condition alongside the amount condition and resubmit.'
 
-  // Reject self-referential payee rules: condition "payeeName equals X" + action sets same payeeName X
-  // These are no-ops — the payee is already set, so the condition only matches transactions that
-  // already have payee X, and the rule would just "set" it again.
-  if (args.payeeName) {
+  // Reject self-referential payee rules: condition "payeeName equals X" + action ONLY sets same payeeName X
+  // These are no-ops — the payee is already set. But if the rule also assigns a category or project,
+  // "payeeName equals X" is a valid and useful selector — do not reject it.
+  if (args.payeeName && !args.categoryName && !args.workspaceName) {
     const payeeCondition = defs.find(
       (d) => d.field === 'payeeName' && (d.operator === 'equals' || d.operator === 'contains') &&
         String(d.value).toLowerCase() === args.payeeName!.toLowerCase()
@@ -329,6 +337,17 @@ export async function emit_rule_suggestion(
     ? (ctx.payeeMap.get(args.payeeName.toLowerCase()) ?? null)
     : null
 
+  // Validate workspace if provided
+  let workspaceId: string | null = null
+  const workspaceName: string | null = args.workspaceName ?? null
+  if (workspaceName) {
+    workspaceId = ctx.workspaceMap.get(workspaceName.toLowerCase()) ?? null
+    if (!workspaceId) {
+      const available = [...ctx.workspaceMap.keys()].join(', ')
+      return `Rejected: workspace/project "${workspaceName}" not found. Use an exact name from: ${available}. Copy the name verbatim from the AVAILABLE PROJECTS list and resubmit.`
+    }
+  }
+
   // Reject conditions that use payment processor names as keywords — they appear in
   // descriptions as the payment rail ("Urban Sports Gmbh by Adyen") not as the merchant.
   const PAYMENT_PROCESSORS = ['adyen', 'stripe', 'paypal', 'square', 'sumup', 'mollie', 'klarna', 'braintree', 'worldpay', 'checkout.com', 'mangopay']
@@ -343,6 +362,27 @@ export async function emit_rule_suggestion(
 
   // Count matched transactions
   const matchedIds = getMatchedIds(args.conditions, ctx.transactions)
+
+  // For project-assignment rules: reject if the matched transactions span multiple distinct
+  // projects — the condition is too broad to safely assign one project.
+  if (workspaceId) {
+    const projectsHit = new Set(
+      [...matchedIds]
+        .map(id => ctx.transactions.find(t => t.id === id)?.workspaceId)
+        .filter((wid): wid is string => wid != null)
+    )
+    projectsHit.delete(workspaceId) // remove the intended project
+    if (projectsHit.size > 0) {
+      const otherNames = [...projectsHit]
+        .map(wid => {
+          for (const [name, id] of ctx.workspaceMap) if (id === wid) return name
+          return '(unnamed project)'
+        })
+        .join(', ')
+      return `Rejected: the condition matches transactions already assigned to other projects (${otherNames}) in addition to "${workspaceName}" — it is too broad to safely assign just this project. Use a more specific condition (e.g. payeeName equals, or a description keyword that only appears in "${workspaceName}" transactions) and resubmit.`
+    }
+  }
+
   const newIds = [...matchedIds].filter(
     (id) => !ctx.coveredByExisting.has(id) && !ctx.coveredThisRun.has(id)
   )
@@ -350,13 +390,30 @@ export async function emit_rule_suggestion(
 
   // Reject if the majority of matched transactions already have a category — this rule
   // would reclassify correctly-categorised transactions (e.g. "Adyen" matching "Urban Sports by Adyen").
-  // Exempt transactions that were part of the triggering edits — the user just set those categories
-  // deliberately, so they should count as intended matches, not reclassifications.
-  const alreadyCategorised = [...matchedIds]
-    .map(id => ctx.transactions.find(t => t.id === id))
-    .filter(t => t?.categoryId != null && !ctx.sourceEditIds?.has(t.id)).length
-  if (matchedIds.size > 0 && alreadyCategorised / matchedIds.size > 0.4) {
-    return `Rejected: ${alreadyCategorised} of ${matchedIds.size} matched transactions already have a category — this rule would reclassify them incorrectly. The keyword "${defs.find(d => d.field === 'description')?.value}" is too generic (likely a payment processor or shared term). Use a more specific keyword that only matches uncategorised transactions.`
+  // Exempt:
+  //   1. Transactions from triggering edits — the user just set those deliberately.
+  //   2. Rules based on payeeName conditions — precise selectors, not generic keywords.
+  //   3. Self-learning rules that assign the SAME category as already on the transactions (formalising, not reclassifying).
+  //   4. Project-assignment rules (workspaceName set) — additive, never a reclassification.
+  const isPayeeConditionRule = defs.every((d) => d.field === 'payeeName' || d.field === 'amount')
+  const isProjectAssignment = !!args.workspaceName
+  if (!isPayeeConditionRule && !isProjectAssignment) {
+    const alreadyCategorised = [...matchedIds]
+      .map(id => ctx.transactions.find(t => t.id === id))
+      .filter(t => t?.categoryId != null && !ctx.sourceEditIds?.has(t.id)).length
+    if (matchedIds.size > 0 && alreadyCategorised / matchedIds.size > 0.4) {
+      // Allow if this is a self-learning rule that assigns the same category already on those transactions
+      const catId = ctx.categoryMap.get(args.categoryName ?? '')
+      const allMatchSameCategory = catId
+        ? [...matchedIds].every(id => {
+            const t = ctx.transactions.find(tx => tx.id === id)
+            return !t || t.categoryId === catId
+          })
+        : false
+      if (!allMatchSameCategory) {
+        return `Rejected: ${alreadyCategorised} of ${matchedIds.size} matched transactions already have a category — this rule would reclassify them incorrectly. The keyword "${defs.find(d => d.field === 'description')?.value}" is too generic (likely a payment processor or shared term). Use a more specific keyword that only matches uncategorised transactions.`
+      }
+    }
   }
 
   // Reject only if this suggestion adds zero new coverage
@@ -394,6 +451,8 @@ export async function emit_rule_suggestion(
       categoryId,
       payeeName: args.payeeName ?? null,
       payeeId,
+      workspaceId,
+      workspaceName,
       confidence: args.confidence,
       impact,
       reasoning: args.reasoning,
@@ -413,6 +472,7 @@ export async function loadRulesContext(userId: string): Promise<{
   transactions: TxSnapshot[]
   categoryMap: Map<string, string>
   payeeMap: Map<string, string>
+  workspaceMap: Map<string, string>
   coveredByExisting: Set<string>
 }> {
   // Only load transactions from the last 24 months — the agent focuses on recent
@@ -420,7 +480,7 @@ export async function loadRulesContext(userId: string): Promise<{
   const txCutoff = new Date()
   txCutoff.setMonth(txCutoff.getMonth() - 24)
 
-  const [transactions, categories, payees, existingRules] = await Promise.all([
+  const [transactions, categories, payees, workspaces, existingRules] = await Promise.all([
     prisma.transaction.findMany({
       where: { account: { userId }, date: { gte: txCutoff } },
       select: {
@@ -428,12 +488,15 @@ export async function loadRulesContext(userId: string): Promise<{
         amount: true,
         description: true,
         categoryId: true,
+        workspaceId: true,
+        tags: true,
         payee: { select: { name: true } },
-        account: { select: { name: true } },
+        account: { select: { name: true, currency: true } },
       },
     }),
     prisma.category.findMany({ where: { userId }, select: { id: true, name: true } }),
     prisma.payee.findMany({ where: { userId }, select: { id: true, name: true } }),
+    prisma.workspace.findMany({ where: { userId }, select: { id: true, name: true } }),
     prisma.categorizationRule.findMany({
       where: { userId, isActive: true },
       select: { conditions: true },
@@ -444,13 +507,18 @@ export async function loadRulesContext(userId: string): Promise<{
     id: t.id,
     amount: Number(t.amount),
     description: t.description,
+    rawDescription: t.description, // no separate DB column — same as description
     payeeName: t.payee?.name ?? null,
     categoryId: t.categoryId,
     accountName: t.account?.name ?? null,
+    currency: t.account?.currency ?? undefined,
+    workspaceId: t.workspaceId ?? null,
+    tags: t.tags ?? [],
   }))
 
   const categoryMap = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]))
   const payeeMap = new Map(payees.map((p) => [p.name.toLowerCase(), p.id]))
+  const workspaceMap = new Map(workspaces.map((w) => [w.name.toLowerCase(), w.id]))
 
   const coveredByExisting = new Set<string>()
   for (const r of existingRules) {
@@ -458,7 +526,7 @@ export async function loadRulesContext(userId: string): Promise<{
     getMatchedIds(conds, txSnapshots).forEach((id) => coveredByExisting.add(id))
   }
 
-  return { transactions: txSnapshots, categoryMap, payeeMap, coveredByExisting }
+  return { transactions: txSnapshots, categoryMap, payeeMap, workspaceMap, coveredByExisting }
 }
 
 export async function record_plan(
@@ -475,6 +543,138 @@ export async function record_plan(
   return 'Plan recorded.'
 }
 
+// ── Self-learning tools ───────────────────────────────────────────────────────
+
+/**
+ * Returns already-categorised (or already-payee-tagged) transactions that are NOT
+ * covered by any existing rule. These are patterns the user has manually labelled
+ * but never formalised as a rule — prime candidates for automation.
+ */
+export async function get_ruleless_patterns(
+  _userId: string,
+  args: { topN?: number; minCount?: number },
+  ctx: RulesContext
+): Promise<string> {
+  const topN = args.topN ?? 20
+  const minCount = args.minCount ?? 2
+
+  // Already labelled (category OR payee set) but not covered by any rule
+  const labelled = ctx.transactions.filter(
+    (t) => (t.categoryId || t.payeeName) && !ctx.coveredByExisting.has(t.id)
+  )
+
+  if (!labelled.length) return 'No labelled-but-ruleless patterns found.'
+
+  // Reverse-look up category names from IDs
+  const categoryIdToName = new Map<string, string>()
+  for (const [name, id] of ctx.categoryMap) {
+    categoryIdToName.set(id, name)
+  }
+
+  type Group = {
+    count: number
+    categoryName: string | null
+    payeeName: string | null
+    totalAmount: number
+    samples: { desc: string; amount: number }[]
+    matchField: 'payeeName' | 'description'
+  }
+  const groups = new Map<string, Group>()
+
+  for (const tx of labelled) {
+    const result = extractGroupingKey(tx)
+    if (!result) continue
+    const { key, matchField } = result
+    const catName = tx.categoryId ? (categoryIdToName.get(tx.categoryId) ?? null) : null
+    const e = groups.get(key) ?? { count: 0, categoryName: catName, payeeName: tx.payeeName, totalAmount: 0, samples: [], matchField }
+    e.count++
+    e.totalAmount += tx.amount
+    if (e.samples.length < 8) e.samples.push({ desc: tx.description.slice(0, 80), amount: tx.amount })
+    groups.set(key, e)
+  }
+
+  const sorted = [...groups.entries()]
+    .filter(([, v]) => v.count >= minCount)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, topN)
+
+  if (!sorted.length) return `No labelled-but-ruleless groups with ${minCount}+ transactions found.`
+
+  const lines = sorted.map(([name, v]) => {
+    const descs = v.samples
+      .map((d) => `${d.desc} (${d.amount < 0 ? '−' : '+'}${Math.abs(d.amount).toFixed(2)})`)
+      .join(' | ')
+    return `  name:"${name}" | matchField:${v.matchField} | count:${v.count} | total:${v.totalAmount.toFixed(2)} | category:${v.categoryName ?? '(none)'} | payee:${v.payeeName ?? '(none)'} | descriptions: ${descs}`
+  })
+
+  return `${sorted.length} already-labelled patterns with no covering rule (sorted by transaction count):\nname | matchField | count | total | category | payee | descriptions\n${lines.join('\n')}`
+}
+
+/**
+ * Returns project-tagged transactions grouped by payee/description, excluding groups
+ * already covered by a rule that sets that workspace. Used to suggest project-assignment rules.
+ */
+export async function get_project_transactions(
+  _userId: string,
+  args: { topN?: number; minCount?: number },
+  ctx: RulesContext
+): Promise<string> {
+  const topN = args.topN ?? 15
+  const minCount = args.minCount ?? 2
+
+  // Transactions that already have a project assigned
+  const projectTxs = ctx.transactions.filter((t) => t.workspaceId != null)
+
+  if (!projectTxs.length) return 'No project-tagged transactions found.'
+
+  // Build a set of (workspaceId) covered by existing rules that set that workspace
+  // We use coveredByExisting which is condition-based coverage (no workspace check), so
+  // we just show all project-tagged groups — the LLM decides if a rule already exists.
+
+  // Reverse-look up workspace names
+  const workspaceIdToName = new Map<string, string>()
+  for (const [name, id] of ctx.workspaceMap) {
+    workspaceIdToName.set(id, name)
+  }
+
+  type Group = {
+    count: number
+    workspaceName: string
+    totalAmount: number
+    samples: { desc: string; amount: number }[]
+    matchField: 'payeeName' | 'description'
+  }
+  const groups = new Map<string, Group>()
+
+  for (const tx of projectTxs) {
+    const result = extractGroupingKey(tx)
+    if (!result) continue
+    const { key, matchField } = result
+    const wsName = workspaceIdToName.get(tx.workspaceId!) ?? tx.workspaceId!
+    const e = groups.get(key) ?? { count: 0, workspaceName: wsName, totalAmount: 0, samples: [], matchField }
+    e.count++
+    e.totalAmount += tx.amount
+    if (e.samples.length < 8) e.samples.push({ desc: tx.description.slice(0, 80), amount: tx.amount })
+    groups.set(key, e)
+  }
+
+  const sorted = [...groups.entries()]
+    .filter(([, v]) => v.count >= minCount)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, topN)
+
+  if (!sorted.length) return `No project-tagged groups with ${minCount}+ transactions found.`
+
+  const lines = sorted.map(([name, v]) => {
+    const descs = v.samples
+      .map((d) => `${d.desc} (${d.amount < 0 ? '−' : '+'}${Math.abs(d.amount).toFixed(2)})`)
+      .join(' | ')
+    return `  name:"${name}" | matchField:${v.matchField} | count:${v.count} | total:${v.totalAmount.toFixed(2)} | project:"${v.workspaceName}" | descriptions: ${descs}`
+  })
+
+  return `${sorted.length} project-tagged patterns (sorted by transaction count):\nname | matchField | count | total | project | descriptions\n${lines.join('\n')}`
+}
+
 // ── Dispatcher ────────────────────────────────────────────────────────────────
 
 export async function dispatchRulesTool(
@@ -489,6 +689,10 @@ export async function dispatchRulesTool(
       return get_uncategorised_transactions(userId, a as { topN?: number; minCount?: number }, ctx)
     case 'get_no_payee_transactions':
       return get_no_payee_transactions(userId, a as { topN?: number }, ctx)
+    case 'get_ruleless_patterns':
+      return get_ruleless_patterns(userId, a as { topN?: number; minCount?: number }, ctx)
+    case 'get_project_transactions':
+      return get_project_transactions(userId, a as { topN?: number; minCount?: number }, ctx)
     case 'emit_rule_suggestion':
       return emit_rule_suggestion(userId, a as Parameters<typeof emit_rule_suggestion>[1], ctx)
     case 'record_plan':
@@ -563,8 +767,8 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
                   properties: {
                     field: {
                       type: 'string',
-                      enum: ['description', 'payeeName', 'amount', 'accountName'],
-                      description: 'Transaction field to match. ALWAYS use "description" as the primary condition — it is the most reliable. "payeeName" is secondary and only works if a payee already exists. Do NOT use "date".',
+                      enum: ['description', 'rawDescription', 'payeeName', 'amount', 'accountName', 'currency'],
+                      description: 'Transaction field to match. ALWAYS use "description" as the primary condition — it is the most reliable. "rawDescription" is identical to description (same DB column). "payeeName" is secondary and only works if a payee already exists. "currency" is useful for multi-currency books. Do NOT use "date".',
                     },
                     operator: {
                       type: 'string',
@@ -585,7 +789,7 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
                   properties: {
                     field: {
                       type: 'string',
-                      enum: ['description', 'payeeName', 'amount', 'accountName'],
+                      enum: ['description', 'rawDescription', 'payeeName', 'amount', 'accountName', 'currency'],
                       description: 'ALWAYS use "description" as the primary condition. Do NOT use "date".',
                     },
                     operator: {
@@ -611,6 +815,11 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
             description:
               'Payee name to assign. ALWAYS set this using world knowledge when the merchant is identifiable (e.g. "Wayfair", "Zalando", "GitHub", "Stripe", "AWS"). Check existing payees list first and reuse exact spelling if matched. Only null if the counterparty is genuinely ambiguous.',
           },
+          workspaceName: {
+            type: ['string', 'null'],
+            description:
+              'Project/workspace name to assign to matched transactions. ONLY set this when the pattern clearly and exclusively belongs to one project (e.g. all "Acme Ltd invoice" transactions belong to the Acme project). Copy the name VERBATIM from the AVAILABLE PROJECTS list. Leave null if the pattern spans multiple projects or if you are not confident.',
+          },
           confidence: {
             type: 'string',
             enum: ['high', 'medium'],
@@ -620,6 +829,48 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
           reasoning: {
             type: 'string',
             description: '1 sentence explaining why this rule makes sense',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_ruleless_patterns',
+      description:
+        'Get transactions that already have a category or payee assigned by the user, but are NOT covered by any existing rule. These are patterns the user has manually labelled — formalising them as rules enables automatic assignment for future transactions. Returns groups sorted by transaction count.',
+      parameters: {
+        type: 'object',
+        properties: {
+          topN: {
+            type: 'number',
+            description: 'Maximum number of groups to return (default 20)',
+          },
+          minCount: {
+            type: 'number',
+            description: 'Minimum transactions in a group (default 2)',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_project_transactions',
+      description:
+        'Get transactions that already have a project/workspace assigned, grouped by payee or description. Use this to identify recurring patterns that should have a project-assignment rule so future transactions are automatically tagged to the right project.',
+      parameters: {
+        type: 'object',
+        properties: {
+          topN: {
+            type: 'number',
+            description: 'Maximum number of groups to return (default 15)',
+          },
+          minCount: {
+            type: 'number',
+            description: 'Minimum transactions in a group (default 2)',
           },
         },
       },
@@ -638,7 +889,7 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
           summary: {
             type: 'string',
             description:
-              'Structured plan listing EVERY group you will emit. Format each as: "merchant → category (payee: PayeeName)" or "merchant → SKIP (reason)". The execution model copies payee names directly from this plan — payee names are critical to get right here. EVERY named business gets a payee — restaurants, shops, venues, services, software — even local or unknown ones (e.g. "Some Local Bistro" → payee "Some Local Bistro"). Only "payee: null" for genuinely ambiguous counterparties (bare reference numbers, personal names that could be transfers). Example: "Spaetkauf → SKIP (round amounts suggest ATM withdrawals). Sharenow → Rideshare (payee: Sharenow). Transdev → Public transit (payee: Transdev Vertrieb GmbH). SHELL UK → Fuel & gas (payee: Shell)."',
+              'Structured plan listing EVERY group you will emit. Format each as: "merchant → category (payee: PayeeName) [project: ProjectName]" or "merchant → SKIP (reason)". Include [project: X] only when the pattern clearly belongs to one project — omit it otherwise. The execution model copies payee and project names directly from this plan. EVERY named business gets a payee. Only "payee: null" for genuinely ambiguous counterparties. Example: "Spaetkauf → SKIP (ATM). Sharenow → Rideshare (payee: Sharenow). Deliveroo → Meal delivery (payee: Deliveroo). Acme Invoice → Service revenue (payee: Acme Ltd) [project: Acme Ltd]."',
           },
         },
       },
@@ -658,5 +909,5 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
   },
 ]
 
-// All 19 tools: 14 finance + 5 rules
+// All 21 tools: 14 finance + 7 rules
 export const RULES_TOOLS: ToolDefinition[] = [...FINANCE_TOOLS, ...RULES_ONLY_TOOLS]

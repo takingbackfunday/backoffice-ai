@@ -83,10 +83,10 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `Category` / `CategoryGroup` — hierarchical; groups carry `scheduleRef` and `taxType` for tax schedule mapping
 - `Payee` — counterparties; unique per `(userId, name)`; have a `defaultCategoryId`
 - `CategorizationRule` — user-defined rules; `conditions` JSON stores `{ all?: ConditionDef[], any?: ConditionDef[] }`; `priority` 1–99 (lower = evaluated first); can set category, payee, project, notes, and tags on match
-- `RuleSuggestion` — AI-generated rule candidates derived from transaction edits; status `PENDING | ACCEPTED | IGNORED`
+- `RuleSuggestion` — AI-generated rule candidates derived from transaction edits or the self-learning agent; status `PENDING | ACCEPTED | IGNORED`; `workspaceId` / `workspaceName` (denormalised) carry a project assignment when the suggestion includes one
 - `ImportBatch` — tracks CSV import sessions; records `skippedCount` for duplicates
 - `InstitutionSchema` — global (non-user) CSV column mapping templates; `csvMapping` JSON: `{ dateCol, amountCol, descCol, dateFormat, amountSign }`
-- `Project` — client/property/job entities for tagging transactions; `ProjectType`: `CLIENT | PROPERTY | JOB | OTHER`
+- `Project` — client/property/job entities for tagging transactions; `WorkspaceType` (mapped as `ProjectType` in DB): `CLIENT | PROPERTY | OTHER`
 - `Job` — sub-unit of a CLIENT project; `status` enum `ACTIVE | COMPLETED | CANCELLED` (no `isActive` field); `billingType` and `defaultRate` override the parent `ClientProfile` defaults when set
 - `ClientProfile` — contact record linked to a project; holds `email`, `contactName`
 - `Estimate` — internal costing document scoped to a `Workspace` (project) via `workspaceId`; `jobId` is an optional legacy field (job binding happens at Quote time, not Estimate time); never shown to the client; `status`: `DRAFT | FINAL | SUPERSEDED`; `parentId` self-relation enables version chains; sections → items hierarchy
@@ -160,7 +160,7 @@ Agent routes (`api/agent/`) stream SSE responses using `ReadableStream` with `te
 
 - `engine.ts` — generic `evaluateRules<TFact, TResult>(fact, rules, strategy)` where `strategy` is `'first'` (stop on first match) or `'all'`
 - `categorization.ts` — defines `TransactionFact` and `CategorizationResult` types
-- `evaluate-condition.ts` — shared condition evaluation used by both `user-rules.ts` and `rules-tools.ts`; exports `getFieldValue`, `evaluateOperator`, `matchesConditions`, and `ConditionDef`
+- `evaluate-condition.ts` — shared condition evaluation used by both `user-rules.ts` and `rules-tools.ts`; exports `getFieldValue`, `evaluateOperator`, `matchesConditions`, and `ConditionDef`; `matchesConditions` accepts `Parameters<typeof getFieldValue>[0]` as the transaction type so all supported fields (including `rawDescription`, `currency`, `notes`, `tags`) are covered
 - `user-rules.ts` — `loadUserRules(userId)` loads `CategorizationRule` rows from DB and hydrates them into `Rule` objects; `buildCondition()` interprets the conditions JSON
 - `categorize-batch.ts` — runs rules against an array of transactions during import
 
@@ -193,7 +193,15 @@ Agent models: all agents use `anthropic/claude-sonnet-4.6`; domain classifier an
 
 `src/lib/agent/finance-tools.ts` defines `FINANCE_TOOLS` (OpenAI-format tool definitions) and `dispatchTool(userId, toolName, args)`. Tools include `query_transactions`, `aggregate_transactions`, `get_categories`, etc.
 
-`src/lib/agent/rules-tools.ts` — similar tool set for the rules-generation agent. The SSE endpoint (`api/agent/rules`) has a 30-second per-user cooldown stored in `UserPreference.data.lastRulesAgentRun`. The `consecutiveRejections` counter is NOT reset per round — only a successful emit resets it, so persistent bad suggestions accumulate toward the cap across rounds.
+`src/lib/agent/rules-tools.ts` — tool set for the rules-generation agent. Key design points:
+
+- **Self-learning**: in addition to uncategorised transactions, the agent scans two extra sources pre-loaded into the user message: `get_ruleless_patterns` (transactions the user already tagged but no rule covers) and `get_project_transactions` (project-tagged transactions with no project-assignment rule). This lets the agent formalise manual work into automation rules.
+- **Workspace support**: `RulesContext` carries a `workspaceMap` (name.toLowerCase() → id); `emit_rule_suggestion` accepts an optional `workspaceName` which is validated against the map and stored on the suggestion. `CategorizationRule.workspaceId` is already applied by the rules engine.
+- **TxSnapshot**: includes `workspaceId: string | null` and `tags: string[]` (fetched via `account.currency` for currency — currency lives on Account, not Transaction).
+- **Project-assignment validation**: if a suggestion sets `workspaceName`, the validator checks that the matched transactions do not span multiple projects. If the condition is too broad (e.g. "description contains Zelle payment from" matching tenants from several properties), it is rejected with the conflicting project names listed — forcing the agent to use a more specific condition such as `payeeName equals X`.
+- **Payee-condition exemptions**: the "already categorised > 40%" reclassification guard is skipped for rules whose only condition is `payeeName equals X` (precise selector) and for self-learning rules where all matched transactions already carry the same category (formalisation, not reclassification).
+- The SSE endpoint (`api/agent/rules`) has a 30-second per-user cooldown stored in `UserPreference.data.lastRulesAgentRun`. Two-model strategy: Sonnet for the planning round, Haiku for bulk emission.
+- `scripts/run-rules-agent.ts` — standalone `tsx` script for running the agent server-side for a given userId without a UI session; useful for admin inspection and testing.
 
 ### Document Request System (`src/lib/doc-types.ts`, `src/lib/doc-token.ts`, `src/lib/uploadthing.ts`)
 

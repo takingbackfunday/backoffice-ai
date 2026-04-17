@@ -15,6 +15,8 @@ export interface AgentSuggestion {
   categoryId: string | null
   payeeName: string | null
   payeeId: string | null
+  workspaceId: string | null
+  workspaceName: string | null
   confidence: 'high' | 'medium'
   impact: 'low' | 'medium' | 'high'
   reasoning: string
@@ -57,8 +59,8 @@ function suggestionToRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): 
     categoryRef: null,
     payeeId: s.payeeId,
     payee: s.payeeName ? { id: s.payeeId ?? '', name: s.payeeName } : null,
-    projectId: null,
-    workspace: null,
+    projectId: s.workspaceId ?? null,
+    workspace: s.workspaceId && s.workspaceName ? { id: s.workspaceId, name: s.workspaceName } : null,
     conditions: s.conditions,
     isActive: true,
   }
@@ -72,12 +74,13 @@ async function saveRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): Pr
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: `${s.categoryName}${s.payeeName ? ` — ${s.payeeName}` : ''} (auto)`,
+      name: `${s.categoryName}${s.payeeName ? ` — ${s.payeeName}` : ''}${s.workspaceName ? ` [${s.workspaceName}]` : ''} (auto)`,
       priority: 50,
       conditions: s.conditions,
       categoryId: rule.categoryId,
       categoryName: rule.categoryName,
       payeeName: s.payeeName ?? undefined,
+      workspaceId: s.workspaceId ?? undefined,
       isActive: true,
     }),
   })
@@ -293,6 +296,8 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
           categoryId: rule.categoryId as string | null,
           payeeName: rule.payeeName as string | null,
           payeeId: rule.payeeId as string | null,
+          workspaceId: (rule.workspaceId as string | null) ?? null,
+          workspaceName: (rule.workspaceName as string | null) ?? null,
           confidence: rule.confidence as 'high' | 'medium',
           impact: (rule.impact ?? 'low') as 'low' | 'medium' | 'high',
           reasoning: rule.reasoning as string,
