@@ -2,7 +2,7 @@
 
 import { useReducer, useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, X, Sparkles, Eye, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, X, Sparkles, Eye, ChevronRight, CheckCircle, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -47,6 +47,17 @@ interface InvoiceState {
   currency: string
   notes: string
   aiSuggestedNotes: boolean
+}
+
+// Which fields the AI just changed — drives the throb highlight + confirm banner
+interface PendingAiChanges {
+  lineItems: boolean        // whole line items block changed
+  notes: boolean
+  dueDate: boolean
+  issueDate: boolean
+  currency: boolean
+  tax: boolean
+  jobId: boolean
 }
 
 type InvoiceAction =
@@ -252,6 +263,12 @@ export function InvoiceEditor({
   const [finalizing, setFinalizing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // HITL — track which elements the AI just changed so we can throb + confirm
+  const noChanges: PendingAiChanges = { lineItems: false, notes: false, dueDate: false, issueDate: false, currency: false, tax: false, jobId: false }
+  const [pendingAiChanges, setPendingAiChanges] = useState<PendingAiChanges>(noChanges)
+  const [preAiSnapshot, setPreAiSnapshot] = useState<InvoiceState | null>(null)
+  const hasPendingChanges = Object.values(pendingAiChanges).some(Boolean)
   const [showCopyPicker, setShowCopyPicker] = useState(false)
   const [unitPopoverId, setUnitPopoverId] = useState<string | null>(null)
   const [unitPopoverPos, setUnitPopoverPos] = useState<{ top: number; right: number } | null>(null)
@@ -401,6 +418,23 @@ export function InvoiceEditor({
 
       const { text: aiText, actions } = json.data as { text: string; actions: AiAction[] }
 
+      // HITL — capture snapshot before applying any AI changes
+      const changingActions = (actions ?? []).filter(a => a.type !== 'ask_clarification')
+      if (changingActions.length > 0) {
+        setPreAiSnapshot({ ...state, lineItems: state.lineItems.map(i => ({ ...i })) })
+        const changed: PendingAiChanges = { ...noChanges }
+        for (const action of changingActions) {
+          if (action.type === 'set_line_items') changed.lineItems = true
+          if (action.type === 'set_notes') changed.notes = true
+          if (action.type === 'set_due_date') changed.dueDate = true
+          if (action.type === 'set_issue_date') changed.issueDate = true
+          if (action.type === 'set_currency') changed.currency = true
+          if (action.type === 'set_tax') changed.tax = true
+          if (action.type === 'set_job') changed.jobId = true
+        }
+        setPendingAiChanges(changed)
+      }
+
       // Apply actions to form state
       if (actions?.length) {
         for (const action of actions) {
@@ -412,6 +446,29 @@ export function InvoiceEditor({
     } finally {
       setChatLoading(false)
     }
+  }
+
+  function confirmAiChanges() {
+    setPendingAiChanges(noChanges)
+    setPreAiSnapshot(null)
+  }
+
+  function undoAiChanges() {
+    if (!preAiSnapshot) return
+    dispatch({ type: 'SET_LINE_ITEMS', items: preAiSnapshot.lineItems })
+    if (preAiSnapshot.notes !== state.notes) dispatch({ type: 'SET_NOTES', value: preAiSnapshot.notes })
+    if (preAiSnapshot.dueDate !== state.dueDate) dispatch({ type: 'SET_DUE_DATE', value: preAiSnapshot.dueDate })
+    if (preAiSnapshot.issueDate !== state.issueDate) dispatch({ type: 'SET_ISSUE_DATE', value: preAiSnapshot.issueDate })
+    if (preAiSnapshot.currency !== state.currency) dispatch({ type: 'SET_CURRENCY', value: preAiSnapshot.currency })
+    if (preAiSnapshot.jobId !== state.jobId) dispatch({ type: 'SET_JOB', jobId: preAiSnapshot.jobId })
+    if (preAiSnapshot.taxEnabled !== state.taxEnabled || preAiSnapshot.taxRate !== state.taxRate) {
+      dispatch({ type: 'SET_TAX_ENABLED', enabled: preAiSnapshot.taxEnabled })
+      dispatch({ type: 'SET_TAX_LABEL', label: preAiSnapshot.taxLabel })
+      dispatch({ type: 'SET_TAX_MODE', mode: preAiSnapshot.taxMode })
+      dispatch({ type: 'SET_TAX_RATE', rate: preAiSnapshot.taxRate })
+    }
+    setPendingAiChanges(noChanges)
+    setPreAiSnapshot(null)
   }
 
   function applyAiAction(action: AiAction) {
@@ -810,7 +867,7 @@ export function InvoiceEditor({
           {/* Line items */}
           <div className="mb-5">
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Line items</label>
-            <div className="rounded-xl border overflow-hidden">
+            <div className={cn('rounded-xl border overflow-hidden transition-shadow', pendingAiChanges.lineItems && 'ai-changed')}>
               <div className="grid grid-cols-[1fr_140px_110px_100px_32px] bg-muted/50 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                 <span>Description</span>
                 <span className="text-right">Qty / Unit</span>
@@ -827,6 +884,7 @@ export function InvoiceEditor({
                       rows={1}
                       onChange={e => {
                         dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'description', value: e.target.value })
+                        setPendingAiChanges(p => ({ ...p, lineItems: false }))
                         e.target.style.height = 'auto'
                         e.target.style.height = e.target.scrollHeight + 'px'
                       }}
@@ -988,8 +1046,8 @@ export function InvoiceEditor({
               <input
                 type="date"
                 value={state.dueDate}
-                onChange={e => dispatch({ type: 'SET_DUE_DATE', value: e.target.value })}
-                className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                onChange={e => { dispatch({ type: 'SET_DUE_DATE', value: e.target.value }); setPendingAiChanges(p => ({ ...p, dueDate: false })) }}
+                className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-shadow', pendingAiChanges.dueDate && 'ai-changed')}
                 required
               />
             </div>
@@ -998,16 +1056,16 @@ export function InvoiceEditor({
               <input
                 type="date"
                 value={state.issueDate}
-                onChange={e => dispatch({ type: 'SET_ISSUE_DATE', value: e.target.value })}
-                className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                onChange={e => { dispatch({ type: 'SET_ISSUE_DATE', value: e.target.value }); setPendingAiChanges(p => ({ ...p, issueDate: false })) }}
+                className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-shadow', pendingAiChanges.issueDate && 'ai-changed')}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Currency</label>
               <select
                 value={state.currency}
-                onChange={e => dispatch({ type: 'SET_CURRENCY', value: e.target.value })}
-                className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                onChange={e => { dispatch({ type: 'SET_CURRENCY', value: e.target.value }); setPendingAiChanges(p => ({ ...p, currency: false })) }}
+                className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-shadow', pendingAiChanges.currency && 'ai-changed')}
               >
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -1026,12 +1084,40 @@ export function InvoiceEditor({
             </div>
             <textarea
               value={state.notes}
-              onChange={e => dispatch({ type: 'SET_NOTES', value: e.target.value })}
+              onChange={e => { dispatch({ type: 'SET_NOTES', value: e.target.value }); setPendingAiChanges(p => ({ ...p, notes: false })) }}
               rows={3}
-              className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+              className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none transition-shadow', pendingAiChanges.notes && 'ai-changed')}
               placeholder="Payment instructions, late fee policy, thank-you note…"
             />
           </div>
+
+          {/* HITL — AI change confirmation banner */}
+          {hasPendingChanges && (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/8 px-3 py-2.5">
+              <div className="flex items-center gap-2 text-xs text-primary font-medium">
+                <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                AI made changes — review the highlighted fields above
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={undoAiChanges}
+                  className="flex items-center gap-1 rounded-md border border-primary/30 px-2.5 py-1 text-xs text-primary hover:bg-primary/10 transition-colors"
+                >
+                  <Undo2 className="h-3 w-3" />
+                  Undo
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmAiChanges}
+                  className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <CheckCircle className="h-3 w-3" />
+                  Confirm
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Save errors */}
           {saveError && (
