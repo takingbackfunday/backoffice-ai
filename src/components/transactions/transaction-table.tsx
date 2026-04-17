@@ -1219,11 +1219,10 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // ── Sorting ──────────────────────────────────────────────────────
   function handleSort(field: SortField) {
     if (sortBy === field) {
-      if (sortDir === 'asc') setSortDir('desc')
-      else { setSortBy('date'); setSortDir('desc') }
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     } else {
       setSortBy(field)
-      setSortDir('asc')
+      setSortDir('desc')
     }
     setPage(1)
   }
