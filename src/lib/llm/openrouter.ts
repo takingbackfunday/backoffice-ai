@@ -73,6 +73,11 @@ export async function openrouterChat(
 
 const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504])
 const MAX_RETRIES = 2
+// Per-attempt timeout: abort if the stream produces no [DONE] within this window.
+// Sonnet round-0 with a large context can take 40-50s; 90s gives comfortable headroom
+// while ensuring a hung connection fails and retries rather than blocking until the
+// outer hard-timeout fires.
+const STREAM_TIMEOUT_MS = 90_000
 
 export async function openrouterWithTools(
   messages: ChatMessage[],
@@ -90,25 +95,45 @@ export async function openrouterWithTools(
       await new Promise((r) => setTimeout(r, delayMs))
     }
 
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        tools,
-        tool_choice: 'auto',
-        max_tokens: 8192,
-        stream: true,
-      }),
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS)
+
+    let res: Response
+    try {
+      res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          tools,
+          tool_choice: 'auto',
+          max_tokens: 8192,
+          stream: true,
+        }),
+        signal: controller.signal,
+      })
+    } catch (fetchErr) {
+      clearTimeout(timeoutId)
+      const isTimeout = fetchErr instanceof Error && fetchErr.name === 'AbortError'
+      logLlm('tools:fetch-error', { model, attempt, isTimeout, message: fetchErr instanceof Error ? fetchErr.message : String(fetchErr) })
+      lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : `OpenRouter fetch failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`)
+      if (attempt < MAX_RETRIES) continue
+      throw lastError
+    }
 
     if (!res.ok) {
+      clearTimeout(timeoutId)
       const text = await res.text()
       logLlm('tools:error', { model, attempt, status: res.status, body: text.slice(0, 300) })
+      // Surface context-length errors clearly
+      const isContextLength = res.status === 400 && /context.length|too.long|max.token|prompt.length/i.test(text)
+      if (isContextLength) {
+        throw new Error('The transaction data is too large to analyse in one pass. Try running after categorising some transactions manually to reduce the uncategorised backlog.')
+      }
       lastError = new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`)
       if (TRANSIENT_STATUSES.has(res.status) && attempt < MAX_RETRIES) continue
       throw lastError
@@ -124,46 +149,58 @@ export async function openrouterWithTools(
     const decoder = new TextDecoder()
     let buffer = ''
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
 
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
 
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        const data = line.slice(6).trim()
-        if (data === '[DONE]') break
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') break
 
-        let chunk: Record<string, unknown>
-        try { chunk = JSON.parse(data) } catch { continue }
+          let chunk: Record<string, unknown>
+          try { chunk = JSON.parse(data) } catch { continue }
 
-        const choice = (chunk.choices as { delta?: Record<string, unknown>; finish_reason?: string }[] | undefined)?.[0]
-        if (!choice) continue
+          const choice = (chunk.choices as { delta?: Record<string, unknown>; finish_reason?: string }[] | undefined)?.[0]
+          if (!choice) continue
 
-        if (choice.finish_reason) finish_reason = choice.finish_reason
+          if (choice.finish_reason) finish_reason = choice.finish_reason
 
-        const delta = choice.delta ?? {}
+          const delta = choice.delta ?? {}
 
-        if (typeof delta.content === 'string') content += delta.content
+          if (typeof delta.content === 'string') content += delta.content
 
-        const deltaToolCalls = delta.tool_calls as { index: number; id?: string; type?: string; function?: { name?: string; arguments?: string } }[] | undefined
-        if (deltaToolCalls) {
-          for (const tc of deltaToolCalls) {
-            const i = tc.index
-            if (!toolCallMap[i]) {
-              toolCallMap[i] = { id: tc.id ?? '', type: tc.type ?? 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
-            } else {
-              if (tc.id) toolCallMap[i].id = tc.id
-              if (tc.function?.name) toolCallMap[i].function.name += tc.function.name
+          const deltaToolCalls = delta.tool_calls as { index: number; id?: string; type?: string; function?: { name?: string; arguments?: string } }[] | undefined
+          if (deltaToolCalls) {
+            for (const tc of deltaToolCalls) {
+              const i = tc.index
+              if (!toolCallMap[i]) {
+                toolCallMap[i] = { id: tc.id ?? '', type: tc.type ?? 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
+              } else {
+                if (tc.id) toolCallMap[i].id = tc.id
+                if (tc.function?.name) toolCallMap[i].function.name += tc.function.name
+              }
+              if (tc.function?.arguments) toolCallMap[i].function.arguments += tc.function.arguments
             }
-            if (tc.function?.arguments) toolCallMap[i].function.arguments += tc.function.arguments
           }
         }
       }
+    } catch (streamErr) {
+      clearTimeout(timeoutId)
+      reader.cancel().catch(() => {})
+      const isTimeout = streamErr instanceof Error && streamErr.name === 'AbortError'
+      logLlm('tools:stream-error', { model, attempt, isTimeout, message: streamErr instanceof Error ? streamErr.message : String(streamErr) })
+      lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : `OpenRouter stream interrupted: ${streamErr instanceof Error ? streamErr.message : String(streamErr)}`)
+      if (attempt < MAX_RETRIES) continue
+      throw lastError
     }
+
+    clearTimeout(timeoutId)
 
     const tool_calls = Object.keys(toolCallMap).length > 0
       ? Object.values(toolCallMap) as ToolCall[]
