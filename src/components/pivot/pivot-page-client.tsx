@@ -27,19 +27,36 @@ export function PivotPageClient() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didRestorePrefs = useRef(false)
 
-  // Fetch data
+  // Fetch data — retries once after 3s to handle Fly.io cold-start race
+  // where the proxy marks the machine reachable before Next.js is fully ready
   useEffect(() => {
-    const controller = new AbortController()
-    fetch('/api/pivot/', { signal: controller.signal })
-      .then(r => r.json())
-      .then(res => {
-        if (res.data) setData(res.data)
-      })
-      .catch(err => {
-        if (err.name !== 'AbortError') console.error(err)
-      })
-      .finally(() => setLoading(false))
-    return () => controller.abort()
+    let cancelled = false
+
+    async function load(attempt = 0) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      let retrying = false
+      try {
+        const r = await fetch('/api/pivot', { signal: controller.signal })
+        const res = await r.json()
+        if (!cancelled && res.data) setData(res.data)
+      } catch (err: unknown) {
+        if (cancelled) return
+        if (attempt === 0) {
+          retrying = true
+          setTimeout(() => { if (!cancelled) load(1) }, 3000)
+        } else {
+          const isAbort = err instanceof Error && err.name === 'AbortError'
+          if (!isAbort) console.error(err)
+        }
+      } finally {
+        clearTimeout(timeoutId)
+        if (!cancelled && !retrying) setLoading(false)
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
   }, [])
 
   // Restore preferences on mount

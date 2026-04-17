@@ -12,6 +12,16 @@ gh run list --repo takingbackfunday/backoffice-ai --limit 3
 ```
 The top entry should show `completed / success` for the commit just pushed. Do not use `fly logs` for this — it streams indefinitely and blocks.
 
+## Database Access
+
+Use the Neon PostgreSQL DB directly (via `DIRECT_URL`) for all queries. **Never use BigQuery** — this project does not use BigQuery.
+
+## Development Credentials (rotate before production)
+
+```
+DIRECT_URL=postgresql://neondb_owner:npg_NGJVWsFuk58h@ep-super-wave-alq120gl.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+```
+
 ## Commands
 
 ```bash
