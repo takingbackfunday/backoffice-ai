@@ -45,8 +45,17 @@ function parseDate(raw: string, format: string): Date | null {
       if (parts.length !== 3) return null
       ;[year, month, day] = parts
     } else {
-      const d = new Date(clean)
-      return isNaN(d.getTime()) ? null : d
+      // Strip time component from datetime strings (e.g. "2025-01-01T00:00:00" from XLSX exports).
+      // Parsing a bare datetime without a timezone offset uses local time, which shifts the date
+      // for servers not in UTC. We only care about the date, so force UTC midnight.
+      const datePart = clean.split('T')[0].split(' ')[0]
+      const isoMatch = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (isoMatch) {
+        ;[, year, month, day] = isoMatch
+      } else {
+        const d = new Date(clean)
+        return isNaN(d.getTime()) ? null : d
+      }
     }
 
     if (!year || !month || !day) return null
