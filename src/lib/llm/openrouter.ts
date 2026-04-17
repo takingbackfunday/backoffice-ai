@@ -71,99 +71,118 @@ export async function openrouterChat(
 
 // ── Tool-use completion (streaming to avoid serverless timeouts) ──────────────
 
+const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504])
+const MAX_RETRIES = 2
+
 export async function openrouterWithTools(
   messages: ChatMessage[],
   tools: ToolDefinition[],
   model = 'mistralai/mistral-small-2603'
 ): Promise<ChatResponse> {
   const t0 = Date.now()
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      tools,
-      tool_choice: 'auto',
-      max_tokens: 8192,
-      stream: true,
-    }),
-  })
 
-  if (!res.ok) {
-    const text = await res.text()
-    logLlm('tools:error', { model, status: res.status, body: text.slice(0, 300) })
-    throw new Error(`OpenRouter ${res.status}: ${text}`)
-  }
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      // Exponential back-off: 2s, 4s
+      const delayMs = 2000 * Math.pow(2, attempt - 1)
+      logLlm('tools:retry', { model, attempt, delayMs })
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
 
-  // Accumulate streamed SSE chunks into a final ChatResponse
-  let content = ''
-  let finish_reason = 'stop'
-  // tool_calls indexed by index
-  const toolCallMap: Record<number, { id: string; type: string; function: { name: string; arguments: string } }> = {}
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        tools,
+        tool_choice: 'auto',
+        max_tokens: 8192,
+        stream: true,
+      }),
+    })
 
-  const reader = res.body!.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
+    if (!res.ok) {
+      const text = await res.text()
+      logLlm('tools:error', { model, attempt, status: res.status, body: text.slice(0, 300) })
+      lastError = new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`)
+      if (TRANSIENT_STATUSES.has(res.status) && attempt < MAX_RETRIES) continue
+      throw lastError
+    }
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+    // Accumulate streamed SSE chunks into a final ChatResponse
+    let content = ''
+    let finish_reason = 'stop'
+    // tool_calls indexed by index
+    const toolCallMap: Record<number, { id: string; type: string; function: { name: string; arguments: string } }> = {}
 
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
 
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const data = line.slice(6).trim()
-      if (data === '[DONE]') break
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
 
-      let chunk: Record<string, unknown>
-      try { chunk = JSON.parse(data) } catch { continue }
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
 
-      const choice = (chunk.choices as { delta?: Record<string, unknown>; finish_reason?: string }[] | undefined)?.[0]
-      if (!choice) continue
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6).trim()
+        if (data === '[DONE]') break
 
-      if (choice.finish_reason) finish_reason = choice.finish_reason
+        let chunk: Record<string, unknown>
+        try { chunk = JSON.parse(data) } catch { continue }
 
-      const delta = choice.delta ?? {}
+        const choice = (chunk.choices as { delta?: Record<string, unknown>; finish_reason?: string }[] | undefined)?.[0]
+        if (!choice) continue
 
-      if (typeof delta.content === 'string') content += delta.content
+        if (choice.finish_reason) finish_reason = choice.finish_reason
 
-      const deltaToolCalls = delta.tool_calls as { index: number; id?: string; type?: string; function?: { name?: string; arguments?: string } }[] | undefined
-      if (deltaToolCalls) {
-        for (const tc of deltaToolCalls) {
-          const i = tc.index
-          if (!toolCallMap[i]) {
-            toolCallMap[i] = { id: tc.id ?? '', type: tc.type ?? 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
-          } else {
-            if (tc.id) toolCallMap[i].id = tc.id
-            if (tc.function?.name) toolCallMap[i].function.name += tc.function.name
+        const delta = choice.delta ?? {}
+
+        if (typeof delta.content === 'string') content += delta.content
+
+        const deltaToolCalls = delta.tool_calls as { index: number; id?: string; type?: string; function?: { name?: string; arguments?: string } }[] | undefined
+        if (deltaToolCalls) {
+          for (const tc of deltaToolCalls) {
+            const i = tc.index
+            if (!toolCallMap[i]) {
+              toolCallMap[i] = { id: tc.id ?? '', type: tc.type ?? 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
+            } else {
+              if (tc.id) toolCallMap[i].id = tc.id
+              if (tc.function?.name) toolCallMap[i].function.name += tc.function.name
+            }
+            if (tc.function?.arguments) toolCallMap[i].function.arguments += tc.function.arguments
           }
-          if (tc.function?.arguments) toolCallMap[i].function.arguments += tc.function.arguments
         }
       }
     }
+
+    const tool_calls = Object.keys(toolCallMap).length > 0
+      ? Object.values(toolCallMap) as ToolCall[]
+      : null
+
+    logLlm('tools:res', {
+      model,
+      latencyMs: Date.now() - t0,
+      finish_reason,
+      toolCalls: tool_calls?.map(t => t.function.name) ?? null,
+    })
+
+    return {
+      content: content || null,
+      tool_calls,
+      finish_reason,
+    }
   }
 
-  const tool_calls = Object.keys(toolCallMap).length > 0
-    ? Object.values(toolCallMap) as ToolCall[]
-    : null
-
-  logLlm('tools:res', {
-    model,
-    latencyMs: Date.now() - t0,
-    finish_reason,
-    toolCalls: tool_calls?.map(t => t.function.name) ?? null,
-  })
-
-  return {
-    content: content || null,
-    tool_calls,
-    finish_reason,
-  }
+  // All retries exhausted (only reachable if we continued on every attempt)
+  throw lastError ?? new Error('OpenRouter request failed after retries')
 }

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { matchInvoicePayments } from '@/lib/invoice-matching'
 import { matchReceiptTransactions } from '@/lib/receipt-matching'
+import { runRulesAgentInBackground } from '@/lib/agent/run-rules-agent'
 
 const nullableString = z.union([z.string(), z.null()]).transform((v) => v ?? '')
 const optionalNullableString = z.union([z.string(), z.null()]).transform((v) => (v && v.trim()) ? v.trim() : null).optional()
@@ -103,6 +104,13 @@ export async function POST(request: Request) {
       matchInvoicePayments(userId, importedIds),
       matchReceiptTransactions(userId, importedIds),
     ])
+
+    // Fire-and-forget: run the rules agent in the background after every CSV import.
+    // The agent persists RuleSuggestion rows to DB — the user sees them in the rules UI.
+    // We do not await this; the import response is returned immediately.
+    runRulesAgentInBackground(userId).catch((err) => {
+      console.error('[import] background rules agent failed:', err instanceof Error ? err.message : err)
+    })
 
     return ok({
       imported: newRows.length,

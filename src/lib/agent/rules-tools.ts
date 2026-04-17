@@ -611,6 +611,105 @@ export async function get_ruleless_patterns(
 }
 
 /**
+ * Detects potential account transfers: pairs of transactions on the same day where one
+ * account has a debit (negative amount) and another has a credit (positive amount) that
+ * are within a small tolerance of each other (to account for FX fees or bank charges).
+ * These are typically internal fund movements that should be categorised as "Account transfer"
+ * rather than income/expense, and should not inflate spending/income reports.
+ */
+export async function get_transfer_candidates(
+  userId: string,
+  args: { topN?: number; tolerancePct?: number },
+  _ctx: RulesContext
+): Promise<string> {
+  const topN = args.topN ?? 20
+  // Allow up to tolerancePct% difference (default 2%) to catch cross-currency transfers with small fees
+  const tolerancePct = args.tolerancePct ?? 0.02
+
+  // Load all transactions with account info, grouped by date
+  const txs = await prisma.transaction.findMany({
+    where: { account: { userId }, categoryId: null },
+    select: {
+      id: true,
+      date: true,
+      amount: true,
+      description: true,
+      account: { select: { id: true, name: true } },
+    },
+    orderBy: { date: 'asc' },
+  })
+
+  if (!txs.length) return 'No uncategorised transactions to analyse for transfers.'
+
+  // Group by date string (YYYY-MM-DD)
+  const byDate = new Map<string, typeof txs>()
+  for (const tx of txs) {
+    const dateKey = tx.date.toISOString().slice(0, 10)
+    if (!byDate.has(dateKey)) byDate.set(dateKey, [])
+    byDate.get(dateKey)!.push(tx)
+  }
+
+  type TransferPair = {
+    date: string
+    debitDesc: string
+    creditDesc: string
+    debitAccount: string
+    creditAccount: string
+    amount: number
+    debitId: string
+    creditId: string
+  }
+
+  const pairs: TransferPair[] = []
+  const usedIds = new Set<string>()
+
+  for (const [date, dayTxs] of byDate) {
+    const debits = dayTxs.filter((t) => Number(t.amount) < 0)
+    const credits = dayTxs.filter((t) => Number(t.amount) > 0)
+
+    for (const debit of debits) {
+      if (usedIds.has(debit.id)) continue
+      const debitAbs = Math.abs(Number(debit.amount))
+
+      for (const credit of credits) {
+        if (usedIds.has(credit.id)) continue
+        // Skip same-account matches (not a transfer)
+        if (debit.account.id === credit.account.id) continue
+        const creditAmt = Number(credit.amount)
+        // Check if amounts are within tolerance
+        const diff = Math.abs(debitAbs - creditAmt)
+        const larger = Math.max(debitAbs, creditAmt)
+        if (larger > 0 && diff / larger <= tolerancePct) {
+          pairs.push({
+            date,
+            debitDesc: debit.description.slice(0, 80),
+            creditDesc: credit.description.slice(0, 80),
+            debitAccount: debit.account.name ?? 'unknown',
+            creditAccount: credit.account.name ?? 'unknown',
+            amount: debitAbs,
+            debitId: debit.id,
+            creditId: credit.id,
+          })
+          usedIds.add(debit.id)
+          usedIds.add(credit.id)
+          break
+        }
+      }
+    }
+  }
+
+  if (!pairs.length) return 'No same-day debit/credit pairs detected across different accounts — no likely account transfers found.'
+
+  const top = pairs.slice(0, topN)
+
+  const lines = top.map((p, i) =>
+    `  ${i + 1}. date:${p.date} | amount:${p.amount.toFixed(2)} | from:"${p.debitAccount}" (desc:"${p.debitDesc}") → to:"${p.creditAccount}" (desc:"${p.creditDesc}")`
+  )
+
+  return `${pairs.length} likely account transfer pair(s) detected (same-day matching debit/credit across different accounts, within ${(tolerancePct * 100).toFixed(0)}% amount tolerance). Showing top ${top.length}:\n${lines.join('\n')}\n\nFor each of these description patterns, suggest a rule with category "Account transfer" so they are excluded from spending/income reports.`
+}
+
+/**
  * Returns project-tagged transactions grouped by payee/description, excluding groups
  * already covered by a rule that sets that workspace. Used to suggest project-assignment rules.
  */
@@ -693,6 +792,8 @@ export async function dispatchRulesTool(
       return get_ruleless_patterns(userId, a as { topN?: number; minCount?: number }, ctx)
     case 'get_project_transactions':
       return get_project_transactions(userId, a as { topN?: number; minCount?: number }, ctx)
+    case 'get_transfer_candidates':
+      return get_transfer_candidates(userId, a as { topN?: number; tolerancePct?: number }, ctx)
     case 'emit_rule_suggestion':
       return emit_rule_suggestion(userId, a as Parameters<typeof emit_rule_suggestion>[1], ctx)
     case 'record_plan':
@@ -879,6 +980,27 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'get_transfer_candidates',
+      description:
+        'Detect likely account transfers: same-day debit/credit pairs across different accounts whose amounts match within a small tolerance (2% by default, to allow for FX fees). These should be categorised as "Account transfer" so they are excluded from spending and income reports. Returns pairs with description text for each side, so you can suggest description-based rules.',
+      parameters: {
+        type: 'object',
+        properties: {
+          topN: {
+            type: 'number',
+            description: 'Maximum number of pairs to return (default 20)',
+          },
+          tolerancePct: {
+            type: 'number',
+            description: 'Fractional tolerance for amount matching, e.g. 0.02 = 2% (default 0.02)',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'record_plan',
       description:
         'Record your analysis strategy before emitting suggestions. Call this FIRST, before any emit_rule_suggestion calls. Describe which patterns you identified and how you plan to categorise them. This is shown to the user as a status message.',
@@ -909,5 +1031,5 @@ const RULES_ONLY_TOOLS: ToolDefinition[] = [
   },
 ]
 
-// All 21 tools: 14 finance + 7 rules
+// All 22 tools: 14 finance + 8 rules (includes get_transfer_candidates)
 export const RULES_TOOLS: ToolDefinition[] = [...FINANCE_TOOLS, ...RULES_ONLY_TOOLS]

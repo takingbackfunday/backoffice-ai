@@ -21,7 +21,7 @@ function encode(event: RulesSseEvent): Uint8Array {
 
 const SYSTEM_PROMPT = `You are an expert financial categorisation assistant. Your job is to analyse the user's transaction data and suggest high-quality automation rules.
 
-ALL data is pre-loaded in the user message. Do NOT call get_rules, get_categories, get_uncategorised_transactions, get_no_payee_transactions, get_payees, get_ruleless_patterns, or get_project_transactions — the data is already there.
+ALL data is pre-loaded in the user message. Do NOT call get_rules, get_categories, get_uncategorised_transactions, get_no_payee_transactions, get_payees, get_ruleless_patterns, get_project_transactions, or get_transfer_candidates — the data is already there.
 
 CRITICAL — CATEGORY NAMES:
 - The user message contains an "AVAILABLE CATEGORIES" section. Read it FIRST before doing anything else.
@@ -38,11 +38,12 @@ Workflow:
 5. Call finish_analysis
 
 SOURCES OF PATTERNS — SELF-LEARNING:
-The user message contains FOUR sources of patterns. Treat all four equally:
+The user message contains FIVE sources of patterns. Treat all five equally:
 1. UNCATEGORISED TRANSACTIONS — no category yet; suggest a category + payee rule
 2. TRANSACTIONS WITH CATEGORY BUT NO PAYEE — already categorised; suggest a payee-assignment rule that reinforces the user's manual work
 3. ALREADY-LABELLED PATTERNS WITHOUT A RULE — the user manually tagged these; create rules to automate future occurrences. Use the "category" field shown to confirm the right category name
 4. PROJECT-TAGGED TRANSACTIONS WITHOUT A PROJECT RULE — the user assigned these to a project; create rules so future similar transactions are auto-assigned. Set workspaceName from the "project" field shown
+5. ACCOUNT TRANSFER CANDIDATES — same-day debit/credit pairs across different accounts whose amounts match closely. These are almost certainly internal fund movements (bank transfer, moving money between accounts). Suggest a rule with category "Account transfer" (or the closest match in the AVAILABLE CATEGORIES list) for the description keywords found on each side. Transfer rules are HIGH priority — they prevent fund movements from inflating spending or income reports. Use description contains with the common keyword from the debit or credit side.
 
 PAYEE ASSIGNMENT — CRITICAL:
 - ALWAYS set payeeName on every suggestion where the merchant/counterparty is identifiable — this means nearly every suggestion should have a payee
@@ -128,10 +129,16 @@ export async function GET() {
       // Hard timeout — close the stream gracefully if analysis runs too long
       const HARD_TIMEOUT_MS = 55_000
       let hardTimedOut = false
+      // emitCount is declared here (before try) so the timeout callback can read it
+      let emitCount = 0
       const hardTimeout = setTimeout(() => {
         hardTimedOut = true
         console.log(`[rules-agent:${runId}] hard timeout reached — closing stream gracefully`)
-        send({ type: 'error', error: 'Analysis took too long. Partial results shown above — try again for more suggestions.' })
+        // Message depends on whether any suggestions arrived before the timeout
+        const timeoutMsg = emitCount > 0
+          ? `Analysis timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)}s — ${emitCount} suggestion${emitCount === 1 ? '' : 's'} found so far. Try running again for more.`
+          : `Analysis timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)}s — the AI model took too long to respond. Please try again.`
+        send({ type: 'error', error: timeoutMsg })
       }, HARD_TIMEOUT_MS)
 
       try {
@@ -180,7 +187,7 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
 
         // Pre-fetch all data the LLM would normally call tools to get.
         send({ type: 'status', message: 'Fetching transaction data…' })
-        const [uncatData, catsData, noPayeeData, payeesData, rulesData, rulelessData, projectTxData] = await Promise.all([
+        const [uncatData, catsData, noPayeeData, payeesData, rulesData, rulelessData, projectTxData, transferData] = await Promise.all([
           dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 25 }, ctx),
           dispatchRulesTool(userId, 'get_categories', {}, ctx),
           dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 15 }, ctx),
@@ -188,6 +195,7 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
           dispatchRulesTool(userId, 'get_rules', {}, ctx),
           dispatchRulesTool(userId, 'get_ruleless_patterns', { topN: 20 }, ctx),
           dispatchRulesTool(userId, 'get_project_transactions', { topN: 15 }, ctx),
+          dispatchRulesTool(userId, 'get_transfer_candidates', { topN: 20 }, ctx),
         ])
 
         // Build available projects list from workspaceMap
@@ -204,6 +212,7 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
           noPayeeLen: noPayeeData.length,
           rulelessLen: rulelessData.length,
           projectTxLen: projectTxData.length,
+          transferLen: transferData.length,
           // Log the first 800 chars of the categories list so we can see what the LLM has
           categoriesPreview: catsData.slice(0, 800),
           // Log the first 600 chars of uncategorised groups
@@ -240,6 +249,10 @@ ${rulelessData}
 These transactions already have a project assigned. Create rules so future similar transactions are automatically assigned to the same project. Set workspaceName using the "project" field shown (copy VERBATIM from AVAILABLE PROJECTS).
 ${projectTxData}
 
+--- ACCOUNT TRANSFER CANDIDATES (same-day matching debit/credit across different accounts) ---
+These are likely internal fund movements. Suggest an "Account transfer" rule (or the closest category in the list above) for each distinct description pattern seen here. HIGH PRIORITY — transfer rules prevent fund movements from inflating spending or income totals.
+${transferData}
+
 Instructions:
 1. Call record_plan listing every merchant group you spotted → category → payee → [project if applicable]
 2. Emit ALL suggestions in ONE response (call emit_rule_suggestion multiple times at once)
@@ -254,7 +267,7 @@ Instructions:
 
         let finished = false
         let everEmitted = false  // true once any emit_rule_suggestion succeeds
-        let emitCount = 0
+        // emitCount declared before try block (needed by hard timeout callback)
         const MAX_EMITS = 20
         let queryCount = 0
         const MAX_QUERIES = 2  // hard cap on query_transactions / search_transactions calls
@@ -325,7 +338,7 @@ Instructions:
             }
 
             // Block pre-loaded tools — data is already in the user message
-            const PRELOADED = ['get_rules', 'get_categories', 'get_uncategorised_transactions', 'get_no_payee_transactions', 'get_payees', 'get_ruleless_patterns', 'get_project_transactions']
+            const PRELOADED = ['get_rules', 'get_categories', 'get_uncategorised_transactions', 'get_no_payee_transactions', 'get_payees', 'get_ruleless_patterns', 'get_project_transactions', 'get_transfer_candidates']
             if (PRELOADED.includes(toolName)) {
               const msg = `This data is already pre-loaded in the user message above. Do not call ${toolName} again — use the data already provided and emit your suggestions.`
               messages.push({ role: 'tool', tool_call_id: tc.id, content: msg })

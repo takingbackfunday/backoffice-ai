@@ -278,6 +278,10 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
     const es = new EventSource('/api/agent/rules')
     esRef.current = es
 
+    // Track whether the server sent a terminal event (done/error) so we can
+    // ignore the onerror that fires when EventSource closes after a terminal event.
+    let serverTerminated = false
+
     es.onmessage = (e) => {
       let event: Record<string, unknown>
       try {
@@ -319,26 +323,27 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
           setSuggestions((prev) => [...prev, suggestion])
         }
       } else if (event.type === 'done') {
+        serverTerminated = true
         setStatus('done')
         if (event.uncategorised !== undefined && event.noPayee !== undefined) {
           setDoneSummary({ uncategorised: event.uncategorised as number, noPayee: event.noPayee as number })
         }
         es.close()
       } else if (event.type === 'error') {
-        setStatusMessages((prev) => [...prev, `Error: ${event.error as string}`])
+        serverTerminated = true
+        setStatusMessages((prev) => [...prev, event.error as string])
         setStatus('error')
         es.close()
       }
     }
 
     es.onerror = () => {
-      // EventSource fires onerror on a clean server-close too — only treat it as
-      // an error if we never received a 'done' event.
-      setStatus((current) => {
-        if (current === 'done') return current
-        setStatusMessages((prev) => [...prev, 'Connection error'])
-        return 'error'
-      })
+      // EventSource fires onerror when the server closes the connection — including
+      // after a clean 'done' or 'error' event. Only treat it as a connection failure
+      // if the server never sent a terminal event.
+      if (serverTerminated) return
+      setStatusMessages((prev) => [...prev, 'Connection lost — the analysis was interrupted. Try again.'])
+      setStatus('error')
       es.close()
     }
   }
@@ -411,9 +416,24 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
 
       {/* Error retry */}
       {status === 'error' && (
-        <button onClick={engage} className="rounded-md border px-4 py-1.5 text-sm font-medium hover:bg-muted">
-          Try again
-        </button>
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 space-y-2">
+          <p className="text-xs font-medium text-red-700">
+            {statusMessages.at(-1)?.startsWith('Analysis timed out')
+              ? 'Analysis timed out'
+              : statusMessages.at(-1)?.startsWith('Connection lost')
+                ? 'Connection lost'
+                : 'Analysis failed'}
+          </p>
+          <p className="text-xs text-red-600/80 leading-snug">
+            {statusMessages.at(-1) ?? 'An unexpected error occurred.'}
+          </p>
+          <button
+            onClick={engage}
+            className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          >
+            Try again
+          </button>
+        </div>
       )}
 
       {/* Suggestions */}
