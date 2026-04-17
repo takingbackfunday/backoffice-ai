@@ -8,7 +8,8 @@ Financial management tool for freelancers, consultants, and small property manag
 - Import bank transactions via CSV upload or automated bank sync (Open Banking APIs)
 - Duplicate detection via SHA-256 hash over `(account, date, amount, description)`
 - Auto-categorise at import using a priority-ordered rules engine (regex, amount ranges, payee match, etc.)
-- AI rules agent suggests new rules based on transaction edits; "Run rules agent" and "Create rule" open inline modals from the transactions toolbar (no page navigation)
+- AI rules agent suggests new rules based on transaction edits; runs automatically in the background after every CSV import (suggestions appear in the rules UI); can also be triggered manually via the transactions toolbar
+- Account transfer detection: same-day matching debit/credit pairs across different accounts are surfaced as "Account transfer" rule candidates, keeping them out of spending/income totals
 - Make-rule popup anchors to the edited transaction row
 - Pivot table view for cross-category analysis
 

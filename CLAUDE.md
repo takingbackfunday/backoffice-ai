@@ -170,7 +170,7 @@ Rule condition fields: `description`, `payeeName`, `rawDescription`, `amount`, `
 
 `src/lib/llm/openrouter.ts` exposes two functions:
 - `openrouterChat(messages, model?)` — simple text completion; default model `mistralai/devstral-small`
-- `openrouterWithTools(messages, tools, model?)` — tool-calling with streaming SSE accumulation; default model `mistralai/mistral-small-2603`; streams to avoid serverless timeouts
+- `openrouterWithTools(messages, tools, model?)` — tool-calling with streaming SSE accumulation; default model `mistralai/mistral-small-2603`; streams to avoid serverless timeouts; retries up to 2× with exponential back-off (2s, 4s) on transient errors (429, 500, 502, 503, 504)
 
 ### Multi-Agent System (`src/lib/agent/`)
 
@@ -195,12 +195,14 @@ Agent models: all agents use `anthropic/claude-sonnet-4.6`; domain classifier an
 
 `src/lib/agent/rules-tools.ts` — tool set for the rules-generation agent. Key design points:
 
-- **Self-learning**: in addition to uncategorised transactions, the agent scans two extra sources pre-loaded into the user message: `get_ruleless_patterns` (transactions the user already tagged but no rule covers) and `get_project_transactions` (project-tagged transactions with no project-assignment rule). This lets the agent formalise manual work into automation rules.
+- **Self-learning**: in addition to uncategorised transactions, the agent scans three extra sources pre-loaded into the user message: `get_ruleless_patterns` (transactions the user already tagged but no rule covers), `get_project_transactions` (project-tagged transactions with no project-assignment rule), and `get_transfer_candidates` (same-day debit/credit pairs across different accounts — likely internal transfers). This lets the agent formalise manual work and detect structural patterns automatically.
+- **Transfer detection**: `get_transfer_candidates` queries uncategorised transactions, groups by date, and finds debit/credit pairs across different accounts whose amounts match within a 2% tolerance (to catch cross-currency transfers with small fees). Pairs are surfaced to the LLM with description text from both sides so it can emit an "Account transfer" rule for each distinct pattern.
 - **Workspace support**: `RulesContext` carries a `workspaceMap` (name.toLowerCase() → id); `emit_rule_suggestion` accepts an optional `workspaceName` which is validated against the map and stored on the suggestion. `CategorizationRule.workspaceId` is already applied by the rules engine.
 - **TxSnapshot**: includes `workspaceId: string | null` and `tags: string[]` (fetched via `account.currency` for currency — currency lives on Account, not Transaction).
 - **Project-assignment validation**: if a suggestion sets `workspaceName`, the validator checks that the matched transactions do not span multiple projects. If the condition is too broad (e.g. "description contains Zelle payment from" matching tenants from several properties), it is rejected with the conflicting project names listed — forcing the agent to use a more specific condition such as `payeeName equals X`.
 - **Payee-condition exemptions**: the "already categorised > 40%" reclassification guard is skipped for rules whose only condition is `payeeName equals X` (precise selector) and for self-learning rules where all matched transactions already carry the same category (formalisation, not reclassification).
 - The SSE endpoint (`api/agent/rules`) has a 30-second per-user cooldown stored in `UserPreference.data.lastRulesAgentRun`. Two-model strategy: Sonnet for the planning round, Haiku for bulk emission.
+- **Background runner** (`src/lib/agent/run-rules-agent.ts`): `runRulesAgentInBackground(userId)` runs the same LLM loop but persists `RuleSuggestion` rows to DB instead of streaming SSE. Called fire-and-forget from `POST /api/transactions/import` after every CSV import — the user sees suggestions in the rules UI the next time they open it. Also stamps `lastRulesAgentRun` so the SSE cooldown is respected.
 - `scripts/run-rules-agent.ts` — standalone `tsx` script for running the agent server-side for a given userId without a UI session; useful for admin inspection and testing.
 
 ### Document Request System (`src/lib/doc-types.ts`, `src/lib/doc-token.ts`, `src/lib/uploadthing.ts`)
@@ -344,7 +346,7 @@ Single icon pill always visible — Sparkles icon by default, expands to show "c
 1. Upload (`/upload`, `api/upload/`) — parse CSV client-side via `src/components/upload/csv-dropzone.tsx`; store in Zustand (`src/stores/upload-store.ts`)
 2. Column mapping (`src/components/upload/column-mapper.tsx`) — LLM validates/maps headers via `api/llm/validate-mapping/`
 3. Import preview (`src/components/upload/import-preview.tsx`) — apply institution schema
-4. Final import (`api/transactions/import/`) — dedup via `src/lib/dedup.ts` (`buildDuplicateHash`), then batch-categorize, insert transactions and update `ImportBatch`
+4. Final import (`api/transactions/import/`) — dedup via `src/lib/dedup.ts` (`buildDuplicateHash`), then batch-categorize, insert transactions and update `ImportBatch`; after returning the response, fires `runRulesAgentInBackground(userId)` as a fire-and-forget to generate rule suggestions automatically
 
 ### Dashboard Widgets (`src/components/widgets/`, `src/lib/widgets/`)
 

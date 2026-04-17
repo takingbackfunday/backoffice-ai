@@ -684,13 +684,13 @@ export function RuleEditor({
             <button type="submit" disabled={saving}
               onClick={() => { applyAfterSaveRef.current = true }}
               className="rounded bg-[#085041] text-[#E1F5EE] px-3 py-1 text-[12px] font-medium disabled:opacity-50 hover:opacity-90">
-              {saving ? 'Saving…' : (saveLabel ? `${saveLabel} & apply` : (editingRule ? 'Update & apply' : 'Save & apply'))}
+              {saving ? 'Saving…' : (saveLabel ? `${saveLabel} & apply` : (editingRule?.id ? 'Update & apply' : 'Save & apply'))}
             </button>
           )}
           <button type="submit" disabled={saving}
             onClick={() => { applyAfterSaveRef.current = false }}
             className="rounded border border-black/20 text-[#555] px-3 py-1 text-[12px] disabled:opacity-50 hover:bg-muted">
-            {saving ? 'Saving…' : (saveLabel ?? (editingRule ? 'Update & apply' : 'Save rule'))}
+            {saving ? 'Saving…' : (saveLabel ?? (editingRule?.id ? 'Update & apply' : 'Save rule'))}
           </button>
           <button type="button" onClick={onCancel}
             className="text-[#999] px-2 py-1 text-[12px] hover:text-[#555]">
