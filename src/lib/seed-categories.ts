@@ -45,16 +45,16 @@ const ALL_CATEGORIES: GroupDef[] = [
     ],
   },
 
-  // ── SHARED EXPENSES (both C and E) ─────────────────────────────
+  // ── SHARED EXPENSES (Sch C freelance + Sch E property) ─────────
   {
     group: 'Advertising',
     scheduleRef: 'C,E',
     taxType: 'expense',
     categories: [
-      'Online ads (Google, Meta, LinkedIn)',
-      'Print & direct mail',
-      'Signage & displays',
       'Listing sites & vacancy ads',
+      'Online ads (Google, Meta)',
+      'Signage & displays',
+      'Print & direct mail',
       'Website & SEO',
     ],
   },
@@ -63,41 +63,41 @@ const ALL_CATEGORIES: GroupDef[] = [
     scheduleRef: 'C,E',
     taxType: 'expense',
     categories: [
+      'Landlord / rental dwelling policy',
       'General liability',
-      'Professional liability / E&O',
+      'Flood / earthquake',
       'Property insurance',
       'Workers\' compensation',
+      'Professional liability / E&O',
       'Business interruption',
-      'Landlord / rental dwelling policy',
-      'Flood / earthquake',
     ],
   },
   {
-    group: 'Legal & professional services',
+    group: 'Legal & other professional fees',
     scheduleRef: 'C,E',
     taxType: 'expense',
     categories: [
-      'Accounting & bookkeeping',
       'Legal fees',
+      'Accounting & bookkeeping',
       'Tax preparation',
-      'Consulting fees',
-      'Payroll service fees',
       'Eviction / collections legal',
+      'Registered agent fees',
+      'Real estate services',
+      'Consulting fees',
     ],
   },
   {
-    group: 'Repairs & maintenance',
+    group: 'Repairs',
     scheduleRef: 'C,E',
     taxType: 'expense',
     categories: [
-      'Building / facility repairs',
+      'General repairs',
       'Plumbing',
       'Electrical',
       'HVAC',
       'Appliance repair',
-      'Equipment maintenance',
-      'IT support & repairs',
       'Painting & cosmetic',
+      'Flooring',
     ],
   },
   {
@@ -105,38 +105,22 @@ const ALL_CATEGORIES: GroupDef[] = [
     scheduleRef: 'C,E',
     taxType: 'expense',
     categories: [
-      'Raw materials',
-      'Packaging & shipping materials',
+      'Maintenance supplies',
+      'Cleaning supplies',
       'Tools & small equipment',
       'Safety supplies',
-      'Cleaning supplies',
-      'Maintenance supplies',
     ],
   },
   {
-    group: 'Taxes & licenses',
+    group: 'Taxes',
     scheduleRef: 'C,E',
     taxType: 'expense',
     categories: [
+      'Property tax',
       'State & local business taxes',
       'Business licenses & permits',
       'Payroll taxes (employer share)',
-      'Property tax',
       'Franchise tax',
-    ],
-  },
-  {
-    group: 'Travel',
-    scheduleRef: 'C,E',
-    taxType: 'expense',
-    categories: [
-      'Airfare',
-      'Lodging',
-      'Ground transportation',
-      'Car rental',
-      'Conference registration',
-      'Per diem / incidentals',
-      'Mileage (property visits)',
     ],
   },
   {
@@ -156,25 +140,13 @@ const ALL_CATEGORIES: GroupDef[] = [
     scheduleRef: 'C,E',
     taxType: 'expense',
     categories: [
-      'Computer & electronics',
-      'Furniture & fixtures',
-      'Machinery & equipment',
-      'Leasehold improvements',
-      'Vehicles (depreciation portion)',
       'Residential rental property (27.5 yr)',
       'Appliances & fixtures (rental)',
-    ],
-  },
-  {
-    group: 'Interest',
-    scheduleRef: 'C,E',
-    taxType: 'expense',
-    categories: [
-      'Business loan interest',
-      'Line of credit interest',
-      'Credit card interest (business)',
-      'Mortgage interest (business property)',
-      'Mortgage interest (rental property)',
+      'Furniture & fixtures',
+      'Vehicles (depreciation portion)',
+      'Computer & electronics',
+      'Machinery & equipment',
+      'Leasehold improvements',
     ],
   },
   {
@@ -185,8 +157,6 @@ const ALL_CATEGORIES: GroupDef[] = [
       'Office supplies & stationery',
       'Postage & shipping',
       'Printing & copying',
-      'Small equipment (< $2,500)',
-      'Cleaning & janitorial',
     ],
   },
 
@@ -311,6 +281,22 @@ const ALL_CATEGORIES: GroupDef[] = [
 
   // ── SCHEDULE E ONLY (rental property) ──────────────────────────
   {
+    group: 'Auto & travel',
+    scheduleRef: 'E',
+    taxType: 'expense',
+    categories: [
+      'Gas & fuel',
+      'Parking & tolls',
+      'Mileage (standard rate)',
+      'Car rental',
+      'Airfare',
+      'Lodging',
+      'Ground transportation',
+      'Vehicle repairs & maintenance',
+      'Auto insurance',
+    ],
+  },
+  {
     group: 'Cleaning & maintenance',
     scheduleRef: 'E',
     taxType: 'expense',
@@ -323,6 +309,17 @@ const ALL_CATEGORIES: GroupDef[] = [
     ],
   },
   {
+    group: 'Commissions',
+    scheduleRef: 'E',
+    taxType: 'expense',
+    categories: [
+      'Leasing commissions',
+      'Referral fees',
+      'Finder\'s fees',
+      'Tenant placement fees',
+    ],
+  },
+  {
     group: 'Management fees',
     scheduleRef: 'E',
     taxType: 'expense',
@@ -330,6 +327,25 @@ const ALL_CATEGORIES: GroupDef[] = [
       'Property management company',
       'Leasing agent fees',
       'On-site manager wages',
+    ],
+  },
+  {
+    group: 'Mortgage interest',
+    scheduleRef: 'E',
+    taxType: 'expense',
+    categories: [
+      'Mortgage interest (rental property)',
+      'Mortgage interest (business property)',
+    ],
+  },
+  {
+    group: 'Other interest',
+    scheduleRef: 'E',
+    taxType: 'expense',
+    categories: [
+      'Business loan interest',
+      'Line of credit interest',
+      'Credit card interest (business)',
     ],
   },
   {
@@ -365,15 +381,15 @@ const ALL_CATEGORIES: GroupDef[] = [
     ],
   },
   {
-    group: 'Other rental expenses',
+    group: 'Other expenses',
     scheduleRef: 'E',
     taxType: 'expense',
     categories: [
+      'Software (property management)',
+      'Bank & wire fees (rental)',
       'Lock & key replacement',
       'Smoke / CO detector compliance',
-      'Bank & wire fees (rental)',
-      'Mileage (property visits)',
-      'Software (property management)',
+      'Storage',
     ],
   },
 
@@ -583,8 +599,12 @@ const PERSONAL_CATEGORIES: GroupDef[] = [
 
 /**
  * Filter the master category list based on business type.
- * 'freelance' → C + C,E + none
- * 'property'  → E + C,E + none
+ * 'freelance' → C + C,E + none  (Schedule C lines)
+ * 'property'  → E + C,E + none  (Schedule E lines: Rental income, Advertising, Auto & travel,
+ *               Cleaning & maintenance, Commissions, Insurance, Legal & other professional fees,
+ *               Management fees, Mortgage interest, Other interest, Repairs, Supplies, Taxes,
+ *               Utilities, Depreciation & Section 179, Other expenses, Office expense,
+ *               HOA & condo fees, Landscaping & grounds, Tenant-related expenses)
  * 'both'      → everything
  * 'personal'  → PERSONAL_CATEGORIES (entirely separate list)
  */
