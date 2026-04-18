@@ -88,6 +88,8 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
   const [loadingTxs, setLoadingTxs] = useState(false)
   const [linkedTxId, setLinkedTxId] = useState<string | null>(null)
   const [linkedTxDesc, setLinkedTxDesc] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewing, setPreviewing] = useState(false)
 
   // Auto-open send modal when redirected from "Create & Send"
   useEffect(() => {
@@ -407,15 +409,25 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
             </button>
           )}
 
-          {/* 6. Preview PDF — opens in new tab */}
-          <a
-            href={`/api/projects/${projectId}/invoices/${invoice.id}/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
+          {/* 6. Preview PDF — opens in modal iframe */}
+          <button
+            type="button"
+            disabled={previewing}
+            onClick={async () => {
+              setPreviewing(true)
+              try {
+                const res = await fetch(`/api/projects/${projectId}/invoices/${invoice.id}/pdf`)
+                if (!res.ok) return
+                const blob = await res.blob()
+                setPreviewUrl(URL.createObjectURL(blob))
+              } finally {
+                setPreviewing(false)
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50 transition-colors"
           >
-            Preview PDF
-          </a>
+            {previewing ? 'Loading…' : 'Preview PDF'}
+          </button>
 
           {/* 7. Download PDF — triggers download and queues mark-as-sent notification */}
           <button
@@ -847,6 +859,38 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           setTimeout(() => setEmailStatus(null), 4000)
         }}
       />
+    )}
+
+    {/* PDF Preview Modal */}
+    {previewUrl && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }}
+      >
+        <div
+          className="relative bg-white rounded-xl shadow-2xl overflow-hidden"
+          style={{ width: 'min(90vw, 860px)', height: 'min(92vh, 1100px)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-4 py-2.5 border-b">
+            <span className="text-sm font-semibold">Invoice preview — {invoice.invoiceNumber}</span>
+            <button
+              type="button"
+              onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }}
+              className="text-muted-foreground hover:text-foreground text-lg leading-none px-1"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          <iframe
+            src={previewUrl}
+            className="w-full"
+            style={{ height: 'calc(100% - 45px)', border: 'none' }}
+            title="Invoice preview"
+          />
+        </div>
+      </div>
     )}
     </>
   )
