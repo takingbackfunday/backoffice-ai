@@ -858,6 +858,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [expandedClient, setExpandedClient] = useState<string | null>(null)
   const [clientSearch, setClientSearch] = useState('')
   const [clientFilter, setClientFilter] = useState<'outstanding' | 'overdue' | 'unsent' | null>(null)
+  const [creatingOverhead, setCreatingOverhead] = useState(false)
   const cardsRef = useRef<HTMLDivElement>(null)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [showNewClientModal, setShowNewClientModal] = useState(false)
@@ -975,8 +976,17 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           label="Track business overhead"
           detail="Set up a shared workspace for expenses not tied to a specific client — subscriptions, equipment, office costs."
           color="blue"
-          onClick={() => router.push('/projects/new?type=OTHER&overhead=1')}
-          cta="Set up →"
+          onClick={async () => {
+            if (creatingOverhead) return
+            setCreatingOverhead(true)
+            await fetch('/api/projects', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: 'Business Overhead', type: 'OTHER', isDefault: true }),
+            })
+            router.refresh()
+          }}
+          cta={creatingOverhead ? 'Setting up…' : 'Set up →'}
         />
       )}
 
