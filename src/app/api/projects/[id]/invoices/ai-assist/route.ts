@@ -323,11 +323,12 @@ Rules:
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Round 0: stream with tools enabled, forwarding content tokens immediately.
-        // Claude returns content: null when calling tools, so no garbage leaks to the client.
-        // - If no tools called: tokens already flowed to the client. Emit done event.
-        // - If tools called: execute them, then stream the final answer.
-        const round0 = await streamingPass(llmMessages, INVOICE_AI_TOOLS, 'anthropic/claude-sonnet-4.6', controller, true)
+        // Round 0: stream with tools enabled, NOT forwarding tokens.
+        // The model returns JSON {"text":"...","actions":[...]} which must be parsed before
+        // displaying — forwarding raw tokens would leak JSON to the user.
+        // - If no tools called: emit clean text via the done event.
+        // - If tools called: execute them, then stream the final answer via streamFinalAnswer.
+        const round0 = await streamingPass(llmMessages, INVOICE_AI_TOOLS, 'anthropic/claude-sonnet-4.6', controller, false)
 
         if (!round0.tool_calls || round0.tool_calls.length === 0) {
           // Tokens were already forwarded; just send the done event with parsed actions

@@ -393,13 +393,14 @@ export function InvoiceEditor({
     if (!text || chatLoading) return
 
     const userMsg: ChatMessage = { role: 'user', text }
-    setChatMessages(prev => [...prev, userMsg])
     setChatInput('')
     setChatLoading(true)
 
-    // Add a placeholder assistant message we'll stream into
-    const placeholderIdx = chatMessages.length + 1  // user msg is at +0
-    setChatMessages(prev => [...prev, { role: 'assistant', text: '' }])
+    // Append user message and assistant placeholder atomically so placeholderIdx
+    // is always consistent with the resulting array length (avoids stale-closure issues
+    // with React 18 automatic batching when two separate setChatMessages calls run).
+    const placeholderIdx = chatMessages.length + 1  // user msg lands at +0, placeholder at +1
+    setChatMessages(prev => [...prev, userMsg, { role: 'assistant', text: '' }])
 
     try {
       const history = [...chatMessages, userMsg].map(m => ({ role: m.role, content: m.text }))
@@ -489,23 +490,45 @@ export function InvoiceEditor({
 
   /** Extract the visible text value from a partially-streamed JSON response.
    *  The model streams raw JSON like: {"text":"Hello world","actions":[...]}
-   *  We parse the "text" field progressively so the user sees clean text. */
+   *  We parse the "text" field progressively so the user sees clean text.
+   *  Uses a char-by-char walk instead of regex to correctly handle embedded
+   *  quotes and escape sequences inside the text value. */
   function extractStreamingText(raw: string): string {
     // Try full parse first (works once streaming is complete or near-complete)
     const parsed = parsePartialInvoiceText(raw)
     if (parsed !== null) return parsed
 
-    // Extract whatever is inside the "text": "..." field so far
-    const match = raw.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)/)
-    if (match) {
-      try {
-        return JSON.parse(`"${match[1]}"`)
-      } catch {
-        return match[1]
+    // Locate the "text" key
+    const textKeyIdx = raw.indexOf('"text"')
+    if (textKeyIdx === -1) return ''
+    const colonIdx = raw.indexOf(':', textKeyIdx + 6)
+    if (colonIdx === -1) return ''
+
+    // Skip whitespace to find the opening quote of the value
+    let i = colonIdx + 1
+    while (i < raw.length && (raw[i] === ' ' || raw[i] === '\t')) i++
+    if (i >= raw.length || raw[i] !== '"') return ''
+    i++ // skip opening quote
+
+    // Walk character-by-character, handling escape sequences
+    let result = ''
+    while (i < raw.length) {
+      if (raw[i] === '\\' && i + 1 < raw.length) {
+        const esc = raw[i + 1]
+        if (esc === '"') result += '"'
+        else if (esc === 'n') result += '\n'
+        else if (esc === 't') result += '\t'
+        else if (esc === '\\') result += '\\'
+        else result += esc
+        i += 2
+      } else if (raw[i] === '"') {
+        break // closing quote — string complete
+      } else {
+        result += raw[i]
+        i++
       }
     }
-
-    return ''
+    return result
   }
 
   function parsePartialInvoiceText(raw: string): string | null {
