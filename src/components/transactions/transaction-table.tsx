@@ -1277,7 +1277,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
           const group = categoryGroups.find((g) => g.categories.some((c) => c.id === rawValue))
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const categoryRef = cat && group ? { ...cat, group } as any : null
-          return { ...r, categoryId: rawValue, categoryRef }
+          return { ...r, categoryId: rawValue, category: cat?.name ?? null, categoryRef }
         }
         if (field === 'payeeId') {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1294,12 +1294,12 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
     setSavingIds((s) => new Set(s).add(id))
 
     try {
-      // For categoryId, also send the category string for backward compat
+      // For categoryId, keep the denormalised category string in sync
       const patchBody: Record<string, unknown> = { [field]: patchValue }
-      if (field === 'categoryId' && rawValue) {
+      if (field === 'categoryId') {
         const allCats = categoryGroups.flatMap((g) => g.categories)
-        const cat = allCats.find((c) => c.id === rawValue)
-        if (cat) patchBody.category = cat.name
+        const cat = rawValue ? allCats.find((c) => c.id === rawValue) : null
+        patchBody.category = cat?.name ?? null
       }
 
       const res = await fetch(`/api/transactions/${id}`, {
