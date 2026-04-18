@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { OverheadExplainerModal } from '@/components/onboarding/overhead-explainer-modal'
 
-type BusinessType = 'freelance' | 'property' | 'both' | 'personal'
+type BusinessType = 'freelance' | 'property' | 'personal'
 
 interface Option {
   type: BusinessType
@@ -33,14 +33,6 @@ const OPTIONS: Option[] = [
     categories: 0,
   },
   {
-    type: 'both',
-    title: 'Both',
-    description: 'Schedules C + E — you freelance and manage rental properties.',
-    examples: 'A consultant who also rents out a unit or two',
-    groups: 0,
-    categories: 0,
-  },
-  {
     type: 'personal',
     title: 'Personal finance',
     description: 'Track personal income and spending — not for a business.',
@@ -54,7 +46,6 @@ interface Props {
   counts: {
     freelance: { groups: number; categories: number }
     property: { groups: number; categories: number }
-    both: { groups: number; categories: number }
     personal: { groups: number; categories: number }
   }
 }
@@ -164,7 +155,7 @@ export function BusinessTypePicker({ counts }: Props) {
 
       {showOverheadModal && selected && selected !== 'personal' && (
         <OverheadExplainerModal
-          businessType={selected as 'freelance' | 'property' | 'both'}
+          businessType={selected as 'freelance' | 'property'}
           onDismiss={() => {
             setShowOverheadModal(false)
             router.push(redirectTarget)

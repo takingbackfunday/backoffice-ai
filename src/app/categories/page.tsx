@@ -50,9 +50,7 @@ export default async function CategoriesPage() {
                         ? 'Schedule C'
                         : data.businessType === 'property'
                           ? 'Schedule E'
-                          : data.businessType === 'personal'
-                            ? 'Personal finance'
-                            : 'Schedules C + E'})
+                          : 'Personal finance'})
                     </span>
                   )}
                 </p>

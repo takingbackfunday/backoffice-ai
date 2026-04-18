@@ -672,10 +672,6 @@ export function getCategoryCounts() {
       groups: propertyGroups.length,
       categories: propertyGroups.reduce((s, g) => s + g.categories.length, 0),
     },
-    both: {
-      groups: ALL_CATEGORIES.length,
-      categories: ALL_CATEGORIES.reduce((s, g) => s + g.categories.length, 0),
-    },
     personal: {
       groups: PERSONAL_CATEGORIES.length,
       categories: PERSONAL_CATEGORIES.reduce((s, g) => s + g.categories.length, 0),

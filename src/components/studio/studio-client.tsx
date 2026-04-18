@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
 import { NewClientModal, NewJobModal, NewEstimateModal, NewQuoteModal, LogTimeModal } from '@/components/studio/studio-action-modals'
+import { MarkSentModal } from '@/components/studio/mark-sent-modal'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { ActionBanner } from '@/components/ui/action-banner'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
@@ -76,6 +77,14 @@ interface Props {
 }
 
 type View = 'open' | 'paid' | 'all'
+
+interface PendingMarkSentItem {
+  invoiceId: string
+  invoiceNumber: string
+  projectId: string
+  projectSlug: string
+  downloadedAt: number
+}
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
@@ -867,6 +876,20 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [showNewQuoteModal, setShowNewQuoteModal] = useState(false)
   const [showLogTimeModal, setShowLogTimeModal] = useState(false)
   const [suggestionTxCount] = useState(pendingSuggestions)
+  const [pendingMarkSent, setPendingMarkSent] = useState<PendingMarkSentItem[]>([])
+  const [markSentTarget, setMarkSentTarget] = useState<PendingMarkSentItem | null>(null)
+
+  // Load pending mark-as-sent notifications from localStorage on mount
+  useEffect(() => {
+    try {
+      const key = 'pending-mark-sent'
+      const raw: PendingMarkSentItem[] = JSON.parse(localStorage.getItem(key) ?? '[]')
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+      const fresh = raw.filter(item => item.downloadedAt > sevenDaysAgo)
+      if (fresh.length !== raw.length) localStorage.setItem(key, JSON.stringify(fresh))
+      setPendingMarkSent(fresh)
+    } catch {}
+  }, [])
 
   const flat: FlatInvoice[] = useMemo(() =>
     clients.flatMap(c =>
@@ -940,8 +963,18 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       onClick: () => router.push(`/projects/${uninvoiced[0].clientSlug}/quotes`),
     })
 
+    // PDF downloaded but not yet marked as sent
+    for (const item of pendingMarkSent) {
+      items.push({
+        dot: '#6366f1',
+        label: `${item.invoiceNumber} — downloaded but not marked sent`,
+        detail: 'Click to review and mark as sent',
+        onClick: () => setMarkSentTarget(item),
+      })
+    }
+
     return items
-  }, [flat, clients, clientFilter, router])
+  }, [flat, clients, clientFilter, router, pendingMarkSent])
 
   if (clients.length === 0) {
     return (
@@ -1401,6 +1434,16 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         <LogTimeModal
           clients={clients.map(c => ({ id: c.id, name: c.name, slug: c.slug, jobs: c.jobs }))}
           onClose={() => setShowLogTimeModal(false)}
+        />
+      )}
+      {markSentTarget && (
+        <MarkSentModal
+          item={markSentTarget}
+          onDone={() => {
+            setPendingMarkSent(prev => prev.filter(i => i.invoiceId !== markSentTarget.invoiceId))
+            setMarkSentTarget(null)
+            router.refresh()
+          }}
         />
       )}
     </div>

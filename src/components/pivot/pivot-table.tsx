@@ -4,14 +4,10 @@ import { useState } from 'react'
 import type { PivotResult, PivotConfig, AggregationType } from '@/lib/pivot/types'
 import { FIELD_DEFINITIONS } from '@/lib/pivot/field-definitions'
 import { formatValue } from '@/lib/pivot/engine'
-import { PivotFilterDropdown } from './pivot-filter-dropdown'
 
 interface PivotTableProps {
   result: PivotResult
   config: PivotConfig
-  uniqueValues: Record<string, string[]>
-  onSetFilter: (key: string, values: string[]) => void
-  onClearFilter: (key: string) => void
 }
 
 function getLabel(key: string) {
@@ -24,9 +20,8 @@ function cellClass(value: number): string {
   return 'text-muted-foreground'
 }
 
-export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearFilter }: PivotTableProps) {
+export function PivotTable({ result, config }: PivotTableProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-  const [openFilterField, setOpenFilterField] = useState<string | null>(null)
 
   const { flatRows, groups, colKeys, colTotals, grandTotal } = result
   const { rows, cols, viewMode, showSubtotals, showGrandTotals, aggregation, filterValues } = config
@@ -76,39 +71,13 @@ export function PivotTable({ result, config, uniqueValues, onSetFilter, onClearF
             className="sticky z-10 bg-background px-3 py-2 text-left text-sm font-semibold border-b border-r whitespace-nowrap"
             style={stickyStyle(i)}
           >
-            <span>{getLabel(rowField)}</span>
-            {i === 0 && (
-              <PivotFilterDropdown
-                fieldKey={rowField}
-                fieldLabel={getLabel(rowField)}
-                uniqueValues={uniqueValues[rowField] ?? []}
-                activeValues={filterValues[rowField] ?? []}
-                onApply={v => onSetFilter(rowField, v)}
-                onClear={() => onClearFilter(rowField)}
-                isOpen={openFilterField === rowField}
-                onOpen={() => setOpenFilterField(rowField)}
-                onClose={() => setOpenFilterField(null)}
-              />
-            )}
+            {getLabel(rowField)}
           </th>
         ))}
         {hasColData ? (
-          displayColKeys.map((ck, i) => (
+          displayColKeys.map((ck) => (
             <th key={ck} className="px-3 py-2 text-right text-sm font-semibold border-b whitespace-nowrap">
               {ck}
-              {i === 0 && cols.length === 1 && (
-                <PivotFilterDropdown
-                  fieldKey={cols[0]}
-                  fieldLabel={getLabel(cols[0])}
-                  uniqueValues={uniqueValues[cols[0]] ?? []}
-                  activeValues={filterValues[cols[0]] ?? []}
-                  onApply={v => onSetFilter(cols[0], v)}
-                  onClear={() => onClearFilter(cols[0])}
-                  isOpen={openFilterField === `col-${cols[0]}`}
-                  onOpen={() => setOpenFilterField(`col-${cols[0]}`)}
-                  onClose={() => setOpenFilterField(null)}
-                />
-              )}
             </th>
           ))
         ) : null}

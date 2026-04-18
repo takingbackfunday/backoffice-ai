@@ -5,7 +5,7 @@ import { seedDefaultCategories, type BusinessType } from '@/lib/seed-categories'
 import { parsePreferences } from '@/types/preferences'
 import { generateSlug } from '@/lib/slug'
 
-const VALID_TYPES: BusinessType[] = ['freelance', 'property', 'both', 'personal']
+const VALID_TYPES: BusinessType[] = ['freelance', 'property', 'personal']
 
 export async function POST(request: Request) {
   try {
@@ -58,7 +58,6 @@ export async function POST(request: Request) {
     const redirectTo =
       businessType === 'freelance' ? '/studio?onboarding=1' :
       businessType === 'property'  ? '/portfolio?onboarding=1' :
-      businessType === 'both'      ? '/dashboard?onboarding=1' :
       '/bank-accounts?onboarding=1'
 
     return ok({ businessType, overheadWorkspace, redirectTo })

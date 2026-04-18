@@ -56,25 +56,60 @@ export function DropZone({
       {fields.length === 0 ? (
         <p className="text-[10px] text-muted-foreground/60 italic">Drag fields here</p>
       ) : (
-        <div className="flex flex-wrap gap-1">
-          {fields.map(key => (
-            <FieldPill
-              key={key}
-              fieldKey={key}
-              label={getLabel(key)}
-              zone={zone}
-              isFiltered={(filterValues[key]?.length ?? 0) > 0}
-              onRemove={() => onRemove(key)}
-              onDragStart={e => {
-                e.dataTransfer.setData('text/plain', JSON.stringify({ key, from: zone }))
-                onFieldDragStart(key, zone)
-              }}
-              uniqueValues={uniqueValues[key] ?? []}
-              activeFilterValues={filterValues[key] ?? []}
-              onFilter={values => onFilter(key, values)}
-              onClearFilter={() => onClearFilter(key)}
-            />
-          ))}
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap gap-1">
+            {fields.map(key => (
+              <FieldPill
+                key={key}
+                fieldKey={key}
+                label={getLabel(key)}
+                zone={zone}
+                isFiltered={(filterValues[key]?.length ?? 0) > 0}
+                onRemove={() => onRemove(key)}
+                onDragStart={e => {
+                  e.dataTransfer.setData('text/plain', JSON.stringify({ key, from: zone }))
+                  onFieldDragStart(key, zone)
+                }}
+                uniqueValues={uniqueValues[key] ?? []}
+                activeFilterValues={filterValues[key] ?? []}
+                onFilter={values => onFilter(key, values)}
+                onClearFilter={() => onClearFilter(key)}
+              />
+            ))}
+          </div>
+          {fields.some(key => (filterValues[key]?.length ?? 0) > 0) && (
+            <div className="flex flex-col gap-0.5">
+              {fields.filter(key => (filterValues[key]?.length ?? 0) > 0).map(key => (
+                <div key={key} className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[10px] text-muted-foreground shrink-0">{getLabel(key)}:</span>
+                  {filterValues[key].slice(0, 4).map(val => (
+                    <span key={val} className="inline-flex items-center gap-0.5 px-1 py-0 rounded bg-indigo-100 text-indigo-700 text-[10px] border border-indigo-200 leading-4">
+                      {val || '(blank)'}
+                      <button
+                        onClick={() => {
+                          const remaining = filterValues[key].filter(v => v !== val)
+                          remaining.length > 0 ? onFilter(key, remaining) : onClearFilter(key)
+                        }}
+                        className="opacity-50 hover:opacity-100 leading-none ml-0.5"
+                        aria-label={`Remove filter ${val}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  {filterValues[key].length > 4 && (
+                    <span className="text-[10px] text-indigo-500">+{filterValues[key].length - 4} more</span>
+                  )}
+                  <button
+                    onClick={() => onClearFilter(key)}
+                    className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                  >
+                    clear
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

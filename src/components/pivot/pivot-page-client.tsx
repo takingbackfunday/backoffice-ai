@@ -265,9 +265,6 @@ export function PivotPageClient() {
       <PivotTable
         result={pivotResult}
         config={config}
-        uniqueValues={uniqueValues}
-        onSetFilter={setFieldFilter}
-        onClearFilter={clearFieldFilter}
       />
     </div>
   )

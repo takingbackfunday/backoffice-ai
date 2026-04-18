@@ -341,6 +341,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* 1. Edit */}
           {!['PAID', 'VOID'].includes(invoice.status) && (
             <Link
               href={`/projects/${projectSlug}/invoices/${invoice.id}/edit`}
@@ -349,33 +350,22 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
               <Pencil className="h-3 w-3" /> Edit
             </Link>
           )}
-          <a
-            href={`/api/projects/${projectId}/invoices/${invoice.id}/pdf`}
-            download
-            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
-          >
-            <Download className="h-3 w-3" /> Download PDF
-          </a>
-          {emailStatus && <span className="text-xs text-green-600">{emailStatus}</span>}
-          {invoice.status !== 'VOID' && invoice.status !== 'PAID' && (
-            <>
-              {invoice.status === 'DRAFT' && (
-                <button type="button" onClick={() => openSend(false)} className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition-colors">
-                  Send invoice
-                </button>
-              )}
-              {(invoice.status === 'SENT' || invoice.status === 'PARTIAL') && (
-                <button type="button" onClick={() => openSend(true)} className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
-                  Send reminder
-                </button>
-              )}
-            </>
-          )}
+
+          {/* 2. Renegotiate — with EDUX tooltip */}
           {['DRAFT', 'SENT', 'PARTIAL', 'OVERDUE'].includes(invoice.status) && !replacedBy && (
-            <button type="button" onClick={() => setShowRenegotiateConfirm(true)} className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-              <RefreshCw className="h-3 w-3" /> Renegotiate
-            </button>
+            <div className="relative group">
+              <button type="button" onClick={() => setShowRenegotiateConfirm(true)} className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                <RefreshCw className="h-3 w-3" /> Renegotiate
+              </button>
+              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-72 rounded-lg border bg-popover px-3 py-2.5 text-xs text-popover-foreground shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                <p className="font-semibold mb-1">What is renegotiation?</p>
+                <p className="text-muted-foreground leading-relaxed">Voids this invoice and opens a new draft with a credit line for any payments already received. Use this when a client disputes the amount or terms change after sending.</p>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-border" />
+              </div>
+            </div>
           )}
+
+          {/* 3. Delete (DRAFT only) */}
           {invoice.status === 'DRAFT' && (
             <button
               type="button"
@@ -389,6 +379,71 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
               Delete
             </button>
           )}
+
+          {/* 4. Send invoice (DRAFT) / Send reminder (SENT/PARTIAL) */}
+          {emailStatus && <span className="text-xs text-green-600">{emailStatus}</span>}
+          {invoice.status === 'DRAFT' && (
+            <button type="button" onClick={() => openSend(false)} className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition-colors">
+              Send invoice
+            </button>
+          )}
+          {(invoice.status === 'SENT' || invoice.status === 'PARTIAL') && (
+            <button type="button" onClick={() => openSend(true)} className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
+              Send reminder
+            </button>
+          )}
+
+          {/* 5. Mark as sent (DRAFT only — manual override when emailing outside the app) */}
+          {invoice.status === 'DRAFT' && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm('Mark this invoice as sent? This moves it into your Outstanding balance.')) return
+                await updateStatus('SENT')
+              }}
+              className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              Mark as sent
+            </button>
+          )}
+
+          {/* 6. Preview PDF — opens in new tab */}
+          <a
+            href={`/api/projects/${projectId}/invoices/${invoice.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
+          >
+            Preview PDF
+          </a>
+
+          {/* 7. Download PDF — triggers download and queues mark-as-sent notification */}
+          <button
+            type="button"
+            onClick={() => {
+              const a = document.createElement('a')
+              a.href = `/api/projects/${projectId}/invoices/${invoice.id}/pdf`
+              a.download = `${invoice.invoiceNumber}.pdf`
+              document.body.appendChild(a)
+              a.click()
+              document.body.removeChild(a)
+
+              // Queue a studio notification only for DRAFT invoices
+              if (invoice.status !== 'DRAFT') return
+              try {
+                const key = 'pending-mark-sent'
+                const existing: { invoiceId: string; invoiceNumber: string; projectId: string; projectSlug: string; downloadedAt: number }[] = JSON.parse(localStorage.getItem(key) ?? '[]')
+                if (existing.some(e => e.invoiceId === invoice.id)) return
+                existing.push({ invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, projectId, projectSlug, downloadedAt: Date.now() })
+                localStorage.setItem(key, JSON.stringify(existing))
+              } catch {}
+            }}
+            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
+          >
+            <Download className="h-3 w-3" /> Download PDF
+          </button>
+
+          {/* 8. Void (non-VOID, non-PAID, non-DRAFT) */}
           {invoice.status !== 'VOID' && invoice.status !== 'PAID' && invoice.status !== 'DRAFT' && (
             <button type="button" onClick={() => { if (confirm('Void this invoice? This cannot be undone.')) updateStatus('VOID') }} className="rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-destructive hover:border-destructive transition-colors">
               Void
