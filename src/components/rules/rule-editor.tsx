@@ -175,6 +175,8 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
     console.log('[LivePreview] runPreview defs:', defs)
     if (defs.length === 0) { setResults([]); setMatchCount(0); return }
     setLoading(true)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
     try {
       const payload = { conditions: { op, defs } }
       console.log('[LivePreview] POST /api/rules/preview', JSON.stringify(payload))
@@ -182,6 +184,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       })
       console.log('[LivePreview] response status:', res.status)
       const json = await res.json()
@@ -195,6 +198,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
       setResults([])
       setMatchCount(0)
     } finally {
+      clearTimeout(timeoutId)
       setLoading(false)
     }
   }, [conditions, op, buildDefs])
