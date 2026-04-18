@@ -34,10 +34,11 @@ interface Props {
   clients: ClientOption[]
   paymentMethods: PaymentMethods
   invoiceDefaults?: InvoiceDefaults
+  hasTransactions?: boolean
   onClose: () => void
 }
 
-export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, onClose }: Props) {
+export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, hasTransactions = true, onClose }: Props) {
   const [selectedClientId, setSelectedClientId] = useState('')
   const [showNewClient, setShowNewClient] = useState(false)
   const [newClientName, setNewClientName] = useState('')
@@ -193,6 +194,7 @@ export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, o
                 projectSlug={selectedClient.slug}
                 clientName={selectedClient.contactName ?? selectedClient.name}
                 acceptedQuotes={selectedClient.acceptedQuotes}
+                hasTransactions={hasTransactions}
               />
               <InvoiceEditor
                 key={selectedClient.id}

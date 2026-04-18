@@ -72,6 +72,7 @@ interface Props {
   invoiceDefaults?: InvoiceDefaults
   isOnboarding?: boolean
   hasOverheadWorkspace?: boolean
+  hasTransactions?: boolean
 }
 
 type View = 'open' | 'paid' | 'all'
@@ -850,7 +851,7 @@ function InvoicePreviewModal({ inv: initial, clientId, clientName, clientSlug, o
 
 type FlatInvoice = Invoice & { clientId: string; clientName: string; clientSlug: string; clientCompany: string | null }
 
-export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults, isOnboarding = false, hasOverheadWorkspace = true }: Props) {
+export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults, isOnboarding = false, hasOverheadWorkspace = true, hasTransactions = true }: Props) {
   const router = useRouter()
   const [previewInv, setPreviewInv] = useState<FlatInvoice | null>(null)
   const [kpis, setKpis] = useState(initialKpis)
@@ -1035,7 +1036,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
 
         {/* Take action — 2-column pill buttons */}
-        <div>
+        <div style={{ border: '1.5px solid #e0ddd5', borderRadius: 10, padding: '10px 12px', background: '#fafaf8' }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Take action</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
             {[
@@ -1044,8 +1045,8 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               { label: 'New job',      onClick: () => setShowNewJobModal(true) },
               { label: 'New quote',    onClick: () => setShowNewQuoteModal(true) },
               { label: 'Log time',     onClick: () => setShowLogTimeModal(true) },
-              { label: 'Add receipt',  onClick: () => router.push('/receipts?upload=1') },
               { label: 'New estimate', onClick: () => setShowNewEstimateModal(true) },
+              { label: 'Add receipt',  onClick: () => router.push('/receipts?upload=1') },
             ].map(item => (
               <button
                 key={item.label}
@@ -1357,6 +1358,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           clients={clients}
           paymentMethods={paymentMethods}
           invoiceDefaults={invoiceDefaults}
+          hasTransactions={hasTransactions}
           onClose={() => setShowInvoiceModal(false)}
         />
       )}

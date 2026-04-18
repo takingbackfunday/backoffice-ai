@@ -59,7 +59,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
     receiptCounts.map(r => [r.workspaceId, r._count.id])
   )
 
-  const [prefs, pendingSuggestions, recentPaymentsCount] = await Promise.all([
+  const [prefs, pendingSuggestions, recentPaymentsCount, txCount] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId } }),
     prisma.invoicePaymentSuggestion.count({ where: { userId, status: 'PENDING' } }),
     prisma.invoicePayment.count({
@@ -73,6 +73,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
         },
       },
     }),
+    prisma.transaction.count({ where: { userId } }),
   ])
   const prefsData = parsePreferences(prefs?.data)
   const paymentMethods = prefsData.paymentMethods ?? {}
@@ -95,7 +96,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
       })
 
       const outstanding = invoicesWithTotals
-        .filter(({ inv }) => inv.status !== 'VOID' && inv.status !== 'PAID')
+        .filter(({ inv }) => inv.status === 'SENT' || inv.status === 'PARTIAL' || inv.status === 'OVERDUE')
         .reduce((s, { total, paid }) => s + (total - paid), 0)
 
       return {
@@ -161,7 +162,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
   ).length
 
   const totalOutstanding = allInvoices
-    .filter(({ inv }) => inv.status !== 'VOID' && inv.status !== 'PAID')
+    .filter(({ inv }) => inv.status === 'SENT' || inv.status === 'PARTIAL' || inv.status === 'OVERDUE')
     .reduce((s, { total, paid }) => s + (total - paid), 0)
 
   const revenueThisMonth = allInvoices
@@ -185,7 +186,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
             <h1 className="text-xl font-bold">Client Hub</h1>
             <p className="text-sm text-muted-foreground">Overview of your client projects and invoices</p>
           </div>
-          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} invoiceDefaults={invoiceDefaults} isOnboarding={isOnboarding} hasOverheadWorkspace={!!overheadWorkspace} />
+          <StudioClient clients={clients} kpis={kpis} paymentMethods={paymentMethods} pendingSuggestions={pendingSuggestions} recentPaymentsCount={recentPaymentsCount} invoiceDefaults={invoiceDefaults} isOnboarding={isOnboarding} hasOverheadWorkspace={!!overheadWorkspace} hasTransactions={txCount > 0} />
         </main>
       </div>
     </div>

@@ -251,7 +251,7 @@ export function InvoiceEditor({
   const [state, dispatch] = useReducer(reducer, initial)
 
   // AI chat
-  const [chatVisible, setChatVisible] = useState(mode === 'create')
+  const [chatVisible, setChatVisible] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     { role: 'assistant', text: mode === 'create'
       ? `Hi! I can help you build this invoice for ${clientName}. Just describe the work — I'll fill in the line items, due date, and notes.`
@@ -1146,6 +1146,15 @@ export function InvoiceEditor({
               {finalizing ? 'Reviewing…' : 'AI Finalize'}
             </button>
 
+            <button
+              type="button"
+              onClick={() => setChatVisible(v => !v)}
+              className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {chatVisible ? 'Close AI Chat' : 'AI Chat'}
+            </button>
+
             <div className="flex-1" />
 
             <button
@@ -1172,18 +1181,6 @@ export function InvoiceEditor({
           </div>
         </div>
       </div>
-
-      {/* ── AI chat toggle (always visible) ─────────────────────── */}
-      {!chatVisible && (
-        <button
-          type="button"
-          onClick={() => setChatVisible(true)}
-          className="fixed right-6 bottom-6 flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all hover:scale-105 z-50"
-        >
-          <Sparkles className="h-4 w-4" />
-          AI Chat
-        </button>
-      )}
 
       {/* ── RIGHT: AI chat panel ─────────────────────────────────── */}
       {chatVisible && (

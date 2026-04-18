@@ -103,11 +103,14 @@ export default async function NewInvoicePage({ params }: PageParams) {
   if (!project.clientProfile) notFound()
   const cp = project.clientProfile
 
-  const acceptedQuotes = await prisma.quote.findMany({
-    where: { clientProfileId: cp.id, status: 'ACCEPTED' },
-    select: { id: true, quoteNumber: true, title: true, totalQuoted: true, currency: true },
-    orderBy: { createdAt: 'desc' },
-  })
+  const [acceptedQuotes, txCount] = await Promise.all([
+    prisma.quote.findMany({
+      where: { clientProfileId: cp.id, status: 'ACCEPTED' },
+      select: { id: true, quoteNumber: true, title: true, totalQuoted: true, currency: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.transaction.count({ where: { userId } }),
+  ])
 
   return (
     <div className="flex min-h-screen">
@@ -135,10 +138,12 @@ export default async function NewInvoicePage({ params }: PageParams) {
             </Link>
             <h2 className="text-lg font-semibold">New Invoice</h2>
           </div>
+          <div className="max-w-3xl">
           <NewInvoiceShortcuts
             projectId={project.id}
             projectSlug={slug}
             clientName={cp.contactName ?? project.name}
+            hasTransactions={txCount > 0}
             acceptedQuotes={acceptedQuotes.map(q => ({
               id: q.id,
               quoteNumber: q.quoteNumber,
@@ -166,6 +171,7 @@ export default async function NewInvoicePage({ params }: PageParams) {
               notes: invoiceDefaults.notes ?? '',
             } : undefined}
           />
+          </div>
         </main>
       </div>
     </div>
