@@ -9,7 +9,7 @@ import {
   type RulesSseEvent,
   type RulesContext,
 } from '@/lib/agent/rules-tools'
-import { dispatchTool } from '@/lib/agent/finance-tools'
+
 
 // ── SSE helper ────────────────────────────────────────────────────────────────
 
@@ -21,29 +21,27 @@ function encode(event: RulesSseEvent): Uint8Array {
 
 const SYSTEM_PROMPT = `You are an expert financial categorisation assistant. Your job is to analyse the user's transaction data and suggest high-quality automation rules.
 
-ALL data is pre-loaded in the user message. Do NOT call get_rules, get_categories, get_uncategorised_transactions, get_no_payee_transactions, get_payees, get_ruleless_patterns, get_project_transactions, or get_transfer_candidates — the data is already there.
-
 CRITICAL — CATEGORY NAMES:
-- The user message contains an "AVAILABLE CATEGORIES" section. Read it FIRST before doing anything else.
+- Call get_categories FIRST. Read that list before doing anything else.
 - categoryName MUST be copied VERBATIM (exact spelling, exact capitalisation) from that list.
 - Do NOT use generic names like "Housing", "Education", "Food", "Transport", "Transfers & other" unless those exact strings appear in the list.
 - The taxonomy is user-specific — it may be IRS Schedule C, Schedule E, or personal finance categories. Only use what is in the list.
 - If no category fits perfectly, pick the closest match from the list. Never invent a name.
 
 Workflow:
-1. Read the AVAILABLE CATEGORIES list carefully — identify the exact category name for each merchant group
-2. Call record_plan FIRST — before any other tool. List your TOP 20 merchant groups in ONE LINE EACH: "merchant → category (payee: PayeeName) [project: ProjectName]" or "merchant → SKIP (reason)". Only include [project: X] when the pattern clearly belongs to one project. Do NOT add explanatory notes, transaction counts, or reasoning — just the one-line mapping per merchant. The execution model copies payee and project names directly from this plan, so spell them correctly. Do NOT call query_transactions before record_plan.
+1. Call get_categories, get_uncategorised_transactions, get_no_payee_transactions, get_rules, get_ruleless_patterns, get_project_transactions, get_transfer_candidates, and get_payees in a SINGLE response (call them all at once)
+2. Call record_plan — list your TOP 20 merchant groups in ONE LINE EACH: "merchant → category (payee: PayeeName) [project: ProjectName]" or "merchant → SKIP (reason)". Only include [project: X] when the pattern clearly belongs to one project. Do NOT add explanatory notes, transaction counts, or reasoning — just the one-line mapping per merchant. The execution model copies payee and project names directly from this plan, so spell them correctly. Do NOT call query_transactions before record_plan.
 3. Emit ALL suggestions in a SINGLE round by calling emit_rule_suggestion multiple times in one response — do NOT spread them across multiple rounds
 4. If any suggestion is rejected for a bad categoryName or workspaceName, look at the full list in the rejection message and resubmit with the correct name immediately
 5. Call finish_analysis
 
 SOURCES OF PATTERNS — SELF-LEARNING:
-The user message contains FIVE sources of patterns. Treat all five equally:
-1. UNCATEGORISED TRANSACTIONS — no category yet; suggest a category + payee rule
-2. TRANSACTIONS WITH CATEGORY BUT NO PAYEE — already categorised; suggest a payee-assignment rule that reinforces the user's manual work
-3. ALREADY-LABELLED PATTERNS WITHOUT A RULE — the user manually tagged these; create rules to automate future occurrences. Use the "category" field shown to confirm the right category name
-4. PROJECT-TAGGED TRANSACTIONS WITHOUT A PROJECT RULE — the user assigned these to a project; create rules so future similar transactions are auto-assigned. Set workspaceName from the "project" field shown
-5. ACCOUNT TRANSFER CANDIDATES — same-day debit/credit pairs across different accounts whose amounts match closely. These are almost certainly internal fund movements (bank transfer, moving money between accounts). Suggest a rule with category "Account transfer" (or the closest match in the AVAILABLE CATEGORIES list) for the description keywords found on each side. Transfer rules are HIGH priority — they prevent fund movements from inflating spending or income reports. Use description contains with the common keyword from the debit or credit side.
+Use tools to fetch FIVE sources of patterns. Treat all five equally:
+1. get_uncategorised_transactions — no category yet; suggest a category + payee rule
+2. get_no_payee_transactions — already categorised; suggest a payee-assignment rule that reinforces the user's manual work
+3. get_ruleless_patterns — the user manually tagged these; create rules to automate future occurrences. Use the "category" field shown to confirm the right category name
+4. get_project_transactions — the user assigned these to a project; create rules so future similar transactions are auto-assigned. Set workspaceName from the "project" field shown
+5. get_transfer_candidates — same-day debit/credit pairs across different accounts whose amounts match closely. These are almost certainly internal fund movements (bank transfer, moving money between accounts). Suggest a rule with category "Account transfer" (or the closest match in the AVAILABLE CATEGORIES list) for the description keywords found on each side. Transfer rules are HIGH priority — they prevent fund movements from inflating spending or income reports. Use description contains with the common keyword from the debit or credit side.
 
 PAYEE ASSIGNMENT — CRITICAL:
 - ALWAYS set payeeName on every suggestion where the merchant/counterparty is identifiable — this means nearly every suggestion should have a payee
@@ -174,8 +172,8 @@ export async function GET() {
 
 Focus first on patterns from the last 18 months (since ${recentCutoff.toISOString().slice(0, 10)}). The full history is available via query_transactions if a pattern spans a longer period.`
 
-        // ── Step 2: pre-load context + pre-fetch all data ─────────────────
-        send({ type: 'status', message: 'Pre-loading transaction index…' })
+        // ── Step 2: load validation context (needed for emit_rule_suggestion) ──
+        send({ type: 'status', message: 'Loading rules context…' })
 
         const preloaded = await loadRulesContext(userId)
 
@@ -185,80 +183,15 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
           coveredThisRun: new Set<string>(),
         }
 
-        // Pre-fetch all data the LLM would normally call tools to get.
-        send({ type: 'status', message: 'Fetching transaction data…' })
-        const [uncatData, catsData, noPayeeData, payeesData, rulesData, rulelessData, projectTxData, transferData] = await Promise.all([
-          dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 25 }, ctx),
-          dispatchRulesTool(userId, 'get_categories', {}, ctx),
-          dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 15 }, ctx),
-          dispatchTool(userId, 'get_payees', {}),
-          dispatchRulesTool(userId, 'get_rules', {}, ctx),
-          dispatchRulesTool(userId, 'get_ruleless_patterns', { topN: 20 }, ctx),
-          dispatchRulesTool(userId, 'get_project_transactions', { topN: 15 }, ctx),
-          dispatchRulesTool(userId, 'get_transfer_candidates', { topN: 20 }, ctx),
-        ])
-
-        // Build available projects list from workspaceMap
-        const projectsList = preloaded.workspaceMap.size > 0
-          ? [...preloaded.workspaceMap.keys()].map((n) => `  ${n}`).join('\n')
-          : '  (no projects set up)'
-
-        // ── Step 3: single LLM round to emit suggestions ──────────────────
-        console.log(`[rules-agent:${runId}] context`, JSON.stringify({
-          categoriesLen: catsData.length,
-          uncategorisedLen: uncatData.length,
-          payeesLen: payeesData.length,
-          rulesLen: rulesData.length,
-          noPayeeLen: noPayeeData.length,
-          rulelessLen: rulelessData.length,
-          projectTxLen: projectTxData.length,
-          transferLen: transferData.length,
-          // Log the first 800 chars of the categories list so we can see what the LLM has
-          categoriesPreview: catsData.slice(0, 800),
-          // Log the first 600 chars of uncategorised groups
-          uncategorisedPreview: uncatData.slice(0, 600),
+        // ── Step 3: start LLM — it will call tools lazily ─────────────────
+        console.log(`[rules-agent:${runId}] context loaded`, JSON.stringify({
+          categoryCount: preloaded.categoryMap.size,
+          workspaceCount: preloaded.workspaceMap.size,
         }))
 
         send({ type: 'status', message: 'Ready — starting analysis…' })
 
-        const userMessage = `${snapshot}
-
---- AVAILABLE CATEGORIES (copy names VERBATIM from this list) ---
-${catsData}
-
---- AVAILABLE PROJECTS (copy names VERBATIM when setting workspaceName) ---
-${projectsList}
-
---- EXISTING PAYEES (reuse exact spelling if the merchant matches) ---
-${payeesData}
-
---- EXISTING RULES (SKIP merchants already covered here — do not suggest duplicate rules) ---
-${rulesData}
-
---- UNCATEGORISED TRANSACTIONS NOT COVERED BY EXISTING RULES (top 25 by spend) ---
-${uncatData}
-
---- TRANSACTIONS WITH CATEGORY BUT NO PAYEE (top 15) ---
-${noPayeeData}
-
---- ALREADY-LABELLED PATTERNS WITHOUT A RULE (top 20 by count) ---
-These transactions were manually tagged by the user. Formalise them as rules so future transactions are auto-labelled. Use the "category" and "payee" fields shown — do NOT change what the user already decided.
-${rulelessData}
-
---- PROJECT-TAGGED TRANSACTIONS WITHOUT A PROJECT RULE (top 15) ---
-These transactions already have a project assigned. Create rules so future similar transactions are automatically assigned to the same project. Set workspaceName using the "project" field shown (copy VERBATIM from AVAILABLE PROJECTS).
-${projectTxData}
-
---- ACCOUNT TRANSFER CANDIDATES (same-day matching debit/credit across different accounts) ---
-These are likely internal fund movements. Suggest an "Account transfer" rule (or the closest category in the list above) for each distinct description pattern seen here. HIGH PRIORITY — transfer rules prevent fund movements from inflating spending or income totals.
-${transferData}
-
-Instructions:
-1. Call record_plan listing every merchant group you spotted → category → payee → [project if applicable]
-2. Emit ALL suggestions in ONE response (call emit_rule_suggestion multiple times at once)
-3. Use the "descriptions" field to pick the right keyword for each condition
-4. If a suggestion is rejected, fix and resubmit immediately
-5. Call finish_analysis`
+        const userMessage = snapshot
 
         const messages: ChatMessage[] = [
           { role: 'system', content: SYSTEM_PROMPT },
@@ -277,9 +210,9 @@ Instructions:
         const MAX_TOTAL_REJECTIONS = 12
 
         // Two-model strategy:
-        // - Sonnet 4.6 → round 1 (record_plan only): deep reasoning on ambiguous merchants/categories
+        // - Sonnet 4.6 → rounds 0 & 1: fetch all data (round 0), then record_plan (round 1)
         // - Haiku 4.5  → rounds 2-N: fast bulk emission guided by the Sonnet plan
-        // - Sonnet 4.6 → one final cleanup round if Haiku leaves unresolved rejections
+        // - Sonnet 4.6 → one final cleanup round if Haiku leaves unresolved rejections (user msg injected)
         const STRATEGY_MODEL = 'anthropic/claude-sonnet-4.6'
         const EXECUTION_MODEL = 'anthropic/claude-haiku-4.5'
 
@@ -287,14 +220,14 @@ Instructions:
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           if (hardTimedOut) break
 
-          // Round 1: Sonnet reasons and plans. Escalation rounds (user message injected): Sonnet cleans up.
-          // All other rounds: Haiku executes fast.
+          // Rounds 0-1: Sonnet fetches data and plans. Escalation rounds (user message injected): Sonnet cleans up.
+          // Round 2+: Haiku executes fast.
           const lastMsg = messages.at(-1)
-          const isStrategyRound = round === 0 || (lastMsg?.role === 'user' && round > 0)
+          const isStrategyRound = round <= 1 || (lastMsg?.role === 'user' && round > 0)
           const model = isStrategyRound ? STRATEGY_MODEL : EXECUTION_MODEL
 
           console.log(`[rules-agent:${runId}] round:start`, JSON.stringify({ round: round + 1, model, messages: messages.length, emitCount, lastRole: messages.at(-1)?.role }))
-          send({ type: 'status', message: round === 0 ? 'Sonnet reasoning…' : `Haiku emitting (round ${round + 1})…` })
+          send({ type: 'status', message: round === 0 ? 'Fetching data…' : round === 1 ? 'Sonnet planning…' : `Haiku emitting (round ${round + 1})…` })
           const response = await openrouterWithTools(messages, RULES_TOOLS, model)
 
           // Push assistant message — omit content when null/empty alongside tool_calls
@@ -330,19 +263,10 @@ Instructions:
               args = {}
             }
 
-            // Round 1: block queries before record_plan — Opus must plan first
-            if (round === 0 && !roundHasRecordPlan && (toolName === 'query_transactions' || toolName === 'search_transactions')) {
+            // Rounds 1+: block queries before record_plan — model must plan before investigating
+            if (round >= 1 && !roundHasRecordPlan && !everEmitted && (toolName === 'query_transactions' || toolName === 'search_transactions')) {
               messages.push({ role: 'tool', tool_call_id: tc.id, content: 'You must call record_plan FIRST before querying transactions. Call record_plan now with your analysis plan, then you may query for additional detail.' })
               roundOutcomes.push({ tool: toolName, status: 'blocked:no-plan-yet', detail: '' })
-              continue
-            }
-
-            // Block pre-loaded tools — data is already in the user message
-            const PRELOADED = ['get_rules', 'get_categories', 'get_uncategorised_transactions', 'get_no_payee_transactions', 'get_payees', 'get_ruleless_patterns', 'get_project_transactions', 'get_transfer_candidates']
-            if (PRELOADED.includes(toolName)) {
-              const msg = `This data is already pre-loaded in the user message above. Do not call ${toolName} again — use the data already provided and emit your suggestions.`
-              messages.push({ role: 'tool', tool_call_id: tc.id, content: msg })
-              roundOutcomes.push({ tool: toolName, status: 'blocked:preloaded', detail: '' })
               continue
             }
 
