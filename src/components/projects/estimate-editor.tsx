@@ -347,9 +347,73 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
   async function handleAiSend() {
     if (!aiInput.trim() || aiLoading) return
     const userMsg = { role: 'user' as const, text: aiInput }
-    setAiMessages(prev => [...prev, userMsg])
     setAiInput('')
     setAiLoading(true)
+
+    // Append user message and assistant placeholder atomically (same pattern as invoice-editor)
+    const placeholderIdx = aiMessages.length + 1
+    setAiMessages(prev => [...prev, userMsg, { role: 'assistant', text: '' }])
+
+    const toItems = (items: AiItem[]) => (items ?? []).map((i: AiItem) => ({
+      id: crypto.randomUUID(),
+      description: i.description ?? '',
+      hours: i.hours?.toString() ?? '',
+      costRate: i.costRate?.toString() ?? '',
+      quantity: (i.quantity ?? 1).toString(),
+      unit: i.unit ?? 'hrs',
+      tags: (i.tags ?? []).join(', '),
+      isOptional: i.isOptional ?? false,
+      internalNotes: i.internalNotes ?? '',
+      riskLevel: i.riskLevel ?? 'low',
+    }))
+
+    function applyActions(actions: AiActionDef[]) {
+      for (const action of (actions ?? [])) {
+        if (action.type === 'set_sections' && action.sections) {
+          dispatch({
+            type: 'set_sections',
+            sections: action.sections.map((s: AiSection) => ({
+              id: crypto.randomUUID(),
+              name: s.name,
+              collapsed: false,
+              items: toItems(s.items ?? []),
+            })),
+          })
+        } else if (action.type === 'add_section' && action.name) {
+          dispatch({
+            type: 'set_sections',
+            sections: [
+              ...state.sections,
+              {
+                id: crypto.randomUUID(),
+                name: action.name,
+                collapsed: false,
+                items: action.items ? toItems(action.items) : [newItem()],
+              },
+            ],
+          })
+        } else if (action.type === 'add_items' && action.sectionName && action.items) {
+          const targetSection = state.sections.find(
+            s => s.name.toLowerCase() === (action.sectionName as string).toLowerCase()
+          )
+          if (targetSection) {
+            dispatch({
+              type: 'set_sections',
+              sections: state.sections.map(s =>
+                s.id === targetSection.id
+                  ? { ...s, items: [...s.items, ...toItems(action.items as AiItem[])] }
+                  : s
+              ),
+            })
+          }
+        } else if (action.type === 'set_title' && action.title) {
+          dispatch({ type: 'set_title', value: action.title })
+        } else if (action.type === 'set_notes' && action.notes) {
+          dispatch({ type: 'set_notes', value: action.notes })
+        }
+      }
+    }
+
     try {
       const estId = existingEstimate?.id ?? 'new'
       const res = await fetch(
@@ -381,77 +445,45 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
           }),
         }
       )
-      const json = await res.json()
-      if (!res.ok) {
-        console.error('[ai-assist] API error', res.status, json)
-        setAiMessages(prev => [...prev, { role: 'assistant', text: `Error ${res.status}: ${json.error ?? 'Request failed'}` }])
+
+      if (!res.ok || !res.body) {
+        setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: 'Something went wrong. Please try again.' } : m))
         return
       }
-      console.log('[ai-assist] response', json)
-      const result = json.data as { text: string; actions: AiActionDef[] }
-      setAiMessages(prev => [...prev, { role: 'assistant', text: result.text || 'Done.' }])
 
-      const toItems = (items: AiItem[]) => (items ?? []).map((i: AiItem) => ({
-        id: crypto.randomUUID(),
-        description: i.description ?? '',
-        hours: i.hours?.toString() ?? '',
-        costRate: i.costRate?.toString() ?? '',
-        quantity: (i.quantity ?? 1).toString(),
-        unit: i.unit ?? 'hrs',
-        tags: (i.tags ?? []).join(', '),
-        isOptional: i.isOptional ?? false,
-        internalNotes: i.internalNotes ?? '',
-        riskLevel: i.riskLevel ?? 'low',
-      }))
+      // Read the SSE stream — same event shape as invoice ai-assist
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
 
-      for (const action of (result.actions ?? [])) {
-        if (action.type === 'set_sections' && action.sections) {
-          dispatch({
-            type: 'set_sections',
-            sections: action.sections.map((s: AiSection) => ({
-              id: crypto.randomUUID(),
-              name: s.name,
-              collapsed: false,
-              items: toItems(s.items ?? []),
-            })),
-          })
-        } else if (action.type === 'add_section' && action.name) {
-          dispatch({
-            type: 'set_sections',
-            sections: [
-              ...state.sections,
-              {
-                id: crypto.randomUUID(),
-                name: action.name,
-                collapsed: false,
-                items: action.items ? toItems(action.items) : [newItem()],
-              },
-            ],
-          })
-        } else if (action.type === 'add_items' && action.sectionName && action.items) {
-          // Find the matching section by name (case-insensitive)
-          const targetSection = state.sections.find(
-            s => s.name.toLowerCase() === (action.sectionName as string).toLowerCase()
-          )
-          if (targetSection) {
-            dispatch({
-              type: 'set_sections',
-              sections: state.sections.map(s =>
-                s.id === targetSection.id
-                  ? { ...s, items: [...s.items, ...toItems(action.items as AiItem[])] }
-                  : s
-              ),
-            })
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          let event: { type: string; text?: string; actions?: AiActionDef[] }
+          try { event = JSON.parse(line.slice(6)) } catch { continue }
+
+          if (event.type === 'status' && event.text) {
+            setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: `_${event.text}_` } : m))
+          } else if (event.type === 'token' && event.text) {
+            setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: event.text! } : m))
+          } else if (event.type === 'done') {
+            const finalText = event.text ?? ''
+            setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: finalText } : m))
+            applyActions(event.actions ?? [])
+          } else if (event.type === 'error') {
+            setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: event.text ?? 'Something went wrong. Please try again.' } : m))
           }
-        } else if (action.type === 'set_title' && action.title) {
-          dispatch({ type: 'set_title', value: action.title })
-        } else if (action.type === 'set_notes' && action.notes) {
-          dispatch({ type: 'set_notes', value: action.notes })
         }
       }
     } catch (e) {
       console.error('[ai-assist] client error', e)
-      setAiMessages(prev => [...prev, { role: 'assistant', text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }])
+      setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` } : m))
     } finally {
       setAiLoading(false)
     }

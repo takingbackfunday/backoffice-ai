@@ -1,8 +1,8 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
-import { openrouterChat, openrouterWithTools } from '@/lib/llm/openrouter'
+import { badRequest, unauthorized, notFound } from '@/lib/api-response'
+import { openrouterWithTools, openrouterStream } from '@/lib/llm/openrouter'
 import type { ChatMessage, ToolDefinition } from '@/lib/llm/openrouter'
 
 const MessageSchema = z.object({
@@ -72,35 +72,34 @@ function parseEstimateJson(raw: string): { text: string; actions: unknown[] } | 
   }
 }
 
+function sseEvent(data: Record<string, unknown>): Uint8Array {
+  return new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`)
+}
+
 export async function POST(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id, estId } = await params
+  const { userId } = await auth()
+  if (!userId) return unauthorized()
+  const { id, estId } = await params
 
-    const project = await prisma.workspace.findFirst({ where: { id, userId } })
-    if (!project) return notFound('Project not found')
+  const project = await prisma.workspace.findFirst({ where: { id, userId } })
+  if (!project) return notFound('Project not found')
 
-    // If estId is a real ID (not 'new'), verify ownership
-    if (estId !== 'new') {
-      const exists = await prisma.estimate.findFirst({ where: { id: estId, workspaceId: id } })
-      if (!exists) return notFound('Estimate not found')
-    }
+  if (estId !== 'new') {
+    const exists = await prisma.estimate.findFirst({ where: { id: estId, workspaceId: id } })
+    if (!exists) return notFound('Estimate not found')
+  }
 
-    const body = await request.json()
-    const parsed = RequestSchema.safeParse(body)
-    if (!parsed.success) {
-      console.error('[ai-assist] validation error:', parsed.error.errors)
-      return badRequest(parsed.error.errors[0].message)
-    }
+  const body = await request.json()
+  const parsed = RequestSchema.safeParse(body)
+  if (!parsed.success) return badRequest(parsed.error.errors[0].message)
 
-    const { messages, currentEstimate, clientName, projectDescription, billingType } = parsed.data
+  const { messages, currentEstimate, clientName, projectDescription, billingType } = parsed.data
 
-    const currentEstimateStr = currentEstimate?.sections?.length
-      ? `Current estimate state:\n${JSON.stringify(currentEstimate, null, 2)}`
-      : 'No items in estimate yet.'
+  const currentEstimateStr = currentEstimate?.sections?.length
+    ? `Current estimate state:\n${JSON.stringify(currentEstimate, null, 2)}`
+    : 'No items in estimate yet.'
 
-    const systemPrompt = `You are an estimation assistant for a freelancer or consultant. Help them build accurate internal project estimates.
+  const systemPrompt = `You are an estimation assistant for a freelancer or consultant. Help them build accurate internal project estimates.
 
 Client: ${clientName || 'Unknown'}
 Project: ${project.name}${projectDescription ? `\nDescription: ${projectDescription}` : ''}
@@ -151,80 +150,138 @@ You have a tool to look up previous estimates on this project for reference.
 - For set_sections: replaces all sections — use only when starting fresh or restructuring
 - Always call lookup_similar_estimates first if the project may have prior estimates`
 
-    const llmMessages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-      ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-    ]
+  const llmMessages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+  ]
 
-    const MAX_ROUNDS = 3
-    for (let round = 0; round < MAX_ROUNDS; round++) {
-      console.log(`[ai-assist] round ${round}, messages:`, llmMessages.length)
-      const response = await openrouterWithTools(llmMessages, ESTIMATE_AI_TOOLS, 'anthropic/claude-sonnet-4.6')
-      console.log(`[ai-assist] round ${round} response: finish_reason=${response.finish_reason}, tool_calls=${response.tool_calls?.length ?? 0}, content=${response.content?.slice(0, 200)}`)
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        // Run tool rounds (non-streaming; estimate tool calls are fast DB lookups)
+        const MAX_ROUNDS = 3
+        let toolRoundsRan = false
 
-      if (!response.tool_calls || response.tool_calls.length === 0) {
-        const text = response.content ?? ''
-        console.log('[ai-assist] final content:', text.slice(0, 500))
-        const result = parseEstimateJson(text)
-        console.log('[ai-assist] parsed result:', result ? `text="${result.text?.slice(0,100)}", actions=${result.actions.length}` : 'null — parse failed')
-        return ok(result ?? { text, actions: [] })
-      }
+        for (let round = 0; round < MAX_ROUNDS; round++) {
+          const response = await openrouterWithTools(llmMessages, ESTIMATE_AI_TOOLS, 'anthropic/claude-sonnet-4.6')
 
-      const assistantMsg: Record<string, unknown> = { role: 'assistant' }
-      if (response.content) assistantMsg.content = response.content
-      assistantMsg.tool_calls = response.tool_calls
-      llmMessages.push(assistantMsg as unknown as ChatMessage)
-
-      for (const tc of response.tool_calls) {
-        let toolResult: string
-        try {
-          if (tc.function.name === 'lookup_similar_estimates') {
-            const args = JSON.parse(tc.function.arguments) as { limit?: number }
-            const previousEstimates = await prisma.estimate.findMany({
-              where: { workspaceId: id, id: { not: estId === 'new' ? '' : estId } },
-              include: {
-                sections: {
-                  include: { items: { select: { description: true, hours: true, costRate: true, unit: true, tags: true } } },
-                },
-              },
-              orderBy: { createdAt: 'desc' },
-              take: args.limit ?? 3,
-            })
-            toolResult = previousEstimates.length === 0
-              ? 'No previous estimates found for this project.'
-              : JSON.stringify(previousEstimates.map(e => ({
-                  title: e.title,
-                  sections: e.sections.map(s => ({
-                    name: s.name,
-                    items: s.items.map(i => ({
-                      description: i.description,
-                      hours: i.hours ? Number(i.hours) : null,
-                      costRate: i.costRate ? Number(i.costRate) : null,
-                      unit: i.unit,
-                      tags: i.tags,
-                    })),
-                  })),
-                })), null, 2)
-          } else {
-            toolResult = 'Unknown tool'
+          if (!response.tool_calls || response.tool_calls.length === 0) {
+            // No more tools — if we never ran any tools, content is the final answer
+            if (!toolRoundsRan && response.content) {
+              const result = parseEstimateJson(response.content)
+              controller.enqueue(sseEvent({ type: 'done', text: result?.text ?? response.content, actions: result?.actions ?? [] }))
+              controller.close()
+              return
+            }
+            break
           }
-        } catch {
-          toolResult = 'Tool execution failed'
+
+          toolRoundsRan = true
+          controller.enqueue(sseEvent({ type: 'status', text: 'Looking up similar estimates…' }))
+
+          const assistantMsg: Record<string, unknown> = { role: 'assistant' }
+          if (response.content) assistantMsg.content = response.content
+          assistantMsg.tool_calls = response.tool_calls
+          llmMessages.push(assistantMsg as unknown as ChatMessage)
+
+          for (const tc of response.tool_calls) {
+            let toolResult: string
+            try {
+              if (tc.function.name === 'lookup_similar_estimates') {
+                const args = JSON.parse(tc.function.arguments) as { limit?: number }
+                const previousEstimates = await prisma.estimate.findMany({
+                  where: { workspaceId: id, id: { not: estId === 'new' ? '' : estId } },
+                  include: {
+                    sections: {
+                      include: { items: { select: { description: true, hours: true, costRate: true, unit: true, tags: true } } },
+                    },
+                  },
+                  orderBy: { createdAt: 'desc' },
+                  take: args.limit ?? 3,
+                })
+                toolResult = previousEstimates.length === 0
+                  ? 'No previous estimates found for this project.'
+                  : JSON.stringify(previousEstimates.map(e => ({
+                      title: e.title,
+                      sections: e.sections.map(s => ({
+                        name: s.name,
+                        items: s.items.map(i => ({
+                          description: i.description,
+                          hours: i.hours ? Number(i.hours) : null,
+                          costRate: i.costRate ? Number(i.costRate) : null,
+                          unit: i.unit,
+                          tags: i.tags,
+                        })),
+                      })),
+                    })), null, 2)
+              } else {
+                toolResult = 'Unknown tool'
+              }
+            } catch {
+              toolResult = 'Tool execution failed'
+            }
+            llmMessages.push({ role: 'tool', tool_call_id: tc.id, content: toolResult })
+          }
         }
 
-        llmMessages.push({ role: 'tool', tool_call_id: tc.id, content: toolResult })
+        // Stream the final answer
+        llmMessages.push({ role: 'user', content: 'Please provide your final response now as the JSON object.' })
+        let fullText = ''
+        await openrouterStream(llmMessages, 'anthropic/claude-sonnet-4.6', (token) => {
+          fullText += token
+          // Extract and forward just the visible text portion as it streams
+          const display = extractStreamingText(fullText)
+          if (display) controller.enqueue(sseEvent({ type: 'token', text: display }))
+        })
+        const result = parseEstimateJson(fullText)
+        controller.enqueue(sseEvent({ type: 'done', text: result?.text ?? fullText, actions: result?.actions ?? [] }))
+        controller.close()
+      } catch (err) {
+        console.error('[estimate ai-assist]', err)
+        controller.enqueue(sseEvent({ type: 'error', text: 'Failed to get AI response' }))
+        controller.close()
       }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
+}
+
+/** Extract the visible text value from a partially-streamed JSON response.
+ *  Char-by-char walk so embedded quotes and escape sequences are handled correctly. */
+function extractStreamingText(raw: string): string {
+  const textKeyIdx = raw.indexOf('"text"')
+  if (textKeyIdx === -1) return ''
+  const colonIdx = raw.indexOf(':', textKeyIdx + 6)
+  if (colonIdx === -1) return ''
+
+  let i = colonIdx + 1
+  while (i < raw.length && (raw[i] === ' ' || raw[i] === '\t')) i++
+  if (i >= raw.length || raw[i] !== '"') return ''
+  i++
+
+  let result = ''
+  while (i < raw.length) {
+    if (raw[i] === '\\' && i + 1 < raw.length) {
+      const esc = raw[i + 1]
+      if (esc === '"') result += '"'
+      else if (esc === 'n') result += '\n'
+      else if (esc === 't') result += '\t'
+      else if (esc === '\\') result += '\\'
+      else result += esc
+      i += 2
+    } else if (raw[i] === '"') {
+      break
+    } else {
+      result += raw[i]
+      i++
     }
-
-    llmMessages.push({ role: 'user', content: 'Please provide your final response now as the JSON object.' })
-    const text = await openrouterChat(
-      llmMessages as { role: 'user' | 'assistant' | 'system'; content: string }[],
-      'anthropic/claude-sonnet-4.6'
-    )
-    return ok(parseEstimateJson(text) ?? { text, actions: [] })
-
-  } catch (e) {
-    console.error('[estimate ai-assist] unhandled error:', e)
-    return serverError()
   }
+  return result
 }
