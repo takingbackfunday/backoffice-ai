@@ -397,6 +397,10 @@ export function InvoiceEditor({
     setChatInput('')
     setChatLoading(true)
 
+    // Add a placeholder assistant message we'll stream into
+    const placeholderIdx = chatMessages.length + 1  // user msg is at +0
+    setChatMessages(prev => [...prev, { role: 'assistant', text: '' }])
+
     try {
       const history = [...chatMessages, userMsg].map(m => ({ role: m.role, content: m.text }))
       const res = await fetch(`/api/projects/${projectId}/invoices/ai-assist`, {
@@ -410,16 +414,50 @@ export function InvoiceEditor({
           paymentTermDays,
         }),
       })
-      const json = await res.json()
-      if (!res.ok || json.error) {
-        setChatMessages(prev => [...prev, { role: 'assistant', text: json.error ?? 'Something went wrong. Please try again.' }])
+
+      if (!res.ok || !res.body) {
+        setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: 'Something went wrong. Please try again.' } : m))
         return
       }
 
-      const { text: aiText, actions } = json.data as { text: string; actions: AiAction[] }
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let streamedText = ''
+      let finalActions: AiAction[] = []
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          let event: { type: string; text?: string; actions?: AiAction[] }
+          try { event = JSON.parse(line.slice(6)) } catch { continue }
+
+          if (event.type === 'status' && event.text) {
+            setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: `_${event.text}_` } : m))
+          } else if (event.type === 'token' && event.text) {
+            streamedText += event.text
+            // The model streams raw JSON like {"text":"...","actions":[...]}
+            // Extract just the visible text value progressively.
+            const display = extractStreamingText(streamedText)
+            setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: display } : m))
+          } else if (event.type === 'done') {
+            finalActions = (event.actions ?? []) as AiAction[]
+            const finalText = event.text ?? streamedText
+            setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: finalText, actions: finalActions } : m))
+          } else if (event.type === 'error') {
+            setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: event.text ?? 'Something went wrong. Please try again.' } : m))
+          }
+        }
+      }
 
       // HITL — capture snapshot before applying any AI changes
-      const changingActions = (actions ?? []).filter(a => a.type !== 'ask_clarification')
+      const changingActions = finalActions.filter(a => a.type !== 'ask_clarification')
       if (changingActions.length > 0) {
         setPreAiSnapshot({ ...state, lineItems: state.lineItems.map(i => ({ ...i })) })
         const changed: PendingAiChanges = { ...noChanges }
@@ -436,15 +474,46 @@ export function InvoiceEditor({
       }
 
       // Apply actions to form state
-      if (actions?.length) {
-        for (const action of actions) {
-          applyAiAction(action)
-        }
+      for (const action of finalActions) {
+        applyAiAction(action)
       }
-
-      setChatMessages(prev => [...prev, { role: 'assistant', text: aiText, actions }])
     } finally {
       setChatLoading(false)
+    }
+  }
+
+  /** Extract the visible text value from a partially-streamed JSON response.
+   *  The model streams raw JSON like: {"text":"Hello world","actions":[...]}
+   *  We parse the "text" field progressively so the user sees clean text. */
+  function extractStreamingText(raw: string): string {
+    // Try full parse first (works once streaming is complete or near-complete)
+    const parsed = parsePartialInvoiceText(raw)
+    if (parsed !== null) return parsed
+
+    // Extract whatever is inside the "text": "..." field so far
+    const match = raw.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)/)
+    if (match) {
+      try {
+        return JSON.parse(`"${match[1]}"`)
+      } catch {
+        return match[1]
+      }
+    }
+
+    return ''
+  }
+
+  function parsePartialInvoiceText(raw: string): string | null {
+    let jsonStr = raw.trim()
+    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (fenceMatch) jsonStr = fenceMatch[1].trim()
+    const braceMatch = jsonStr.match(/\{[\s\S]*\}/)
+    if (braceMatch) jsonStr = braceMatch[0]
+    try {
+      const p = JSON.parse(jsonStr)
+      return typeof p.text === 'string' ? p.text : null
+    } catch {
+      return null
     }
   }
 
@@ -1204,7 +1273,7 @@ export function InvoiceEditor({
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-            {chatMessages.map((msg, idx) => (
+            {chatMessages.map((msg, idx) => msg.role === 'assistant' && !msg.text ? null : (
               <div key={idx} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
                 <div className={cn(
                   'max-w-[85%] rounded-2xl px-3 py-2 text-sm',
@@ -1229,7 +1298,7 @@ export function InvoiceEditor({
                 </div>
               </div>
             ))}
-            {chatLoading && (
+            {chatLoading && chatMessages[chatMessages.length - 1]?.text === '' && (
               <div className="flex justify-start">
                 <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
                   {[0, 1, 2].map(i => (

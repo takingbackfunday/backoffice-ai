@@ -424,7 +424,14 @@ Do **not** use `PrismaNeonHttp`, `PrismaPg`, or `@prisma/adapter-pg` — `Prisma
 
 ### Invoice AI routes expect JSON from the model
 
-`ai-assist` and `ai-finalize` routes call `anthropic/claude-sonnet-4.6` via `openrouterChat()` and parse the response as JSON. The routes strip markdown code fences and fall back to extracting the first `{...}` block — so a plain JSON response and a fenced code block both work. If the model returns unparseable output, the routes return an empty actions array gracefully rather than erroring.
+`ai-finalize` calls `anthropic/claude-sonnet-4.6` via `openrouterChat()` and parses the response as JSON. The route strips markdown code fences and falls back to extracting the first `{...}` block. If the model returns unparseable output it returns an empty actions array gracefully.
+
+`ai-assist` returns **SSE** (`text/event-stream`), not JSON. It streams three event types:
+- `{ type: "status", text: "..." }` — emitted while tool calls run (e.g. expenses lookup)
+- `{ type: "token", text: "..." }` — one per streamed content token from the model
+- `{ type: "done", text: "...", actions: [...] }` — final clean text + parsed actions array
+
+The route uses a single streaming pass for round 0 (tokens forwarded immediately if no tools needed) and falls back to `streamFinalAnswer` after tool rounds. The client (`invoice-editor.tsx`) reads the SSE stream with `res.body.getReader()`, progressively extracts the `"text"` field from the partial JSON via `extractStreamingText()`, and applies actions atomically on the `done` event.
 
 ### `isTaxLine` on `InvoiceLineItem`
 
