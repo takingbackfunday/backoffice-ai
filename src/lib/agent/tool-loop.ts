@@ -1,4 +1,4 @@
-import { openrouterWithTools, type ChatMessage, type ToolDefinition } from '@/lib/llm/openrouter'
+import { openrouterWithTools, openrouterStream, type ChatMessage, type ToolDefinition } from '@/lib/llm/openrouter'
 
 export async function runToolLoop(opts: {
   messages: ChatMessage[]
@@ -7,6 +7,7 @@ export async function runToolLoop(opts: {
   model: string
   maxRounds: number
   onStatus: (message: string) => void
+  onToken?: (text: string) => void
 }): Promise<{ answer: string; toolsUsed: string[] }> {
   const toolsUsed: string[] = []
 
@@ -22,8 +23,14 @@ export async function runToolLoop(opts: {
     if (!assistantMsg.content && !assistantMsg.tool_calls) assistantMsg.content = ''
     opts.messages.push(assistantMsg as unknown as ChatMessage)
 
-    // No tool calls = final answer
+    // No tool calls = final answer — stream it if onToken is provided
     if (!response.tool_calls || response.tool_calls.length === 0) {
+      if (opts.onToken) {
+        // Re-stream: pop the assistant message we just added and stream the final answer fresh
+        opts.messages.pop()
+        const answer = await openrouterStream(opts.messages, opts.model, opts.onToken)
+        return { answer: answer.trim(), toolsUsed }
+      }
       return { answer: (response.content ?? '').trim(), toolsUsed }
     }
 
@@ -59,6 +66,10 @@ export async function runToolLoop(opts: {
     role: 'user',
     content: 'Please give your final answer now based on the data you have gathered.',
   })
+  if (opts.onToken) {
+    const answer = await openrouterStream(opts.messages, opts.model, opts.onToken)
+    return { answer: answer.trim(), toolsUsed }
+  }
   const final = await openrouterWithTools(opts.messages, [], opts.model)
   return { answer: (final.content ?? 'Unable to answer.').trim(), toolsUsed }
 }

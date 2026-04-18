@@ -17,8 +17,9 @@ export async function orchestrate(opts: {
   question: string
   conversationHistory: ConversationTurn[]
   send: SendFn
+  onToken?: (text: string) => void
 }): Promise<{ answer: string; toolsUsed: string[] }> {
-  const { userId, question, conversationHistory, send } = opts
+  const { userId, question, conversationHistory, send, onToken } = opts
 
   send({ type: 'status', message: 'Classifying question…' })
   const classification = await classifyDomain(question)
@@ -29,6 +30,7 @@ export async function orchestrate(opts: {
     question,
     conversationHistory,
     onStatus: (message) => send({ type: 'status', message }),
+    onToken,
   }
 
   // Primary agent run

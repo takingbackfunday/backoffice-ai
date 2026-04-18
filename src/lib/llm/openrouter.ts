@@ -41,6 +41,98 @@ export interface ChatResponse {
   finish_reason: 'stop' | 'tool_calls' | 'length' | string
 }
 
+// ── Token-streaming completion (for final answer pass) ────────────────────────
+
+/** Stream a completion without tools, forwarding each content token to `onToken`.
+ *  Returns the full accumulated text. Uses same retry/timeout as openrouterWithTools. */
+export async function openrouterStream(
+  messages: ChatMessage[],
+  model: string,
+  onToken: (text: string) => void,
+): Promise<string> {
+  const t0 = Date.now()
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delayMs = 2000 * Math.pow(2, attempt - 1)
+      logLlm('stream:retry', { model, attempt, delayMs })
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS)
+
+    let res: Response
+    try {
+      res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        },
+        body: JSON.stringify({ model, messages, max_tokens: 8192, stream: true }),
+        signal: controller.signal,
+      })
+    } catch (fetchErr) {
+      clearTimeout(timeoutId)
+      const isTimeout = fetchErr instanceof Error && fetchErr.name === 'AbortError'
+      lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : `OpenRouter fetch failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`)
+      if (attempt < MAX_RETRIES) continue
+      throw lastError
+    }
+
+    if (!res.ok) {
+      clearTimeout(timeoutId)
+      const text = await res.text()
+      lastError = new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`)
+      if (TRANSIENT_STATUSES.has(res.status) && attempt < MAX_RETRIES) continue
+      throw lastError
+    }
+
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let content = ''
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') break
+          let chunk: Record<string, unknown>
+          try { chunk = JSON.parse(data) } catch { continue }
+          const delta = (chunk.choices as { delta?: { content?: string } }[] | undefined)?.[0]?.delta
+          if (delta?.content) {
+            content += delta.content
+            onToken(delta.content)
+          }
+        }
+      }
+    } catch (streamErr) {
+      clearTimeout(timeoutId)
+      reader.cancel().catch(() => {})
+      const isTimeout = streamErr instanceof Error && streamErr.name === 'AbortError'
+      lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : `OpenRouter stream interrupted: ${streamErr instanceof Error ? streamErr.message : String(streamErr)}`)
+      if (attempt < MAX_RETRIES) continue
+      throw lastError
+    }
+
+    clearTimeout(timeoutId)
+    logLlm('stream:res', { model, latencyMs: Date.now() - t0, contentLen: content.length })
+    return content
+  }
+
+  throw lastError ?? new Error('OpenRouter stream request failed after retries')
+}
+
 // ── Simple text completion (existing behaviour) ───────────────────────────────
 
 export async function openrouterChat(

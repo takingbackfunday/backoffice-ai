@@ -122,6 +122,7 @@ export const financeAgent: Agent = {
       model: AGENT_MODEL,
       maxRounds,
       onStatus,
+      onToken: ctx.onToken,
     })
 
     const needsHandoff = answer.includes('[NEEDS_PROPERTY_AGENT]')

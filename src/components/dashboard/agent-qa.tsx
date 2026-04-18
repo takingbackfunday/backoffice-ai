@@ -23,9 +23,11 @@ export function AgentQA() {
   const [question, setQuestion] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [statusMsg, setStatusMsg] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const esRef = useRef<AbortController | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { sessionId, turns, addTurn, clearHistory, pendingMessage, clearPendingMessage } = useChatStore()
 
@@ -43,6 +45,7 @@ export function AgentQA() {
     esRef.current = null
     setStatus('idle')
     setStatusMsg('')
+    setIsStreaming(false)
   }
 
   function ask(q?: string) {
@@ -54,6 +57,7 @@ export function AgentQA() {
     setError('')
     setStatus('running')
     setStatusMsg('')
+    setIsStreaming(false)
 
     // Optimistically add user message
     setMessages((prev) => [...prev, { role: 'user', content: q_ }])
@@ -80,7 +84,8 @@ export function AgentQA() {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buf = ''
-      let lastAnswer = ''
+      let streamedAnswer = ''
+      let streamingStarted = false
       let detectedDomain: AgentDomain | 'cross-domain' = 'finance'
 
       while (true) {
@@ -96,17 +101,37 @@ export function AgentQA() {
           try {
             const event = JSON.parse(line.slice(6))
             if (event.type === 'status') setStatusMsg(event.message ?? '')
-            if (event.type === 'answer') lastAnswer = event.answer ?? ''
+            if (event.type === 'token' && event.text) {
+              streamedAnswer += event.text
+              if (!streamingStarted) {
+                // First token — push an assistant bubble and hide the spinner
+                streamingStarted = true
+                setIsStreaming(true)
+                setStatusMsg('')
+                setMessages((prev) => [...prev, { role: 'assistant', content: streamedAnswer }])
+              } else {
+                // Subsequent tokens — update the last message in place
+                setMessages((prev) => {
+                  const updated = [...prev]
+                  updated[updated.length - 1] = { role: 'assistant', content: streamedAnswer }
+                  return updated
+                })
+              }
+              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+            }
             if (event.type === 'session' && event.sessionId) {
-              // detect domain from status messages is approximate — default to cross-domain for multi-agent
               detectedDomain = 'cross-domain'
             }
             if (event.type === 'done') {
               setStatus('done')
-              if (lastAnswer) {
-                setMessages((prev) => [...prev, { role: 'assistant', content: lastAnswer }])
+              const finalAnswer = streamedAnswer || event.answer || ''
+              if (finalAnswer) {
+                if (!streamingStarted) {
+                  // No tokens were streamed (shouldn't happen, but fallback)
+                  setMessages((prev) => [...prev, { role: 'assistant', content: finalAnswer }])
+                }
                 addTurn('user', q_, detectedDomain)
-                addTurn('assistant', lastAnswer, detectedDomain)
+                addTurn('assistant', finalAnswer, detectedDomain)
               }
             }
             if (event.type === 'error') {
@@ -171,7 +196,7 @@ export function AgentQA() {
               </div>
             </div>
           ))}
-          {status === 'running' && (
+          {status === 'running' && !isStreaming && (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-xl rounded-bl-sm px-3 py-2">
                 <span className="inline-block w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin shrink-0" />
@@ -179,6 +204,7 @@ export function AgentQA() {
               </div>
             </div>
           )}
+          <div ref={messagesEndRef} />
         </div>
       )}
 

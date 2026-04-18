@@ -43,6 +43,7 @@ export async function POST(request: Request) {
           question,
           conversationHistory,
           send,
+          onToken: (text) => send({ type: 'token', text }),
         })
 
         console.log('[ask-route] done', JSON.stringify({

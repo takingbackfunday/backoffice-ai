@@ -53,6 +53,7 @@ export const propertyAgent: Agent = {
       model: AGENT_MODEL,
       maxRounds: MAX_ROUNDS,
       onStatus,
+      onToken: ctx.onToken,
     })
 
     const needsHandoff = answer.includes('[NEEDS_FINANCE_AGENT]')

@@ -54,6 +54,7 @@ export const studioAgent: Agent = {
       model: AGENT_MODEL,
       maxRounds: MAX_ROUNDS,
       onStatus,
+      onToken: ctx.onToken,
     })
 
     const needsFinanceHandoff = answer.includes('[NEEDS_FINANCE_AGENT]')

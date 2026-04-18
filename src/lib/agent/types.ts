@@ -34,6 +34,7 @@ export interface AgentContext {
   question: string
   conversationHistory: ConversationTurn[]
   onStatus: (message: string) => void
+  onToken?: (text: string) => void
 }
 
 export interface AgentResult {
@@ -52,8 +53,9 @@ export interface Agent {
 // ── SSE Events ───────────────────────────────────────────────────
 
 export interface SseEvent {
-  type: 'status' | 'answer' | 'done' | 'error' | 'session'
+  type: 'status' | 'token' | 'answer' | 'done' | 'error' | 'session'
   message?: string
+  text?: string
   answer?: string
   error?: string
   sessionId?: string
