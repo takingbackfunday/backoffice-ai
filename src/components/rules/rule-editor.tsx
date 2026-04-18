@@ -172,20 +172,26 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
 
   const runPreview = useCallback(async () => {
     const defs = buildDefs(conditions)
+    console.log('[LivePreview] runPreview defs:', defs)
     if (defs.length === 0) { setResults([]); setMatchCount(0); return }
     setLoading(true)
     try {
+      const payload = { conditions: { op, defs } }
+      console.log('[LivePreview] POST /api/rules/preview', JSON.stringify(payload))
       const res = await fetch('/api/rules/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conditions: { op, defs } }),
+        body: JSON.stringify(payload),
       })
+      console.log('[LivePreview] response status:', res.status)
       const json = await res.json()
+      console.log('[LivePreview] response body:', json)
       setResults(json.data ?? [])
       setMatchCount(json.meta?.matchCount ?? json.data?.length ?? 0)
       setShowAll(false)
       lastDefsRef.current = JSON.stringify({ op, defs })
-    } catch {
+    } catch (err) {
+      console.error('[LivePreview] fetch error:', err)
       setResults([])
       setMatchCount(0)
     } finally {
@@ -497,6 +503,12 @@ export function RuleEditor({
   }
 
   const initialOutputs = (): OutputAction[] => {
+    console.log('[RuleEditor] initialOutputs from editingRule:', {
+      categoryId: editingRule?.categoryId,
+      categoryName: editingRule?.categoryName,
+      payee: editingRule?.payee,
+      projectId: editingRule?.projectId,
+    })
     const base: OutputAction[] = [{
       type: 'category',
       value: editingRule?.categoryId ?? editingRule?.categoryName ?? '',
@@ -506,6 +518,7 @@ export function RuleEditor({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const meta = editingRule as any
     if (meta?.setNotes) base.push({ type: 'notes', value: meta.setNotes })
+    console.log('[RuleEditor] initialOutputs result:', base)
     return base
   }
 

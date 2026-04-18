@@ -29,8 +29,10 @@ export async function POST(request: Request) {
     const all = searchParams.get('all') === '1'
 
     const body = await request.json()
+    console.log('[rules/preview] body:', JSON.stringify(body))
     const parsed = PreviewBodySchema.safeParse(body)
     if (!parsed.success) {
+      console.error('[rules/preview] validation failed:', parsed.error.errors)
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
@@ -42,11 +44,14 @@ export async function POST(request: Request) {
     const testCondition = buildCondition(group)
 
     // Fetch all transactions for this user to test against
+    console.log('[rules/preview] fetching transactions for userId:', userId)
+    const t0 = Date.now()
     const transactions = await prisma.transaction.findMany({
       where: { account: { userId } },
       orderBy: { date: 'desc' },
       include: { account: true, payee: true, workspace: true },
     })
+    console.log('[rules/preview] fetched', transactions.length, 'transactions in', Date.now() - t0, 'ms')
 
     const allMatches = transactions.filter((tx) => {
       const fact: TransactionFact = {
@@ -66,6 +71,7 @@ export async function POST(request: Request) {
     const matchCount = allMatches.length
     const matches = all ? allMatches : allMatches.slice(0, PREVIEW_LIMIT)
 
+    console.log('[rules/preview] matched', matchCount, 'transactions, returning', matches.length)
     return ok(
       matches.map((tx) => ({
         id: tx.id,
@@ -80,7 +86,7 @@ export async function POST(request: Request) {
       { matchCount }
     )
   } catch (err) {
-    console.error('[/api/rules/preview]', err)
+    console.error('[rules/preview] error:', err)
     return serverError('Failed to preview rule')
   }
 }
