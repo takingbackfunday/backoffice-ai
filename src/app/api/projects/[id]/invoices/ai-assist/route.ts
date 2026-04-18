@@ -277,8 +277,8 @@ After any tool calls, respond with JSON ONLY — no prose outside the JSON objec
 Rules:
 - Never invent amounts. Use tool data or ask if unclear.
 - Preserve existing line items unless user asks to change them.
-- Default due date = today + ${paymentTermDays ?? 30} days if not set.
-- Only include actions that actually change something.
+- Only emit set_due_date or set_issue_date if the user explicitly mentioned a date or asked you to change one. Never emit them just to confirm the default.
+- Only include actions that actually change something relative to the current invoice state shown above.
 - The "actions" array can be empty if user is only asking a question.
 - For ask_clarification: include no other actions — just the question.
 - For set_currency: use ISO 4217 codes (USD, EUR, GBP, CAD, AUD, etc.).

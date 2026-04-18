@@ -456,20 +456,25 @@ export function InvoiceEditor({
         }
       }
 
-      // HITL — capture snapshot before applying any AI changes
-      const changingActions = finalActions.filter(a => a.type !== 'ask_clarification')
-      if (changingActions.length > 0) {
-        setPreAiSnapshot({ ...state, lineItems: state.lineItems.map(i => ({ ...i })) })
-        const changed: PendingAiChanges = { ...noChanges }
-        for (const action of changingActions) {
-          if (action.type === 'set_line_items') changed.lineItems = true
-          if (action.type === 'set_notes') changed.notes = true
-          if (action.type === 'set_due_date') changed.dueDate = true
-          if (action.type === 'set_issue_date') changed.issueDate = true
-          if (action.type === 'set_currency') changed.currency = true
-          if (action.type === 'set_tax') changed.tax = true
-          if (action.type === 'set_job') changed.jobId = true
+      // HITL — only flag actions that actually change the current state
+      const changed: PendingAiChanges = { ...noChanges }
+      for (const action of finalActions) {
+        if (action.type === 'set_line_items') {
+          // Only flag if line items content actually differs
+          const incoming = action.lineItems.map(i => `${i.description}|${i.quantity}|${i.unitPrice}`).join(',')
+          const current = state.lineItems.filter(i => i.description.trim()).map(i => `${i.description}|${parseFloat(i.quantity)||1}|${parseFloat(i.unitPrice)||0}`).join(',')
+          if (incoming !== current) changed.lineItems = true
         }
+        if (action.type === 'set_notes' && action.value !== state.notes) changed.notes = true
+        if (action.type === 'set_due_date' && action.value !== state.dueDate) changed.dueDate = true
+        if (action.type === 'set_issue_date' && action.value !== state.issueDate) changed.issueDate = true
+        if (action.type === 'set_currency' && action.value !== state.currency) changed.currency = true
+        if (action.type === 'set_tax') changed.tax = true
+        if (action.type === 'set_job' && action.jobId !== state.jobId) changed.jobId = true
+      }
+      const hasTrueChanges = Object.values(changed).some(Boolean)
+      if (hasTrueChanges) {
+        setPreAiSnapshot({ ...state, lineItems: state.lineItems.map(i => ({ ...i })) })
         setPendingAiChanges(changed)
       }
 
