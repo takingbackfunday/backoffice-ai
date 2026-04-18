@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { resolveDateRange } from '@/lib/widgets/date-utils'
 import { format, startOfMonth } from 'date-fns'
+import { getRate } from '@/lib/fx'
+import type { DashboardCurrency } from '@/lib/fx'
 
 export interface CashflowPoint {
   label: string
@@ -20,6 +22,7 @@ export async function GET(request: Request) {
     const period = searchParams.get('period') ?? 'last-6-months'
     const customStart = searchParams.get('start')
     const customEnd = searchParams.get('end')
+    const currency = (searchParams.get('currency') ?? 'USD') as DashboardCurrency
     // comma-separated category names; empty/absent = all
     const categoriesParam = searchParams.get('categories')
     const categoryNames = categoriesParam ? categoriesParam.split(',').filter(Boolean) : []
@@ -59,7 +62,7 @@ export async function GET(request: Request) {
         ...(!categoryFilter ? { NOT: { categoryRef: { group: { taxType: 'non_deductible' } } } } : {}),
         ...categoryFilter,
       },
-      select: { date: true, amount: true },
+      select: { date: true, amount: true, account: { select: { currency: true } } },
       orderBy: { date: 'asc' },
     })
 
@@ -73,11 +76,28 @@ export async function GET(request: Request) {
       cursor = startOfMonth(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
     }
 
+    // Prefetch all distinct (sourceCurrency, month) rate pairs in parallel
+    const ratePairs = new Set<string>()
+    for (const row of rows) {
+      const acctCurrency = row.account.currency
+      if (acctCurrency !== currency) {
+        ratePairs.add(`${acctCurrency}:${format(new Date(row.date), 'yyyy-MM')}`)
+      }
+    }
+    await Promise.all(
+      [...ratePairs].map(async (key) => {
+        const [from, month] = key.split(':')
+        await getRate(from, currency, month)
+      }),
+    )
+
     for (const row of rows) {
       const key = format(new Date(row.date), 'yyyy-MM')
       const bucket = buckets.get(key)
       if (!bucket) continue
-      const amt = Number(row.amount)
+      const rawAmt = Number(row.amount)
+      const rate = await getRate(row.account.currency, currency, key)
+      const amt = rawAmt * rate
       if (amt > 0) bucket.income += amt
       else bucket.expenses += Math.abs(amt)  // store as positive
     }

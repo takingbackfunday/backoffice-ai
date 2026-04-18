@@ -1150,3 +1150,18 @@ enum ReceiptStatus {
   INVOICED     // attached to an InvoiceLineItem
   FAILED       // OCR pipeline error
 }
+
+// ── FX Rates ─────────────────────────────────────────────────────────────────
+
+model FxRate {
+  id         String   @id @default(cuid())
+  month      String   // 'YYYY-MM'
+  base       String   // always 'EUR' (ECB publishes EUR-base rates)
+  quote      String   // 'USD' | 'GBP'
+  rate       Decimal  @db.Decimal(10, 6)
+  isOfficial Boolean  @default(false) // true = official ECB data; false = carry-forward
+  createdAt  DateTime @default(now())
+
+  @@unique([month, base, quote])
+  @@index([month])
+}

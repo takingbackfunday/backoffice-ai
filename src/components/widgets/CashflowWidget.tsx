@@ -8,6 +8,7 @@ import {
 import type { CashflowPoint } from '@/app/api/widgets/cashflow/route'
 import { RelativeDateRangePicker, resolveExpr, toDateString } from './RelativeDateRangePicker'
 import type { RelativeDateRange } from './RelativeDateRangePicker'
+import type { DashboardCurrency } from '@/lib/fx'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -153,10 +154,13 @@ function CategoryFilterDropdown({
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function fmt(value: number): string {
+const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' }
+
+function fmt(value: number, currency = 'USD'): string {
+  const sym = SYMBOLS[currency] ?? '$'
   const abs = Math.abs(value)
-  if (abs >= 1000) return `$${(value / 1000).toFixed(1)}k`
-  return `$${value.toFixed(0)}`
+  if (abs >= 1000) return `${sym}${(value / 1000).toFixed(1)}k`
+  return `${sym}${value.toFixed(0)}`
 }
 
 function shortMonth(label: string): string {
@@ -166,7 +170,7 @@ function shortMonth(label: string): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label, currency }: any) {
   if (!active || !payload?.length) return null
   const income   = payload.find((p: { dataKey: string }) => p.dataKey === 'income')?.value ?? 0
   const expenses = payload.find((p: { dataKey: string }) => p.dataKey === 'expenses')?.value ?? 0
@@ -176,15 +180,15 @@ function CustomTooltip({ active, payload, label }: any) {
       <p className="font-medium text-[#333] mb-1">{label}</p>
       <div className="flex justify-between gap-4">
         <span className="text-[#16a34a]">Income</span>
-        <span className="font-medium text-[#16a34a]">{fmt(income)}</span>
+        <span className="font-medium text-[#16a34a]">{fmt(income, currency)}</span>
       </div>
       <div className="flex justify-between gap-4">
         <span className="text-[#dc2626]">Expenses</span>
-        <span className="font-medium text-[#dc2626]">{fmt(expenses)}</span>
+        <span className="font-medium text-[#dc2626]">{fmt(expenses, currency)}</span>
       </div>
       <div className="flex justify-between gap-4 border-t border-black/[0.08] pt-1 mt-1">
         <span className="text-[#534AB7]">Net</span>
-        <span className={`font-semibold ${net >= 0 ? 'text-[#16a34a]' : 'text-[#dc2626]'}`}>{net >= 0 ? '+' : ''}{fmt(net)}</span>
+        <span className={`font-semibold ${net >= 0 ? 'text-[#16a34a]' : 'text-[#dc2626]'}`}>{net >= 0 ? '+' : ''}{fmt(net, currency)}</span>
       </div>
     </div>
   )
@@ -202,7 +206,11 @@ const PREF_KEY = 'cashflowFilters'
 
 // ── Main widget ────────────────────────────────────────────────────────────────
 
-export function CashflowWidget() {
+interface CashflowWidgetProps {
+  currency: DashboardCurrency
+}
+
+export function CashflowWidget({ currency }: CashflowWidgetProps) {
   const [period, setPeriod] = useState<Period>('last-6-months')
   const [relativeDateRange, setRelativeDateRange] = useState<RelativeDateRange>({
     start: { anchor: 'today', operator: 'minus', value: 7, unit: 'day' },
@@ -246,7 +254,7 @@ export function CashflowWidget() {
     })
   }, [])
 
-  // Fetch cashflow data whenever appliedRange or selectedCategories changes
+  // Fetch cashflow data whenever appliedRange, selectedCategories, or currency changes
   useEffect(() => {
     if (appliedRange.period === 'custom' && (!appliedRange.start || !appliedRange.end)) return
     setLoading(true)
@@ -257,8 +265,8 @@ export function CashflowWidget() {
     const categoriesParam = isAll ? '' : `&categories=${encodeURIComponent([...selectedCategories].join(','))}`
 
     const url = appliedRange.period === 'custom'
-      ? `/api/widgets/cashflow?period=custom&start=${appliedRange.start}&end=${appliedRange.end}${categoriesParam}`
-      : `/api/widgets/cashflow?period=${appliedRange.period}${categoriesParam}`
+      ? `/api/widgets/cashflow?period=custom&start=${appliedRange.start}&end=${appliedRange.end}&currency=${currency}${categoriesParam}`
+      : `/api/widgets/cashflow?period=${appliedRange.period}&currency=${currency}${categoriesParam}`
 
     fetch(url)
       .then((r) => r.json())
@@ -268,7 +276,7 @@ export function CashflowWidget() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [appliedRange, selectedCategories, categoryGroups])
+  }, [appliedRange, selectedCategories, categoryGroups, currency])
 
   function handlePeriod(p: Period) {
     setPeriod(p)
@@ -419,11 +427,11 @@ export function CashflowWidget() {
               fontSize={11}
               tickLine={false}
               axisLine={false}
-              tickFormatter={fmt}
+              tickFormatter={(v) => fmt(v, currency)}
               tick={{ fill: '#6b7280' }}
               width={64}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip currency={currency} />} />
             <Legend
               wrapperStyle={{ fontSize: 12 }}
               formatter={(value) =>

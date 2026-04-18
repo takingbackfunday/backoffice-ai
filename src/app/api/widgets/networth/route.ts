@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { resolveDateRange } from '@/lib/widgets/date-utils'
 import { format, startOfMonth } from 'date-fns'
+import { getRate } from '@/lib/fx'
+import type { DashboardCurrency } from '@/lib/fx'
 
 export interface NetWorthPoint {
   label: string    // 'YYYY-MM'
@@ -18,6 +20,7 @@ export async function GET(request: Request) {
     const period = searchParams.get('period') ?? 'all-time'
     const customStart = searchParams.get('start')
     const customEnd = searchParams.get('end')
+    const currency = (searchParams.get('currency') ?? 'USD') as DashboardCurrency
     const categoriesParam = searchParams.get('categories')
     const categoryNames = categoriesParam ? categoriesParam.split(',').filter(Boolean) : []
 
@@ -53,15 +56,32 @@ export async function GET(request: Request) {
         account: { userId },
         ...categoryFilter,
       },
-      select: { date: true, amount: true },
+      select: { date: true, amount: true, account: { select: { currency: true } } },
       orderBy: { date: 'asc' },
     })
 
-    // Group by month bucket
+    // Prefetch all rate pairs in parallel before the loop
+    const ratePairs = new Set<string>()
+    for (const row of rows) {
+      const acctCurrency = row.account.currency
+      if (acctCurrency !== currency) {
+        ratePairs.add(`${acctCurrency}:${format(new Date(row.date), 'yyyy-MM')}`)
+      }
+    }
+    await Promise.all(
+      [...ratePairs].map(async (key) => {
+        const [from, month] = key.split(':')
+        await getRate(from, currency, month)
+      }),
+    )
+
+    // Group by month bucket (converted)
     const buckets = new Map<string, number>()
     for (const row of rows) {
       const key = format(new Date(row.date), 'yyyy-MM')
-      buckets.set(key, (buckets.get(key) ?? 0) + Number(row.amount))
+      const rate = await getRate(row.account.currency, currency, key)
+      const converted = Number(row.amount) * rate
+      buckets.set(key, (buckets.get(key) ?? 0) + converted)
     }
 
     // Compute cumulative running total across all months

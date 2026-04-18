@@ -1,7 +1,9 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
-import { startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns'
+import { convertAmounts } from '@/lib/fx'
+import type { DashboardCurrency } from '@/lib/fx'
 
 export interface KpiData {
   revenue: number
@@ -14,12 +16,16 @@ export interface KpiData {
   savingRateDelta: number | null
   netWorthDelta: number | null
   month: string  // 'YYYY-MM' of the reported month
+  currency: string
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
+
+    const { searchParams } = new URL(request.url)
+    const currency = (searchParams.get('currency') ?? 'USD') as DashboardCurrency
 
     const now = new Date()
     // Last full completed month
@@ -46,24 +52,37 @@ export async function GET() {
     const [thisRows, prevRows, allRows] = await Promise.all([
       prisma.transaction.findMany({
         where: { account: { userId }, date: { gte: thisStart, lte: thisEnd }, ...excludeNonDeductible },
-        select: { amount: true },
+        select: { amount: true, date: true, account: { select: { currency: true } } },
       }),
       prisma.transaction.findMany({
         where: { account: { userId }, date: { gte: prevStart, lte: prevEnd }, ...excludeNonDeductible },
-        select: { amount: true },
+        select: { amount: true, date: true, account: { select: { currency: true } } },
       }),
       // Net worth uses ALL transactions — transfers still move money between accounts
       prisma.transaction.findMany({
         where: { account: { userId } },
-        select: { amount: true },
+        select: { amount: true, date: true, account: { select: { currency: true } } },
       }),
     ])
 
-    function calcMonthStats(rows: { amount: unknown }[]) {
+    // Convert amounts to target currency using monthly rates
+    const toConvertRows = (rows: { amount: unknown; date: Date; account: { currency: string } }[]) =>
+      rows.map((r) => ({
+        amount: Number(r.amount),
+        currency: r.account.currency,
+        month: format(r.date, 'yyyy-MM'),
+      }))
+
+    const [thisConverted, prevConverted, allConverted] = await Promise.all([
+      convertAmounts(toConvertRows(thisRows), currency),
+      convertAmounts(toConvertRows(prevRows), currency),
+      convertAmounts(toConvertRows(allRows), currency),
+    ])
+
+    function calcMonthStats(amounts: number[]) {
       let revenue = 0
       let expenses = 0
-      for (const r of rows) {
-        const amt = Number(r.amount)
+      for (const amt of amounts) {
         if (amt > 0) revenue += amt
         else expenses += Math.abs(amt)
       }
@@ -71,10 +90,10 @@ export async function GET() {
       return { revenue, expenses, savingRate }
     }
 
-    const thisStats = calcMonthStats(thisRows)
-    const prevStats = calcMonthStats(prevRows)
+    const thisStats = calcMonthStats(thisConverted)
+    const prevStats = calcMonthStats(prevConverted)
 
-    const netWorth = allRows.reduce((sum, r) => sum + Number(r.amount), 0)
+    const netWorth = allConverted.reduce((sum, amt) => sum + amt, 0)
     // Net worth previous month = netWorth minus this month's net
     const thisNet = thisStats.revenue - thisStats.expenses
     const prevNetWorth = netWorth - thisNet
@@ -98,6 +117,7 @@ export async function GET() {
         : null,
       netWorthDelta: pctDelta(netWorth, prevNetWorth),
       month,
+      currency,
     }
 
     return ok(result)

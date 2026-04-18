@@ -99,7 +99,8 @@ All user data is isolated by Clerk `userId` (no org-level sharing). Core Prisma 
 - `InvoiceLineItem` — line on an invoice; `isTaxLine: true` marks tax lines (no separate tax model)
 - `InvoicePayment` — payment against an invoice; `transactionId` (`@unique`) optionally links to a bank `Transaction`; amount triggers automatic `PARTIAL` / `PAID` status update; payments can be deleted (`DELETE /payments/[paymentId]`) or moved to another open invoice (`PATCH /payments/[paymentId]`) — both recalculate invoice status atomically
 - `InvoicePaymentSuggestion` — auto-generated match between a `Transaction` and an `Invoice`; `confidence`: `HIGH | MEDIUM`; `status`: `PENDING | ACCEPTED | DISMISSED`; HIGH confidence matches are auto-applied at import time
-- `UserPreference` — one row per user, `data` JSON for arbitrary UI state. Known keys: `businessName`, `yourName`, `fromEmail`, `fromPhone`, `fromAddress`, `fromVatNumber`, `fromWebsite` (sender details on invoices), `paymentMethods` (bank/PayPal/Stripe/custom), `invoicePaymentNote`, `invoiceDefaults` (tax, currency, notes), `lastRulesAgentRun`
+- `UserPreference` — one row per user, `data` JSON for arbitrary UI state. Known keys: `businessName`, `yourName`, `fromEmail`, `fromPhone`, `fromAddress`, `fromVatNumber`, `fromWebsite` (sender details on invoices), `paymentMethods` (bank/PayPal/Stripe/custom), `invoicePaymentNote`, `invoiceDefaults` (tax, currency, notes), `lastRulesAgentRun`, `dashboardCurrency` (`'USD' | 'EUR' | 'GBP'` — display currency for dashboard totals)
+- `FxRate` — monthly EUR-base exchange rates for currency conversion; `(month, base, quote)` unique; `isOfficial: false` = carry-forward of latest known rate; seeded from ECB via Frankfurter.app for 2000-01 to present; refreshed via `POST /api/fx-rates/refresh`
 - `BankPlaybook` — stores discovered browser automation steps for each connected bank account; `steps` JSON contains `PlaybookStep[]` array; `twoFaType` tracks 2FA method; `status` indicates verification state
 - `EncryptedCredential` — AES-256-GCM encrypted bank login credentials (username:password); scoped per account with unique IV and auth tag
 - `SyncJob` — tracks bank sync operations with status progression: `PENDING` → `CONNECTING` → `DOWNLOADING` → `IMPORTING` → `COMPLETE/FAILED`
@@ -353,6 +354,18 @@ Single icon pill always visible — Sparkles icon by default, expands to show "c
 Each widget fetches from a dedicated `api/widgets/` endpoint (`cashflow`, `categories`, `networth`, `data`). Widgets use a relative date range picker (`RelativeDateRangePicker.tsx`) where the applied range is stored separately from in-progress selection. Chart rendering is handled by `ChartRouter.tsx` which dispatches to `AreaChartWidget`, `BarChartWidget`, `DonutChartWidget`, or `LineChartWidget`.
 
 Widget data pipeline: `src/lib/widgets/data-fetcher.ts` → `data-transformer.ts` → component. Colors: `src/lib/widgets/colors.ts`. Date helpers: `src/lib/widgets/date-utils.ts`.
+
+All widget API routes accept a `?currency=USD|EUR|GBP` query param (or `currency` field in POST body for `/api/widgets/data`). Amounts are converted at the transaction's own month's rate before aggregation.
+
+### Dashboard Currency Picker
+
+The dashboard header contains a USD/EUR/GBP pill picker (`src/components/dashboard/dashboard-header.tsx`). Selection is held in `DashboardClient` (`src/components/dashboard/dashboard-client.tsx`) and immediately persisted to `UserPreference.data.dashboardCurrency` via `POST /api/preferences`. On first visit the default is detected from the user's earliest `Account.currency`.
+
+**FX conversion** (`src/lib/fx.ts`):
+- `getRate(from, to, 'YYYY-MM')` — looks up EUR-base cross-rate for the given month; falls back to the most recent available row (carry-forward)
+- `convertAmounts(rows, targetCurrency)` — batch conversion with in-process caching; all widget routes and `data-fetcher.ts` use this
+- `POST /api/fx-rates/refresh` — fetches latest ECB rates from `api.frankfurter.app` and upserts the current month's `FxRate` row
+- Seed script: `npx tsx scripts/seed-fx-rates.ts` — populates the full 2000–present history (642 rows, EUR/USD + EUR/GBP)
 
 ### Client State
 

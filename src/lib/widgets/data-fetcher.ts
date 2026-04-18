@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import type { WidgetConfig } from '@/types/widgets'
 import { resolveDateRange } from './date-utils'
+import { format } from 'date-fns'
+import { convertAmounts } from '@/lib/fx'
 
 export interface RawDataRow {
   date: Date
@@ -11,7 +13,11 @@ export interface RawDataRow {
   account: string
 }
 
-export async function fetchWidgetData(userId: string, config: WidgetConfig): Promise<RawDataRow[]> {
+export async function fetchWidgetData(
+  userId: string,
+  config: WidgetConfig,
+  currency = 'USD',
+): Promise<RawDataRow[]> {
   const { start, end } = resolveDateRange(config.dateRange)
 
   // Build category filter from DataFilter[]
@@ -58,15 +64,22 @@ export async function fetchWidgetData(userId: string, config: WidgetConfig): Pro
       amount: true,
       categoryRef: { select: { name: true, group: { select: { name: true } } } },
       payee: { select: { name: true } },
-      account: { select: { name: true } },
+      account: { select: { name: true, currency: true } },
     },
     orderBy: { date: 'asc' },
   })
 
-  return rows.map((r) => ({
-    date: r.date,
-    // Store as positive number for display
+  // Convert all amounts to the target currency in one batch
+  const convertInput = rows.map((r) => ({
     amount: Math.abs(Number(r.amount)),
+    currency: r.account?.currency ?? 'USD',
+    month: format(r.date, 'yyyy-MM'),
+  }))
+  const converted = await convertAmounts(convertInput, currency)
+
+  return rows.map((r, i) => ({
+    date: r.date,
+    amount: converted[i],
     category: r.categoryRef?.name ?? 'Uncategorized',
     categoryGroup: r.categoryRef?.group?.name ?? 'No Group',
     payee: r.payee?.name ?? 'Unknown',

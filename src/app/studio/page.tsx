@@ -73,7 +73,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
         },
       },
     }),
-    prisma.transaction.count({ where: { userId } }),
+    prisma.transaction.count({ where: { account: { userId } } }),
   ])
   const prefsData = parsePreferences(prefs?.data)
   const paymentMethods = prefsData.paymentMethods ?? {}

@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import type { KpiData } from '@/app/api/widgets/kpi/route'
+import type { DashboardCurrency } from '@/lib/fx'
 
-function fmt(value: number): string {
+const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' }
+
+function fmt(value: number, currency: string): string {
+  const sym = SYMBOLS[currency] ?? '$'
   const abs = Math.abs(value)
-  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
-  if (abs >= 1000) return `$${(value / 1000).toFixed(1)}k`
-  return `$${value.toFixed(0)}`
+  if (abs >= 1_000_000) return `${sym}${(value / 1_000_000).toFixed(1)}M`
+  if (abs >= 1000) return `${sym}${(value / 1000).toFixed(1)}k`
+  return `${sym}${value.toFixed(0)}`
 }
 
 function Delta({ value, invert = false }: { value: number | null; invert?: boolean }) {
@@ -52,16 +56,22 @@ function monthLabel(ym: string): string {
   return new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' })
 }
 
-export function KpiBar() {
+interface KpiBarProps {
+  currency: DashboardCurrency
+}
+
+export function KpiBar({ currency }: KpiBarProps) {
   const [data, setData] = useState<KpiData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/widgets/kpi')
+    setLoading(true)
+    setData(null)
+    fetch(`/api/widgets/kpi?currency=${currency}`)
       .then((r) => r.json())
       .then((json) => { if (!json.error) setData(json.data) })
       .finally(() => setLoading(false))
-  }, [])
+  }, [currency])
 
   if (loading) {
     return (
@@ -83,12 +93,12 @@ export function KpiBar() {
         </div>
         <KpiCard
           label="Revenue"
-          value={fmt(data.revenue)}
+          value={fmt(data.revenue, currency)}
           delta={data.revenueDelta}
         />
         <KpiCard
           label="Expenses"
-          value={fmt(data.expenses)}
+          value={fmt(data.expenses, currency)}
           delta={data.expensesDelta}
           invertDelta
         />
@@ -100,7 +110,7 @@ export function KpiBar() {
         />
         <KpiCard
           label="Net worth"
-          value={fmt(data.netWorth)}
+          value={fmt(data.netWorth, currency)}
           delta={data.netWorthDelta}
         />
       </div>

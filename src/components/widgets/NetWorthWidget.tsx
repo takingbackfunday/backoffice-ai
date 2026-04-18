@@ -8,6 +8,7 @@ import {
 import type { NetWorthPoint } from '@/app/api/widgets/networth/route'
 import { RelativeDateRangePicker, resolveExpr, toDateString } from './RelativeDateRangePicker'
 import type { RelativeDateRange } from './RelativeDateRangePicker'
+import type { DashboardCurrency } from '@/lib/fx'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -154,10 +155,13 @@ function CategoryFilterDropdown({
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function fmt(value: number): string {
+const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' }
+
+function fmt(value: number, currency = 'USD'): string {
+  const sym = SYMBOLS[currency] ?? '$'
   const abs = Math.abs(value)
-  if (abs >= 1000) return `$${(value / 1000).toFixed(1)}k`
-  return `$${value.toFixed(0)}`
+  if (abs >= 1000) return `${sym}${(value / 1000).toFixed(1)}k`
+  return `${sym}${value.toFixed(0)}`
 }
 
 function shortMonth(label: string): string {
@@ -167,7 +171,7 @@ function shortMonth(label: string): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload }: any) {
+function CustomTooltip({ active, payload, currency }: any) {
   if (!active || !payload?.length) return null
   const point = payload[0]
   const netWorth: number = point?.value ?? 0
@@ -179,7 +183,7 @@ function CustomTooltip({ active, payload }: any) {
       <p className="font-medium text-[#333] mb-1">{displayLabel}</p>
       <div className="flex justify-between gap-4">
         <span className="text-[#16a34a]">Net Worth</span>
-        <span className={`font-semibold ${netWorth >= 0 ? 'text-[#16a34a]' : 'text-[#dc2626]'}`}>{fmt(netWorth)}</span>
+        <span className={`font-semibold ${netWorth >= 0 ? 'text-[#16a34a]' : 'text-[#dc2626]'}`}>{fmt(netWorth, currency)}</span>
       </div>
     </div>
   )
@@ -197,7 +201,11 @@ const PREF_KEY = 'networthFilters'
 
 // ── Main widget ────────────────────────────────────────────────────────────────
 
-export function NetWorthWidget() {
+interface NetWorthWidgetProps {
+  currency: DashboardCurrency
+}
+
+export function NetWorthWidget({ currency }: NetWorthWidgetProps) {
   const [period, setPeriod] = useState<Period>('all-time')
   const [relativeDateRange, setRelativeDateRange] = useState<RelativeDateRange>({
     start: { anchor: 'today', operator: 'minus', value: 7, unit: 'day' },
@@ -252,8 +260,8 @@ export function NetWorthWidget() {
     const categoriesParam = isAll ? '' : `&categories=${encodeURIComponent([...selectedCategories].join(','))}`
 
     const url = appliedRange.period === 'custom'
-      ? `/api/widgets/networth?period=custom&start=${appliedRange.start}&end=${appliedRange.end}${categoriesParam}`
-      : `/api/widgets/networth?period=${appliedRange.period}${categoriesParam}`
+      ? `/api/widgets/networth?period=custom&start=${appliedRange.start}&end=${appliedRange.end}&currency=${currency}${categoriesParam}`
+      : `/api/widgets/networth?period=${appliedRange.period}&currency=${currency}${categoriesParam}`
 
     fetch(url)
       .then((r) => r.json())
@@ -263,7 +271,7 @@ export function NetWorthWidget() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [appliedRange, selectedCategories, categoryGroups])
+  }, [appliedRange, selectedCategories, categoryGroups, currency])
 
   function handlePeriod(p: Period) {
     setPeriod(p)
@@ -427,12 +435,12 @@ export function NetWorthWidget() {
               fontSize={11}
               tickLine={false}
               axisLine={false}
-              tickFormatter={fmt}
+              tickFormatter={(v) => fmt(v, currency)}
               tick={{ fill: '#6b7280' }}
               width={64}
               domain={[yMin, yMax]}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip currency={currency} />} />
             <Area
               type="monotone"
               dataKey="netWorth"

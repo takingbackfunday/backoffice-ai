@@ -10,15 +10,17 @@ export async function POST(req: Request) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let config: WidgetConfig
+  let currency = 'USD'
   try {
     const body = await req.json()
     config = body.config ?? createDefaultWidgetConfig()
+    currency = body.currency ?? 'USD'
   } catch {
     config = createDefaultWidgetConfig()
   }
 
   try {
-    const rows = await fetchWidgetData(userId, config)
+    const rows = await fetchWidgetData(userId, config, currency)
     const { data, seriesKeys } = transformData(rows, config)
     return NextResponse.json({ data, seriesKeys })
   } catch (err) {

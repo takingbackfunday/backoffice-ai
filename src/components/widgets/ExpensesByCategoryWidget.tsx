@@ -6,6 +6,7 @@ import { createDefaultWidgetConfig } from '@/lib/widgets/defaults'
 import type { ChartDataPoint, WidgetConfig } from '@/types/widgets'
 import { RelativeDateRangePicker, resolveExpr, toDateString } from './RelativeDateRangePicker'
 import type { RelativeDateRange } from './RelativeDateRangePicker'
+import type { DashboardCurrency } from '@/lib/fx'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -164,7 +165,11 @@ const PREF_KEY = 'chartFilters'
 
 // ── Main widget ────────────────────────────────────────────────────────────────
 
-export function ExpensesByCategoryWidget() {
+interface ExpensesByCategoryWidgetProps {
+  currency: DashboardCurrency
+}
+
+export function ExpensesByCategoryWidget({ currency }: ExpensesByCategoryWidgetProps) {
   const [config, setConfig] = useState<WidgetConfig>(() => ({
     ...createDefaultWidgetConfig('stacked-bar'),
     splitBy: 'group',
@@ -235,14 +240,14 @@ export function ExpensesByCategoryWidget() {
     })
   }, [])
 
-  // Fetch chart data whenever config changes
+  // Fetch chart data whenever config or currency changes
   useEffect(() => {
     setLoading(true)
     setError(null)
     fetch('/api/widgets/data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config }),
+      body: JSON.stringify({ config, currency }),
     })
       .then((r) => r.json())
       .then((json) => {
@@ -252,7 +257,7 @@ export function ExpensesByCategoryWidget() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [config])
+  }, [config, currency])
 
   function setPeriod(period: Period) {
     setActivePeriod(period)

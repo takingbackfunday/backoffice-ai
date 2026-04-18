@@ -33,6 +33,9 @@ export interface UserPreferenceData {
   quoteValidityDays?: number
   quoteTerms?: string
 
+  // Dashboard display currency
+  dashboardCurrency?: 'USD' | 'EUR' | 'GBP'
+
   // Internal / system
   lastRulesAgentRun?: number
   onboardingStep?: string

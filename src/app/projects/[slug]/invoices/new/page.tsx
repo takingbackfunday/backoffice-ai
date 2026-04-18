@@ -109,7 +109,7 @@ export default async function NewInvoicePage({ params }: PageParams) {
       select: { id: true, quoteNumber: true, title: true, totalQuoted: true, currency: true },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.transaction.count({ where: { userId } }),
+    prisma.transaction.count({ where: { account: { userId } } }),
   ])
 
   return (

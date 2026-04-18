@@ -43,6 +43,13 @@ Financial management tool for freelancers, consultants, and small property manag
 - Maintenance request management
 - Tenant messaging portal
 
+### Dashboard Currency Conversion
+- Currency picker (USD / EUR / GBP) in the dashboard header — choice persists across sessions
+- Default auto-detected from the user's first imported account currency
+- All KPI figures, cashflow, net worth, and spending charts are converted to the chosen currency
+- Conversion uses official ECB monthly rates (Frankfurter.app) seeded from 2000 to present
+- Most recent months without published data fall back to the latest available rate automatically
+
 ### AI Agent
 - Multi-agent system: domain classifier routes questions to a Finance agent or Property agent (or both)
 - Finance agent answers questions about transactions, categories, spending trends
