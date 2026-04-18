@@ -474,6 +474,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
           if (event.type === 'status' && event.text) {
             setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: `_${event.text}_` } : m))
           } else if (event.type === 'token' && event.text) {
+            // token carries the full extracted text so far (not a delta), just set it
             setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: event.text! } : m))
           } else if (event.type === 'done') {
             const finalText = event.text ?? ''

@@ -158,7 +158,11 @@ You have a tool to look up previous estimates on this project for reference.
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Run tool rounds (non-streaming; estimate tool calls are fast DB lookups)
+        // Emit a thinking indicator immediately so the user sees activity
+        // before the first openrouterWithTools round completes (can take 10-30s
+        // for complex requests like detailed production estimates).
+        controller.enqueue(sseEvent({ type: 'status', text: 'Thinking…' }))
+
         const MAX_ROUNDS = 3
         let toolRoundsRan = false
 
@@ -225,6 +229,7 @@ You have a tool to look up previous estimates on this project for reference.
         }
 
         // Stream the final answer
+        controller.enqueue(sseEvent({ type: 'status', text: 'Building estimate…' }))
         llmMessages.push({ role: 'user', content: 'Please provide your final response now as the JSON object.' })
         let fullText = ''
         await openrouterStream(llmMessages, 'anthropic/claude-sonnet-4.6', (token) => {
