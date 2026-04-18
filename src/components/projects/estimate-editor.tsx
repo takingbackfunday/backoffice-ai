@@ -1,8 +1,8 @@
 'use client'
 
-import { useReducer, useState, useCallback } from 'react'
+import { useReducer, useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Sparkles, ChevronDown, ChevronUp, Check, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Sparkles, ChevronDown, ChevronUp, ChevronRight, Check, AlertTriangle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -231,6 +231,9 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
   const [aiInput, setAiInput] = useState('')
   const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([])
   const [aiLoading, setAiLoading] = useState(false)
+  const aiEndRef = useRef<HTMLDivElement>(null)
+  const aiInputRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => { aiEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [aiMessages])
 
   const isFinalized = existingEstimate?.status === 'FINAL' || existingEstimate?.status === 'SUPERSEDED'
 
@@ -490,7 +493,8 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex gap-0 min-h-0">
+    <div className="flex-1 min-w-0 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex-1 mr-4">
@@ -599,37 +603,6 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
         <div className="text-sm text-destructive bg-destructive/10 rounded px-3 py-2">{error}</div>
       )}
 
-      {/* AI Assist panel */}
-      {aiOpen && (
-        <div className="border rounded-lg p-4 space-y-3 bg-accent/20">
-          <p className="text-sm font-medium">AI Estimation Assistant</p>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {aiMessages.map((m, i) => (
-              <div key={i} className={cn('text-sm rounded px-3 py-2', m.role === 'user' ? 'bg-primary/10 ml-8' : 'bg-background mr-8')}>
-                {m.text}
-              </div>
-            ))}
-            {aiLoading && <div className="text-sm text-muted-foreground px-3">Thinking…</div>}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={aiInput}
-              onChange={e => setAiInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAiSend() } }}
-              placeholder="Describe the project scope…"
-              className="flex-1 text-sm border rounded px-3 py-1.5 bg-background"
-            />
-            <button
-              onClick={handleAiSend}
-              disabled={aiLoading || !aiInput.trim()}
-              className="text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              Send
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Sections */}
       <div className="space-y-4">
@@ -852,6 +825,84 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
           Total cost: {new Intl.NumberFormat('en-US', { style: 'currency', currency: state.currency }).format(totalCost)}
         </span>
       </div>
+    </div>{/* end left form */}
+
+      {/* ── RIGHT: AI chat panel ─────────────────────────────────── */}
+      {aiOpen && (
+        <div className="w-[380px] flex-shrink-0 border-l flex flex-col bg-background">
+          {/* Chat header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                <Sparkles className="h-3 w-3 text-primary-foreground" />
+              </div>
+              <span className="text-sm font-semibold">AI Estimation Assistant</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAiOpen(false)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style={{ maxHeight: 'calc(100vh - 320px)' }}>
+            {aiMessages.map((msg, idx) => msg.role === 'assistant' && !msg.text ? null : (
+              <div key={idx} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                <div className={cn(
+                  'max-w-[85%] rounded-2xl px-3 py-2 text-sm',
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground rounded-br-sm'
+                    : 'bg-muted text-foreground rounded-bl-sm'
+                )}>
+                  <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                </div>
+              </div>
+            ))}
+            {aiLoading && aiMessages[aiMessages.length - 1]?.text === '' && (
+              <div className="flex justify-start">
+                <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
+                  {[0, 1, 2].map(i => (
+                    <span key={i} className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />
+                  ))}
+                </div>
+              </div>
+            )}
+            <div ref={aiEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="p-3 border-t">
+            <div className="flex gap-2 items-end">
+              <textarea
+                ref={aiInputRef}
+                value={aiInput}
+                onChange={e => setAiInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleAiSend()
+                  }
+                }}
+                placeholder="Describe the project scope, ask to add or change items…"
+                rows={2}
+                className="flex-1 rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary min-h-[60px]"
+              />
+              <button
+                type="button"
+                onClick={handleAiSend}
+                disabled={!aiInput.trim() || aiLoading}
+                className="rounded-xl bg-primary p-2.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors self-end"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5">Enter to send · Shift+Enter for newline</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
