@@ -132,7 +132,7 @@ Each resource has its own directory (e.g. `api/transactions/`, `api/rules/`). Al
 - `POST [estId]/finalize` — set status to `FINAL` (locks editing; further edits must go through `/revise`)
 - `POST [estId]/revise` — create a new version (`parentId` → prior estimate, prior status set to `SUPERSEDED`)
 - `POST [estId]/duplicate` — copy an estimate as a new `DRAFT` (use as template)
-- `POST [estId]/ai-assist` — chat-based AI estimation; `estId` can be `'new'` for unsaved estimates; uses `openrouterWithTools` with a `lookup_similar_estimates` tool
+- `POST [estId]/ai-assist` — chat-based AI estimation; `estId` can be `'new'` for unsaved estimates; returns **SSE** (`text/event-stream`) with the same `status / token / done / error` event shape as the invoice `ai-assist` route; uses `openrouterWithTools` for tool rounds then `openrouterStream` for the final streamed answer; tool: `lookup_similar_estimates`
 
 **Quote routes** (`api/projects/[id]/quotes/`):
 - `GET / POST` — list quotes for a project; `POST` triggers quote generation from an estimate ID
@@ -169,9 +169,10 @@ Rule condition fields: `description`, `payeeName`, `rawDescription`, `amount`, `
 
 ### LLM / Agent Integration (`src/lib/llm/`, `src/lib/agent/`)
 
-`src/lib/llm/openrouter.ts` exposes two functions:
+`src/lib/llm/openrouter.ts` exposes three functions:
 - `openrouterChat(messages, model?)` — simple text completion; default model `mistralai/devstral-small`
 - `openrouterWithTools(messages, tools, model?)` — tool-calling with streaming SSE accumulation; default model `mistralai/mistral-small-2603`; streams to avoid serverless timeouts; retries up to 2× with exponential back-off (2s, 4s) on transient errors (429, 500, 502, 503, 504)
+- `openrouterStream(messages, model, onToken)` — streaming completion without tools; calls `onToken(chunk)` for each content delta; returns the full accumulated text; used by `ai-assist` routes for the final answer pass after tool rounds complete
 
 ### Multi-Agent System (`src/lib/agent/`)
 
@@ -320,6 +321,8 @@ Server component (`page.tsx`) fetches all active CLIENT workspaces with their in
 
 `StudioClient` is the client component. Key layout from top to bottom:
 
+0. **Overhead workspace banner** — shown above everything when `hasOverheadWorkspace` is `false` (i.e. no `Workspace` with `isDefault: true` exists for the user). Clicking "Set up →" POSTs directly to `POST /api/projects` with `{ name: 'Business Overhead', type: 'OTHER', isDefault: true }` and calls `router.refresh()` — no navigation. The banner disappears once the server re-queries and finds the new workspace. `hasOverheadWorkspace` is computed in `studio/page.tsx` via `prisma.workspace.findFirst({ where: { userId, isDefault: true } })`.
+
 1. **Unified KPI + pipeline row** — single 6-cell grid: Quotes accepted | Outstanding | Overdue | Collected | Earned this month | Clients. Outstanding and Overdue are clickable: set `clientFilter` state, auto-expand the first matching client card, and scroll to the cards section.
 
 2. **3-column strip** — `gridTemplateColumns: 'auto 1fr 1fr'`:
@@ -422,16 +425,28 @@ Do **not** use `PrismaNeonHttp`, `PrismaPg`, or `@prisma/adapter-pg` — `Prisma
 
 `Job` uses a `status` enum (`JobStatus`: `ACTIVE`, `COMPLETED`, `CANCELLED`). Filter active jobs with `{ status: 'ACTIVE' }`, not `{ isActive: true }`.
 
-### Invoice AI routes expect JSON from the model
+### Invoice and estimate AI chat — shared SSE pattern
 
-`ai-finalize` calls `anthropic/claude-sonnet-4.6` via `openrouterChat()` and parses the response as JSON. The route strips markdown code fences and falls back to extracting the first `{...}` block. If the model returns unparseable output it returns an empty actions array gracefully.
+Both `ai-assist` routes (invoice and estimate) return **SSE** (`text/event-stream`) with the same four event types:
+- `{ type: "status", text: "..." }` — emitted at the start and during tool calls (e.g. "Thinking…", "Looking up similar estimates…", "Building estimate…")
+- `{ type: "token", text: "..." }` — carries the **full extracted text so far** (not a delta) as the final answer streams in; client sets message text to this value directly
+- `{ type: "done", text: "...", actions: [...] }` — final clean text + parsed actions array; client applies actions on this event
+- `{ type: "error", text: "..." }` — on failure
 
-`ai-assist` returns **SSE** (`text/event-stream`), not JSON. It streams three event types:
-- `{ type: "status", text: "..." }` — emitted while tool calls run (e.g. expenses lookup)
-- `{ type: "token", text: "..." }` — one per streamed content token from the model
-- `{ type: "done", text: "...", actions: [...] }` — final clean text + parsed actions array
+**Invoice `ai-assist`** (`api/projects/[id]/invoices/ai-assist/route.ts`): tool rounds via `openrouterWithTools` (non-streaming), final answer via `streamFinalAnswer` (internal helper that streams directly). Round 0 uses `forwardTokens: false` — raw JSON is never forwarded to the client; only the parsed `text` field reaches the user via the `done` event.
 
-The route uses a single streaming pass for round 0 (tokens forwarded immediately if no tools needed) and falls back to `streamFinalAnswer` after tool rounds. The client (`invoice-editor.tsx`) reads the SSE stream with `res.body.getReader()`, progressively extracts the `"text"` field from the partial JSON via `extractStreamingText()`, and applies actions atomically on the `done` event.
+**Estimate `ai-assist`** (`api/projects/[id]/estimates/[estId]/ai-assist/route.ts`): same shape. Tool rounds via `openrouterWithTools`; final answer via `openrouterStream` with `extractStreamingText` called on each token to progressively extract the visible text. `estId` can be `'new'` for unsaved estimates.
+
+**`extractStreamingText(raw)`** — shared char-by-char walker (duplicated in both route files) that locates the `"text"` key in a partially-streamed JSON string and extracts its value, correctly handling escape sequences and embedded quotes. Avoids the regex approach which terminates early on unescaped quotes inside the text value.
+
+**`ai-finalize`** (invoice only) — separate non-streaming route; calls `openrouterChat()` and returns a plain JSON response `{ suggestedNotes, questions }`. Strips markdown fences and falls back to the first `{...}` block.
+
+**Client SSE reader pattern** (both `invoice-editor.tsx` and `estimate-editor.tsx`):
+- Append user message + assistant placeholder in a **single** `setChatMessages` call to avoid stale-index issues under React 18 automatic batching
+- `status` → update placeholder to italic status text
+- `token` → set placeholder text to the full extracted text so far
+- `done` → set final text, apply actions
+- `error` → set error text
 
 ### `isTaxLine` on `InvoiceLineItem`
 

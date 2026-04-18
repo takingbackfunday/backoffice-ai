@@ -148,6 +148,6 @@ Uses `@prisma/adapter-neon` (`PrismaNeon`) with `@neondatabase/serverless` for W
 
 On Fly.io the Node process persists across requests, so fire-and-forget works. However, `await Promise.allSettled([...])` is still preferred for critical background work (invoice matching, tenant matching) to ensure errors are caught and logged.
 
-### Invoice AI models
+### Invoice and estimate AI chat (SSE)
 
-Invoice AI routes call `anthropic/claude-sonnet-4.6` via OpenRouter and expect JSON. Routes strip markdown code fences and fall back to extracting the first `{...}` block.
+Both `ai-assist` routes (`invoices/ai-assist` and `estimates/[estId]/ai-assist`) return `text/event-stream` SSE with four event types: `status`, `token`, `done`, `error`. The model responds with `{"text":"...","actions":[...]}` JSON — raw tokens are never forwarded to the client; only the parsed `text` field is displayed. The `ai-finalize` route (invoice only) still returns plain JSON via `openrouterChat`.
