@@ -37,8 +37,17 @@ function F({ label, value, onChange, placeholder, mono = false }: {
   )
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mt-4 mb-1.5 first:mt-0">{children}</p>
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border bg-white">
+      <div className="px-4 py-2.5 border-b bg-muted/30 rounded-t-lg">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      </div>
+      <div className="px-4 py-3 space-y-2">
+        {children}
+      </div>
+    </div>
+  )
 }
 
 export function PaymentSettingsForm({
@@ -155,97 +164,95 @@ export function PaymentSettingsForm({
 
   return (
     <>
-      <div className="rounded-xl border p-4 space-y-0 max-w-xl">
+      <div className="space-y-4 max-w-xl">
 
-        <SectionLabel>Business profile</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          <F label="Business / trading name" value={businessName} onChange={setBusinessName} placeholder="Acme Studio" />
-          <F label="Your name" value={yourName} onChange={setYourName} placeholder="Jane Smith" />
-        </div>
-        <div className="mt-2">
+        <Section title="Business profile">
+          <div className="grid grid-cols-2 gap-2">
+            <F label="Business / trading name" value={businessName} onChange={setBusinessName} placeholder="Acme Studio" />
+            <F label="Your name" value={yourName} onChange={setYourName} placeholder="Jane Smith" />
+          </div>
           <F label="Address" value={address} onChange={setAddress} placeholder="123 Main St, London, EC1A 1BB" />
-        </div>
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          <F label="Email" value={email} onChange={setEmail} placeholder="hello@acmestudio.com" />
-          <F label="Phone" value={phone} onChange={setPhone} placeholder="+44 7700 900000" />
-        </div>
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          <F label="Website" value={website} onChange={setWebsite} placeholder="acmestudio.com" />
-          <F label="VAT / Tax number" value={vatNumber} onChange={setVatNumber} placeholder="GB123456789" mono />
-        </div>
+          <div className="grid grid-cols-2 gap-2">
+            <F label="Email" value={email} onChange={setEmail} placeholder="hello@acmestudio.com" />
+            <F label="Phone" value={phone} onChange={setPhone} placeholder="+44 7700 900000" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <F label="Website" value={website} onChange={setWebsite} placeholder="acmestudio.com" />
+            <F label="VAT / Tax number" value={vatNumber} onChange={setVatNumber} placeholder="GB123456789" mono />
+          </div>
+        </Section>
 
-        <SectionLabel>Bank transfer</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          <F label="Account name" value={accountName} onChange={setAccountName} placeholder="Your Name or Business" />
-          <F label="Bank name" value={bankName} onChange={setBankName} placeholder="Barclays, Chase…" />
-        </div>
-        <div className="mt-2">
+        <Section title="Bank transfer">
+          <div className="grid grid-cols-2 gap-2">
+            <F label="Account name" value={accountName} onChange={setAccountName} placeholder="Your Name or Business" />
+            <F label="Bank name" value={bankName} onChange={setBankName} placeholder="Barclays, Chase…" />
+          </div>
           <F label="IBAN" value={iban} onChange={setIban} placeholder="GB29 NWBK 6016 1331 9268 19" mono />
-        </div>
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          <F label="SWIFT / BIC" value={swift} onChange={setSwift} placeholder="NWBKGB2L" mono />
-          <F label="Sort code (UK)" value={sortCode} onChange={setSortCode} placeholder="60-16-13" mono />
-        </div>
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          <F label="Account number" value={accountNumber} onChange={setAccountNumber} placeholder="31926819" mono />
-          <F label="Routing number (US ACH)" value={routingNumber} onChange={setRoutingNumber} placeholder="021000021" mono />
-        </div>
+          <div className="grid grid-cols-2 gap-2">
+            <F label="SWIFT / BIC" value={swift} onChange={setSwift} placeholder="NWBKGB2L" mono />
+            <F label="Sort code (UK)" value={sortCode} onChange={setSortCode} placeholder="60-16-13" mono />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <F label="Account number" value={accountNumber} onChange={setAccountNumber} placeholder="31926819" mono />
+            <F label="Routing number (US ACH)" value={routingNumber} onChange={setRoutingNumber} placeholder="021000021" mono />
+          </div>
+        </Section>
 
-        <SectionLabel>Online payments</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          <F label="PayPal link or email" value={paypalLink} onChange={setPaypalLink} placeholder="paypal.me/yourname" />
-          <F label="Stripe payment link" value={stripeLink} onChange={setStripeLink} placeholder="buy.stripe.com/…" />
-        </div>
+        <Section title="Online payments">
+          <div className="grid grid-cols-2 gap-2">
+            <F label="PayPal link or email" value={paypalLink} onChange={setPaypalLink} placeholder="paypal.me/yourname" />
+            <F label="Stripe payment link" value={stripeLink} onChange={setStripeLink} placeholder="buy.stripe.com/…" />
+          </div>
+          <div className="space-y-1.5">
+            {customMethods.map((m, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={m.label}
+                  onChange={e => setCustomMethods(prev => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                  placeholder="Label (e.g. Wise)"
+                  className="w-24 shrink-0 rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary"
+                />
+                <input
+                  type="text"
+                  value={m.value}
+                  onChange={e => setCustomMethods(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}
+                  placeholder="Account, email, handle…"
+                  className="flex-1 rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCustomMethods(prev => prev.filter((_, j) => j !== i))}
+                  className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                  aria-label="Remove"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setCustomMethods(prev => [...prev, { label: '', value: '' }])}
+              className="flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              <Plus className="h-3 w-3" /> Add method
+            </button>
+          </div>
+        </Section>
 
-        <SectionLabel>Custom payment methods</SectionLabel>
-        <div className="space-y-1.5">
-          {customMethods.map((m, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <input
-                type="text"
-                value={m.label}
-                onChange={e => setCustomMethods(prev => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
-                placeholder="Label (e.g. Wise)"
-                className="w-24 shrink-0 rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary"
-              />
-              <input
-                type="text"
-                value={m.value}
-                onChange={e => setCustomMethods(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}
-                placeholder="Account, email, handle…"
-                className="flex-1 rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary"
-              />
-              <button
-                type="button"
-                onClick={() => setCustomMethods(prev => prev.filter((_, j) => j !== i))}
-                className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                aria-label="Remove"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setCustomMethods(prev => [...prev, { label: '', value: '' }])}
-            className="flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            <Plus className="h-3 w-3" /> Add method
-          </button>
-        </div>
+        <Section title="Payment instructions">
+          <textarea
+            value={paymentNote}
+            onChange={e => setPaymentNote(e.target.value)}
+            rows={2}
+            placeholder="Please include your invoice number and full name in your payment reference."
+            className="w-full rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary resize-none"
+          />
+        </Section>
 
-        <SectionLabel>Payment instructions</SectionLabel>
-        <textarea
-          value={paymentNote}
-          onChange={e => setPaymentNote(e.target.value)}
-          rows={2}
-          placeholder="Please include your invoice number and full name in your payment reference."
-          className="w-full rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary resize-none"
-        />
+        {error && <p className="text-xs text-destructive">{error}</p>}
 
-        {error && <p className="text-xs text-destructive pt-1">{error}</p>}
-
-        <div className="flex items-center gap-3 pt-3">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleSave}
