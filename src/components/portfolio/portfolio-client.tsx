@@ -212,58 +212,6 @@ function KpiCard({ label, value, sub, color, onClick, active }: {
 /*  Pipeline Strip                                                     */
 /* ------------------------------------------------------------------ */
 
-function PipelineStrip({ properties }: { properties: Property[] }) {
-  const allUnits = properties.flatMap(p => p.units)
-
-  const vacant = allUnits.filter(u => u.status === 'VACANT')
-  const expiring = allUnits.filter(u => getLeaseUrgency(u.leaseEndDate) !== null)
-  const overdueUnits = allUnits.filter(u => hasOverdueRent(u))
-
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const collectedThisMonth = allUnits.flatMap(u =>
-    u.invoices
-      .filter(inv => inv.status !== 'VOID')
-      .filter(inv => new Date(inv.dueDate) >= startOfMonth)
-  )
-  const collectedAmount = collectedThisMonth.reduce((s, inv) => s + inv.paymentTotal, 0)
-  const overdueAmount = overdueUnits.reduce((s, u) => s + getBalance(u), 0)
-
-  const stages = [
-    { label: 'Vacant units',       count: vacant.length,   amount: null,            color: '#fef3c7', textColor: '#a16207' },
-    { label: 'Expiring ≤90d',      count: expiring.length, amount: null,            color: '#fee2e2', textColor: '#dc2626' },
-    { label: 'Rent overdue',       count: overdueUnits.length, amount: overdueAmount > 0 ? overdueAmount : null, color: '#fecaca', textColor: '#991b1b' },
-    { label: 'Collected this mo.', count: collectedThisMonth.length, amount: collectedAmount > 0 ? collectedAmount : null, color: '#d1fae5', textColor: '#065f46' },
-  ]
-
-  const hasAnyData = stages.some(s => s.count > 0)
-  if (!hasAnyData) return null
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 1, marginBottom: 20, borderRadius: 14, overflow: 'hidden', border: '1px solid #e8e6df' }}>
-      {stages.map((stage, i) => (
-        <div
-          key={stage.label}
-          style={{
-            background: stage.count > 0 ? stage.color : '#fafaf8',
-            padding: '14px 18px',
-            borderRight: i < 3 ? '1px solid #e8e6df' : 'none',
-            opacity: stage.count === 0 ? 0.5 : 1,
-          }}
-        >
-          <p style={{ fontSize: 10, fontWeight: 700, color: stage.count > 0 ? stage.textColor : '#bbb', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 6px' }}>{stage.label}</p>
-          <p style={{ fontSize: 20, fontWeight: 700, color: stage.count > 0 ? stage.textColor : '#ccc', fontVariantNumeric: 'tabular-nums', margin: '0 0 2px', lineHeight: 1.1 }}>
-            {stage.amount != null ? fmt(stage.amount) : stage.count > 0 ? stage.count : '—'}
-          </p>
-          <p style={{ fontSize: 10, color: stage.count > 0 ? stage.textColor : '#ccc', margin: 0, opacity: 0.7 }}>
-            {stage.count} unit{stage.count !== 1 ? 's' : ''}
-          </p>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 /* ------------------------------------------------------------------ */
 /*  Recent Activity                                                    */
 /* ------------------------------------------------------------------ */
@@ -560,11 +508,6 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
       </div>
 
       {/* ============================================================= */}
-      {/*  PIPELINE STRIP                                                */}
-      {/* ============================================================= */}
-
-      <PipelineStrip properties={properties} />
-
       {/* ============================================================= */}
       {/*  3-COL STRIP: Take action | Take notice | Recent activity      */}
       {/* ============================================================= */}

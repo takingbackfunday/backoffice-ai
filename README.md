@@ -40,7 +40,6 @@ Financial management tool for freelancers, consultants, and small property manag
 ### Projects (PROPERTY)
 - **Portfolio dashboard** (`/portfolio`): Client Hub-style command centre with teal (#1D9E75) accent
 - **KPI bar**: gradient KpiCards — Units | Occupancy | Leased | Vacant | Revenue/mo | Rent overdue | Expiring ≤90d | Applicants | Maintenance; click filterable cards to filter property cards below
-- **Revenue pipeline strip**: Vacant | Expiring ≤90 days | Rent overdue | Collected this month
 - **3-column action strip**: Take action (Add property, Log rent, Add unit, Maintenance, Send message pill grid) | Take notice (clickable rows for overdue, expiring, maintenance, applicants) | Recent activity (top-6 events from rent, maintenance, and messages)
 - **Per-property accordion cards**: mini-KPI header row with occupancy ring, revenue, expiring leases, overdue rent, and maintenance count; expanded panel shows unit list with status/balance/payment badges; per-unit ExpandedPanel shows lease, ledger, maintenance, and messages tabs
 - Quick actions sidebar per property card (hidden when a filter is active)
