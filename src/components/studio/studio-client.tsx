@@ -866,7 +866,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [kpis, setKpis] = useState(initialKpis)
   const [expandedClient, setExpandedClient] = useState<string | null>(null)
   const [clientSearch, setClientSearch] = useState('')
-  const [clientFilter, setClientFilter] = useState<'outstanding' | 'overdue' | 'unsent' | null>(null)
+  const [clientFilter, setClientFilter] = useState<'outstanding' | 'overdue' | 'unsent' | 'collected' | null>(null)
   const [creatingOverhead, setCreatingOverhead] = useState(false)
   const cardsRef = useRef<HTMLDivElement>(null)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
@@ -1027,48 +1027,52 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       {(() => {
         const acceptedQuotesTotal = clients.reduce((s, c) => s + c.acceptedQuotes.reduce((qs, q) => qs + (q.totalQuoted ?? 0), 0), 0)
         const acceptedQuotesCount = clients.reduce((s, c) => s + c.acceptedQuotes.length, 0)
-        const invoiced = flat.filter(i => { const s = getDisplayStatus(i); return s === 'DRAFT' || s === 'SENT' || s === 'PARTIAL' })
+        const outstandingInvs = flat.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' || s === 'OVERDUE' })
         const overdueInvs = flat.filter(i => getDisplayStatus(i) === 'OVERDUE')
         const collected = flat.filter(i => getDisplayStatus(i) === 'PAID')
-        const invoicedTotal = invoiced.reduce((s, i) => s + (i.total - i.paid), 0)
+        const outstandingTotal = outstandingInvs.reduce((s, i) => s + (i.total - i.paid), 0)
         const overdueTotal = overdueInvs.reduce((s, i) => s + (i.total - i.paid), 0)
         const collectedTotal = collected.reduce((s, i) => s + i.paid, 0)
+
+        function handleKpiClick(filter: 'outstanding' | 'overdue' | 'collected', matchFn: (c: typeof clients[0]) => boolean) {
+          const next = clientFilter === filter ? null : filter
+          setClientFilter(next)
+          if (next) {
+            const first = clients.find(matchFn)
+            if (first) setExpandedClient(first.id)
+          } else {
+            setExpandedClient(null)
+          }
+          setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+        }
+
         return (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr', gap: 8, marginBottom: 20 }}>
             <KpiCard label="Quotes accepted" value={acceptedQuotesCount > 0 ? fmt(acceptedQuotesTotal) : '—'} sub={acceptedQuotesCount > 0 ? `${acceptedQuotesCount} quote${acceptedQuotesCount !== 1 ? 's' : ''}` : 'none active'} color="neutral" />
             <KpiCard
-              label="Outstanding" value={invoicedTotal > 0 ? fmt(invoicedTotal) : '—'} sub={`${invoiced.length} open`}
-              color={invoicedTotal > 0 ? 'amber' : 'neutral'}
+              label="Invoices Outstanding"
+              value={outstandingTotal > 0 ? fmt(outstandingTotal) : '—'}
+              sub={outstandingInvs.length > 0 ? `${outstandingInvs.length} invoice${outstandingInvs.length !== 1 ? 's' : ''}` : ''}
+              color={outstandingTotal > 0 ? 'amber' : 'neutral'}
               active={clientFilter === 'outstanding'}
-              onClick={kpis.totalOutstanding > 0 ? () => {
-                const next = clientFilter === 'outstanding' ? null : 'outstanding'
-                setClientFilter(next)
-                if (next) {
-                  const first = clients.find(c => c.outstanding > 0)
-                  if (first) setExpandedClient(first.id)
-                } else {
-                  setExpandedClient(null)
-                }
-                setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-              } : undefined}
+              onClick={outstandingTotal > 0 ? () => handleKpiClick('outstanding', c => c.outstanding > 0) : undefined}
             />
             <KpiCard
-              label="Overdue" value={overdueTotal > 0 ? fmt(overdueTotal) : '—'} sub={overdueInvs.length > 0 ? `${overdueInvs.length} invoice${overdueInvs.length !== 1 ? 's' : ''}` : ''}
+              label="Invoices Overdue"
+              value={overdueTotal > 0 ? fmt(overdueTotal) : '—'}
+              sub={overdueInvs.length > 0 ? `${overdueInvs.length} invoice${overdueInvs.length !== 1 ? 's' : ''}` : ''}
               color={overdueInvs.length > 0 ? 'red' : 'neutral'}
               active={clientFilter === 'overdue'}
-              onClick={overdueInvs.length > 0 ? () => {
-                const next = clientFilter === 'overdue' ? null : 'overdue'
-                setClientFilter(next)
-                if (next) {
-                  const first = clients.find(c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE'))
-                  if (first) setExpandedClient(first.id)
-                } else {
-                  setExpandedClient(null)
-                }
-                setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-              } : undefined}
+              onClick={overdueInvs.length > 0 ? () => handleKpiClick('overdue', c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE')) : undefined}
             />
-            <KpiCard label="Collected" value={collectedTotal > 0 ? fmt(collectedTotal) : '—'} sub={collected.length > 0 ? `${collected.length} paid` : ''} color={collectedTotal > 0 ? 'green' : 'neutral'} />
+            <KpiCard
+              label="Invoices Collected"
+              value={collectedTotal > 0 ? fmt(collectedTotal) : '—'}
+              sub={collected.length > 0 ? `${collected.length} paid` : ''}
+              color={collectedTotal > 0 ? 'green' : 'neutral'}
+              active={clientFilter === 'collected'}
+              onClick={collected.length > 0 ? () => handleKpiClick('collected', c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'PAID')) : undefined}
+            />
             <KpiCard label="Earned this month" value={fmt(kpis.revenueThisMonth)} color="green" />
             <KpiCard label="Clients" value={kpis.activeClients} sub="active" color="neutral" />
           </div>
@@ -1180,9 +1184,13 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
             {clientFilter && (
               <button
                 onClick={() => setClientFilter(null)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, color: clientFilter === 'overdue' ? '#dc2626' : clientFilter === 'unsent' ? '#1d4ed8' : '#a16207', background: clientFilter === 'overdue' ? '#fef2f2' : clientFilter === 'unsent' ? '#eff6ff' : '#fffbeb', border: `1px solid ${clientFilter === 'overdue' ? '#fecaca' : clientFilter === 'unsent' ? '#bfdbfe' : '#fde68a'}`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600,
+                  color: clientFilter === 'overdue' ? '#dc2626' : clientFilter === 'collected' ? '#16a34a' : clientFilter === 'unsent' ? '#1d4ed8' : '#a16207',
+                  background: clientFilter === 'overdue' ? '#fef2f2' : clientFilter === 'collected' ? '#f0fdf4' : clientFilter === 'unsent' ? '#eff6ff' : '#fffbeb',
+                  border: `1px solid ${clientFilter === 'overdue' ? '#fecaca' : clientFilter === 'collected' ? '#bbf7d0' : clientFilter === 'unsent' ? '#bfdbfe' : '#fde68a'}`,
+                  borderRadius: 99, padding: '2px 8px', cursor: 'pointer' }}
               >
-                {clientFilter === 'overdue' ? 'Overdue' : clientFilter === 'unsent' ? 'Unsent drafts' : 'Outstanding'} ✕
+                {clientFilter === 'overdue' ? 'Invoices Overdue' : clientFilter === 'collected' ? 'Invoices Collected' : clientFilter === 'unsent' ? 'Unsent drafts' : 'Invoices Outstanding'} ✕
               </button>
             )}
           </div>
@@ -1212,6 +1220,10 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
             if (clientFilter === 'unsent') {
               const clientFlat = flat.filter(i => i.clientId === client.id)
               if (!clientFlat.some(i => i.status === 'DRAFT')) return false
+            }
+            if (clientFilter === 'collected') {
+              const clientFlat = flat.filter(i => i.clientId === client.id)
+              if (!clientFlat.some(i => getDisplayStatus(i) === 'PAID')) return false
             }
             // Omni search
             if (!clientSearch.trim()) return true
