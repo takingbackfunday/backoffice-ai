@@ -180,7 +180,8 @@ export function PivotTable({ result, config }: PivotTableProps) {
                         </button>
                         {group.key}
                       </td>
-                      {firstChild && firstChild.rowValues.slice(1).map((val, vi) => (
+                      {/* Second row column — empty when collapsed (subtotals fill data cells), first child value when expanded */}
+                      {!isCollapsed && firstChild && firstChild.rowValues.slice(1).map((val, vi) => (
                         <td
                           key={vi}
                           className="sticky z-10 bg-background [box-shadow:inset_0_0_0_9999px_hsl(var(--muted))] px-3 py-2 text-sm border-b border-r pl-6 whitespace-nowrap"
@@ -189,20 +190,34 @@ export function PivotTable({ result, config }: PivotTableProps) {
                           {val}
                         </td>
                       ))}
-                      {hasColData && firstChild && displayColKeys.map(ck => (
+                      {isCollapsed && rows.slice(1).map((_, vi) => (
+                        <td key={vi} className="sticky z-10 bg-background [box-shadow:inset_0_0_0_9999px_hsl(var(--muted))] px-3 py-2 text-sm border-b border-r" style={stickyStyle(vi + 1)} />
+                      ))}
+                      {/* Data cells — subtotals when collapsed, first child when expanded */}
+                      {hasColData && isCollapsed && displayColKeys.map(ck => (
+                        <td key={ck} className={`px-3 py-2 text-right font-mono text-sm border-b ${cellClass(group.subtotals[ck] ?? 0)}`}>
+                          {formatValue(group.subtotals[ck] ?? 0, aggregation as AggregationType)}
+                        </td>
+                      ))}
+                      {hasColData && !isCollapsed && firstChild && displayColKeys.map(ck => (
                         <td key={ck} className={`px-3 py-2 text-right font-mono text-sm border-b ${cellClass(firstChild.cells[ck] ?? 0)}`}>
                           {firstChild.cells[ck] !== undefined ? formatValue(firstChild.cells[ck], aggregation as AggregationType) : '—'}
                         </td>
                       ))}
-                      {!firstChild && hasColData && displayColKeys.map(ck => (
+                      {hasColData && !isCollapsed && !firstChild && displayColKeys.map(ck => (
                         <td key={ck} className="px-3 py-2 border-b" />
                       ))}
-                      {showGrandTotals && firstChild && (
+                      {showGrandTotals && isCollapsed && (
+                        <td className={`px-3 py-2 text-right font-mono text-sm border-b border-l ${cellClass(group.rowTotal)}`}>
+                          {formatValue(group.rowTotal, aggregation as AggregationType)}
+                        </td>
+                      )}
+                      {showGrandTotals && !isCollapsed && firstChild && (
                         <td className={`px-3 py-2 text-right font-mono text-sm border-b border-l ${cellClass(firstChild.rowTotal)}`}>
                           {formatValue(firstChild.rowTotal, aggregation as AggregationType)}
                         </td>
                       )}
-                      {showGrandTotals && !firstChild && <td className="px-3 py-2 border-b border-l" />}
+                      {showGrandTotals && !isCollapsed && !firstChild && <td className="px-3 py-2 border-b border-l" />}
                     </tr>
                   )
                 })()}
