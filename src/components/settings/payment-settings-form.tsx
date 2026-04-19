@@ -42,7 +42,7 @@ function Section({ title, children, id }: { title: string; children: React.React
   return (
     <div id={id} className="rounded-lg border bg-white">
       <div className="px-4 py-2.5 border-b bg-muted/30 rounded-t-lg">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/70">{title}</p>
       </div>
       <div className="px-4 py-3 space-y-2">
         {children}
