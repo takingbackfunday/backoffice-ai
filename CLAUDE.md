@@ -129,11 +129,16 @@ Tax is a regular `InvoiceLineItem` with `isTaxLine: true`. Always include `isTax
 ### Document upload token is single-use
 `ApplicantDocument.uploadToken` is nulled after upload. A second attempt returns `400 Invalid token`.
 
-### Workspace column filter in transaction API
-The `GET /api/transactions` route reads workspace filter from `projectId` query param. The client sends `projectId` — do not rename to `workspaceId` on the client.
+### Transaction — `projectId` vs `workspaceId` field name split
+The DB column is `projectId` but Prisma maps it to `workspaceId` via `@map("projectId")`. Consequence:
+- The `GET /api/transactions` query param is `projectId` (client-facing) — do not rename to `workspaceId` on the client.
+- The `PATCH /api/transactions/[id]` body must use `workspaceId` (Prisma field) — sending `projectId` is silently ignored by the zod schema.
+- The UI field name in `commitEdit` is `projectId`; map it to `workspaceId` before sending to the API.
 
 ### React Hooks — top-level only
 `useState`/`useReducer` must be at the top level of component functions. The linter enforces `react-hooks/rules-of-hooks`.
 
 ### Transaction table — dropdowns must use portals
 The table wrapper has `overflow-auto`, which clips absolutely-positioned dropdowns. Any new dropdown/popover inside `transaction-table.tsx` must render via `ReactDOM.createPortal` into `document.body`, positioned with `position: fixed` coords from `getBoundingClientRect`. Use the existing `useAnchorRect` hook in that file.
+
+Portal elements have no `[data-row-id]` ancestor, so the row outside-click handler would exit row-edit when the user clicks a dropdown item. Add `data-portal-dropdown` to any new portal root element — the handler skips exit for clicks inside `[data-portal-dropdown]`.
