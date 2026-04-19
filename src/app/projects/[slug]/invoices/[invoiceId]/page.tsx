@@ -143,26 +143,28 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
             description={project.description}
           />
           <ProjectSubNav slug={slug} type={project.type} />
-          <div className="mb-4">
-            <Link
-              href={`/projects/${slug}/invoices`}
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-            >
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              All invoices
-            </Link>
+          <div style={{ width: '65%' }}>
+            <div className="mb-4">
+              <Link
+                href={`/projects/${slug}/invoices`}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                All invoices
+              </Link>
+            </div>
+            <InvoiceDetailClient
+              projectId={project.id}
+              projectSlug={slug}
+              invoice={serialized}
+              paymentMethods={paymentMethods}
+              suggestions={suggestions}
+              replacesInvoice={serialized.replacesInvoice}
+              replacedBy={serialized.replacedBy}
+            />
           </div>
-          <InvoiceDetailClient
-            projectId={project.id}
-            projectSlug={slug}
-            invoice={serialized}
-            paymentMethods={paymentMethods}
-            suggestions={suggestions}
-            replacesInvoice={serialized.replacesInvoice}
-            replacedBy={serialized.replacedBy}
-          />
         </main>
       </div>
     </div>
