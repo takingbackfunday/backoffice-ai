@@ -1212,7 +1212,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
             />
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {clients.filter(client => {
             // KPI / notice filter
             if (clientFilter === 'outstanding') {
@@ -1260,13 +1260,13 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                   return (
                     <div
                       onClick={() => setExpandedClient(isExpanded ? null : client.id)}
-                      style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto', alignItems: 'center', gap: 16, padding: '14px 18px', cursor: 'pointer', transition: 'background 0.15s' }}
+                      style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto', alignItems: 'center', gap: 16, padding: '8px 14px', cursor: 'pointer', transition: 'background 0.15s' }}
                       onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
                       onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                     >
                       {/* Identity */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                        <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#534AB7', flexShrink: 0 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#534AB7', flexShrink: 0 }}>
                           {client.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
                         </div>
                         <div style={{ minWidth: 0 }}>

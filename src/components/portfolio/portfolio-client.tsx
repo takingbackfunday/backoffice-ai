@@ -520,9 +520,15 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
         />
         <KpiCard label="Revenue/mo" value={fmt(kpis.monthlyRevenue)} color={kpis.monthlyRevenue > 0 ? 'teal' : 'neutral'} />
         <KpiCard
-          label="Applicants"
-          value={kpis.activeApplicants}
-          color={kpis.activeApplicants > 0 ? 'neutral' : 'neutral'}
+          label="Rent overdue"
+          value={kpis.overduePayments}
+          color={kpis.overduePayments > 0 ? 'red' : 'neutral'}
+          active={propertyFilter === 'RENT_OVERDUE'}
+          onClick={kpis.overduePayments > 0 ? () => {
+            const next = propertyFilter === 'RENT_OVERDUE' ? null : 'RENT_OVERDUE' as PropertyFilter
+            setPropertyFilter(next)
+            setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+          } : undefined}
         />
         <KpiCard
           label="Expiring ≤90d"
@@ -536,23 +542,17 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
           } : undefined}
         />
         <KpiCard
-          label="Rent overdue"
-          value={kpis.overduePayments}
-          color={kpis.overduePayments > 0 ? 'red' : 'neutral'}
-          active={propertyFilter === 'RENT_OVERDUE'}
-          onClick={kpis.overduePayments > 0 ? () => {
-            const next = propertyFilter === 'RENT_OVERDUE' ? null : 'RENT_OVERDUE' as PropertyFilter
-            setPropertyFilter(next)
-            setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-          } : undefined}
+          label="Applicants"
+          value={kpis.activeApplicants}
+          color={kpis.activeApplicants > 0 ? 'neutral' : 'neutral'}
         />
         <KpiCard
-          label="Unread msgs"
-          value={kpis.unreadMessages}
-          color={kpis.unreadMessages > 0 ? 'amber' : 'neutral'}
-          active={propertyFilter === 'UNREAD_MESSAGES'}
-          onClick={kpis.unreadMessages > 0 ? () => {
-            const next = propertyFilter === 'UNREAD_MESSAGES' ? null : 'UNREAD_MESSAGES' as PropertyFilter
+          label="Maintenance"
+          value={kpis.openMaintenance}
+          color={kpis.openMaintenance > 0 ? 'amber' : 'neutral'}
+          active={propertyFilter === 'MAINTENANCE_OPEN'}
+          onClick={kpis.openMaintenance > 0 ? () => {
+            const next = propertyFilter === 'MAINTENANCE_OPEN' ? null : 'MAINTENANCE_OPEN' as PropertyFilter
             setPropertyFilter(next)
             setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
           } : undefined}
@@ -704,17 +704,10 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
                 style={{ paddingLeft: 28, paddingRight: 10, paddingTop: 6, paddingBottom: 6, borderRadius: 8, border: '1px solid #e8e6df', background: '#fafaf8', fontSize: 12, outline: 'none', width: 220, color: '#1a1a1a' }}
               />
             </div>
-            <Link
-              href="/projects/new?type=PROPERTY"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, background: '#1D9E75', padding: '7px 14px', fontSize: 12, fontWeight: 600, color: '#fff', textDecoration: 'none' }}
-            >
-              <Plus size={12} />
-              Add property
-            </Link>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {filteredProperties.map(property => {
             const isExpanded = expandedProperty === property.id
             const units = propertyFilter ? property.units.filter(u => matchesFilter(u)) : property.units
@@ -734,13 +727,13 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
                 {/* Card header */}
                 <div
                   onClick={() => { setExpandedProperty(isExpanded ? null : property.id); setExpandedUnit(null) }}
-                  style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto auto', alignItems: 'center', gap: 16, padding: '14px 18px', cursor: 'pointer', transition: 'background 0.15s' }}
+                  style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto auto', alignItems: 'center', gap: 16, padding: '8px 14px', cursor: 'pointer', transition: 'background 0.15s' }}
                   onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
                   onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                 >
                   {/* Identity */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: hasUrgency ? '#fef2f2' : '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: hasUrgency ? '#dc2626' : '#1D9E75', flexShrink: 0 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: hasUrgency ? '#fef2f2' : '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: hasUrgency ? '#dc2626' : '#1D9E75', flexShrink: 0 }}>
                       {property.name[0]?.toUpperCase() ?? '?'}
                     </div>
                     <div style={{ minWidth: 0 }}>
