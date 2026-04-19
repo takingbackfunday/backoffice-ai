@@ -12,6 +12,8 @@ Financial management tool for freelancers, consultants, and small property manag
 - Account transfer detection: same-day matching debit/credit pairs across different accounts are surfaced as "Account transfer" rule candidates, keeping them out of spending/income totals
 - Make-rule popup anchors to the edited transaction row
 - Pivot table view for cross-category analysis
+- Toolbar: search bar left-aligned with AI search (plain-language queries with tooltip examples); transaction actions ("+ New transaction", "↑ Upload CSV", "Delete transactions") grouped in one pill; rules actions ("+ Create rule", "Run rules agent") grouped separately
+- Bulk delete: "Delete transactions" always visible — click to enter select mode (checkboxes appear, rows clickable), button pulses red as "Delete N" confirm; ✕ cancels
 
 ### Projects (CLIENT)
 - Client projects with jobs, invoices, and payment tracking

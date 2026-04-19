@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'))
     const pageSize = Math.min(200, Math.max(1, parseInt(searchParams.get('pageSize') ?? '50')))
     const accountId = searchParams.get('accountId') ?? undefined
-    const workspaceId = searchParams.get('workspaceId') ?? undefined
+    const workspaceId = searchParams.get('projectId') ?? searchParams.get('workspaceId') ?? undefined
     const dateFrom = searchParams.get('dateFrom') ?? undefined
     const dateTo = searchParams.get('dateTo') ?? undefined
 

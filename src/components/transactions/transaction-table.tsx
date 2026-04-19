@@ -969,7 +969,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkDeletedCount, setBulkDeletedCount] = useState(0)
 
@@ -1155,6 +1155,8 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
     setDebouncedFilters({})
     setDateFrom(''); setDateTo(''); setCustomFrom(''); setCustomTo('')
     setPage(1)
+    setSelectMode(false)
+    setSelectedIds(new Set())
   }
 
   async function handleAiSearch() {
@@ -1229,7 +1231,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
 
   // ── Inline edit ──────────────────────────────────────────────────
   function startEdit(id: string, field: EditableField) {
-    if (savingIds.has(id) || deletingIds.has(id)) return
+    if (selectMode || savingIds.has(id) || deletingIds.has(id)) return
     // Clear any lingering "make rule" popup from a previous row
     setMakeRuleSnap(null)
     setShowMakeRuleEditor(false)
@@ -1411,7 +1413,8 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
 
   // ── Bulk delete ───────────────────────────────────────────────────
   async function confirmBulkDelete() {
-    setBulkDeleteConfirm(false)
+    if (selectedIds.size === 0) { setSelectMode(false); return }
+    setSelectMode(false)
     setBulkDeleting(true)
     setBulkDeletedCount(0)
     const ids = Array.from(selectedIds)
@@ -1434,6 +1437,11 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
     setTotal((t) => t - deleted)
     setBulkDeleting(false)
     setBulkDeletedCount(0)
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelectedIds(new Set())
   }
 
   // ── Checkbox helpers ──────────────────────────────────────────────
@@ -1622,63 +1630,16 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
       />
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <p className="text-xs text-muted-foreground mr-auto">
-          {loading && total === 0 ? 'Loading transactions…' : `${total} transaction${total !== 1 ? 's' : ''}`}
-        </p>
+      <style>{`
+        @keyframes bulkDeletePulse {
+          0%, 100% { background-color: #dc2626; }
+          50% { background-color: #991b1b; }
+        }
+      `}</style>
+      <div className="flex items-center gap-3 flex-wrap">
 
-        {/* New transaction button */}
-        {!addingRow && (
-          <button
-            onClick={() => setAddingRow(true)}
-            className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-muted/60 transition-colors flex items-center gap-1"
-            data-testid="new-transaction-btn"
-          >
-            + New transaction
-          </button>
-        )}
-
-        {/* Upload CSV */}
-        <a
-          href="/upload"
-          className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-muted/60 transition-colors flex items-center gap-1"
-        >
-          ↑ Upload CSV
-        </a>
-
-        {/* Rules shortcuts */}
-        <button
-          type="button"
-          onClick={() => setShowNewRuleModal(true)}
-          className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-muted/60 transition-colors"
-        >
-          + Create rule
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowAgentModal(true)}
-          className="rounded-md border border-[#534AB7]/40 bg-[#EEEDFE]/60 px-2.5 py-1.5 text-xs font-medium text-[#3C3489] hover:bg-[#EEEDFE] transition-colors"
-        >
-          Run rules agent
-        </button>
-
-        {/* Active filter count + clear */}
-        {hasActiveFilters && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#3C3489] bg-[#EEEDFE] border border-[#534AB7]/20 rounded-full px-2.5 py-1">
-              {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
-            </span>
-            <button
-              onClick={clearAllFilters}
-              className="text-xs text-muted-foreground hover:text-foreground border border-black/10 rounded-lg px-2.5 py-1.5 transition-colors"
-            >
-              Clear filters
-            </button>
-          </div>
-        )}
-
-        {/* Global search — keyword or AI mode */}
-        <div className="relative flex items-center gap-1">
+        {/* ── Search (left-aligned) ─────────────────────────── */}
+        <div className="flex items-center gap-1">
           {aiMode ? (
             <>
               <div className="relative">
@@ -1740,46 +1701,128 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => setAiMode(true)}
-                className="rounded-md border border-purple-200 bg-purple-50 px-2 py-1.5 text-xs text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-1"
-                title="Switch to AI search"
-                aria-label="AI search"
-                data-testid="ai-search-toggle"
-              >
-                <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4" strokeLinecap="round"/>
-                </svg>
-                AI
-              </button>
+              {/* AI toggle with tooltip */}
+              <div className="relative group">
+                <button
+                  onClick={() => setAiMode(true)}
+                  className="rounded-md border border-purple-200 bg-purple-50 px-2 py-1.5 text-xs text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-1"
+                  aria-label="AI search"
+                  data-testid="ai-search-toggle"
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4" strokeLinecap="round"/>
+                  </svg>
+                  AI
+                </button>
+                <div className="pointer-events-none absolute left-0 top-full mt-1.5 z-50 w-64 rounded-lg border border-purple-200 bg-white px-3 py-2.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                  <p className="text-[11px] font-medium text-purple-800 mb-1">AI search</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Describe the transactions you&apos;re looking for in plain language — e.g. <span className="italic">&quot;all Uber rides last month&quot;</span>, <span className="italic">&quot;expenses over £200 in Q1&quot;</span>, or <span className="italic">&quot;rent payments from 2024&quot;</span>.
+                  </p>
+                  <p className="text-[10px] text-purple-600 mt-1.5 font-medium">You must click the Search button (or press Enter) to run the search.</p>
+                </div>
+              </div>
             </>
           )}
         </div>
 
-        {(someChecked || bulkDeleting) && (
-          <div className="flex items-center gap-2 text-xs" role="toolbar" aria-label="Bulk actions" data-testid="bulk-toolbar">
-            {bulkDeleting ? (
-              <>
-                <span className="inline-block w-3 h-3 rounded-full border-2 border-red-500 border-t-transparent animate-spin" />
-                <span className="text-muted-foreground">Deleting {bulkDeletedCount} of {bulkDeletedCount + deletingIds.size}…</span>
-              </>
-            ) : (
-              <>
-                <span className="text-muted-foreground">{selectedIds.size} selected</span>
-                {bulkDeleteConfirm ? (
-                  <>
-                    <span className="text-red-600 font-medium">Delete {selectedIds.size} rows?</span>
-                    <button onClick={confirmBulkDelete} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700" aria-label="Confirm bulk delete" data-testid="bulk-delete-confirm-btn">Confirm</button>
-                    <button onClick={() => setBulkDeleteConfirm(false)} className="rounded border px-2 py-1 hover:bg-muted" aria-label="Cancel bulk delete">Cancel</button>
-                  </>
-                ) : (
-                  <button onClick={() => setBulkDeleteConfirm(true)} className="rounded bg-red-600 px-2 py-1 text-white hover:bg-red-700" aria-label="Delete selected" data-testid="bulk-delete-btn">Delete selected</button>
+        {/* ── Spacer ────────────────────────────────────────── */}
+        <div className="flex-1" />
+
+        {/* ── Transaction actions group ─────────────────────── */}
+        <div className="flex items-center gap-px rounded-lg border border-black/10 bg-black/[0.03] p-0.5">
+          {!addingRow && (
+            <button
+              onClick={() => setAddingRow(true)}
+              className="rounded-md px-2.5 py-1.5 text-xs font-medium hover:bg-white hover:shadow-sm transition-all"
+              data-testid="new-transaction-btn"
+            >
+              + New transaction
+            </button>
+          )}
+          <a
+            href="/upload"
+            className="rounded-md px-2.5 py-1.5 text-xs font-medium hover:bg-white hover:shadow-sm transition-all"
+          >
+            ↑ Upload CSV
+          </a>
+          {!bulkDeleting && (
+            selectMode ? (
+              <div className="flex items-center gap-1 pl-0.5">
+                {selectedIds.size > 0 && (
+                  <span className="text-xs text-muted-foreground px-1">{selectedIds.size} selected</span>
                 )}
-                <button onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }} className="text-muted-foreground hover:text-foreground px-1" aria-label="Clear selection">✕</button>
-              </>
-            )}
+                <button
+                  onClick={confirmBulkDelete}
+                  className="rounded-md px-2.5 py-1.5 text-xs font-medium text-white"
+                  style={{ animation: 'bulkDeletePulse 2s ease-in-out infinite' }}
+                  data-testid="bulk-delete-confirm-btn"
+                  aria-label="Confirm delete selected"
+                >
+                  {selectedIds.size > 0 ? `Delete ${selectedIds.size}` : 'Delete selected'}
+                </button>
+                <button
+                  onClick={exitSelectMode}
+                  className="text-muted-foreground hover:text-foreground leading-none px-1.5 text-sm"
+                  aria-label="Cancel selection"
+                >✕</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setSelectMode(true)}
+                className="rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-white hover:shadow-sm transition-all"
+                data-testid="delete-transactions-btn"
+              >
+                Delete transactions
+              </button>
+            )
+          )}
+          {bulkDeleting && (
+            <div className="flex items-center gap-1.5 px-2.5 text-xs" role="status" aria-live="polite">
+              <span className="inline-block w-3 h-3 rounded-full border-2 border-red-500 border-t-transparent animate-spin" />
+              <span className="text-muted-foreground">Deleting {bulkDeletedCount} of {bulkDeletedCount + deletingIds.size}…</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Rules group ───────────────────────────────────── */}
+        <div className="flex items-center gap-px rounded-lg border border-[#534AB7]/20 bg-[#EEEDFE]/40 p-0.5">
+          <button
+            type="button"
+            onClick={() => setShowNewRuleModal(true)}
+            className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[#3C3489] hover:bg-[#EEEDFE] hover:shadow-sm transition-all"
+          >
+            + Create rule
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAgentModal(true)}
+            className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[#3C3489] hover:bg-[#EEEDFE] hover:shadow-sm transition-all"
+          >
+            Run rules agent
+          </button>
+        </div>
+
+        {/* ── Active filters ────────────────────────────────── */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#3C3489] bg-[#EEEDFE] border border-[#534AB7]/20 rounded-full px-2.5 py-1">
+              {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
+            </span>
+            <button
+              onClick={clearAllFilters}
+              className="text-xs text-muted-foreground hover:text-foreground border border-black/10 rounded-lg px-2.5 py-1.5 transition-colors"
+            >
+              Clear filters
+            </button>
           </div>
         )}
+
+        {/* ── Transaction count ─────────────────────────────── */}
+        <p className="text-xs text-muted-foreground">
+          {loading && total === 0 ? 'Loading…' : `${total} transaction${total !== 1 ? 's' : ''}`}
+        </p>
+
       </div>
 
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
@@ -1799,17 +1842,19 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
         <table className="w-full text-[11px]" aria-label="Transactions">
           <thead className="bg-muted text-[10px] uppercase tracking-wide">
             <tr>
-              {/* Checkbox */}
+              {/* Checkbox — only shown in select mode */}
               <th className="px-3 py-1 w-8">
-                <input
-                  type="checkbox"
-                  checked={allChecked}
-                  ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked }}
-                  onChange={toggleAll}
-                  aria-label="Select all rows"
-                  data-testid="select-all-checkbox"
-                  className="cursor-pointer"
-                />
+                {selectMode && (
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked }}
+                    onChange={toggleAll}
+                    aria-label="Select all rows"
+                    data-testid="select-all-checkbox"
+                    className="cursor-pointer"
+                  />
+                )}
               </th>
 
               {/* Date column with filter */}
@@ -2128,20 +2173,24 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                       isDeleting ? 'opacity-50 bg-red-50'
                         : isRowEditing ? 'bg-indigo-50/60 ring-1 ring-inset ring-indigo-200'
                         : isSelected ? 'bg-blue-50'
+                        : selectMode ? 'hover:bg-blue-50/50 cursor-pointer'
                         : 'hover:bg-muted/40',
                     ].filter(Boolean).join(' ')}
                     data-testid="transaction-row"
+                    onClick={selectMode ? () => toggleRow(row.id) : undefined}
                     onKeyDown={isRowEditing ? (e) => { if (e.key === 'Enter') exitRowEdit(row.id) } : undefined}
                   >
-                    {/* Checkbox */}
+                    {/* Checkbox — only shown in select mode */}
                     <td className="px-3 py-0.5 w-8">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleRow(row.id)}
-                        aria-label={`Select row ${row.id}`}
-                        className="cursor-pointer"
-                      />
+                      {selectMode && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleRow(row.id)}
+                          aria-label={`Select row ${row.id}`}
+                          className="cursor-pointer"
+                        />
+                      )}
                     </td>
 
                     {renderEditableCell(row, 'date')}

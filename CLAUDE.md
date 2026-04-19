@@ -367,7 +367,11 @@ Server component (`page.tsx`) fetches all active CLIENT workspaces with their in
 ### Transaction Table & Rules UI (`src/components/transactions/transaction-table.tsx`)
 
 - **Make-rule inline prompt** — after the user finishes editing a row and moves away, a compact 💡 "Make rule / ✕" prompt appears in the last `<td>` of that row (where "Done" was). Clicking "Make rule" inserts a full-width `<tr>` directly below the edited row containing `RuleEditor`, pre-filled from the edit. The prompt persists until dismissed or the page reloads — no auto-dismiss timer. Rows are wrapped in `React.Fragment` (keyed) to allow the sibling sub-row. No `position: fixed` or `getBoundingClientRect` involved.
-- **Toolbar modals** — "Create rule" and "Run rules agent" are buttons in the toolbar that open inline modals (no page navigation); "Create rule" reuses `RuleEditor`; "Run rules agent" embeds `RulesAgent` in a scrollable modal
+- **Toolbar layout** — search is left-aligned; a `flex-1` spacer pushes two button groups to the right. Transaction actions group ("+ New transaction", "↑ Upload CSV", "Delete transactions") shares a pill with `bg-black/[0.03]` background. Rules group ("+ Create rule", "Run rules agent") shares a separate pill with `bg-[#EEEDFE]/40` purple tint. The groups are visually separated.
+- **Toolbar modals** — "Create rule" and "Run rules agent" open inline modals (no page navigation); "Create rule" reuses `RuleEditor`; "Run rules agent" embeds `RulesAgent` in a scrollable modal.
+- **Bulk delete UX** — "Delete transactions" is always visible in the toolbar. Clicking it enters `selectMode`: row checkboxes appear, clicking any row toggles its selection, the button becomes a pulsing red "Delete N" confirm button. Clicking confirm executes; ✕ exits select mode. Editing is blocked while `selectMode` is active. `selectMode` state is a boolean; `selectedIds` is a `Set<string>`.
+- **Workspace column filter** — the `GET /api/transactions` route reads the workspace filter from the `projectId` query param (with `workspaceId` as a fallback). The client sends `projectId`; do not change this to `workspaceId` in the client.
+- **AI search tooltip** — hovering the "AI" button next to the keyword search shows a popover explaining plain-language query examples and a note that the user must click Search (or press Enter) to run it.
 
 ### Chat Overlay (`src/components/chat/chat-overlay.tsx`)
 
