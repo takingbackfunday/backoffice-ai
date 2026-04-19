@@ -16,6 +16,27 @@ The top entry should show `completed / success` for the commit just pushed. Do n
 
 Use the Neon PostgreSQL DB directly (via `DIRECT_URL`) for all queries. **Never use BigQuery** — this project does not use BigQuery.
 
+### Ad-hoc queries from the CLI
+
+`psql` is not available in this environment. Use Node with `@neondatabase/serverless` instead:
+
+```bash
+node << 'EOF'
+const { neon } = require('@neondatabase/serverless');
+const sql = neon('postgresql://neondb_owner:...');
+(async () => {
+  const rows = await sql`SELECT id, name FROM "Project" WHERE ...`;
+  console.log(JSON.stringify(rows, null, 2));
+})();
+EOF
+```
+
+**Always use a heredoc (`<< 'EOF'`)** — not `-e "..."`. Single-quoted heredocs prevent the shell from expanding `$` in regex patterns (e.g. `'^[0-9]+$'`) or template literals.
+
+**`RETURNING` clauses work but return `[]`** — the Neon serverless client silently drops the returned rows from `DELETE … RETURNING`. Run a `SELECT` first to confirm what will be affected, then delete. The delete itself executes correctly even when the returned array is empty.
+
+**FK constraints** — when a delete fails silently or errors, check for FK dependencies first (`information_schema.table_constraints`) and delete child records before the parent.
+
 ## Development Credentials (rotate before production)
 
 ```
