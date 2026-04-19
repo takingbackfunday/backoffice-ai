@@ -1755,11 +1755,14 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                 <button
                   onClick={confirmBulkDelete}
                   className="rounded-md px-2.5 py-1.5 text-xs font-medium text-white"
-                  style={{ animation: 'bulkDeletePulse 2s ease-in-out infinite' }}
+                  style={{
+                    backgroundColor: '#dc2626',
+                    animation: selectedIds.size > 0 ? 'bulkDeletePulse 2s ease-in-out infinite' : 'none',
+                  }}
                   data-testid="bulk-delete-confirm-btn"
                   aria-label="Confirm delete selected"
                 >
-                  {selectedIds.size > 0 ? `Delete ${selectedIds.size}` : 'Delete selected'}
+                  {selectedIds.size > 0 ? `Delete ${selectedIds.size}` : 'Select transactions'}
                 </button>
                 <button
                   onClick={exitSelectMode}
@@ -2181,7 +2184,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                     onKeyDown={isRowEditing ? (e) => { if (e.key === 'Enter') exitRowEdit(row.id) } : undefined}
                   >
                     {/* Checkbox — only shown in select mode */}
-                    <td className="px-3 py-0.5 w-8">
+                    <td className="px-3 py-0.5 w-8" onClick={(e) => e.stopPropagation()}>
                       {selectMode && (
                         <input
                           type="checkbox"
