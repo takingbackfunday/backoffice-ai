@@ -1245,53 +1245,83 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                 style={{ borderRadius: 14, border: `1px solid ${isExpanded ? '#c7c4e8' : '#e8e6df'}`, background: '#fff', overflow: 'hidden', transition: 'border-color 0.15s' }}
               >
                 {/* Card header — always visible */}
-                <div
-                  onClick={() => setExpandedClient(isExpanded ? null : client.id)}
-                  style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', alignItems: 'center', gap: 20, padding: '14px 18px', cursor: 'pointer', transition: 'background 0.15s' }}
-                  onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
-                >
-                  {/* Identity */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#534AB7', flexShrink: 0 }}>
-                      {client.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
+                {(() => {
+                  const clientOverdueTotal = clientInvoices.filter(i => getDisplayStatus(i) === 'OVERDUE').reduce((s, i) => s + (i.total - i.paid), 0)
+                  const clientCollectedTotal = clientInvoices.filter(i => getDisplayStatus(i) === 'PAID').reduce((s, i) => s + i.paid, 0)
+                  const now = new Date()
+                  const clientEarnedThisMonth = clientInvoices
+                    .filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate).getMonth() === now.getMonth() && new Date(i.issueDate).getFullYear() === now.getFullYear())
+                    .reduce((s, i) => s + i.paid, 0)
+                  return (
+                    <div
+                      onClick={() => setExpandedClient(isExpanded ? null : client.id)}
+                      style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto', alignItems: 'center', gap: 16, padding: '14px 18px', cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+                    >
+                      {/* Identity */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                        <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#534AB7', flexShrink: 0 }}>
+                          {client.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{client.name}</p>
+                          {client.company && <p style={{ fontSize: 11, color: '#aaa', margin: 0 }}>{client.company}</p>}
+                        </div>
+                      </div>
+
+                      {/* Quotes accepted */}
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Quotes accepted</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: client.acceptedQuotes.length > 0 ? '#534AB7' : '#aaa' }}>
+                          {client.acceptedQuotes.length || '—'}
+                        </p>
+                      </div>
+
+                      {/* Outstanding */}
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Outstanding</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: client.outstanding > 0 ? '#a16207' : '#aaa' }}>
+                          {client.outstanding > 0 ? fmt(client.outstanding, client.currency) : '—'}
+                        </p>
+                      </div>
+
+                      {/* Overdue */}
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Overdue</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientOverdueTotal > 0 ? '#dc2626' : '#aaa' }}>
+                          {clientOverdueTotal > 0 ? fmt(clientOverdueTotal, client.currency) : '—'}
+                        </p>
+                      </div>
+
+                      {/* Collected */}
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedTotal > 0 ? '#15803d' : '#aaa' }}>
+                          {clientCollectedTotal > 0 ? fmt(clientCollectedTotal, client.currency) : '—'}
+                        </p>
+                      </div>
+
+                      {/* Earned this month */}
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Earned this month</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientEarnedThisMonth > 0 ? '#15803d' : '#aaa' }}>
+                          {clientEarnedThisMonth > 0 ? fmt(clientEarnedThisMonth, client.currency) : '—'}
+                        </p>
+                      </div>
+
+                      {/* Chevron */}
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#bbb', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
+                        <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                     </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: 14, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{client.name}</p>
-                      {client.company && <p style={{ fontSize: 11, color: '#aaa', margin: 0 }}>{client.company}</p>}
-                    </div>
-                  </div>
-
-                  {/* Outstanding */}
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Outstanding</p>
-                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: hasOverdue ? '#dc2626' : client.outstanding > 0 ? '#a16207' : '#aaa' }}>
-                      {client.outstanding > 0 ? fmt(client.outstanding, client.currency) : '—'}
-                    </p>
-                  </div>
-
-                  {/* Open invoices */}
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Open invoices</p>
-                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums' }}>{openInvs.length || '—'}</p>
-                  </div>
-
-                  {/* Accepted quotes */}
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Accepted quotes</p>
-                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums' }}>{client.acceptedQuotes.length || '—'}</p>
-                  </div>
-
-                  {/* Chevron */}
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#bbb', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
-                    <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
+                  )
+                })()}
 
                 {/* Expanded content */}
                 {isExpanded && (
                   <div style={{ borderTop: '1px solid #f0eeeb', background: '#fafaf8', padding: '16px 18px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr' : '1fr 260px', gap: 20 }}>
 
                       {/* Left: invoices + quotes */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1361,30 +1391,32 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
 
                       </div>
 
-                      {/* Right: quick actions */}
-                      <div>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Quick actions</p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          {[
-                            { label: 'Draft invoice', action: () => setShowInvoiceModal(true) },
-                            { label: 'New estimate', action: () => setShowNewEstimateModal(true) },
-                            { label: 'New quote', action: () => setShowNewQuoteModal(true) },
-                            { label: 'Log time', action: () => setShowLogTimeModal(true) },
-                            { label: 'Add receipt', action: () => router.push(`/receipts?upload=1&workspaceId=${client.id}`) },
-                            { label: 'View project →', action: () => router.push(`/projects/${client.slug}`) },
-                          ].map(item => (
-                            <button
-                              key={item.label}
-                              onClick={e => { e.stopPropagation(); item.action() }}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 10, border: '1px solid #e8e6df', background: '#fff', fontSize: 12, fontWeight: 500, color: '#555', cursor: 'pointer', transition: 'all 0.15s' }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#534AB7'; (e.currentTarget as HTMLButtonElement).style.color = '#534AB7' }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e8e6df'; (e.currentTarget as HTMLButtonElement).style.color = '#555' }}
-                            >
-                              {item.label}
-                            </button>
-                          ))}
+                      {/* Right: quick actions — hidden when a KPI/notice filter is active */}
+                      {!clientFilter && (
+                        <div>
+                          <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Quick actions</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                            {[
+                              { label: 'Draft invoice', action: () => setShowInvoiceModal(true) },
+                              { label: 'New estimate', action: () => setShowNewEstimateModal(true) },
+                              { label: 'New quote', action: () => setShowNewQuoteModal(true) },
+                              { label: 'Log time', action: () => setShowLogTimeModal(true) },
+                              { label: 'Add receipt', action: () => router.push(`/receipts?upload=1&workspaceId=${client.id}`) },
+                              { label: 'View project →', action: () => router.push(`/projects/${client.slug}`) },
+                            ].map(item => (
+                              <button
+                                key={item.label}
+                                onClick={e => { e.stopPropagation(); item.action() }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 10, border: '1px solid #e8e6df', background: '#fff', fontSize: 12, fontWeight: 500, color: '#555', cursor: 'pointer', transition: 'all 0.15s' }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#534AB7'; (e.currentTarget as HTMLButtonElement).style.color = '#534AB7' }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e8e6df'; (e.currentTarget as HTMLButtonElement).style.color = '#555' }}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 )}
