@@ -9,6 +9,7 @@ interface Props {
   initialBusinessName?: string
   initialYourName?: string
   initialPaymentNote?: string
+  initialNotesDefault?: string
   initialEmail?: string
   initialPhone?: string
   initialAddress?: string
@@ -55,6 +56,7 @@ export function PaymentSettingsForm({
   initialBusinessName = '',
   initialYourName = '',
   initialPaymentNote = '',
+  initialNotesDefault = '',
   initialEmail = '',
   initialPhone = '',
   initialAddress = '',
@@ -81,6 +83,7 @@ export function PaymentSettingsForm({
   const [stripeLink, setStripeLink] = useState(initial.stripe?.link ?? '')
   const [customMethods, setCustomMethods] = useState<{ label: string; value: string }[]>(initial.custom ?? [])
   const [paymentNote, setPaymentNote] = useState(initialPaymentNote)
+  const [notesDefault, setNotesDefault] = useState(initialNotesDefault)
 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -111,6 +114,7 @@ export function PaymentSettingsForm({
       businessName: businessName || undefined,
       yourName: yourName || undefined,
       invoicePaymentNote: paymentNote || undefined,
+      invoiceNotesDefault: notesDefault || undefined,
       fromEmail: email || undefined,
       fromPhone: phone || undefined,
       fromAddress: address || undefined,
@@ -238,6 +242,16 @@ export function PaymentSettingsForm({
               <Plus className="h-3 w-3" /> Add method
             </button>
           </div>
+        </Section>
+
+        <Section title="Notes / payment terms default" id="invoice-notes-default">
+          <textarea
+            value={notesDefault}
+            onChange={e => setNotesDefault(e.target.value)}
+            rows={3}
+            placeholder="Leave blank to show nothing by default. You can always edit per-invoice."
+            className="w-full rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary resize-none"
+          />
         </Section>
 
         <Section title="Payment instructions" id="payment-instructions">

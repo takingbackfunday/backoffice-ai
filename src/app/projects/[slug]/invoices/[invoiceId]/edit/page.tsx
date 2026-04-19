@@ -39,6 +39,7 @@ export default async function EditInvoicePage({ params }: PageParams) {
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
   const parsedPrefs = parsePreferences(prefs?.data)
   const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? DEFAULT_PAYMENT_NOTE
+  const invoiceNotesDefault = parsedPrefs.invoiceNotesDefault ?? ''
   const paymentMethods = parsedPrefs.paymentMethods ?? {}
 
   // PAID and VOID invoices cannot be edited

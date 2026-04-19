@@ -7,7 +7,6 @@ export interface InvoiceDefaults {
   taxMode?: 'percent' | 'flat'
   taxRate?: string
   currency?: string
-  notes?: string
 }
 
 export interface UserPreferenceData {
@@ -27,6 +26,7 @@ export interface UserPreferenceData {
   // Invoice settings
   paymentMethods?: PaymentMethods
   invoicePaymentNote?: string
+  invoiceNotesDefault?: string
   invoiceDefaults?: InvoiceDefaults
 
   // Quote settings

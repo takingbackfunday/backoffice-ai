@@ -213,7 +213,6 @@ export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, h
                   taxMode: invoiceDefaults.taxMode ?? 'percent',
                   taxRate: invoiceDefaults.taxRate ?? '',
                   currency: invoiceDefaults.currency ?? 'USD',
-                  notes: invoiceDefaults.notes ?? '',
                 } : undefined}
               />
             </>

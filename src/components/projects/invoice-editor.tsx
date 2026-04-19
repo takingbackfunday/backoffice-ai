@@ -96,8 +96,8 @@ interface Props {
     taxMode: 'percent' | 'flat'
     taxRate: string
     currency: string
-    notes: string
   }
+  invoiceNotesDefault?: string
   // create mode only — for "Copy from past invoice"
   recentInvoices?: { id: string; invoiceNumber: string; dueDate: string; total: number; currency: string }[]
   // edit mode only
@@ -217,6 +217,7 @@ export function InvoiceEditor({
   quoteId,
   quoteNumber,
   invoicePaymentNote = '',
+  invoiceNotesDefault = '',
   paymentMethods,
 }: Props) {
   const router = useRouter()
@@ -252,7 +253,7 @@ export function InvoiceEditor({
         dueDate: defaultDueDate(paymentTermDays),
         issueDate: new Date().toISOString().split('T')[0],
         currency: lastInvoiceDefaults?.currency ?? 'USD',
-        notes: lastInvoiceDefaults?.notes ?? '',
+        notes: invoiceNotesDefault,
         aiSuggestedNotes: false,
       }
 
@@ -769,7 +770,6 @@ export function InvoiceEditor({
             taxMode: state.taxMode,
             taxRate: state.taxRate,
             currency: state.currency,
-            notes: state.notes,
           }}),
         }).catch(() => {})
 
@@ -1180,10 +1180,16 @@ export function InvoiceEditor({
 
           {/* Notes */}
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes / payment terms</label>
+              <Link
+                href="/settings#invoice-notes-default"
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Change default text →
+              </Link>
               {state.aiSuggestedNotes && (
-                <span className="text-[10px] text-primary flex items-center gap-1">
+                <span className="text-[10px] text-primary flex items-center gap-1 ml-auto">
                   <Sparkles className="h-3 w-3" /> AI suggested
                 </span>
               )}
@@ -1191,9 +1197,16 @@ export function InvoiceEditor({
             <textarea
               value={state.notes}
               onChange={e => { dispatch({ type: 'SET_NOTES', value: e.target.value }); setPendingAiChanges(p => ({ ...p, notes: false })) }}
+              onBlur={e => {
+                fetch('/api/preferences', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ invoiceNotesDefault: e.target.value }),
+                }).catch(() => {})
+              }}
               rows={3}
               className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none transition-shadow', pendingAiChanges.notes && 'ai-changed')}
-              placeholder="Payment instructions, late fee policy, thank-you note…"
+              placeholder="Leave blank to hide from invoices"
             />
           </div>
 

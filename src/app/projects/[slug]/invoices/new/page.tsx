@@ -49,6 +49,7 @@ export default async function NewInvoicePage({ params }: PageParams) {
   const parsedPrefs = parsePreferences(prefs?.data)
   const invoiceDefaults = parsedPrefs.invoiceDefaults
   const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? DEFAULT_PAYMENT_NOTE
+  const invoiceNotesDefault = parsedPrefs.invoiceNotesDefault ?? ''
   const paymentMethods = parsedPrefs.paymentMethods ?? {}
 
   /* ── PROPERTY project ─────────────────────────────────────────── */
@@ -171,8 +172,8 @@ export default async function NewInvoicePage({ params }: PageParams) {
               taxMode: invoiceDefaults.taxMode ?? 'percent',
               taxRate: invoiceDefaults.taxRate ?? '',
               currency: invoiceDefaults.currency ?? 'USD',
-              notes: invoiceDefaults.notes ?? '',
             } : undefined}
+            invoiceNotesDefault={invoiceNotesDefault}
             invoicePaymentNote={invoicePaymentNote}
             paymentMethods={paymentMethods}
           />

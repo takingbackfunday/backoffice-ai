@@ -16,6 +16,7 @@ export default async function SettingsPage() {
   const businessName = data.businessName ?? ''
   const yourName = data.yourName ?? ''
   const invoicePaymentNote = data.invoicePaymentNote ?? ''
+  const invoiceNotesDefault = data.invoiceNotesDefault ?? ''
   const fromEmail = data.fromEmail ?? ''
   const fromPhone = data.fromPhone ?? ''
   const fromAddress = data.fromAddress ?? ''
@@ -37,6 +38,7 @@ export default async function SettingsPage() {
             initialBusinessName={businessName}
             initialYourName={yourName}
             initialPaymentNote={invoicePaymentNote}
+            initialNotesDefault={invoiceNotesDefault}
             initialEmail={fromEmail}
             initialPhone={fromPhone}
             initialAddress={fromAddress}
