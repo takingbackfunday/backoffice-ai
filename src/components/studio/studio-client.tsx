@@ -157,16 +157,16 @@ function KpiCard({ label, value, sub, color, onClick, active }: { label: string;
   return (
     <div
       onClick={onClick}
-      style={{ borderRadius: 10, border: `1.5px solid ${active ? c.text : c.border}`, background: c.bg, padding: '10px 14px', display: 'flex', alignItems: 'baseline', gap: 10, cursor: onClick ? 'pointer' : 'default', transition: 'border-color 0.15s, box-shadow 0.15s', boxShadow: active ? `0 0 0 3px ${c.text}18` : 'none' }}
+      style={{ borderRadius: 10, border: `1.5px solid ${active ? c.text : c.border}`, background: c.bg, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4, cursor: onClick ? 'pointer' : 'default', transition: 'border-color 0.15s, box-shadow 0.15s', boxShadow: active ? `0 0 0 3px ${c.text}18` : 'none' }}
       onMouseEnter={e => { if (onClick) (e.currentTarget as HTMLDivElement).style.borderColor = c.text }}
       onMouseLeave={e => { if (onClick && !active) (e.currentTarget as HTMLDivElement).style.borderColor = c.border }}
     >
-      <p style={{ fontSize: 18, fontWeight: 700, color: c.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1, margin: 0, flexShrink: 0 }}>{value}</p>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ fontSize: 11, fontWeight: 600, color: '#888', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</p>
+      <p style={{ fontSize: 11, fontWeight: 600, color: '#888', margin: 0, lineHeight: 1.3 }}>{label}</p>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <p style={{ fontSize: 18, fontWeight: 700, color: c.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1, margin: 0 }}>{value}</p>
         {sub && <p style={{ fontSize: 10, color: '#aaa', margin: 0 }}>{sub}</p>}
+        {onClick && <span style={{ marginLeft: 'auto', fontSize: 10, color: c.text, opacity: 0.6 }}>↓</span>}
       </div>
-      {onClick && <span style={{ marginLeft: 'auto', fontSize: 10, color: c.text, opacity: 0.6, flexShrink: 0 }}>↓</span>}
     </div>
   )
 }
