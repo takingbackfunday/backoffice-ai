@@ -7,7 +7,7 @@ import { ProjectDetailHeader } from '@/components/projects/project-detail-header
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceDetailClient } from '@/components/projects/invoice-detail-client'
 import Link from 'next/link'
-import { parsePreferences, DEFAULT_PAYMENT_NOTE } from '@/types/preferences'
+import { parsePreferences } from '@/types/preferences'
 
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
 
@@ -66,7 +66,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
   ])
   const parsedPrefs = parsePreferences(prefs?.data)
   const paymentMethods = parsedPrefs.paymentMethods ?? {}
-  const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? DEFAULT_PAYMENT_NOTE
+  const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? ''
 
   const suggestions = rawSuggestions.map(s => ({
     id: s.id,

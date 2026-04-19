@@ -553,7 +553,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
       {/* Payment instructions */}
       {invoicePaymentNote && (
         <div className="rounded-md border px-3 py-2">
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2 mb-1">
             <p className="text-xs text-muted-foreground font-semibold">Payment instructions</p>
             <Link href="/settings#payment-instructions" className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
               Change default text →

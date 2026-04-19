@@ -1199,7 +1199,7 @@ export function InvoiceEditor({
 
           {/* Payment instructions */}
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Payment instructions</label>
               <Link
                 href="/settings#payment-instructions"
@@ -1211,9 +1211,16 @@ export function InvoiceEditor({
             <textarea
               value={paymentInstructions}
               onChange={e => setPaymentInstructions(e.target.value)}
+              onBlur={e => {
+                fetch('/api/preferences', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ invoicePaymentNote: e.target.value }),
+                }).catch(() => {})
+              }}
               rows={2}
               className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none transition-shadow"
-              placeholder="Please include your invoice number and full name in your payment reference."
+              placeholder="Leave blank to hide from invoices"
             />
             {paymentMethods && (
               <div className="mt-2">
