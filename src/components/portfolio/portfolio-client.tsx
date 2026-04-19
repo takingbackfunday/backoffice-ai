@@ -442,69 +442,79 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
       {/*  KPI BAR                                                       */}
       {/* ============================================================= */}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 8, marginBottom: 8 }}>
-        <KpiCard label="Units" value={kpis.totalUnits} color="neutral" />
-        <KpiCard
-          label="Occupancy"
-          value={`${occupancyPct}%`}
-          sub={`${kpis.leasedUnits} leased`}
-          color={occupancyPct >= 80 ? 'teal' : occupancyPct >= 50 ? 'amber' : 'red'}
-        />
-        <KpiCard
-          label="Leased"
-          value={kpis.leasedUnits}
-          color={kpis.leasedUnits > 0 ? 'teal' : 'neutral'}
-        />
-        <KpiCard
-          label="Vacant"
-          value={kpis.vacantUnits}
-          color={kpis.vacantUnits > 0 ? 'amber' : 'neutral'}
-          active={propertyFilter === 'VACANT'}
-          onClick={kpis.vacantUnits > 0 ? () => {
-            const next = propertyFilter === 'VACANT' ? null : 'VACANT' as PropertyFilter
-            setPropertyFilter(next)
-            setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-          } : undefined}
-        />
-        <KpiCard label="Revenue/mo" value={fmt(kpis.monthlyRevenue)} color={kpis.monthlyRevenue > 0 ? 'teal' : 'neutral'} />
-        <KpiCard
-          label="Rent overdue"
-          value={kpis.overduePayments}
-          color={kpis.overduePayments > 0 ? 'red' : 'neutral'}
-          active={propertyFilter === 'RENT_OVERDUE'}
-          onClick={kpis.overduePayments > 0 ? () => {
-            const next = propertyFilter === 'RENT_OVERDUE' ? null : 'RENT_OVERDUE' as PropertyFilter
-            setPropertyFilter(next)
-            setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-          } : undefined}
-        />
-        <KpiCard
-          label="Expiring ≤90d"
-          value={kpis.expiringLeases}
-          color={kpis.expiringLeases > 0 ? 'red' : 'neutral'}
-          active={propertyFilter === 'EXPIRING'}
-          onClick={kpis.expiringLeases > 0 ? () => {
-            const next = propertyFilter === 'EXPIRING' ? null : 'EXPIRING' as PropertyFilter
-            setPropertyFilter(next)
-            setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-          } : undefined}
-        />
-        <KpiCard
-          label="Applicants"
-          value={kpis.activeApplicants}
-          color={kpis.activeApplicants > 0 ? 'neutral' : 'neutral'}
-        />
-        <KpiCard
-          label="Maintenance"
-          value={kpis.openMaintenance}
-          color={kpis.openMaintenance > 0 ? 'amber' : 'neutral'}
-          active={propertyFilter === 'MAINTENANCE_OPEN'}
-          onClick={kpis.openMaintenance > 0 ? () => {
-            const next = propertyFilter === 'MAINTENANCE_OPEN' ? null : 'MAINTENANCE_OPEN' as PropertyFilter
-            setPropertyFilter(next)
-            setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-          } : undefined}
-        />
+      <div style={{ display: 'flex', gap: 16, marginBottom: 8, alignItems: 'stretch' }}>
+        {/* Group 1: core portfolio metrics */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, flex: '6 1 0' }}>
+          <KpiCard label="Units" value={kpis.totalUnits} color="neutral" />
+          <KpiCard
+            label="Occupancy"
+            value={`${occupancyPct}%`}
+            sub={`${kpis.leasedUnits} leased`}
+            color={occupancyPct >= 80 ? 'teal' : occupancyPct >= 50 ? 'amber' : 'red'}
+          />
+          <KpiCard label="Revenue/mo" value={fmt(kpis.monthlyRevenue)} color={kpis.monthlyRevenue > 0 ? 'teal' : 'neutral'} />
+          <KpiCard
+            label="Leased"
+            value={kpis.leasedUnits}
+            color={kpis.leasedUnits > 0 ? 'teal' : 'neutral'}
+          />
+          <KpiCard
+            label="Vacant"
+            value={kpis.vacantUnits}
+            color={kpis.vacantUnits > 0 ? 'amber' : 'neutral'}
+            active={propertyFilter === 'VACANT'}
+            onClick={kpis.vacantUnits > 0 ? () => {
+              const next = propertyFilter === 'VACANT' ? null : 'VACANT' as PropertyFilter
+              setPropertyFilter(next)
+              setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+            } : undefined}
+          />
+          <KpiCard
+            label="Applicants"
+            value={kpis.activeApplicants}
+            color={kpis.activeApplicants > 0 ? 'neutral' : 'neutral'}
+          />
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, background: '#e5e7eb', alignSelf: 'stretch', flexShrink: 0 }} />
+
+        {/* Group 2: alert metrics */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, flex: '3 1 0' }}>
+          <KpiCard
+            label="Rent overdue"
+            value={kpis.overduePayments}
+            color={kpis.overduePayments > 0 ? 'red' : 'neutral'}
+            active={propertyFilter === 'RENT_OVERDUE'}
+            onClick={kpis.overduePayments > 0 ? () => {
+              const next = propertyFilter === 'RENT_OVERDUE' ? null : 'RENT_OVERDUE' as PropertyFilter
+              setPropertyFilter(next)
+              setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+            } : undefined}
+          />
+          <KpiCard
+            label="Expiring ≤90d"
+            value={kpis.expiringLeases}
+            color={kpis.expiringLeases > 0 ? 'red' : 'neutral'}
+            active={propertyFilter === 'EXPIRING'}
+            onClick={kpis.expiringLeases > 0 ? () => {
+              const next = propertyFilter === 'EXPIRING' ? null : 'EXPIRING' as PropertyFilter
+              setPropertyFilter(next)
+              setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+            } : undefined}
+          />
+          <KpiCard
+            label="Maintenance"
+            value={kpis.openMaintenance}
+            color={kpis.openMaintenance > 0 ? 'amber' : 'neutral'}
+            active={propertyFilter === 'MAINTENANCE_OPEN'}
+            onClick={kpis.openMaintenance > 0 ? () => {
+              const next = propertyFilter === 'MAINTENANCE_OPEN' ? null : 'MAINTENANCE_OPEN' as PropertyFilter
+              setPropertyFilter(next)
+              setTimeout(() => document.getElementById('portfolio-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+            } : undefined}
+          />
+        </div>
       </div>
 
       {/* ============================================================= */}
