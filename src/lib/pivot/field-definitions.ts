@@ -11,14 +11,12 @@ export const FIELD_DEFINITIONS: FieldDef[] = [
   { key: 'category', label: 'Category', group: 'Categories & Tax' },
   { key: 'categoryGroup', label: 'Category Group', group: 'Categories & Tax' },
   { key: 'taxSchedule', label: 'Tax Schedule', group: 'Categories & Tax' },
-  { key: 'taxType', label: 'Tax Type', group: 'Categories & Tax' },
   // Parties
   { key: 'payee', label: 'Payee', group: 'Parties' },
   { key: 'account', label: 'Account', group: 'Parties' },
   { key: 'accountType', label: 'Account Type', group: 'Parties' },
   // Projects
   { key: 'project', label: 'Project', group: 'Projects' },
-  { key: 'projectType', label: 'Project Type', group: 'Projects' },
   // Other
   { key: 'type', label: 'Income / Expense', group: 'Other' },
   { key: 'description', label: 'Description', group: 'Other' },
