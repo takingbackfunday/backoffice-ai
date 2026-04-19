@@ -134,3 +134,6 @@ The `GET /api/transactions` route reads workspace filter from `projectId` query 
 
 ### React Hooks — top-level only
 `useState`/`useReducer` must be at the top level of component functions. The linter enforces `react-hooks/rules-of-hooks`.
+
+### Transaction table — dropdowns must use portals
+The table wrapper has `overflow-auto`, which clips absolutely-positioned dropdowns. Any new dropdown/popover inside `transaction-table.tsx` must render via `ReactDOM.createPortal` into `document.body`, positioned with `position: fixed` coords from `getBoundingClientRect`. Use the existing `useAnchorRect` hook in that file.
