@@ -208,7 +208,7 @@ export function RulesManager({
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<{ updated: number; total: number } | null>(null)
   const [showAgent, setShowAgent] = useState(autoAgent)
-  const [showStarter, setShowStarter] = useState(true)
+  const [showStarter, setShowStarter] = useState(false)
   const [agentFinishedSummary, setAgentFinishedSummary] = useState<{ uncategorised: number; noPayee: number } | null>(null)
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
