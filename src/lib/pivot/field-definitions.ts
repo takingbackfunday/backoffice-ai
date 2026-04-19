@@ -10,7 +10,7 @@ export const FIELD_DEFINITIONS: FieldDef[] = [
   // Categories & Tax
   { key: 'category', label: 'Category', group: 'Categories & Tax' },
   { key: 'categoryGroup', label: 'Category Group', group: 'Categories & Tax' },
-  { key: 'taxSchedule', label: 'Tax Schedule', group: 'Categories & Tax' },
+  { key: 'taxType', label: 'Tax Type', group: 'Categories & Tax' },
   // Parties
   { key: 'payee', label: 'Payee', group: 'Parties' },
   { key: 'account', label: 'Account', group: 'Parties' },
