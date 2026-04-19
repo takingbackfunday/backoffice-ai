@@ -19,7 +19,7 @@ const OPTIONS: Option[] = [
   {
     type: 'freelance',
     title: 'Freelance / sole proprietor',
-    description: 'Schedule C — you sell services or products as a self-employed individual.',
+    description: 'You sell services or products as a self-employed individual.',
     examples: 'Consultants, designers, contractors, creators, small business owners',
     groups: 0,
     categories: 0,
@@ -27,7 +27,7 @@ const OPTIONS: Option[] = [
   {
     type: 'property',
     title: 'Rental property / landlord',
-    description: 'Schedule E — you earn income from residential or commercial rentals.',
+    description: 'You earn income from residential or commercial rentals.',
     examples: 'Landlords, Airbnb hosts, small property managers',
     groups: 0,
     categories: 0,
@@ -105,7 +105,7 @@ export function BusinessTypePicker({ counts }: Props) {
         <div className="mb-8 text-center">
           <h2 className="text-xl font-semibold mb-2">What kind of work do you do?</h2>
           <p className="text-sm text-muted-foreground">
-            This sets up your expense categories to match the right IRS tax schedule.
+            This sets up your expense categories to match your business type.
             You can always add or remove categories later.
           </p>
         </div>

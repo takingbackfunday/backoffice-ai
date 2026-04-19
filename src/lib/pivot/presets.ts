@@ -11,9 +11,9 @@ export const PIVOT_PRESETS: PivotPreset[] = [
   {
     name: 'Tax Summary',
     icon: '📋',
-    description: 'Tax schedule breakdown by quarter',
+    description: 'Tax type breakdown by quarter',
     config: {
-      rows: ['taxSchedule', 'category'],
+      rows: ['taxType', 'category'],
       cols: ['quarter'],
       filterValues: {},
     },

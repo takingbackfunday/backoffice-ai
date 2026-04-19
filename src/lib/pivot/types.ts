@@ -10,7 +10,6 @@ export interface PivotRow {
   dayOfWeek: string
   category: string
   categoryGroup: string
-  taxSchedule: string
   taxType: string
   payee: string
   account: string

@@ -14,17 +14,6 @@ import type { PivotRow } from '@/lib/pivot/types'
 // strings via to_char(..., 'YYYY-MM-DD') AT TIME ZONE 'UTC', so we never touch
 // JS Date methods on the returned date values.
 
-const SCHEDULE_REF_MAP: Record<string, string> = {
-  C: 'Schedule C',
-  E: 'Schedule E',
-  'C,E': 'Schedule C & E',
-}
-
-function mapScheduleRef(ref: string | null | undefined): string {
-  if (!ref || ref === 'none') return 'No Schedule'
-  return SCHEDULE_REF_MAP[ref] ?? ref
-}
-
 const ACCOUNT_TYPE_MAP: Record<string, string> = {
   CREDIT_CARD: 'Credit Card',
   DEBIT_CARD: 'Debit Card',
@@ -49,7 +38,6 @@ interface RawTxRow {
   tags: string[]
   category_name: string | null
   category_group: string | null
-  schedule_ref: string | null
   tax_type: string | null
   payee_name: string | null
   account_name: string
@@ -90,7 +78,6 @@ export async function GET(request: Request) {
         t.tags,
         c.name AS category_name,
         cg.name AS category_group,
-        cg."scheduleRef" AS schedule_ref,
         cg."taxType" AS tax_type,
         p.name AS payee_name,
         a.name AS account_name,
@@ -129,7 +116,6 @@ export async function GET(request: Request) {
         dayOfWeek: DAY_NAMES[dow],
         category: tx.category_name ?? 'Uncategorized',
         categoryGroup: tx.category_group ?? 'Uncategorized',
-        taxSchedule: mapScheduleRef(tx.schedule_ref),
         taxType: tx.tax_type ?? 'unclassified',
         payee: tx.payee_name ?? 'No Payee',
         account: tx.account_name,
