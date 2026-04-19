@@ -107,7 +107,8 @@ Keep this updated when feature areas are added or moved.
 | Quick-create shortcuts | `src/components/projects/new-invoice-shortcuts.tsx` |
 | Invoice number format | `{INITIALS}_{DDMMYYYY}_{SEQ}` — logic in create + renegotiate routes |
 | Payment methods display | `src/components/projects/payment-summary.tsx` — renders bank/PayPal/Stripe/custom from `UserPreference.data.paymentMethods` |
-| Payment instructions | Pre-filled textarea in editor + read-only block in detail view, sourced from `UserPreference.data.invoicePaymentNote`; not stored on the `Invoice` record. Deep-link: `/settings#payment-instructions`. |
+| Notes default | `UserPreference.data.invoiceNotesDefault` — pre-fills "Notes / payment terms" in editor; onBlur saves back. Not stored on `Invoice`. Deep-link: `/settings#invoice-notes-default`. |
+| Payment instructions | `UserPreference.data.invoicePaymentNote` — pre-fills editor + shown in detail view and PDF only when non-empty. onBlur saves back. Not stored on `Invoice`. Deep-link: `/settings#payment-instructions`. |
 | Key type | `src/types/index.ts` → `Invoice`, `PdfInvoice` |
 
 ### Estimate → Quote pipeline
@@ -298,7 +299,7 @@ All routes use helpers from `src/lib/api-response.ts`:
 | Type definition | `src/types/preferences.ts` → `UserPreferenceData`, `InvoiceDefaults` |
 | Read pattern | `parsePreferences(raw)` — never inline cast |
 | Write pattern | `POST /api/preferences` (shallow merge) |
-| Known keys | `businessName`, `yourName`, `fromEmail`, `fromPhone`, `fromAddress`, `fromVatNumber`, `fromWebsite`, `paymentMethods`, `invoicePaymentNote`, `invoiceDefaults`, `lastRulesAgentRun`, `dashboardCurrency` |
+| Known keys | `businessName`, `yourName`, `fromEmail`, `fromPhone`, `fromAddress`, `fromVatNumber`, `fromWebsite`, `paymentMethods`, `invoicePaymentNote`, `invoiceNotesDefault`, `invoiceDefaults`, `lastRulesAgentRun`, `dashboardCurrency` |
 
 ### Shared types
 

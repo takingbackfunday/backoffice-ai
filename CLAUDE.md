@@ -141,8 +141,12 @@ The DB column is `projectId` but Prisma maps it to `workspaceId` via `@map("proj
 ### Invoice editor — description column uses `minmax`, not `1fr`
 The line-items grid is `grid-cols-[minmax(120px,1fr)_140px_110px_100px_32px]`. The description column must use `minmax(120px,1fr)` — plain `1fr` collapses to zero when the AI sidebar constrains the form to `max-w-[60%]`, making descriptions invisible.
 
-### Invoice payment instructions — preference-scoped, not per-invoice
-`invoicePaymentNote` (stored in `UserPreference.data`) is the default payment instructions text. It is pre-filled in the editor textarea and shown read-only on the invoice detail view, but it is **not saved on the `Invoice` record itself**. The "Change default text →" link deep-links to `/settings#payment-instructions`. The `<Section id="payment-instructions">` anchor in `payment-settings-form.tsx` enables this scroll target.
+### Invoice notes and payment instructions — preference-scoped, not per-invoice
+Two fields in `UserPreference.data` drive invoice defaults:
+- `invoiceNotesDefault` — pre-fills "Notes / payment terms" in the editor. Deep-link: `/settings#invoice-notes-default`.
+- `invoicePaymentNote` — pre-fills "Payment instructions". Deep-link: `/settings#payment-instructions`.
+
+Both are shown read-only on the invoice detail view and in the PDF **only when non-empty** — no fallback text. The editor saves the current value back to preferences on `onBlur`. Neither field is stored on the `Invoice` record. `invoiceDefaults` no longer contains `notes` — that "remember last invoice notes" behaviour has been removed.
 
 ### Transaction table — dropdowns must use portals
 The table wrapper has `overflow-auto`, which clips absolutely-positioned dropdowns. Any new dropdown/popover inside `transaction-table.tsx` must render via `ReactDOM.createPortal` into `document.body`, positioned with `position: fixed` coords from `getBoundingClientRect`. Use the existing `useAnchorRect` hook in that file.
