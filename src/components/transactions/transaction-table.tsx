@@ -255,6 +255,7 @@ function CategoryCell({
       {open && filtered.length > 0 && anchorRect && typeof document !== 'undefined' && ReactDOM.createPortal(
         <ul
           ref={listRef}
+          data-portal-dropdown
           style={{ position: 'fixed', top: anchorRect.bottom + 2, left: anchorRect.left, width: 256 }}
           className="z-[9999] rounded border border-black/10 bg-white shadow-lg text-xs max-h-52 overflow-y-auto"
         >
@@ -528,6 +529,7 @@ function PayeeCell({
       {open && (filtered.length > 0 || showCreate) && anchorRect && typeof document !== 'undefined' && ReactDOM.createPortal(
         <ul
           ref={listRef}
+          data-portal-dropdown
           style={{ position: 'fixed', top: anchorRect.bottom + 2, left: anchorRect.left, width: anchorRect.width }}
           className="z-[9999] rounded border border-black/10 bg-white shadow-md text-[10px] max-h-44 overflow-y-auto"
         >
@@ -631,6 +633,7 @@ function ColumnFilterPopover({
       {isOpen && anchorRect && typeof document !== 'undefined' && ReactDOM.createPortal(
         <div
           ref={dropdownRef}
+          data-portal-dropdown
           style={{ position: 'fixed', top: anchorRect.bottom + 4, left: anchorRect.left }}
           className="z-[9999] bg-white border border-black/10 rounded-lg shadow-lg p-2 min-w-[160px] whitespace-normal"
         >
@@ -867,6 +870,7 @@ function DateFilterHeader({
         {isOpen && anchorRect && typeof document !== 'undefined' && ReactDOM.createPortal(
           <div
             ref={dropdownRef}
+            data-portal-dropdown
             style={{ position: 'fixed', top: anchorRect.bottom + 4, left: anchorRect.left }}
             className="z-[9999] bg-white border border-black/10 rounded-lg shadow-lg w-52 p-3 space-y-3 whitespace-normal"
           >
@@ -1091,6 +1095,10 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
     const rowId = editingRowId
     function handler(e: MouseEvent) {
       const target = e.target as Element | null
+      // Clicks inside portal dropdowns (CategoryCell, PayeeCell, filter popovers)
+      // land on document.body descendants with no [data-row-id] ancestor.
+      // Don't exit row edit for those — the cell components own their own commit logic.
+      if (target?.closest('[data-portal-dropdown]')) return
       const clickedRowId = target?.closest('[data-row-id]')?.getAttribute('data-row-id')
       if (clickedRowId !== rowId) {
         exitRowEdit(rowId)
@@ -1320,8 +1328,8 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
       rows.map((r) => {
         if (r.id !== id) return r
         if (field === 'projectId') {
-          const project = projects.find((p) => p.id === rawValue) ?? null
-          return { ...r, projectId: rawValue, project }
+          const workspace = projects.find((p) => p.id === rawValue) ?? null
+          return { ...r, workspaceId: rawValue, workspace }
         }
         if (field === 'categoryId') {
           const allCats = categoryGroups.flatMap((g) => g.categories)
@@ -1346,8 +1354,10 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
     setSavingIds((s) => new Set(s).add(id))
 
     try {
-      // For categoryId, keep the denormalised category string in sync
-      const patchBody: Record<string, unknown> = { [field]: patchValue }
+      // For categoryId, keep the denormalised category string in sync.
+      // projectId is the UI field name but the API/Prisma field is workspaceId.
+      const apiField = field === 'projectId' ? 'workspaceId' : field
+      const patchBody: Record<string, unknown> = { [apiField]: patchValue }
       if (field === 'categoryId') {
         const allCats = categoryGroups.flatMap((g) => g.categories)
         const cat = rawValue ? allCats.find((c) => c.id === rawValue) : null

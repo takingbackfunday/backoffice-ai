@@ -67,6 +67,7 @@ export async function GET(request: Request) {
           { payee: { is: { name: { contains: search, mode: 'insensitive' as const } } } },
           { account: { name: { contains: search, mode: 'insensitive' as const } } },
           { categoryRef: { is: { name: { contains: search, mode: 'insensitive' as const } } } },
+          { workspace: { is: { name: { contains: search, mode: 'insensitive' as const } } } },
           ...(!isNaN(searchAsNumber) ? [{ amount: searchAsNumber }, { amount: -searchAsNumber }] : []),
         ],
       } : {}),
