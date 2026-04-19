@@ -1240,16 +1240,7 @@ export function InvoiceEditor({
               className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-40 transition-colors"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              {finalizing ? 'Reviewing…' : 'AI Finalize'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setChatVisible(v => !v)}
-              className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              {chatVisible ? 'Close AI Chat' : 'AI Chat'}
+              {finalizing ? 'Reviewing…' : 'Review with AI'}
             </button>
 
             <div className="flex-1" />
