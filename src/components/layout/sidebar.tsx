@@ -143,7 +143,7 @@ export function Sidebar() {
             collapsed ? 'justify-center px-2 py-1.5' : cn('gap-2.5 py-1.5', indent ? 'pl-8 pr-4' : 'px-4'),
             indent
               ? cn('text-xs font-medium', isChildActive && !isOpen ? 'text-[#534AB7] font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground')
-              : cn('text-[11px] font-semibold uppercase tracking-wide', isChildActive && !isOpen ? 'bg-[#2a2a2a] text-[#e5e5e5]' : 'bg-[#2a2a2a] text-[#e5e5e5] hover:bg-[#333333]')
+              : cn('text-[11px] font-semibold uppercase tracking-wide', isChildActive && !isOpen ? 'bg-[#3d3d3d] text-[#e5e5e5]' : 'bg-[#3d3d3d] text-[#e5e5e5] hover:bg-[#484848]')
           )}
         >
           <span aria-hidden="true" className="text-sm">{icon}</span>
