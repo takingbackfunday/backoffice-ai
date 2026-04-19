@@ -6,7 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceEditor } from '@/components/projects/invoice-editor'
-import { parsePreferences } from '@/types/preferences'
+import { parsePreferences, DEFAULT_PAYMENT_NOTE } from '@/types/preferences'
 import { PropertyInvoiceNew } from '@/components/projects/property-invoice-new'
 import { NewInvoiceShortcuts } from '@/components/projects/new-invoice-shortcuts'
 import Link from 'next/link'
@@ -48,7 +48,7 @@ export default async function NewInvoicePage({ params }: PageParams) {
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
   const parsedPrefs = parsePreferences(prefs?.data)
   const invoiceDefaults = parsedPrefs.invoiceDefaults
-  const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? ''
+  const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? DEFAULT_PAYMENT_NOTE
   const paymentMethods = parsedPrefs.paymentMethods ?? {}
 
   /* ── PROPERTY project ─────────────────────────────────────────── */

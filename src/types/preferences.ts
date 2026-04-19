@@ -44,6 +44,8 @@ export interface UserPreferenceData {
   pivotConfig?: Partial<PivotConfig>
 }
 
+export const DEFAULT_PAYMENT_NOTE = 'Please include your invoice number and full name in your payment reference.'
+
 export function parsePreferences(raw: unknown): UserPreferenceData {
   return (raw ?? {}) as UserPreferenceData
 }
