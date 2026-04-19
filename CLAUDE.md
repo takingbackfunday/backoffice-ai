@@ -310,7 +310,10 @@ API routes (SSE-streaming):
 ### Invoice Detail Layout (`src/components/projects/invoice-detail-client.tsx`)
 
 Compact layout designed to fit without scrolling:
-- Payment info and Payments table sit side by side in a `grid-cols-2`
+- **Edit button** shown only for `DRAFT` invoices (not for SENT/PARTIAL/OVERDUE)
+- **Action buttons** split into 2 rows: row 1 = invoice actions (Edit, Renegotiate, Delete, Send, Mark as sent); row 2 = PDF/void (Preview PDF, Download PDF, Void)
+- **PDF preview** opens in a modal iframe overlay (not a new tab) — same blob+`createObjectURL` pattern as the settings page; click outside or × to close
+- Payment info and Payments table sit side by side in a `grid-cols-2`, **below** the action button rows
 - Payments table container has no `overflow-hidden` — required so the `...` dropdown menu is not clipped
 - Each payment row has a three-dot SVG menu with **Remove** (DELETE) and **Move to invoice…** (PATCH) actions
 - The `...` menu registers its close listener via `setTimeout(0)` so the opening click does not immediately re-fire the document listener and close the menu
@@ -323,14 +326,18 @@ Server component (`page.tsx`) fetches all active CLIENT workspaces with their in
 
 0. **Overhead workspace banner** — shown above everything when `hasOverheadWorkspace` is `false` (i.e. no `Workspace` with `isDefault: true` exists for the user). Clicking "Set up →" POSTs directly to `POST /api/projects` with `{ name: 'Business Overhead', type: 'OTHER', isDefault: true }` and calls `router.refresh()` — no navigation. The banner disappears once the server re-queries and finds the new workspace. `hasOverheadWorkspace` is computed in `studio/page.tsx` via `prisma.workspace.findFirst({ where: { userId, isDefault: true } })`.
 
-1. **Unified KPI + pipeline row** — single 6-cell grid: Quotes accepted | Outstanding | Overdue | Collected | Earned this month | Clients. Outstanding and Overdue are clickable: set `clientFilter` state, auto-expand the first matching client card, and scroll to the cards section.
+1. **Unified KPI + pipeline row** — single 6-cell grid: Quotes accepted | Invoices Outstanding | Invoices Overdue | Invoices Collected Past 30 Days | Invoices Collected since start of Year (YTD) | Clients.
+   - **Outstanding** counts only `SENT | PARTIAL | OVERDUE` invoices (DRAFTs excluded)
+   - **Outstanding** and **Overdue** are clickable: set `clientFilter` state, auto-expand the first matching client card, and scroll to the cards section
+   - **Collected Past 30 Days** is also clickable: filters to paid invoices within the last 30 days (computed client-side from flat invoice data)
+   - YTD figure counts all paid invoices since Jan 1 of the current year
 
 2. **3-column strip** — `gridTemplateColumns: 'auto 1fr 1fr'`:
-   - **Take action** — 2-column pill grid: col 1 = New client, New job, Log time; col 2 = Draft invoice, New quote, New estimate.
+   - **Take action** — 2-column pill grid: col 1 = New client, New job, Log time; col 2 = Draft invoice, New quote, New estimate. **Hidden when `clientFilter` is active** (KPI click or Take Notice click) — the invoice/quote list takes full width for easier scanning.
    - **Take notice** — smart banners derived from `notices` useMemo. Invoice banners: overdue, unsent drafts. Quote banners: awaiting acceptance (SENT quotes), accepted but not yet invoiced (ACCEPTED quotes with `hasInvoice: false`). Invoice banners click to set `clientFilter` ('overdue' or 'unsent') and scroll to client cards. Quote banners navigate to the first affected project's quotes page. Active filter highlighted.
    - **Recent activity** — top-6 invoice events sorted by date desc.
 
-3. **Client cards** — expandable accordion per client. `clientFilter` state ('outstanding' | 'overdue' | 'unsent' | null) is combined with `clientSearch` to filter the list. Filter pill shows above cards; clicking ✕ clears the filter.
+3. **Client cards** — expandable accordion per client. `clientFilter` state ('outstanding' | 'overdue' | 'unsent' | 'collected' | null) is combined with `clientSearch` to filter the list. Filter pill shows above cards; clicking ✕ clears the filter. Each client card header shows the same 5 KPIs as the header row (Quotes accepted, Outstanding, Overdue, Collected Past 30 Days, Collected since Jan 1).
 
 **Data shapes passed to `StudioClient`:**
 - `client.acceptedQuotes` — `{ id, quoteNumber, title, totalQuoted, currency, hasInvoice }` (ACCEPTED only)

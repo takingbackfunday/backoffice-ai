@@ -162,29 +162,53 @@ export function PivotTable({ result, config }: PivotTableProps) {
             const isCollapsed = collapsedGroups.has(group.key)
             return (
               <>
-                {/* Group header row */}
-                <tr key={`grp-${group.key}`} className="bg-muted font-semibold">
-                  <td
-                    colSpan={rows.length}
-                    className="sticky left-0 z-10 bg-background [box-shadow:inset_0_0_0_9999px_hsl(var(--muted))] px-3 py-2 text-sm"
-                  >
-                    <button
-                      onClick={() => toggleGroup(group.key)}
-                      className="mr-1.5 text-muted-foreground hover:text-foreground"
-                      aria-label={isCollapsed ? `Expand ${group.key}` : `Collapse ${group.key}`}
-                    >
-                      {isCollapsed ? '▸' : '▾'}
-                    </button>
-                    {group.key}
-                  </td>
-                  {hasColData && displayColKeys.map(ck => (
-                    <td key={ck} className="px-3 py-2" />
-                  ))}
-                  {showGrandTotals && <td className="px-3 py-2 border-l" />}
-                </tr>
+                {/* Group header row — inline with first child */}
+                {(() => {
+                  const firstChild = group.children[0]
+                  return (
+                    <tr key={`grp-${group.key}`} className={`bg-muted font-semibold hover:bg-blue-50 transition-colors`}>
+                      <td
+                        className="sticky z-10 bg-background [box-shadow:inset_0_0_0_9999px_hsl(var(--muted))] px-3 py-2 text-sm border-b border-r whitespace-nowrap"
+                        style={stickyStyle(0)}
+                      >
+                        <button
+                          onClick={() => toggleGroup(group.key)}
+                          className="mr-1.5 text-muted-foreground hover:text-foreground"
+                          aria-label={isCollapsed ? `Expand ${group.key}` : `Collapse ${group.key}`}
+                        >
+                          {isCollapsed ? '▸' : '▾'}
+                        </button>
+                        {group.key}
+                      </td>
+                      {firstChild && firstChild.rowValues.slice(1).map((val, vi) => (
+                        <td
+                          key={vi}
+                          className="sticky z-10 bg-background [box-shadow:inset_0_0_0_9999px_hsl(var(--muted))] px-3 py-2 text-sm border-b border-r pl-6 whitespace-nowrap"
+                          style={stickyStyle(vi + 1)}
+                        >
+                          {val}
+                        </td>
+                      ))}
+                      {hasColData && firstChild && displayColKeys.map(ck => (
+                        <td key={ck} className={`px-3 py-2 text-right font-mono text-sm border-b ${cellClass(firstChild.cells[ck] ?? 0)}`}>
+                          {firstChild.cells[ck] !== undefined ? formatValue(firstChild.cells[ck], aggregation as AggregationType) : '—'}
+                        </td>
+                      ))}
+                      {!firstChild && hasColData && displayColKeys.map(ck => (
+                        <td key={ck} className="px-3 py-2 border-b" />
+                      ))}
+                      {showGrandTotals && firstChild && (
+                        <td className={`px-3 py-2 text-right font-mono text-sm border-b border-l ${cellClass(firstChild.rowTotal)}`}>
+                          {formatValue(firstChild.rowTotal, aggregation as AggregationType)}
+                        </td>
+                      )}
+                      {showGrandTotals && !firstChild && <td className="px-3 py-2 border-b border-l" />}
+                    </tr>
+                  )
+                })()}
 
-                {/* Children */}
-                {!isCollapsed && group.children.map((child, ci) => {
+                {/* Children (skip first — already rendered in group header row) */}
+                {!isCollapsed && group.children.slice(1).map((child, ci) => {
                   const isEven = ci % 2 === 0
                   const stripeClass = !isEven ? '[box-shadow:inset_0_0_0_9999px_hsl(var(--muted)/0.2)]' : ''
                   return (
