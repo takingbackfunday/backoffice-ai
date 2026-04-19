@@ -408,7 +408,7 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 |---|---|
 | `Account` | Bank accounts/cards; belongs to `InstitutionSchema` |
 | `Transaction` | `amount` signed (negative=expense); dedup via SHA-256 `duplicateHash(accountId,date,amount,description)`; `rawData` keeps original CSV |
-| `Category` / `CategoryGroup` | Hierarchical; groups carry `scheduleRef`, `taxType` |
+| `Category` / `CategoryGroup` | Hierarchical; groups carry `scheduleRef` (internal, drives category seeding per business type — never surfaced in UI), `taxType` |
 | `Payee` | Unique per `(userId,name)`; has `defaultCategoryId` |
 | `CategorizationRule` | `conditions` JSON `{all?,any?}`; `priority` 1–99 (lower=first); sets category/payee/project/notes/tags |
 | `RuleSuggestion` | AI candidates; `PENDING\|ACCEPTED\|IGNORED`; `workspaceId`/`workspaceName` denormalised |
