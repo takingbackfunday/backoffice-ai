@@ -64,7 +64,9 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       orderBy: { createdAt: 'desc' },
     }),
   ])
-  const paymentMethods = parsePreferences(prefs?.data).paymentMethods ?? {}
+  const parsedPrefs = parsePreferences(prefs?.data)
+  const paymentMethods = parsedPrefs.paymentMethods ?? {}
+  const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? ''
 
   const suggestions = rawSuggestions.map(s => ({
     id: s.id,
@@ -160,6 +162,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
               projectSlug={slug}
               invoice={serialized}
               paymentMethods={paymentMethods}
+              invoicePaymentNote={invoicePaymentNote}
               suggestions={suggestions}
               replacesInvoice={serialized.replacesInvoice}
               replacedBy={serialized.replacedBy}

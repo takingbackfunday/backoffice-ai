@@ -67,6 +67,7 @@ interface Props {
   projectSlug: string
   invoice: Invoice
   paymentMethods: PaymentMethods
+  invoicePaymentNote?: string
   suggestions?: Suggestion[]
   replacesInvoice?: InvoiceRef | null
   replacedBy?: InvoiceRef | null
@@ -75,7 +76,7 @@ interface Props {
 const fmt = (n: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 
-export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, paymentMethods, suggestions: initialSuggestions = [], replacesInvoice, replacedBy }: Props) {
+export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, paymentMethods, invoicePaymentNote = '', suggestions: initialSuggestions = [], replacesInvoice, replacedBy }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [invoice, setInvoice] = useState<Invoice>(initial)
@@ -546,6 +547,19 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
         <div className="rounded-md border px-3 py-2">
           <p className="text-xs text-muted-foreground mb-1 font-semibold">Notes</p>
           <p className="text-xs whitespace-pre-wrap">{invoice.notes}</p>
+        </div>
+      )}
+
+      {/* Payment instructions */}
+      {invoicePaymentNote && (
+        <div className="rounded-md border px-3 py-2">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-muted-foreground font-semibold">Payment instructions</p>
+            <Link href="/settings#payment-instructions" className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+              Change default text →
+            </Link>
+          </div>
+          <p className="text-xs whitespace-pre-wrap">{invoicePaymentNote}</p>
         </div>
       )}
 

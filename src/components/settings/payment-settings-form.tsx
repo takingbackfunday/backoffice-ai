@@ -37,9 +37,9 @@ function F({ label, value, onChange, placeholder, mono = false }: {
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
-    <div className="rounded-lg border bg-white">
+    <div id={id} className="rounded-lg border bg-white">
       <div className="px-4 py-2.5 border-b bg-muted/30 rounded-t-lg">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
       </div>
@@ -240,7 +240,7 @@ export function PaymentSettingsForm({
           </div>
         </Section>
 
-        <Section title="Payment instructions">
+        <Section title="Payment instructions" id="payment-instructions">
           <textarea
             value={paymentNote}
             onChange={e => setPaymentNote(e.target.value)}

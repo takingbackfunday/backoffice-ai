@@ -2,8 +2,11 @@
 
 import { useReducer, useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Plus, Trash2, X, Sparkles, Eye, ChevronRight, CheckCircle, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PaymentSummary } from '@/components/projects/payment-summary'
+import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -113,6 +116,9 @@ interface Props {
   // quote fulfillment link (optional — set when creating invoice from a quote)
   quoteId?: string | null
   quoteNumber?: string | null
+  // default payment instructions from settings
+  invoicePaymentNote?: string
+  paymentMethods?: PaymentMethods
 }
 
 /* ------------------------------------------------------------------ */
@@ -210,6 +216,8 @@ export function InvoiceEditor({
   recentInvoices: initialRecentInvoices,
   quoteId,
   quoteNumber,
+  invoicePaymentNote = '',
+  paymentMethods,
 }: Props) {
   const router = useRouter()
   const [jobs, setJobs] = useState(initialJobs)
@@ -275,6 +283,7 @@ export function InvoiceEditor({
   const [unitSuggestions, setUnitSuggestions] = useState<Record<string, string>>({})
   const [recentInvoices, setRecentInvoices] = useState(initialRecentInvoices ?? null as null | typeof initialRecentInvoices)
   const [loadingRecent, setLoadingRecent] = useState(false)
+  const [paymentInstructions, setPaymentInstructions] = useState(invoicePaymentNote)
 
   async function openCopyPicker() {
     setShowCopyPicker(true)
@@ -965,7 +974,7 @@ export function InvoiceEditor({
           <div className="mb-5">
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Line items</label>
             <div className={cn('rounded-xl border overflow-hidden transition-shadow', pendingAiChanges.lineItems && 'ai-changed')}>
-              <div className="grid grid-cols-[1fr_140px_110px_100px_32px] bg-muted/50 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              <div className="grid grid-cols-[minmax(120px,1fr)_140px_110px_100px_32px] bg-muted/50 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                 <span>Description</span>
                 <span className="text-right">Qty / Unit</span>
                 <span className="text-right">Rate</span>
@@ -975,7 +984,7 @@ export function InvoiceEditor({
               {state.lineItems.map((item, idx) => {
                 const lineTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)
                 return (
-                  <div key={item.id} className="grid grid-cols-[1fr_140px_110px_100px_32px] border-t px-3 py-1.5 items-start hover:bg-muted/10 group">
+                  <div key={item.id} className="grid grid-cols-[minmax(120px,1fr)_140px_110px_100px_32px] border-t px-3 py-1.5 items-start hover:bg-muted/10 group">
                     <textarea
                       value={item.description}
                       rows={1}
@@ -1186,6 +1195,31 @@ export function InvoiceEditor({
               className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none transition-shadow', pendingAiChanges.notes && 'ai-changed')}
               placeholder="Payment instructions, late fee policy, thank-you note…"
             />
+          </div>
+
+          {/* Payment instructions */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Payment instructions</label>
+              <Link
+                href="/settings#payment-instructions"
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Change default text →
+              </Link>
+            </div>
+            <textarea
+              value={paymentInstructions}
+              onChange={e => setPaymentInstructions(e.target.value)}
+              rows={2}
+              className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none transition-shadow"
+              placeholder="Please include your invoice number and full name in your payment reference."
+            />
+            {paymentMethods && (
+              <div className="mt-2">
+                <PaymentSummary pm={paymentMethods} />
+              </div>
+            )}
           </div>
 
           {/* HITL — AI change confirmation banner */}

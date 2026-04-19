@@ -106,6 +106,8 @@ Keep this updated when feature areas are added or moved.
 | Auto-match payments at import | `src/lib/invoice-matching.ts` → `matchInvoicePayments()` |
 | Quick-create shortcuts | `src/components/projects/new-invoice-shortcuts.tsx` |
 | Invoice number format | `{INITIALS}_{DDMMYYYY}_{SEQ}` — logic in create + renegotiate routes |
+| Payment methods display | `src/components/projects/payment-summary.tsx` — renders bank/PayPal/Stripe/custom from `UserPreference.data.paymentMethods` |
+| Payment instructions | Pre-filled textarea in editor + read-only block in detail view, sourced from `UserPreference.data.invoicePaymentNote`; not stored on the `Invoice` record. Deep-link: `/settings#payment-instructions`. |
 | Key type | `src/types/index.ts` → `Invoice`, `PdfInvoice` |
 
 ### Estimate → Quote pipeline

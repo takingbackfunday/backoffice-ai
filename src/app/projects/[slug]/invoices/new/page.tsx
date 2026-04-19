@@ -46,7 +46,10 @@ export default async function NewInvoicePage({ params }: PageParams) {
   if (!project) notFound()
 
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-  const invoiceDefaults = parsePreferences(prefs?.data).invoiceDefaults
+  const parsedPrefs = parsePreferences(prefs?.data)
+  const invoiceDefaults = parsedPrefs.invoiceDefaults
+  const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? ''
+  const paymentMethods = parsedPrefs.paymentMethods ?? {}
 
   /* ── PROPERTY project ─────────────────────────────────────────── */
   if (project.type === 'PROPERTY') {
@@ -170,6 +173,8 @@ export default async function NewInvoicePage({ params }: PageParams) {
               currency: invoiceDefaults.currency ?? 'USD',
               notes: invoiceDefaults.notes ?? '',
             } : undefined}
+            invoicePaymentNote={invoicePaymentNote}
+            paymentMethods={paymentMethods}
           />
           </div>
         </main>

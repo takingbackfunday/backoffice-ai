@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceEditor } from '@/components/projects/invoice-editor'
+import { parsePreferences } from '@/types/preferences'
 import Link from 'next/link'
 
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
@@ -34,6 +35,11 @@ export default async function EditInvoicePage({ params }: PageParams) {
     },
   })
   if (!invoice) notFound()
+
+  const prefs = await prisma.userPreference.findUnique({ where: { userId } })
+  const parsedPrefs = parsePreferences(prefs?.data)
+  const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? ''
+  const paymentMethods = parsedPrefs.paymentMethods ?? {}
 
   // PAID and VOID invoices cannot be edited
   if (['PAID', 'VOID'].includes(invoice.status)) {
@@ -99,6 +105,8 @@ export default async function EditInvoicePage({ params }: PageParams) {
               })),
               totalPaid,
             }}
+            invoicePaymentNote={invoicePaymentNote}
+            paymentMethods={paymentMethods}
           />
         </main>
       </div>
