@@ -1029,10 +1029,15 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         const acceptedQuotesCount = clients.reduce((s, c) => s + c.acceptedQuotes.length, 0)
         const outstandingInvs = flat.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' || s === 'OVERDUE' })
         const overdueInvs = flat.filter(i => getDisplayStatus(i) === 'OVERDUE')
-        const collected = flat.filter(i => getDisplayStatus(i) === 'PAID')
+        const now = new Date()
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
+        const startOfYear = new Date(now.getFullYear(), 0, 1)
+        const collectedPast30 = flat.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= thirtyDaysAgo)
+        const collectedYtd = flat.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= startOfYear)
         const outstandingTotal = outstandingInvs.reduce((s, i) => s + (i.total - i.paid), 0)
         const overdueTotal = overdueInvs.reduce((s, i) => s + (i.total - i.paid), 0)
-        const collectedTotal = collected.reduce((s, i) => s + i.paid, 0)
+        const collectedPast30Total = collectedPast30.reduce((s, i) => s + i.paid, 0)
+        const collectedYtdTotal = collectedYtd.reduce((s, i) => s + i.paid, 0)
 
         function handleKpiClick(filter: 'outstanding' | 'overdue' | 'collected', matchFn: (c: typeof clients[0]) => boolean) {
           const next = clientFilter === filter ? null : filter
@@ -1066,14 +1071,14 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               onClick={overdueInvs.length > 0 ? () => handleKpiClick('overdue', c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE')) : undefined}
             />
             <KpiCard
-              label="Invoices Collected"
-              value={collectedTotal > 0 ? fmt(collectedTotal) : '—'}
-              sub={collected.length > 0 ? `${collected.length} paid` : ''}
-              color={collectedTotal > 0 ? 'green' : 'neutral'}
+              label="Invoices Collected Past 30 Days"
+              value={collectedPast30Total > 0 ? fmt(collectedPast30Total) : '—'}
+              sub={collectedPast30.length > 0 ? `${collectedPast30.length} paid` : ''}
+              color={collectedPast30Total > 0 ? 'green' : 'neutral'}
               active={clientFilter === 'collected'}
-              onClick={collected.length > 0 ? () => handleKpiClick('collected', c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'PAID')) : undefined}
+              onClick={collectedPast30.length > 0 ? () => handleKpiClick('collected', c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= thirtyDaysAgo)) : undefined}
             />
-            <KpiCard label="Earned this month" value={fmt(kpis.revenueThisMonth)} color="green" />
+            <KpiCard label="Invoices Collected since start of Year" value={collectedYtdTotal > 0 ? fmt(collectedYtdTotal) : '—'} sub={collectedYtd.length > 0 ? `${collectedYtd.length} paid` : ''} color={collectedYtdTotal > 0 ? 'green' : 'neutral'} />
             <KpiCard label="Clients" value={kpis.activeClients} sub="active" color="neutral" />
           </div>
         )
@@ -1247,11 +1252,11 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                 {/* Card header — always visible */}
                 {(() => {
                   const clientOverdueTotal = clientInvoices.filter(i => getDisplayStatus(i) === 'OVERDUE').reduce((s, i) => s + (i.total - i.paid), 0)
-                  const clientCollectedTotal = clientInvoices.filter(i => getDisplayStatus(i) === 'PAID').reduce((s, i) => s + i.paid, 0)
                   const now = new Date()
-                  const clientEarnedThisMonth = clientInvoices
-                    .filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate).getMonth() === now.getMonth() && new Date(i.issueDate).getFullYear() === now.getFullYear())
-                    .reduce((s, i) => s + i.paid, 0)
+                  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
+                  const startOfYear = new Date(now.getFullYear(), 0, 1)
+                  const clientCollectedPast30 = clientInvoices.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= thirtyDaysAgo).reduce((s, i) => s + i.paid, 0)
+                  const clientCollectedYtd = clientInvoices.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= startOfYear).reduce((s, i) => s + i.paid, 0)
                   return (
                     <div
                       onClick={() => setExpandedClient(isExpanded ? null : client.id)}
@@ -1294,19 +1299,19 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                         </p>
                       </div>
 
-                      {/* Collected */}
+                      {/* Collected past 30 days */}
                       <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected</p>
-                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedTotal > 0 ? '#15803d' : '#aaa' }}>
-                          {clientCollectedTotal > 0 ? fmt(clientCollectedTotal, client.currency) : '—'}
+                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected Past 30 Days</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedPast30 > 0 ? '#15803d' : '#aaa' }}>
+                          {clientCollectedPast30 > 0 ? fmt(clientCollectedPast30, client.currency) : '—'}
                         </p>
                       </div>
 
-                      {/* Earned this month */}
+                      {/* Collected YTD */}
                       <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Earned this month</p>
-                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientEarnedThisMonth > 0 ? '#15803d' : '#aaa' }}>
-                          {clientEarnedThisMonth > 0 ? fmt(clientEarnedThisMonth, client.currency) : '—'}
+                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected since Jan 1</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedYtd > 0 ? '#15803d' : '#aaa' }}>
+                          {clientCollectedYtd > 0 ? fmt(clientCollectedYtd, client.currency) : '—'}
                         </p>
                       </div>
 
