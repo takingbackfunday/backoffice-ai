@@ -228,6 +228,43 @@ Agent models: all agents use `anthropic/claude-sonnet-4.6`; domain classifier an
 - **Background runner** (`src/lib/agent/run-rules-agent.ts`): `runRulesAgentInBackground(userId)` runs the same LLM loop but persists `RuleSuggestion` rows to DB instead of streaming SSE. Called fire-and-forget from `POST /api/transactions/import` after every CSV import — the user sees suggestions in the rules UI the next time they open it. Also stamps `lastRulesAgentRun` so the SSE cooldown is respected.
 - `scripts/run-rules-agent.ts` — standalone `tsx` script for running the agent server-side for a given userId without a UI session; useful for admin inspection and testing.
 
+### Rental Application Form (`src/components/public/application-form-client.tsx`)
+
+Public multi-step wizard at `/apply/[slug]/application`. Steps are dynamic — co-applicant step only appears if the applicant checks "I have a co-applicant" on step 4; documents step only appears if `listing.requiredDocs.length > 0`.
+
+**Step order:**
+1. Personal info
+2. Employment
+3. Rental history
+4. Additional details
+5. Screening questions
+6. Co-applicant *(conditional)*
+7. Documents *(conditional)*
+8. Review & consent
+
+**`applicationData` JSON shape** — typed by `src/types/application-data.ts` (`ApplicationData` interface). Stored on `Applicant.applicationData`:
+
+```
+personal:       fullName, email, phone, dateOfBirth, driverLicenseNumber, lastFourSSN,
+                currentAddress, currentCity, currentState, currentZip, currentMovedInDate, currentMonthlyRent
+employment:     currentEmployer, position, annualIncome, employmentStartDate (MM/YYYY),
+                managerName, managerPhone
+rentalHistory:  currentLandlordName, currentLandlordPhone, currentReasonForLeaving,
+                previousAddress, previousLandlordName, previousLandlordPhone, previousRent, durationAtAddress, reasonForLeaving,
+                previousAddress2, previousLandlordName2, previousLandlordPhone2, previousRent2, durationAtAddress2, reasonForLeaving2
+additional:     numberOfOccupants, dependents[]{name,dateOfBirth}, vehicles[]{makeModelYear,monthlyLoanPayment},
+                pets{type,breed,weight,addendumAcknowledged}|null, desiredLeaseTerm
+selfDisclosure: declaredBankruptcy, everEvicted, latePastYear, refusedToPayRent, isSmoker (all boolean|null)
+coApplicant:    null | { fullName, dateOfBirth, driverLicenseNumber, lastFourSSN, phone, workPhone, email,
+                          currentEmployer, position, employmentStartDate, monthlyIncome, managerName, managerPhone }
+```
+
+**Step 5 validation:** all 5 self-disclosure questions must be answered (Yes or No) to advance. `null` = unanswered, blocks Next.
+
+**Consent step extras:** pet addendum checkbox shown and required if `formData.petType` is non-empty; fee acknowledgment shown and required if listing has `applicationFee` or `screeningFee`.
+
+**Manager view** (`src/components/projects/applicant-detail.tsx`): renders all sections including self-disclosure (amber flag on Yes for eviction/bankruptcy/refused-rent) and co-applicant card.
+
 ### Document Request System (`src/lib/doc-types.ts`, `src/lib/doc-token.ts`, `src/lib/uploadthing.ts`)
 
 Applicants can upload PDFs both inline at application time and via ad-hoc manager-requested links.

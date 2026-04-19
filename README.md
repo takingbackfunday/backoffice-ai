@@ -49,6 +49,7 @@ Financial management tool for freelancers, consultants, and small property manag
 - Tenant payment tracking, overdue alerts
 - Maintenance request management
 - Tenant messaging portal
+- **Rental application form**: 8-step public wizard — personal info (DL#, last 4 SSN, current address), employment (start date, manager contact), 2-address rental history with landlord contacts, dependents and vehicles (add/remove rows), 5-question self-disclosure screening (bankruptcy, eviction, late payments, refused rent, smoker), optional co-applicant with full mirrored profile, document uploads, and consent/pet-addendum acknowledgment
 
 ### Dashboard Currency Conversion
 - Currency picker (USD / EUR / GBP) in the dashboard header — choice persists across sessions

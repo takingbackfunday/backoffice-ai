@@ -28,8 +28,9 @@ const STATUS_COLORS: Record<string, string> = {
   WITHDRAWN: 'bg-gray-100 text-gray-500',
 }
 
+import type { ApplicationData } from '@/types/application-data'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AppData = Record<string, any>
+type AppData = ApplicationData | Record<string, any>
 
 interface Applicant {
   id: string
@@ -561,8 +562,24 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
               {/* Personal */}
               {applicant.applicationData.personal && (
                 <AppSection label="Personal">
-                  <AppRow label="Address" value={applicant.applicationData.personal.currentAddress} />
                   <AppRow label="Date of birth" value={applicant.applicationData.personal.dateOfBirth} />
+                  <AppRow label="Driver's license" value={applicant.applicationData.personal.driverLicenseNumber} />
+                  {applicant.applicationData.personal.lastFourSSN && (
+                    <AppRow label="SSN (last 4)" value={`···· ${applicant.applicationData.personal.lastFourSSN}`} />
+                  )}
+                  {(applicant.applicationData.personal.currentAddress || applicant.applicationData.personal.currentCity) && (
+                    <AppRow
+                      label="Current address"
+                      value={[
+                        applicant.applicationData.personal.currentAddress,
+                        applicant.applicationData.personal.currentCity,
+                        applicant.applicationData.personal.currentState,
+                        applicant.applicationData.personal.currentZip,
+                      ].filter(Boolean).join(', ')}
+                    />
+                  )}
+                  <AppRow label="Moved in" value={applicant.applicationData.personal.currentMovedInDate} />
+                  <AppRow label="Current rent" value={applicant.applicationData.personal.currentMonthlyRent ? `$${Number(applicant.applicationData.personal.currentMonthlyRent).toLocaleString()}/mo` : null} />
                 </AppSection>
               )}
 
@@ -572,39 +589,161 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
                   <AppRow label="Employer" value={applicant.applicationData.employment.currentEmployer} />
                   <AppRow label="Position" value={applicant.applicationData.employment.position} />
                   <AppRow label="Annual income" value={applicant.applicationData.employment.annualIncome ? `$${Number(applicant.applicationData.employment.annualIncome).toLocaleString()}` : null} />
-                  <AppRow label="Duration" value={applicant.applicationData.employment.employmentDuration} />
+                  <AppRow label="Start date" value={applicant.applicationData.employment.employmentStartDate} />
+                  <AppRow label="Manager" value={applicant.applicationData.employment.managerName} />
+                  <AppRow label="Manager phone" value={applicant.applicationData.employment.managerPhone} />
                 </AppSection>
               )}
 
               {/* Rental history */}
-              {applicant.applicationData.rentalHistory && (
-                <AppSection label="Rental history">
-                  <AppRow label="Previous landlord" value={applicant.applicationData.rentalHistory.previousLandlordName} />
-                  <AppRow label="Landlord phone" value={applicant.applicationData.rentalHistory.previousLandlordPhone} />
-                  <AppRow label="Previous address" value={applicant.applicationData.rentalHistory.previousAddress} />
-                  <AppRow label="Duration" value={applicant.applicationData.rentalHistory.durationAtAddress} />
-                  <AppRow label="Reason for leaving" value={applicant.applicationData.rentalHistory.reasonForLeaving} />
-                </AppSection>
-              )}
+              {applicant.applicationData.rentalHistory && (() => {
+                const rh = applicant.applicationData.rentalHistory
+                const hasCurrentLandlord = rh.currentLandlordName || rh.currentLandlordPhone
+                const hasPrev1 = rh.previousAddress || rh.previousLandlordName
+                const hasPrev2 = rh.previousAddress2 || rh.previousLandlordName2
+                return (
+                  <AppSection label="Rental history">
+                    {hasCurrentLandlord && (
+                      <>
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Current landlord</p>
+                        <AppRow label="Name" value={rh.currentLandlordName} />
+                        <AppRow label="Phone" value={rh.currentLandlordPhone} />
+                        <AppRow label="Reason for leaving" value={rh.currentReasonForLeaving} />
+                      </>
+                    )}
+                    {hasPrev1 && (
+                      <>
+                        <p className={cn('text-[10px] font-medium text-muted-foreground uppercase tracking-wide', hasCurrentLandlord && 'mt-2')}>Previous address 1</p>
+                        <AppRow label="Address" value={rh.previousAddress} />
+                        <AppRow label="Landlord" value={rh.previousLandlordName} />
+                        <AppRow label="Landlord phone" value={rh.previousLandlordPhone} />
+                        <AppRow label="Rent" value={rh.previousRent ? `$${Number(rh.previousRent).toLocaleString()}/mo` : null} />
+                        <AppRow label="Duration" value={rh.durationAtAddress} />
+                        <AppRow label="Reason for leaving" value={rh.reasonForLeaving} />
+                      </>
+                    )}
+                    {hasPrev2 && (
+                      <>
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mt-2">Previous address 2</p>
+                        <AppRow label="Address" value={rh.previousAddress2} />
+                        <AppRow label="Landlord" value={rh.previousLandlordName2} />
+                        <AppRow label="Landlord phone" value={rh.previousLandlordPhone2} />
+                        <AppRow label="Rent" value={rh.previousRent2 ? `$${Number(rh.previousRent2).toLocaleString()}/mo` : null} />
+                        <AppRow label="Duration" value={rh.durationAtAddress2} />
+                        <AppRow label="Reason for leaving" value={rh.reasonForLeaving2} />
+                      </>
+                    )}
+                    {!hasCurrentLandlord && !hasPrev1 && !hasPrev2 && (
+                      <p className="text-xs text-muted-foreground">No rental history provided.</p>
+                    )}
+                  </AppSection>
+                )
+              })()}
 
               {/* Additional */}
               {applicant.applicationData.additional && (
                 <AppSection label="Additional">
                   <AppRow label="Occupants" value={applicant.applicationData.additional.numberOfOccupants} />
                   <AppRow label="Lease term" value={applicant.applicationData.additional.desiredLeaseTerm} />
-                  <AppRow label="Vehicles" value={applicant.applicationData.additional.vehicles} />
+                  {/* Dependents */}
+                  {Array.isArray(applicant.applicationData.additional.dependents) && applicant.applicationData.additional.dependents.length > 0 ? (
+                    <div className="flex justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground shrink-0">Dependents</span>
+                      <div className="text-right space-y-0.5">
+                        {applicant.applicationData.additional.dependents.map((dep: { name: string; dateOfBirth: string }, i: number) => (
+                          <div key={i}>{dep.name}{dep.dateOfBirth ? ` (${dep.dateOfBirth})` : ''}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <AppRow label="Dependents" value="None" />
+                  )}
+                  {/* Vehicles */}
+                  {Array.isArray(applicant.applicationData.additional.vehicles) && applicant.applicationData.additional.vehicles.length > 0 ? (
+                    <div className="flex justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground shrink-0">Vehicles</span>
+                      <div className="text-right space-y-0.5">
+                        {applicant.applicationData.additional.vehicles.map((v: { makeModelYear: string; monthlyLoanPayment?: string }, i: number) => (
+                          <div key={i}>{v.makeModelYear}{v.monthlyLoanPayment ? ` — $${v.monthlyLoanPayment}/mo loan` : ''}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : typeof applicant.applicationData.additional.vehicles === 'string' ? (
+                    <AppRow label="Vehicles" value={applicant.applicationData.additional.vehicles} />
+                  ) : (
+                    <AppRow label="Vehicles" value="None" />
+                  )}
+                  {/* Pets */}
                   {applicant.applicationData.additional.pets && (
-                    <AppRow
-                      label="Pets"
-                      value={[
-                        applicant.applicationData.additional.pets.type,
-                        applicant.applicationData.additional.pets.breed,
-                        applicant.applicationData.additional.pets.weight ? `${applicant.applicationData.additional.pets.weight} lbs` : null,
-                      ].filter(Boolean).join(', ')}
-                    />
+                    <>
+                      <AppRow
+                        label="Pets"
+                        value={[
+                          applicant.applicationData.additional.pets.type,
+                          applicant.applicationData.additional.pets.breed,
+                          applicant.applicationData.additional.pets.weight ? `${applicant.applicationData.additional.pets.weight} lbs` : null,
+                        ].filter(Boolean).join(', ')}
+                      />
+                      <AppRow
+                        label="Pet addendum"
+                        value={applicant.applicationData.additional.pets.addendumAcknowledged ? 'Acknowledged ✓' : 'Not acknowledged'}
+                      />
+                    </>
                   )}
                 </AppSection>
               )}
+
+              {/* Self-disclosure */}
+              {applicant.applicationData.selfDisclosure && (() => {
+                const sd = applicant.applicationData.selfDisclosure
+                const questions: { label: string; key: string }[] = [
+                  { label: 'Declared bankruptcy (7 yrs)', key: 'declaredBankruptcy' },
+                  { label: 'Ever evicted', key: 'everEvicted' },
+                  { label: '2+ late payments (past yr)', key: 'latePastYear' },
+                  { label: 'Refused to pay rent', key: 'refusedToPayRent' },
+                  { label: 'Smoker', key: 'isSmoker' },
+                ]
+                return (
+                  <AppSection label="Screening questions">
+                    {questions.map(q => {
+                      const val = sd[q.key as keyof typeof sd]
+                      if (val === null || val === undefined) return null
+                      const isYes = val === true
+                      const isConcerning = isYes && ['declaredBankruptcy', 'everEvicted', 'refusedToPayRent'].includes(q.key)
+                      return (
+                        <div key={q.key} className="flex justify-between gap-2 text-xs">
+                          <span className="text-muted-foreground shrink-0">{q.label}</span>
+                          <span className={cn('font-medium', isConcerning ? 'text-amber-600' : isYes ? 'text-foreground' : 'text-muted-foreground')}>
+                            {isYes ? 'Yes' : 'No'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </AppSection>
+                )
+              })()}
+
+              {/* Co-applicant */}
+              {applicant.applicationData.coApplicant && (() => {
+                const co = applicant.applicationData.coApplicant
+                return (
+                  <AppSection label="Co-applicant">
+                    <AppRow label="Name" value={co.fullName} />
+                    <AppRow label="Email" value={co.email} />
+                    <AppRow label="Phone" value={co.phone} />
+                    <AppRow label="Work phone" value={co.workPhone} />
+                    <AppRow label="Date of birth" value={co.dateOfBirth} />
+                    <AppRow label="Driver's license" value={co.driverLicenseNumber} />
+                    {co.lastFourSSN && <AppRow label="SSN (last 4)" value={`···· ${co.lastFourSSN}`} />}
+                    <AppRow label="Employer" value={co.currentEmployer} />
+                    <AppRow label="Position" value={co.position} />
+                    <AppRow label="Monthly income" value={co.monthlyIncome ? `$${Number(co.monthlyIncome).toLocaleString()}/mo` : null} />
+                    <AppRow label="Start date" value={co.employmentStartDate} />
+                    <AppRow label="Manager" value={co.managerName} />
+                    <AppRow label="Manager phone" value={co.managerPhone} />
+                  </AppSection>
+                )
+              })()}
             </div>
           )}
 
@@ -951,7 +1090,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
                   disabled={converting}
                   className="w-full rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  Link to "{conflictTenant.name}" (same person)
+                  Link to &ldquo;{conflictTenant.name}&rdquo; (same person)
                 </button>
                 <button
                   type="button"
