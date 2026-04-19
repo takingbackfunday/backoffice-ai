@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import ReactDOM from 'react-dom'
 import type { Workspace } from '@/generated/prisma/client'
 import type { TransactionWithRelations } from '@/types'
 import { RuleEditor, type CategoryGroup, type Payee, type UserRule } from '@/components/rules/rule-editor'
@@ -29,6 +30,26 @@ interface ColumnFilters {
   categoryId?: string
   categoryGroupId?: string
   projectId?: string
+}
+
+// Returns the bounding rect of an element, refreshed on scroll/resize so
+// portal-rendered dropdowns stay anchored even inside scrollable containers.
+function useAnchorRect(anchorRef: React.RefObject<HTMLElement | null>, open: boolean) {
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  useEffect(() => {
+    if (!open) { setRect(null); return }
+    function update() {
+      if (anchorRef.current) setRect(anchorRef.current.getBoundingClientRect())
+    }
+    update()
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+    }
+  }, [open, anchorRef])
+  return rect
 }
 
 // ── Inline text input ──────────────────────────────────────────────
@@ -145,7 +166,9 @@ function CategoryCell({
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
+  const anchorRef = useRef<HTMLDivElement>(null)
   const fetchedRef = useRef(false)
+  const anchorRect = useAnchorRect(anchorRef, open)
 
   // Fetch confidence scores once on open
   useEffect(() => {
@@ -216,7 +239,7 @@ function CategoryCell({
   }
 
   return (
-    <div className="relative w-full">
+    <div ref={anchorRef} className="relative w-full">
       <input
         ref={inputRef}
         type="text"
@@ -229,10 +252,11 @@ function CategoryCell({
         aria-label="Select category"
         autoComplete="off"
       />
-      {open && filtered.length > 0 && (
+      {open && filtered.length > 0 && anchorRect && typeof document !== 'undefined' && ReactDOM.createPortal(
         <ul
           ref={listRef}
-          className="absolute z-50 top-full left-0 mt-0.5 w-64 rounded border border-black/10 bg-white shadow-lg text-xs max-h-52 overflow-y-auto"
+          style={{ position: 'fixed', top: anchorRect.bottom + 2, left: anchorRect.left, width: 256 }}
+          className="z-[9999] rounded border border-black/10 bg-white shadow-lg text-xs max-h-52 overflow-y-auto"
         >
           <li
             onMouseDown={(e) => { e.preventDefault(); commit(null) }}
@@ -269,7 +293,8 @@ function CategoryCell({
               </li>
             )
           })}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
   )
@@ -418,6 +443,7 @@ function PayeeCell({
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const anchorRect = useAnchorRect(wrapRef, open)
 
   useEffect(() => { inputRef.current?.focus(); inputRef.current?.select() }, [])
 
@@ -499,10 +525,11 @@ function PayeeCell({
         aria-label="Select or create payee"
         autoComplete="off"
       />
-      {open && (filtered.length > 0 || showCreate) && (
+      {open && (filtered.length > 0 || showCreate) && anchorRect && typeof document !== 'undefined' && ReactDOM.createPortal(
         <ul
           ref={listRef}
-          className="absolute z-50 mt-0.5 w-full rounded border border-black/10 bg-white shadow-md text-[10px] max-h-44 overflow-y-auto"
+          style={{ position: 'fixed', top: anchorRect.bottom + 2, left: anchorRect.left, width: anchorRect.width }}
+          className="z-[9999] rounded border border-black/10 bg-white shadow-md text-[10px] max-h-44 overflow-y-auto"
         >
           {filtered.map((p) => (
             <li
@@ -521,7 +548,8 @@ function PayeeCell({
               {creating ? 'Creating…' : `+ Create "${draft.trim()}"`}
             </li>
           )}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
   )
@@ -571,12 +599,18 @@ function ColumnFilterPopover({
   label: string
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const isActive = Boolean(filterValue || filterValue2)
+  const anchorRect = useAnchorRect(wrapRef, isOpen)
 
   useEffect(() => {
     if (!isOpen) return
     function handler(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+      const t = e.target as Node
+      if (
+        wrapRef.current && !wrapRef.current.contains(t) &&
+        dropdownRef.current && !dropdownRef.current.contains(t)
+      ) {
         onClose()
       }
     }
@@ -594,8 +628,12 @@ function ColumnFilterPopover({
       >
         <FunnelIcon active={isActive} />
       </button>
-      {isOpen && (
-        <div className="absolute top-full left-0 z-30 mt-1 bg-white border border-black/10 rounded-lg shadow-lg p-2 min-w-[160px] whitespace-normal">
+      {isOpen && anchorRect && typeof document !== 'undefined' && ReactDOM.createPortal(
+        <div
+          ref={dropdownRef}
+          style={{ position: 'fixed', top: anchorRect.bottom + 4, left: anchorRect.left }}
+          className="z-[9999] bg-white border border-black/10 rounded-lg shadow-lg p-2 min-w-[160px] whitespace-normal"
+        >
           <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">{label}</p>
           {type === 'text' && (
             <input
@@ -673,7 +711,8 @@ function ColumnFilterPopover({
               Clear
             </button>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
@@ -786,14 +825,20 @@ function DateFilterHeader({
   setOpenFilterCol: (col: string | null) => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const isOpen = openFilterCol === 'date'
   const isActive = Boolean(dateFrom || dateTo)
   const isSortActive = sortBy === 'date'
+  const anchorRect = useAnchorRect(wrapRef, isOpen)
 
   useEffect(() => {
     if (!isOpen) return
     function handler(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+      const t = e.target as Node
+      if (
+        wrapRef.current && !wrapRef.current.contains(t) &&
+        dropdownRef.current && !dropdownRef.current.contains(t)
+      ) {
         setOpenFilterCol(null)
       }
     }
@@ -819,8 +864,12 @@ function DateFilterHeader({
         >
           <FunnelIcon active={isActive} />
         </button>
-        {isOpen && (
-          <div className="absolute top-full left-0 z-30 mt-1 bg-white border border-black/10 rounded-lg shadow-lg w-52 p-3 space-y-3 whitespace-normal">
+        {isOpen && anchorRect && typeof document !== 'undefined' && ReactDOM.createPortal(
+          <div
+            ref={dropdownRef}
+            style={{ position: 'fixed', top: anchorRect.bottom + 4, left: anchorRect.left }}
+            className="z-[9999] bg-white border border-black/10 rounded-lg shadow-lg w-52 p-3 space-y-3 whitespace-normal"
+          >
             <div className="space-y-1">
               <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Quick select</p>
               {([
@@ -869,7 +918,8 @@ function DateFilterHeader({
                 Clear date filter
               </button>
             )}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </th>
