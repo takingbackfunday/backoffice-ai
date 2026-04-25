@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Trash2, X, Sparkles, Eye, ChevronRight, CheckCircle, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { JobSelect } from './job-select'
 import { PaymentSummary } from '@/components/projects/payment-summary'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
@@ -221,10 +222,7 @@ export function InvoiceEditor({
   paymentMethods,
 }: Props) {
   const router = useRouter()
-  const [jobs, setJobs] = useState(initialJobs)
-  const [newJobName, setNewJobName] = useState('')
-  const [creatingJob, setCreatingJob] = useState(false)
-  const [showNewJob, setShowNewJob] = useState(false)
+  const jobs = initialJobs
 
   // Build initial state
   const initial: InvoiceState = existingInvoice
@@ -704,27 +702,6 @@ export function InvoiceEditor({
     return regular
   }
 
-  async function handleCreateJob() {
-    if (!newJobName.trim()) return
-    setCreatingJob(true)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/jobs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newJobName.trim() }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.error) return
-      const newJob = { id: json.data.id, name: json.data.name }
-      setJobs(prev => [...prev, newJob])
-      dispatch({ type: 'SET_JOB', jobId: newJob.id })
-      setNewJobName('')
-      setShowNewJob(false)
-    } finally {
-      setCreatingJob(false)
-    }
-  }
-
   async function handleSave(sendAfter: boolean) {
     if (!state.dueDate) { setSaveError('Due date is required'); return }
     const lineItemsPayload = buildLineItemsPayload()
@@ -835,11 +812,6 @@ export function InvoiceEditor({
           <div className="mb-5">
             <div className="flex items-center gap-2 mb-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Job</label>
-              {!showNewJob && (
-                <button type="button" onClick={() => setShowNewJob(true)} className="text-xs text-primary hover:underline flex items-center gap-0.5">
-                  <Plus className="h-3 w-3" /> New job
-                </button>
-              )}
               <span className="text-xs text-muted-foreground italic">(Optional — for your records only)</span>
               {mode === 'create' && showCopyPicker && (
                 <div className="ml-auto relative">
@@ -869,32 +841,14 @@ export function InvoiceEditor({
                 </div>
               )}
             </div>
-            {showNewJob ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={newJobName}
-                  onChange={e => setNewJobName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateJob() } if (e.key === 'Escape') { setShowNewJob(false); setNewJobName('') } }}
-                  placeholder="Job name…"
-                  autoFocus
-                  className="flex-1 max-w-sm rounded-lg border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                <button type="button" onClick={handleCreateJob} disabled={creatingJob || !newJobName.trim()} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50">
-                  {creatingJob ? '…' : 'Create'}
-                </button>
-                <button type="button" onClick={() => { setShowNewJob(false); setNewJobName('') }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
-              </div>
-            ) : (
-              <select
-                value={state.jobId}
-                onChange={e => dispatch({ type: 'SET_JOB', jobId: e.target.value })}
-                className="w-full max-w-sm rounded-lg border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-              >
-                <option value="">No specific job</option>
-                {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
-              </select>
-            )}
+            <JobSelect
+              value={state.jobId}
+              onChange={jobId => dispatch({ type: 'SET_JOB', jobId })}
+              jobs={jobs}
+              projectId={projectId}
+              placeholder="No specific job"
+              className="max-w-sm"
+            />
           </div>
 
           {/* Unit popover — rendered fixed to avoid overflow-hidden clipping */}

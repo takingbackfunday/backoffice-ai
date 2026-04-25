@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Clock, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { JobSelect } from './job-select'
 
 interface TimeEntry {
   id: string
@@ -209,19 +210,15 @@ export function TimeTracker({ projectId, entries: initial, jobs, defaultRate, cu
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            {jobs.length > 0 && (
-              <div>
+            <div>
                 <label className="block text-xs text-muted-foreground mb-1">Job <span className="font-normal">(optional)</span></label>
-                <select
+                <JobSelect
                   value={form.jobId}
-                  onChange={e => setForm(f => ({ ...f, jobId: e.target.value }))}
-                  className="w-full border rounded px-2 py-1.5 text-sm bg-background"
-                >
-                  <option value="">— none —</option>
-                  {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
-                </select>
+                  onChange={jobId => setForm(f => ({ ...f, jobId }))}
+                  jobs={jobs}
+                  projectId={projectId}
+                />
               </div>
-            )}
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Rate override <span className="font-normal">(optional)</span></label>
               <input

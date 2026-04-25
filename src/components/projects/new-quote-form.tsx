@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { JobSelect } from './job-select'
 
 interface Props {
   projectId: string
@@ -58,17 +59,13 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, estimates }: Props)
 
       <div>
         <label className="block text-sm font-medium mb-1">Job</label>
-        {jobs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No active jobs — create a job first.</p>
-        ) : (
-          <select
-            value={jobId}
-            onChange={e => setJobId(e.target.value)}
-            className="w-full border rounded px-3 py-2 text-sm bg-background"
-          >
-            {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
-          </select>
-        )}
+        <JobSelect
+          value={jobId}
+          onChange={setJobId}
+          jobs={jobs}
+          projectId={projectId}
+          required
+        />
       </div>
 
       {estimates.length > 0 && (

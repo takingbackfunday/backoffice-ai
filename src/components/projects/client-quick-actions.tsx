@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Briefcase, FileText, FileCheck, Receipt, Clock, Plus, X, Loader2 } from 'lucide-react'
+import { JobSelect } from './job-select'
 
 interface Job { id: string; name: string }
 
@@ -179,15 +180,15 @@ export function ClientQuickActions({ projectId, projectSlug, jobs, defaultRate, 
                 <input type="text" required value={timeForm.description} onChange={e => setTimeForm(f => ({ ...f, description: e.target.value }))} placeholder="What did you work on?" autoFocus className={field} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                {jobs.length > 0 && (
-                  <div>
+                <div>
                     <label className="block text-xs font-medium mb-1">Job <span className="text-muted-foreground font-normal">(optional)</span></label>
-                    <select value={timeForm.jobId} onChange={e => setTimeForm(f => ({ ...f, jobId: e.target.value }))} className={field}>
-                      <option value="">— none —</option>
-                      {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
-                    </select>
+                    <JobSelect
+                      value={timeForm.jobId}
+                      onChange={jobId => setTimeForm(f => ({ ...f, jobId }))}
+                      jobs={jobs}
+                      projectId={projectId}
+                    />
                   </div>
-                )}
                 <div>
                   <label className="block text-xs font-medium mb-1">Rate override <span className="text-muted-foreground font-normal">(optional)</span></label>
                   <input type="number" value={timeForm.rate} onChange={e => setTimeForm(f => ({ ...f, rate: e.target.value }))} placeholder={defaultRate ? `${defaultRate} (default)` : 'per hr'} min="0" step="0.01" className={field} />

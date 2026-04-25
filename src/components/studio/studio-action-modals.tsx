@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Loader2 } from 'lucide-react'
+import { JobSelect } from '@/components/projects/job-select'
 
 /* ------------------------------------------------------------------ */
 /*  NewClientModal                                                      */
@@ -470,13 +471,15 @@ export function LogTimeModal({ clients, onClose }: LogTimeModalProps) {
             <input type="text" required value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="What did you work on?" className={field} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {activeClient && activeClient.jobs.length > 0 && (
+            {activeClient && (
               <div>
                 <label className="block text-xs font-medium mb-1">Job <span className="text-muted-foreground font-normal">(optional)</span></label>
-                <select value={form.jobId} onChange={e => setForm(f => ({ ...f, jobId: e.target.value }))} className={field}>
-                  <option value="">— none —</option>
-                  {activeClient.jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
-                </select>
+                <JobSelect
+                  value={form.jobId}
+                  onChange={jobId => setForm(f => ({ ...f, jobId }))}
+                  jobs={activeClient.jobs}
+                  projectId={clientId}
+                />
               </div>
             )}
             <div>
