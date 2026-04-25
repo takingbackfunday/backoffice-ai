@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Send, Check, X, GitBranch, Plus, FileText, ChevronRight, Loader2 } from 'lucide-react'
+import { Send, Check, X, GitBranch, Plus, Download, ChevronRight, Loader2 } from 'lucide-react'
 import { FulfillmentBar } from './fulfillment-bar'
 import { cn } from '@/lib/utils'
 
@@ -110,6 +110,8 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
   const [error, setError] = useState<string | null>(null)
   const [showCreateInvoice, setShowCreateInvoice] = useState(false)
   const [dueDate, setDueDate] = useState('')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewing, setPreviewing] = useState(false)
 
   const currency = quote.currency
 
@@ -234,12 +236,47 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
               <Plus className="w-3.5 h-3.5" /> Create Invoice
             </button>
           )}
-          <a
-            href={`/api/projects/${projectId}/quotes/${quote.id}/pdf`}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent"
+          <button
+            type="button"
+            disabled={previewing}
+            onClick={async () => {
+              setPreviewing(true)
+              try {
+                const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}/pdf`)
+                if (!res.ok) return
+                const blob = await res.blob()
+                setPreviewUrl(URL.createObjectURL(blob))
+              } finally {
+                setPreviewing(false)
+              }
+            }}
+            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50 transition-colors"
           >
-            <FileText className="w-3.5 h-3.5" /> PDF
-          </a>
+            {previewing ? 'Loading…' : 'Preview PDF'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const a = document.createElement('a')
+              a.href = `/api/projects/${projectId}/quotes/${quote.id}/pdf`
+              a.download = `${quote.quoteNumber}.pdf`
+              document.body.appendChild(a)
+              a.click()
+              document.body.removeChild(a)
+
+              if (quote.status !== 'DRAFT') return
+              try {
+                const key = 'pending-mark-sent-quote'
+                const existing: { quoteId: string; quoteNumber: string; projectId: string; projectSlug: string; downloadedAt: number }[] = JSON.parse(localStorage.getItem(key) ?? '[]')
+                if (existing.some(e => e.quoteId === quote.id)) return
+                existing.push({ quoteId: quote.id, quoteNumber: quote.quoteNumber, projectId, projectSlug, downloadedAt: Date.now() })
+                localStorage.setItem(key, JSON.stringify(existing))
+              } catch {}
+            }}
+            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" /> Download PDF
+          </button>
         </div>
       </div>
 
@@ -447,6 +484,38 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
                 </div>
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }}
+        >
+          <div
+            className="relative bg-white rounded-xl shadow-2xl overflow-hidden"
+            style={{ width: 'min(90vw, 860px)', height: 'min(92vh, 1100px)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-2.5 border-b">
+              <span className="text-sm font-semibold">Quote preview — {quote.quoteNumber}</span>
+              <button
+                type="button"
+                onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }}
+                className="text-muted-foreground hover:text-foreground text-lg leading-none px-1"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <iframe
+              src={previewUrl}
+              className="w-full"
+              style={{ height: 'calc(100% - 45px)', border: 'none' }}
+              title="Quote preview"
+            />
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ import { Plus } from 'lucide-react'
 import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
 import { NewClientModal, NewJobModal, NewEstimateModal, NewQuoteModal, LogTimeModal } from '@/components/studio/studio-action-modals'
 import { MarkSentModal } from '@/components/studio/mark-sent-modal'
+import { MarkSentQuoteModal } from '@/components/studio/mark-sent-quote-modal'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { ActionBanner } from '@/components/ui/action-banner'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
@@ -81,6 +82,14 @@ type View = 'open' | 'paid' | 'all'
 interface PendingMarkSentItem {
   invoiceId: string
   invoiceNumber: string
+  projectId: string
+  projectSlug: string
+  downloadedAt: number
+}
+
+interface PendingMarkSentQuoteItem {
+  quoteId: string
+  quoteNumber: string
   projectId: string
   projectSlug: string
   downloadedAt: number
@@ -878,6 +887,8 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [suggestionTxCount] = useState(pendingSuggestions)
   const [pendingMarkSent, setPendingMarkSent] = useState<PendingMarkSentItem[]>([])
   const [markSentTarget, setMarkSentTarget] = useState<PendingMarkSentItem | null>(null)
+  const [pendingMarkSentQuote, setPendingMarkSentQuote] = useState<PendingMarkSentQuoteItem[]>([])
+  const [markSentQuoteTarget, setMarkSentQuoteTarget] = useState<PendingMarkSentQuoteItem | null>(null)
 
   // Load pending mark-as-sent notifications from localStorage on mount
   useEffect(() => {
@@ -888,6 +899,17 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       const fresh = raw.filter(item => item.downloadedAt > sevenDaysAgo)
       if (fresh.length !== raw.length) localStorage.setItem(key, JSON.stringify(fresh))
       setPendingMarkSent(fresh)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    try {
+      const key = 'pending-mark-sent-quote'
+      const raw: PendingMarkSentQuoteItem[] = JSON.parse(localStorage.getItem(key) ?? '[]')
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+      const fresh = raw.filter(item => item.downloadedAt > sevenDaysAgo)
+      if (fresh.length !== raw.length) localStorage.setItem(key, JSON.stringify(fresh))
+      setPendingMarkSentQuote(fresh)
     } catch {}
   }, [])
 
@@ -973,8 +995,17 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       })
     }
 
+    for (const item of pendingMarkSentQuote) {
+      items.push({
+        dot: '#a78bfa',
+        label: `${item.quoteNumber} — downloaded but not marked sent`,
+        detail: 'Click to review and mark as sent',
+        onClick: () => setMarkSentQuoteTarget(item),
+      })
+    }
+
     return items
-  }, [flat, clients, clientFilter, router, pendingMarkSent])
+  }, [flat, clients, clientFilter, router, pendingMarkSent, pendingMarkSentQuote])
 
   if (clients.length === 0) {
     return (
@@ -1491,6 +1522,16 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           onDone={() => {
             setPendingMarkSent(prev => prev.filter(i => i.invoiceId !== markSentTarget.invoiceId))
             setMarkSentTarget(null)
+            router.refresh()
+          }}
+        />
+      )}
+      {markSentQuoteTarget && (
+        <MarkSentQuoteModal
+          item={markSentQuoteTarget}
+          onDone={() => {
+            setPendingMarkSentQuote(prev => prev.filter(i => i.quoteId !== markSentQuoteTarget.quoteId))
+            setMarkSentQuoteTarget(null)
             router.refresh()
           }}
         />
