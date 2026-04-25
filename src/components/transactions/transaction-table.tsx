@@ -1833,7 +1833,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
             ) : (
               <button
                 onClick={() => setSelectMode(true)}
-                className="rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-white hover:shadow-sm transition-all"
+                className="rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-white hover:shadow-sm transition-all"
                 data-testid="delete-transactions-btn"
               >
                 Delete transactions
