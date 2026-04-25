@@ -134,24 +134,30 @@ export function ClientInfoEditor({ projectId, isDefault = false, profile }: Prop
     )
   }
 
+  const items = [
+    profile.contactName,
+    profile.company,
+    profile.email,
+    profile.phone,
+    profile.address,
+  ].filter(Boolean)
+
   return (
-    <div className="rounded-lg border p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold">Client info</h2>
-        <button
-          onClick={() => setEditing(true)}
-          className="text-xs text-primary hover:underline"
-        >
-          Edit
-        </button>
-      </div>
-      <dl className="grid grid-cols-2 gap-2 text-sm">
-        {profile.contactName && (<><dt className="text-muted-foreground">Contact</dt><dd>{profile.contactName}</dd></>)}
-        {profile.company && (<><dt className="text-muted-foreground">Company</dt><dd>{profile.company}</dd></>)}
-        {profile.email && (<><dt className="text-muted-foreground">Email</dt><dd>{profile.email}</dd></>)}
-        {profile.phone && (<><dt className="text-muted-foreground">Phone</dt><dd>{profile.phone}</dd></>)}
-        {profile.address && (<><dt className="text-muted-foreground">Address</dt><dd>{profile.address}</dd></>)}
-      </dl>
+    <div className="flex items-center gap-3 rounded-md border px-3 py-2 text-xs text-muted-foreground">
+      <span className="font-medium text-foreground shrink-0">Client info</span>
+      {items.length > 0 ? (
+        <span className="truncate">
+          {items.join(' · ')}
+        </span>
+      ) : (
+        <span className="italic">No details yet</span>
+      )}
+      <button
+        onClick={() => setEditing(true)}
+        className="ml-auto shrink-0 text-primary hover:underline"
+      >
+        Edit
+      </button>
     </div>
   )
 }
