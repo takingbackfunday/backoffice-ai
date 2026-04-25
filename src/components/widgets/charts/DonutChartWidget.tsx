@@ -10,7 +10,8 @@ interface Props {
   config: WidgetConfig
 }
 
-function formatAmount(value: number): string {
+function formatAmount(value: number | null | undefined): string {
+  if (value == null || !isFinite(value)) return ''
   if (Math.abs(value) >= 1000) return `$${(value / 1000).toFixed(1)}k`
   return `$${value.toFixed(0)}`
 }

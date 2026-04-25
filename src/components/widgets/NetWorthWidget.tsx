@@ -157,7 +157,8 @@ function CategoryFilterDropdown({
 
 const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' }
 
-function fmt(value: number, currency = 'USD'): string {
+function fmt(value: number | null | undefined, currency = 'USD'): string {
+  if (value == null || !isFinite(value)) return ''
   const sym = SYMBOLS[currency] ?? '$'
   const abs = Math.abs(value)
   if (abs >= 1000) return `${sym}${(value / 1000).toFixed(1)}k`

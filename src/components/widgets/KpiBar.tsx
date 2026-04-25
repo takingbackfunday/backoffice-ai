@@ -6,7 +6,8 @@ import type { DashboardCurrency } from '@/lib/fx'
 
 const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' }
 
-function fmt(value: number, currency: string): string {
+function fmt(value: number | null | undefined, currency: string): string {
+  if (value == null || !isFinite(value)) return ''
   const sym = SYMBOLS[currency] ?? '$'
   const abs = Math.abs(value)
   if (abs >= 1_000_000) return `${sym}${(value / 1_000_000).toFixed(1)}M`
