@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
+import { JobSelect } from './job-select'
 
 interface Props {
   projectId: string
@@ -58,22 +59,18 @@ export function QuoteFromEstimate({ projectId, projectSlug, estimateId, estimate
 
   return (
     <div className="flex items-center gap-2 shrink-0">
-      {jobs.length === 0 ? (
-        <span className="text-xs text-muted-foreground">No active jobs</span>
-      ) : (
-        <select
-          value={jobId}
-          onChange={e => setJobId(e.target.value)}
-          className="text-xs border rounded px-2 py-1 bg-background"
-          autoFocus
-        >
-          {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
-        </select>
-      )}
+      <JobSelect
+        value={jobId}
+        onChange={setJobId}
+        jobs={jobs}
+        projectId={projectId}
+        required
+        className="text-xs"
+      />
       {error && <span className="text-xs text-destructive">{error}</span>}
       <button
         onClick={handleCreate}
-        disabled={submitting || jobs.length === 0}
+        disabled={submitting || !jobId}
         className="text-xs px-2.5 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       >
         {submitting ? '…' : 'Go'}

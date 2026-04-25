@@ -4,6 +4,7 @@ import { useReducer, useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Sparkles, ChevronDown, ChevronUp, ChevronRight, Check, AlertTriangle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { JobSelect } from './job-select'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -560,14 +561,14 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
             <div className="flex items-center gap-2 shrink-0">
               {quoteJobPicking ? (
                 <>
-                  <select
+                  <JobSelect
                     value={quoteJobId}
-                    onChange={e => setQuoteJobId(e.target.value)}
-                    className="text-xs border border-amber-400 rounded px-1.5 py-1 bg-amber-50"
-                  >
-                    {jobs.length === 0 && <option value="">No active jobs</option>}
-                    {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
-                  </select>
+                    onChange={setQuoteJobId}
+                    jobs={jobs}
+                    projectId={projectId}
+                    required
+                    className="text-xs"
+                  />
                   <button
                     onClick={handleCreateQuote}
                     disabled={quoteGenerating || !quoteJobId}

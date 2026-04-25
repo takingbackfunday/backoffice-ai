@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus, FileText, ChevronRight, Loader2, GitBranch, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { JobSelect } from './job-select'
 
 interface EstimateItem {
   id: string
@@ -188,16 +189,14 @@ export function EstimateList({ projectId, projectSlug, estimates, jobs }: Props)
                 )}
                 {est.status === 'FINAL' && jobSelecting === est.id && (
                   <div className="flex items-center gap-1.5">
-                    <select
+                    <JobSelect
                       value={selectedJobId}
-                      onChange={e => setSelectedJobId(e.target.value)}
-                      className="text-xs border rounded px-1.5 py-1 bg-background"
-                    >
-                      {jobs.length === 0 && <option value="">No jobs</option>}
-                      {jobs.map(j => (
-                        <option key={j.id} value={j.id}>{j.name}</option>
-                      ))}
-                    </select>
+                      onChange={setSelectedJobId}
+                      jobs={jobs}
+                      projectId={projectId}
+                      required
+                      className="text-xs"
+                    />
                     <button
                       onClick={() => handleGenerateQuote(est.id, selectedJobId)}
                       disabled={isGenerating || !selectedJobId}
