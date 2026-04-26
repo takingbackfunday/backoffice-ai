@@ -207,3 +207,50 @@ export const INVOICE_STATUS_COLORS: Record<string, string> = {
   OVERDUE: 'bg-red-100 text-red-800',
   VOID: 'bg-gray-100 text-gray-400',
 }
+
+// === Work Order / Bill types ===
+
+export type WorkOrderStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'BILLED' | 'PAID' | 'CANCELLED'
+export type BillStatus = 'RECEIVED' | 'APPROVED' | 'PAID' | 'VOID'
+export type VendorDocumentType = 'W9' | 'INSURANCE_CERT' | 'CONTRACT' | 'OTHER'
+
+export const WORK_ORDER_STATUS_LABELS: Record<string, string> = {
+  OPEN: 'Open',
+  ASSIGNED: 'Assigned',
+  IN_PROGRESS: 'In progress',
+  COMPLETED: 'Completed',
+  BILLED: 'Billed',
+  PAID: 'Paid',
+  CANCELLED: 'Cancelled',
+}
+
+export const WORK_ORDER_STATUS_COLORS: Record<string, string> = {
+  OPEN: 'bg-gray-100 text-gray-700',
+  ASSIGNED: 'bg-blue-100 text-blue-800',
+  IN_PROGRESS: 'bg-amber-100 text-amber-800',
+  COMPLETED: 'bg-teal-100 text-teal-800',
+  BILLED: 'bg-purple-100 text-purple-800',
+  PAID: 'bg-green-100 text-green-800',
+  CANCELLED: 'bg-gray-100 text-gray-400',
+}
+
+export const BILL_STATUS_LABELS: Record<string, string> = {
+  RECEIVED: 'Received',
+  APPROVED: 'Approved',
+  PAID: 'Paid',
+  VOID: 'Void',
+}
+
+export const BILL_STATUS_COLORS: Record<string, string> = {
+  RECEIVED: 'bg-blue-100 text-blue-800',
+  APPROVED: 'bg-amber-100 text-amber-800',
+  PAID: 'bg-green-100 text-green-800',
+  VOID: 'bg-gray-100 text-gray-400',
+}
+
+export const VENDOR_DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  W9: 'W-9',
+  INSURANCE_CERT: 'Insurance Certificate',
+  CONTRACT: 'Contract',
+  OTHER: 'Other',
+}

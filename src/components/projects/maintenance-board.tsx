@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { MAINTENANCE_PRIORITY_COLORS, MAINTENANCE_PRIORITY_LABELS, MAINTENANCE_STATUS_LABELS } from '@/types'
 import { MaintenanceForm } from './maintenance-form'
@@ -18,11 +19,12 @@ interface UnitOption { id: string; unitLabel: string }
 
 interface Props {
   projectId: string
+  projectSlug: string
   requests: Request[]
   units: UnitOption[]
 }
 
-export function MaintenanceBoard({ projectId, requests: initial, units }: Props) {
+export function MaintenanceBoard({ projectId, projectSlug, requests: initial, units }: Props) {
   const [requests, setRequests] = useState<Request[]>(initial)
   const [showForm, setShowForm] = useState(false)
 
@@ -87,7 +89,7 @@ export function MaintenanceBoard({ projectId, requests: initial, units }: Props)
               {grouped[status].map(req => (
                 <div key={req.id} className="rounded-lg border bg-background p-2 text-xs">
                   <div className="flex items-start justify-between gap-1 mb-1">
-                    <p className="font-medium leading-tight">{req.title}</p>
+                    <Link href={`/projects/${projectSlug}/maintenance/${req.id}`} className="font-medium leading-tight hover:underline">{req.title}</Link>
                     <span className={cn('rounded-full px-1.5 py-0.5 text-xs shrink-0', MAINTENANCE_PRIORITY_COLORS[req.priority] ?? 'bg-muted')}>
                       {MAINTENANCE_PRIORITY_LABELS[req.priority]?.[0] ?? req.priority}
                     </span>

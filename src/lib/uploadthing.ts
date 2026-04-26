@@ -35,6 +35,30 @@ export const ourFileRouter = {
     .onUploadComplete(async ({ file }) => {
       return { url: file.ufsUrl }
     }),
+
+  // Vendor documents: W9, insurance certs, contracts (PDF only)
+  vendorDocument: f({ pdf: { maxFileSize: '16MB', maxFileCount: 1 } })
+    .middleware(async () => {
+      const { auth: clerkAuth } = await import('@clerk/nextjs/server')
+      const { userId } = await clerkAuth()
+      if (!userId) throw new Error('Unauthorized')
+      return { userId }
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl }
+    }),
+
+  // Vendor bill / invoice PDF
+  billPdf: f({ pdf: { maxFileSize: '16MB', maxFileCount: 1 } })
+    .middleware(async () => {
+      const { auth: clerkAuth } = await import('@clerk/nextjs/server')
+      const { userId } = await clerkAuth()
+      if (!userId) throw new Error('Unauthorized')
+      return { userId }
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl }
+    }),
 } satisfies FileRouter
 
 export type OurFileRouter = typeof ourFileRouter

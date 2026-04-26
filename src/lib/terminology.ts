@@ -74,3 +74,8 @@ export function getEntityLabel(workspaceType: string, bt?: BusinessType | null):
   if (bt === 'personal') return 'Project'
   return 'Overhead'
 }
+
+export function getVendorLabel(workspaceType: string): string {
+  if (workspaceType === 'CLIENT') return 'Subcontractor'
+  return 'Vendor'
+}

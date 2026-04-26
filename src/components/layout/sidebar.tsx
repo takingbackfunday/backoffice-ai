@@ -70,6 +70,9 @@ export function Sidebar() {
       items.push({ href: '/projects', label: 'Projects', icon: '📁' })
     }
 
+    if (businessType === 'freelance' || businessType === 'both' || businessType === 'property') {
+      items.push({ href: '/vendors', label: 'Vendors', icon: '🔧' })
+    }
     items.push({ href: '/receipts', label: 'Receipts', icon: '🧾' })
     items.push({ href: '/settings', label: 'Settings', icon: '⚙️' })
 

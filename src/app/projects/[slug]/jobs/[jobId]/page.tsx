@@ -14,6 +14,7 @@ import {
   INVOICE_STATUS_LABELS,
   INVOICE_STATUS_COLORS,
 } from '@/types'
+import { WorkOrderPanel } from '@/components/projects/work-order-panel'
 
 interface PageParams { params: Promise<{ slug: string; jobId: string }> }
 
@@ -117,9 +118,22 @@ export default async function JobDetailPage({ params }: PageParams) {
       timeEntries: {
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       },
+      workOrders: {
+        include: {
+          vendor: { select: { id: true, name: true } },
+          bills: { orderBy: { issueDate: 'desc' } },
+        },
+        orderBy: { createdAt: 'desc' },
+      },
     },
   })
   if (!job) notFound()
+
+  const vendors = await prisma.vendor.findMany({
+    where: { userId },
+    select: { id: true, name: true, specialty: true },
+    orderBy: { name: 'asc' },
+  })
 
   const currency = project.clientProfile.currency ?? 'USD'
 
@@ -127,6 +141,8 @@ export default async function JobDetailPage({ params }: PageParams) {
   const totalPaid     = job.invoices.reduce((s, inv) => s + invoicePaid(inv.payments), 0)
   const totalMinutes  = job.timeEntries.reduce((s, e) => s + e.minutes, 0)
   const totalHours    = totalMinutes / 60
+  const totalCosts    = job.workOrders.flatMap(wo => wo.bills).reduce((s, b) => s + Number(b.amount), 0)
+  const margin        = totalInvoiced - totalCosts
 
   return (
     <div className="flex min-h-screen">
@@ -181,7 +197,7 @@ export default async function JobDetailPage({ params }: PageParams) {
             </div>
 
             {/* Summary strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
               <div className="rounded-lg border bg-card p-3">
                 <p className="text-xs text-muted-foreground mb-0.5">Invoiced</p>
                 <p className="text-sm font-semibold">{fmt(totalInvoiced, currency)}</p>
@@ -191,12 +207,16 @@ export default async function JobDetailPage({ params }: PageParams) {
                 <p className="text-sm font-semibold">{fmt(totalPaid, currency)}</p>
               </div>
               <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground mb-0.5">Time logged</p>
-                <p className="text-sm font-semibold">{totalHours.toFixed(1)} hrs</p>
+                <p className="text-xs text-muted-foreground mb-0.5">Costs</p>
+                <p className="text-sm font-semibold">{fmt(totalCosts, currency)}</p>
+              </div>
+              <div className={cn('rounded-lg border bg-card p-3', margin >= 0 ? '' : 'border-red-200')}>
+                <p className="text-xs text-muted-foreground mb-0.5">Margin</p>
+                <p className={cn('text-sm font-semibold', margin >= 0 ? 'text-green-700' : 'text-red-600')}>{fmt(margin, currency)}</p>
               </div>
               <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground mb-0.5">Quotes</p>
-                <p className="text-sm font-semibold">{job.quotes.length}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">Time logged</p>
+                <p className="text-sm font-semibold">{totalHours.toFixed(1)} hrs</p>
               </div>
             </div>
 
@@ -331,6 +351,14 @@ export default async function JobDetailPage({ params }: PageParams) {
                 </div>
               </section>
             )}
+
+            {/* ── Work Orders (Costs) ──────────────────────────────────── */}
+            <WorkOrderPanel
+              projectId={project.id}
+              workOrders={JSON.parse(JSON.stringify(job.workOrders))}
+              vendors={JSON.parse(JSON.stringify(vendors))}
+              context={{ type: 'job', jobId: job.id }}
+            />
 
             {/* ── Time entries ─────────────────────────────────────────── */}
             <section className="mb-8">

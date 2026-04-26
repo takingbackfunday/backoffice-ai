@@ -20,6 +20,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         workspaceId: id,
         amount: { gt: 0 },
         invoicePayment: null,
+        bill: null,
       },
       select: { id: true, description: true, date: true, amount: true },
       orderBy: { date: 'desc' },

@@ -54,6 +54,7 @@ export default async function ProjectMaintenancePage({ params }: PageParams) {
           <ProjectSubNav slug={slug} type={project.type} />
           <MaintenanceBoard
             projectId={project.id}
+            projectSlug={slug}
             requests={JSON.parse(JSON.stringify(requests))}
             units={JSON.parse(JSON.stringify(units))}
           />

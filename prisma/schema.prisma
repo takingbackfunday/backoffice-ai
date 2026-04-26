@@ -115,6 +115,7 @@ model Transaction {
   invoicePayment            InvoicePayment?
   invoicePaymentSuggestions InvoicePaymentSuggestion[]
   receipts                  Receipt[]
+  bill                      Bill?
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 
@@ -329,6 +330,7 @@ model Workspace {
   estimates           Estimate[]
   timeEntries         TimeEntry[]
   receipts            Receipt[]
+  workOrders          WorkOrder[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -412,6 +414,7 @@ model Job {
   quotes          Quote[]
   estimates       Estimate[]    // legacy back-relation — new estimates use workspaceId directly
   timeEntries     TimeEntry[]
+  workOrders      WorkOrder[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -780,6 +783,7 @@ model MaintenanceRequest {
   vendorName       String?
   transactionId    String?
   invoiceLineItems InvoiceLineItem[]
+  workOrders       WorkOrder[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
@@ -1149,6 +1153,118 @@ enum ReceiptStatus {
   READY        // confirmed, billable (replaces COMPLETED)
   INVOICED     // attached to an InvoiceLineItem
   FAILED       // OCR pipeline error
+}
+
+// ── Vendor / Work Order / Bill (outbound money flow) ─────────────────────────
+
+model Vendor {
+  id         String           @id @default(cuid())
+  userId     String
+  name       String
+  email      String?
+  phone      String?
+  taxId      String?
+  specialty  String?
+  notes      String?
+  documents  VendorDocument[]
+  workOrders WorkOrder[]
+  bills      Bill[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@index([userId])
+}
+
+model VendorDocument {
+  id         String             @id @default(cuid())
+  vendorId   String
+  vendor     Vendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  fileType   VendorDocumentType
+  fileName   String
+  fileUrl    String
+  fileSize   Int?
+  expiresAt  DateTime?
+  notes      String?
+  uploadedBy String
+  createdAt  DateTime           @default(now())
+
+  @@index([vendorId])
+}
+
+enum VendorDocumentType {
+  W9
+  INSURANCE_CERT
+  CONTRACT
+  OTHER
+}
+
+model WorkOrder {
+  id                   String              @id @default(cuid())
+  userId               String
+  workspaceId          String
+  workspace            Workspace           @relation(fields: [workspaceId], references: [id])
+  vendorId             String?
+  vendor               Vendor?             @relation(fields: [vendorId], references: [id])
+  jobId                String?
+  job                  Job?                @relation(fields: [jobId], references: [id])
+  maintenanceRequestId String?
+  maintenanceRequest   MaintenanceRequest? @relation(fields: [maintenanceRequestId], references: [id])
+  title                String
+  description          String?
+  agreedCost           Decimal?            @db.Decimal(12, 2)
+  status               WorkOrderStatus     @default(OPEN)
+  scheduledDate        DateTime?
+  completedDate        DateTime?
+  bills                Bill[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([jobId])
+  @@index([maintenanceRequestId])
+  @@index([vendorId])
+}
+
+enum WorkOrderStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  BILLED
+  PAID
+  CANCELLED
+}
+
+model Bill {
+  id            String       @id @default(cuid())
+  workOrderId   String
+  workOrder     WorkOrder    @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  vendorId      String
+  vendor        Vendor       @relation(fields: [vendorId], references: [id])
+  billNumber    String?
+  amount        Decimal      @db.Decimal(12, 2)
+  issueDate     DateTime
+  dueDate       DateTime?
+  status        BillStatus   @default(RECEIVED)
+  fileUrl       String?
+  fileName      String?
+  notes         String?
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  paidDate      DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([workOrderId])
+  @@index([vendorId])
+}
+
+enum BillStatus {
+  RECEIVED
+  APPROVED
+  PAID
+  VOID
 }
 
 // ── FX Rates ─────────────────────────────────────────────────────────────────
