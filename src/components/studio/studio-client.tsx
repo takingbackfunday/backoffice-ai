@@ -1128,19 +1128,19 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           <div style={{ display: 'flex', gap: 12 }}>
             {[
               {
-                header: 'Clients & Jobs',
+                header: 'New Work',
                 items: [
-                  { label: 'New client', onClick: () => setShowNewClientModal(true) },
-                  { label: 'New job',    onClick: () => setShowNewJobModal(true) },
+                  { label: 'New client',   onClick: () => setShowNewClientModal(true) },
+                  { label: 'New job',      onClick: () => setShowNewJobModal(true) },
+                  { label: 'New estimate', onClick: () => setShowNewEstimateModal(true) },
+                  { label: 'New quote',    onClick: () => setShowNewQuoteModal(true) },
                 ],
               },
               {
                 header: 'Billing',
                 items: [
                   { label: 'Draft invoice', onClick: () => setShowInvoiceModal(true) },
-                  { label: 'New quote',     onClick: () => setShowNewQuoteModal(true) },
                   { label: 'Log time',      onClick: () => setShowLogTimeModal(true) },
-                  { label: 'New estimate',  onClick: () => setShowNewEstimateModal(true) },
                 ],
               },
               {
