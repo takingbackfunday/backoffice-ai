@@ -1244,7 +1244,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
             <input
               value={clientSearch}
               onChange={e => setClientSearch(e.target.value)}
-              placeholder="Search clients, invoices, quotes…"
+              placeholder="Search clients, invoices, quotes, jobs…"
               style={{ paddingLeft: 28, paddingRight: 10, paddingTop: 6, paddingBottom: 6, borderRadius: 8, border: '1px solid #e8e6df', background: '#fafaf8', fontSize: 12, outline: 'none', width: 240, color: '#1a1a1a' }}
             />
           </div>
@@ -1386,7 +1386,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                                     onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#e8e6df'}
                                   >
                                     <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{inv.invoiceNumber}</span>
-                                    {inv.jobName && <span style={{ fontSize: 11, color: '#aaa', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.jobName}</span>}
+                                    {inv.jobName && <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', flexShrink: 0, whiteSpace: 'nowrap' }}>{inv.jobName}</span>}
                                     <div style={{ flex: 1 }} />
                                     <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: '#1a1a1a' }}>{fmt(inv.total, inv.currency)}</span>
                                     {balance > 0 && ds !== 'PAID' && ds !== 'VOID' && (
