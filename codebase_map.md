@@ -37,6 +37,9 @@ Keep this updated when feature areas are added or moved.
 | `/projects/[slug]/tenants` | `src/app/projects/[slug]/tenants/page.tsx` | `src/components/projects/tenants-applicants-client.tsx` |
 | `/projects/[slug]/tenants/[id]` | `src/app/projects/[slug]/tenants/[tenantId]/page.tsx` | `src/components/projects/tenant-detail-client.tsx` |
 | `/projects/[slug]/maintenance` | `src/app/projects/[slug]/maintenance/page.tsx` | `src/components/projects/maintenance-board.tsx` |
+| `/projects/[slug]/maintenance/[requestId]` | `src/app/projects/[slug]/maintenance/[requestId]/page.tsx` | `src/components/projects/work-order-panel.tsx` |
+| `/vendors` | `src/app/vendors/page.tsx` | `src/components/vendors/vendor-list.tsx` |
+| `/vendors/[vendorId]` | `src/app/vendors/[vendorId]/page.tsx` | `src/components/vendors/vendor-detail.tsx` |
 | `/projects/[slug]/messages` | `src/app/projects/[slug]/messages/page.tsx` | `src/components/projects/messages-inbox.tsx` |
 | `/projects/[slug]/listings` | `src/app/projects/[slug]/listings/page.tsx` | `src/components/projects/listings-client.tsx` |
 | `/accounts` | `src/app/accounts/page.tsx` | `src/components/accounts/accounts-client.tsx` |
@@ -96,6 +99,35 @@ Keep this updated when feature areas are added or moved.
   - Suggestions are ordered by transaction count across all sources, not clustered by source type.
 - **`emit_rule_suggestion` validator** (`rules-tools.ts`) rejects rules that would reclassify already-categorised transactions unless every matched transaction already has exactly the target category. Rejection messages include the actual existing categories on matched transactions so the agent can self-correct. Project-assignment rules bypass this check (they are additive, never reclassify).
 - **Project-tag rules** (assigning `workspaceName`) for patterns like Zelle rent payments are intentionally left to manual user creation — the descriptions are too varied to safely infer which property a transfer belongs to.
+
+### Vendor / Work Order / Bill (outbound money flow)
+
+Both CLIENT (freelance) and PROPERTY workspaces share the same schema. `WorkOrder.jobId` is set for the client path; `WorkOrder.maintenanceRequestId` for the property path — exactly one should be non-null.
+
+| Task | File |
+|---|---|
+| Vendor list + create | `GET/POST /api/vendors` → `src/app/api/vendors/route.ts` |
+| Vendor detail + edit + delete | `GET/PATCH/DELETE /api/vendors/[vendorId]` → `src/app/api/vendors/[vendorId]/route.ts` |
+| Vendor document upload | `POST /api/vendors/[vendorId]/documents` → `src/app/api/vendors/[vendorId]/documents/route.ts` |
+| Vendor document delete | `DELETE /api/vendors/[vendorId]/documents/[docId]` |
+| Work order list + create | `GET/POST /api/projects/[id]/work-orders` |
+| Work order update + delete | `PATCH/DELETE /api/projects/[id]/work-orders/[woId]` |
+| Bill create (with optional PDF upload) | `POST /api/projects/[id]/work-orders/[woId]/bills` |
+| Bill update (status, link transaction) + delete | `PATCH/DELETE /api/projects/[id]/work-orders/[woId]/bills/[billId]` |
+| Interactive CRUD panel (create WO, add bills, link txns) | `src/components/projects/work-order-panel.tsx` — used by both job detail and maintenance detail |
+| Vendor list UI | `src/components/vendors/vendor-list.tsx` |
+| Vendor detail UI (docs vault, payment history) | `src/components/vendors/vendor-detail.tsx` |
+| UploadThing routers | `vendorDocument`, `billPdf` — both in `src/lib/uploadthing.ts` |
+| Status + label constants | `src/types/index.ts` → `WORK_ORDER_STATUS_*`, `BILL_STATUS_*`, `VENDOR_DOCUMENT_TYPE_LABELS` |
+| Vendor label (Subcontractor vs Vendor) | `src/lib/terminology.ts` → `getVendorLabel(workspaceType)` |
+| Unlinked transactions (excludes bill-linked) | `GET /api/projects/[id]/unlinked-transactions` |
+
+**Bill → Transaction linking** mirrors `InvoicePayment` UX: `WorkOrderPanel` calls `GET /api/projects/[id]/unlinked-transactions`, renders a picker, then `PATCH …/bills/[billId]` with `{ transactionId }`. `Bill.transactionId` is `@unique`.
+
+**Auto-status transitions:**
+- Creating a work order with a vendor → status `ASSIGNED` (else `OPEN`)
+- Adding the first bill to a work order → status `BILLED`
+- Marking all bills on a work order `PAID` → work order status `PAID`
 
 ### Invoice lifecycle
 
@@ -232,7 +264,8 @@ Routes using this pattern: `agent/ask`, `agent/rules`, `invoices/ai-assist`, `es
 | Tenant invite (portal) | `POST /api/projects/[id]/tenants/[tenantId]/invite` |
 | Rent roll / payment tracking | `src/lib/agent/property-tools.ts` → `get_rent_roll`, `get_tenant_balance` |
 | Rent generation | `POST /api/rent/generate` |
-| Maintenance board | `src/components/projects/maintenance-board.tsx` |
+| Maintenance board (kanban, cards link to detail) | `src/components/projects/maintenance-board.tsx` |
+| Maintenance request detail (+ WorkOrderPanel) | `src/app/projects/[slug]/maintenance/[requestId]/page.tsx` |
 | Maintenance CRUD | `GET/POST /api/projects/[id]/maintenance`, `PATCH/DELETE …/[requestId]` |
 | Messages | `src/components/projects/messages-inbox.tsx` + `message-thread.tsx` |
 | Listings (rental ads) | `src/components/projects/listings-client.tsx` |
@@ -351,7 +384,7 @@ All routes use helpers from `src/lib/api-response.ts`:
 | Concern | Location |
 |---|---|
 | Route handler | `src/app/api/uploadthing/route.ts` |
-| Server config (two routes) | `src/lib/uploadthing.ts` → `applicantDocUploader`, `adHocDocUploader` |
+| Server config | `src/lib/uploadthing.ts` → `applicantDocUploader`, `adHocDocUploader`, `receiptThumbnail`, `vendorDocument`, `billPdf` |
 | Client helpers | `src/lib/uploadthing-client.ts` → `useUploadThing`, `uploadFiles` |
 | Max file size | Must be power-of-2 string: `"16MB"` not `"10MB"` |
 
@@ -448,6 +481,10 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 | `Listing` | `requiredDocs Json @default("[]")` — doc-type keys applicants must upload |
 | `ApplicantDocument` | `status` `requested\|uploaded`; `uploadToken` HMAC-signed, single-use, 7-day TTL |
 | `Receipt` | `status` `PROCESSING\|COMPLETED\|FAILED`; `ocrMarkdown` + `extractedData` JSON; `originalHash` SHA-256 (original discarded) |
+| `Vendor` | User-scoped (not workspace-scoped); shared across all workspaces; `taxId` for 1099 tracking |
+| `VendorDocument` | W9, INSURANCE_CERT, CONTRACT, OTHER; `expiresAt` for insurance cert expiry badge |
+| `WorkOrder` | Polymorphic: either `jobId` (CLIENT path) or `maintenanceRequestId` (PROPERTY path); `workspaceId` denormalised for easy queries; `vendorId` nullable until assigned |
+| `Bill` | Child of WorkOrder; `vendorId` required (denormalised from work order for direct vendor payment queries); `transactionId` `@unique` — same constraint pattern as `InvoicePayment` |
 
 ---
 
@@ -463,3 +500,6 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 - Workspace filter in `GET /api/transactions` reads from `projectId` param — do not rename to `workspaceId` on the client
 - Background work (rules agent, invoice matching) runs fire-and-forget after CSV import; use `Promise.allSettled` for critical paths
 - Never log bank credentials — username/password must never appear in `console.log`
+- `WorkOrder` is polymorphic — set either `jobId` OR `maintenanceRequestId`, never both; the work order panel passes the correct context field based on `context.type`
+- `Bill.vendorId` is denormalised (vendor is also reachable via `bill.workOrder.vendor`) — this duplication is intentional to support direct vendor-level payment history queries without joining through WorkOrder
+- Job detail margin (`totalInvoiced − totalCosts`) is server-computed at page render; it does not update client-side when the `WorkOrderPanel` creates new work orders. A page reload is required to see updated margin/costs in the summary strip.
