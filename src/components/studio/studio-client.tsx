@@ -892,7 +892,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [pendingMarkSent, setPendingMarkSent] = useState<PendingMarkSentItem[]>([])
   const [markSentTarget, setMarkSentTarget] = useState<PendingMarkSentItem | null>(null)
   const [pendingMarkSentQuote, setPendingMarkSentQuote] = useState<PendingMarkSentQuoteItem[]>([])
-  const [activityOpen, setActivityOpen] = useState(true)
+  const [activityOpen, setActivityOpen] = useState(false)
   const [markSentQuoteTarget, setMarkSentQuoteTarget] = useState<PendingMarkSentQuoteItem | null>(null)
 
   // Load pending mark-as-sent notifications from localStorage on mount
@@ -1217,13 +1217,13 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
 
         {/* Recent activity — dense rows, collapsible */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, margin: 0, paddingLeft: 2 }}>Recent activity</p>
             <button
               onClick={() => setActivityOpen(o => !o)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', padding: '0 2px', fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', padding: 0, fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 2 }}
             >
-              {activityOpen ? 'Hide' : 'Show'}
+              {activityOpen ? 'hide' : 'show'}
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style={{ transform: activityOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
                 <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
