@@ -1119,56 +1119,65 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         )
       })()}
 
-      {/* 2-col strip: [Take action + Take notice stacked] | Recent activity */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
+      {/* 3-col strip: Take action | Take notice | Recent activity */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
 
-        {/* Left column: Take action + Take notice stacked */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-        {/* Take action — 2-column pill buttons */}
+        {/* Take action — 3 vertical groups side by side */}
         <div style={{ border: '1.5px solid #e0ddd5', borderRadius: 10, padding: '10px 12px', background: '#fafaf8' }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Take action</p>
-          {[
-            [
-              { label: 'New client',  onClick: () => setShowNewClientModal(true) },
-              { label: 'New job',     onClick: () => setShowNewJobModal(true) },
-            ],
-            [
-              { label: 'Draft invoice',  onClick: () => setShowInvoiceModal(true) },
-              { label: 'New quote',      onClick: () => setShowNewQuoteModal(true) },
-              { label: 'Log time',       onClick: () => setShowLogTimeModal(true) },
-              { label: 'New estimate',   onClick: () => setShowNewEstimateModal(true) },
-            ],
-            [
-              { label: 'Add receipt',    onClick: () => router.push('/receipts?upload=1') },
-              { label: 'New work order', onClick: () => setShowNewWorkOrderModal(true) },
-              { label: 'Intake bill',    onClick: () => setShowIntakeBillModal(true) },
-            ],
-          ].map((group, gi) => (
-            <div key={gi}>
-              {gi > 0 && <div style={{ borderTop: '1px solid #e8e6df', margin: '6px 0' }} />}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
-                {group.map(item => (
-                  <button
-                    key={item.label}
-                    onClick={item.onClick}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, whiteSpace: 'nowrap',
-                      border: '1.5px solid #e0ddd5', background: 'transparent',
-                      padding: '5px 12px', fontSize: 11, fontWeight: 600,
-                      color: '#555', cursor: 'pointer',
-                    }}
-                  >
-                    <Plus size={11} />
-                    {item.label}
-                  </button>
-                ))}
+          <div style={{ display: 'flex', gap: 12 }}>
+            {[
+              {
+                header: 'Clients & Jobs',
+                items: [
+                  { label: 'New client', onClick: () => setShowNewClientModal(true) },
+                  { label: 'New job',    onClick: () => setShowNewJobModal(true) },
+                ],
+              },
+              {
+                header: 'Billing',
+                items: [
+                  { label: 'Draft invoice', onClick: () => setShowInvoiceModal(true) },
+                  { label: 'New quote',     onClick: () => setShowNewQuoteModal(true) },
+                  { label: 'Log time',      onClick: () => setShowLogTimeModal(true) },
+                  { label: 'New estimate',  onClick: () => setShowNewEstimateModal(true) },
+                ],
+              },
+              {
+                header: 'Expenses',
+                items: [
+                  { label: 'Add receipt',    onClick: () => router.push('/receipts?upload=1') },
+                  { label: 'New work order', onClick: () => setShowNewWorkOrderModal(true) },
+                  { label: 'Intake bill',    onClick: () => setShowIntakeBillModal(true) },
+                ],
+              },
+            ].map((group, gi) => (
+              <div key={gi} style={{ display: 'flex', gap: 0 }}>
+                {gi > 0 && <div style={{ width: 1, background: '#e8e6df', marginRight: 12, alignSelf: 'stretch' }} />}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: '#bbb', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 4px', whiteSpace: 'nowrap' }}>{group.header}</p>
+                  {group.items.map(item => (
+                    <button
+                      key={item.label}
+                      onClick={item.onClick}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, whiteSpace: 'nowrap',
+                        border: '1.5px solid #e0ddd5', background: 'transparent',
+                        padding: '5px 12px', fontSize: 11, fontWeight: 600,
+                        color: '#555', cursor: 'pointer',
+                      }}
+                    >
+                      <Plus size={11} />
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        {/* Take notice — dense, no extra padding */}
+        {/* Take notice */}
         <div>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Take notice</p>
           {(notices.length > 0 || pendingSuggestions > 0 || recentPaymentsCount > 0) ? (
@@ -1205,9 +1214,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           )}
         </div>
 
-        </div>{/* end left column */}
-
-        {/* Recent activity — right half, dense rows */}
+        {/* Recent activity — dense rows */}
         <div>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Recent activity</p>
           {(() => {
