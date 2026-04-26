@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Building2, Users, Tag } from 'lucide-react'
 import { PROJECT_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
+import { NewWorkOrderModal } from '@/components/work-orders/new-work-order-modal'
+import { IntakeBillModal } from '@/components/work-orders/intake-bill-modal'
 
 type ProjectType = 'CLIENT' | 'PROPERTY' | 'OTHER'
 
@@ -40,6 +42,8 @@ const FILTERS: { label: string; value: string | null }[] = [
 
 export function ProjectList({ projects }: Props) {
   const [filter, setFilter] = useState<string | null>(null)
+  const [showNewWorkOrderModal, setShowNewWorkOrderModal] = useState(false)
+  const [showIntakeBillModal, setShowIntakeBillModal] = useState(false)
 
   const filtered = filter ? projects.filter(p => p.type === filter) : projects
 
@@ -62,14 +66,42 @@ export function ProjectList({ projects }: Props) {
             </button>
           ))}
         </div>
-        <Link
-          href="/projects/new"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-          data-testid="add-project-btn"
-        >
-          New project
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowIntakeBillModal(true)}
+            className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted/30 transition-colors"
+          >
+            Intake bill
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowNewWorkOrderModal(true)}
+            className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted/30 transition-colors"
+          >
+            New work order
+          </button>
+          <Link
+            href="/projects/new"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            data-testid="add-project-btn"
+          >
+            New project
+          </Link>
+        </div>
       </div>
+
+      {showNewWorkOrderModal && (
+        <NewWorkOrderModal
+          defaultType="PROPERTY"
+          onClose={() => setShowNewWorkOrderModal(false)}
+        />
+      )}
+      {showIntakeBillModal && (
+        <IntakeBillModal
+          onClose={() => setShowIntakeBillModal(false)}
+        />
+      )}
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">

@@ -151,8 +151,16 @@ Both are shown read-only on the invoice detail view and in the PDF **only when n
 ### WorkOrder — polymorphic context, exactly one FK
 `WorkOrder` links to either a `Job` (CLIENT workspace) or a `MaintenanceRequest` (PROPERTY workspace) — never both, never neither. The `WorkOrderPanel` component receives a `context` prop: `{ type: 'job', jobId }` or `{ type: 'maintenance', maintenanceRequestId }`. Pass the correct one; the API accepts whichever is set.
 
-### Bill — vendorId is required and denormalised
-`Bill.vendorId` is a required field even though the vendor is also reachable via `bill.workOrder.vendor`. This is intentional — vendor-level payment history queries (e.g. on the vendor detail page) avoid a double join. Always set `vendorId` when creating a bill; validate it belongs to the current user in the API route.
+Work orders created via `NewWorkOrderModal` (the global shortcut) may have both `jobId` and `maintenanceRequestId` as null if the user skips the context step — this is valid for workspace-level work orders.
+
+### WorkOrder — vendor can be null; must be assigned before billing
+`WorkOrder.vendorId` is nullable. A work order without a vendor will not appear on the vendor's detail page and blocks bill creation. The expanded panel in `WorkOrderPanel` always shows an inline vendor picker (with `+ New vendor…` inline creation) to assign one after the fact.
+
+### Bill — vendorId is required and auto-inherited
+`Bill.vendorId` is a required field. The bill creation UI (both `WorkOrderPanel` and `IntakeBillModal`) has **no vendor picker** — the work order's vendor is silently passed as `vendorId`. If the work order has no vendor, "Add bill" is blocked. Always pass `vendorId` equal to the work order's vendor when creating a bill via the API.
+
+### Inline vendor creation — local state, not refetched
+`WorkOrderPanel` and `NewWorkOrderModal` support `+ New vendor…` inline creation. Newly created vendors are appended to a local `vendorsList` state; the server is not re-queried. On the next page load the new vendor appears from the DB normally.
 
 ### Job detail — margin is server-computed
 The Costs and Margin summary cards on the job detail page (`/projects/[slug]/jobs/[jobId]`) are calculated at server render time. `WorkOrderPanel` mutates its own local state after creating work orders/bills, but the summary cards don't update until the page is hard-reloaded. If you add live margin tracking, move the calculation into a client-side derived value from the panel's state.

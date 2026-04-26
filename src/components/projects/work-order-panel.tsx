@@ -58,11 +58,19 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
   const [unlinkedTxns, setUnlinkedTxns] = useState<Transaction[]>([])
   const [loadingTxns, setLoadingTxns] = useState(false)
 
+  const [vendorsList, setVendorsList] = useState<Vendor[]>(vendors)
+
+  const [woFormCreatingVendor, setWoFormCreatingVendor] = useState(false)
+  const [panelCreatingVendorForWoId, setPanelCreatingVendorForWoId] = useState<string | null>(null)
+  const [newVendorName, setNewVendorName] = useState('')
+  const [newVendorSpecialty, setNewVendorSpecialty] = useState('')
+  const [savingVendor, setSavingVendor] = useState(false)
+
   const [woForm, setWoForm] = useState({
     title: '', description: '', vendorId: '', agreedCost: '', scheduledDate: '',
   })
   const [billForm, setBillForm] = useState({
-    vendorId: '', billNumber: '', amount: '', issueDate: '', dueDate: '', notes: '',
+    billNumber: '', amount: '', issueDate: '', dueDate: '', notes: '',
   })
 
   const { startUpload } = useUploadThing('billPdf')
@@ -107,6 +115,45 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
     }
   }
 
+  async function updateWoVendor(woId: string, vendorId: string | null) {
+    const res = await fetch(`/api/projects/${projectId}/work-orders/${woId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendorId: vendorId || null }),
+    })
+    if (res.ok) {
+      const json = await res.json()
+      setWorkOrders(prev => prev.map(wo => wo.id === woId ? json.data : wo))
+    }
+  }
+
+  async function handleCreateVendor(target: 'form' | string) {
+    if (!newVendorName.trim()) return
+    setSavingVendor(true)
+    try {
+      const res = await fetch('/api/vendors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newVendorName.trim(), specialty: newVendorSpecialty || undefined }),
+      })
+      if (res.ok) {
+        const j = await res.json()
+        setVendorsList(prev => [...prev, j.data])
+        if (target === 'form') {
+          setWoForm(p => ({ ...p, vendorId: j.data.id }))
+          setWoFormCreatingVendor(false)
+        } else {
+          await updateWoVendor(target, j.data.id)
+          setPanelCreatingVendorForWoId(null)
+        }
+        setNewVendorName('')
+        setNewVendorSpecialty('')
+      }
+    } finally {
+      setSavingVendor(false)
+    }
+  }
+
   async function deleteWorkOrder(woId: string) {
     if (!confirm('Delete this work order and all its bills?')) return
     const res = await fetch(`/api/projects/${projectId}/work-orders/${woId}`, { method: 'DELETE' })
@@ -117,7 +164,8 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
 
   async function createBill(e: React.FormEvent, woId: string) {
     e.preventDefault()
-    if (!billForm.amount || !billForm.issueDate || !billForm.vendorId) return
+    const wo = workOrders.find(w => w.id === woId)
+    if (!billForm.amount || !billForm.issueDate || !wo?.vendor) return
     setSavingBill(true)
     try {
       let fileUrl: string | undefined
@@ -135,7 +183,7 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          vendorId: billForm.vendorId,
+          vendorId: wo.vendor.id,
           billNumber: billForm.billNumber || undefined,
           amount: Number(billForm.amount),
           issueDate: billForm.issueDate,
@@ -147,10 +195,10 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
       })
       if (res.ok) {
         const json = await res.json()
-        setWorkOrders(prev => prev.map(wo =>
-          wo.id === woId ? { ...wo, bills: [json.data, ...wo.bills], status: 'BILLED' } : wo
+        setWorkOrders(prev => prev.map(w =>
+          w.id === woId ? { ...w, bills: [json.data, ...w.bills], status: 'BILLED' } : w
         ))
-        setBillForm({ vendorId: '', billNumber: '', amount: '', issueDate: '', dueDate: '', notes: '' })
+        setBillForm({ billNumber: '', amount: '', issueDate: '', dueDate: '', notes: '' })
         setBillFile(null)
         setShowBillForm(null)
       }
@@ -254,16 +302,49 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Vendor</label>
-              <select
-                value={woForm.vendorId}
-                onChange={e => setWoForm(p => ({ ...p, vendorId: e.target.value }))}
-                className="mt-0.5 w-full rounded border px-2 py-1.5 text-sm bg-background"
-              >
-                <option value="">— Unassigned —</option>
-                {vendors.map(v => (
-                  <option key={v.id} value={v.id}>{v.name}{v.specialty ? ` (${v.specialty})` : ''}</option>
-                ))}
-              </select>
+              {woFormCreatingVendor ? (
+                <div className="mt-0.5 space-y-1">
+                  <input
+                    autoFocus
+                    value={newVendorName}
+                    onChange={e => setNewVendorName(e.target.value)}
+                    placeholder="Vendor name *"
+                    className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                  />
+                  <input
+                    value={newVendorSpecialty}
+                    onChange={e => setNewVendorSpecialty(e.target.value)}
+                    placeholder="Specialty (optional)"
+                    className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                  />
+                  <div className="flex gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleCreateVendor('form')}
+                      disabled={savingVendor || !newVendorName.trim()}
+                      className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      {savingVendor ? 'Creating…' : 'Create vendor'}
+                    </button>
+                    <button type="button" onClick={() => { setWoFormCreatingVendor(false); setNewVendorName(''); setNewVendorSpecialty('') }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <select
+                  value={woForm.vendorId}
+                  onChange={e => {
+                    if (e.target.value === '__new__') { setWoFormCreatingVendor(true); setWoForm(p => ({ ...p, vendorId: '' })) }
+                    else { setWoForm(p => ({ ...p, vendorId: e.target.value })) }
+                  }}
+                  className="mt-0.5 w-full rounded border px-2 py-1.5 text-sm bg-background"
+                >
+                  <option value="">— Unassigned —</option>
+                  {vendorsList.map(v => (
+                    <option key={v.id} value={v.id}>{v.name}{v.specialty ? ` (${v.specialty})` : ''}</option>
+                  ))}
+                  <option value="__new__">+ New vendor…</option>
+                </select>
+              )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Agreed cost</label>
@@ -368,6 +449,52 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
                 {/* Expanded: bills + add bill form */}
                 {expanded && (
                   <div className="border-t bg-muted/10 px-4 py-3 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs text-muted-foreground w-14 shrink-0 pt-1.5">Vendor</span>
+                      {panelCreatingVendorForWoId === wo.id ? (
+                        <div className="space-y-1 flex-1">
+                          <input
+                            autoFocus
+                            value={newVendorName}
+                            onChange={e => setNewVendorName(e.target.value)}
+                            placeholder="Vendor name *"
+                            className="w-full rounded border px-2 py-1 text-xs bg-background"
+                          />
+                          <input
+                            value={newVendorSpecialty}
+                            onChange={e => setNewVendorSpecialty(e.target.value)}
+                            placeholder="Specialty (optional)"
+                            className="w-full rounded border px-2 py-1 text-xs bg-background"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleCreateVendor(wo.id)}
+                              disabled={savingVendor || !newVendorName.trim()}
+                              className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                            >
+                              {savingVendor ? 'Creating…' : 'Create vendor'}
+                            </button>
+                            <button type="button" onClick={() => { setPanelCreatingVendorForWoId(null); setNewVendorName(''); setNewVendorSpecialty('') }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <select
+                          value={wo.vendor?.id ?? ''}
+                          onChange={e => {
+                            if (e.target.value === '__new__') { setPanelCreatingVendorForWoId(wo.id); setNewVendorName(''); setNewVendorSpecialty('') }
+                            else { updateWoVendor(wo.id, e.target.value || null) }
+                          }}
+                          className="text-xs rounded border px-2 py-1 bg-background flex-1 max-w-xs"
+                        >
+                          <option value="">— Unassigned —</option>
+                          {vendorsList.map(v => (
+                            <option key={v.id} value={v.id}>{v.name}{v.specialty ? ` (${v.specialty})` : ''}</option>
+                          ))}
+                          <option value="__new__">+ New vendor…</option>
+                        </select>
+                      )}
+                    </div>
                     {wo.description && (
                       <p className="text-xs text-muted-foreground">{wo.description}</p>
                     )}
@@ -454,22 +581,13 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
                     {/* Add bill form */}
                     {showBillForm === wo.id ? (
                       <form onSubmit={e => createBill(e, wo.id)} className="space-y-3 bg-background rounded border p-3">
-                        <p className="text-xs font-medium">Add bill</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium">Add bill</p>
+                          {wo.vendor && (
+                            <span className="text-xs text-muted-foreground">Vendor: <span className="font-medium text-foreground">{wo.vendor.name}</span></span>
+                          )}
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-xs text-muted-foreground">Vendor *</label>
-                            <select
-                              value={billForm.vendorId}
-                              onChange={e => setBillForm(p => ({ ...p, vendorId: e.target.value }))}
-                              required
-                              className="mt-0.5 w-full rounded border px-2 py-1.5 text-xs bg-background"
-                            >
-                              <option value="">— Select vendor —</option>
-                              {vendors.map(v => (
-                                <option key={v.id} value={v.id}>{v.name}</option>
-                              ))}
-                            </select>
-                          </div>
                           <div>
                             <label className="text-xs text-muted-foreground">Bill # (optional)</label>
                             <input
@@ -531,14 +649,16 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
                           </button>
                         </div>
                       </form>
-                    ) : (
+                    ) : wo.vendor ? (
                       <button
                         type="button"
-                        onClick={() => { setShowBillForm(wo.id); setBillForm(p => ({ ...p, vendorId: wo.vendor?.id ?? '' })) }}
+                        onClick={() => setShowBillForm(wo.id)}
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                       >
                         <Plus className="w-3 h-3" /> Add bill
                       </button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">Assign a vendor above to add bills.</p>
                     )}
                   </div>
                 )}

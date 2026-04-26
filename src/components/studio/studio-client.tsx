@@ -8,6 +8,8 @@ import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
 import { NewClientModal, NewJobModal, NewEstimateModal, NewQuoteModal, LogTimeModal } from '@/components/studio/studio-action-modals'
 import { MarkSentModal } from '@/components/studio/mark-sent-modal'
 import { MarkSentQuoteModal } from '@/components/studio/mark-sent-quote-modal'
+import { NewWorkOrderModal } from '@/components/work-orders/new-work-order-modal'
+import { IntakeBillModal } from '@/components/work-orders/intake-bill-modal'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { ActionBanner } from '@/components/ui/action-banner'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
@@ -884,6 +886,8 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [showNewEstimateModal, setShowNewEstimateModal] = useState(false)
   const [showNewQuoteModal, setShowNewQuoteModal] = useState(false)
   const [showLogTimeModal, setShowLogTimeModal] = useState(false)
+  const [showNewWorkOrderModal, setShowNewWorkOrderModal] = useState(false)
+  const [showIntakeBillModal, setShowIntakeBillModal] = useState(false)
   const [suggestionTxCount] = useState(pendingSuggestions)
   const [pendingMarkSent, setPendingMarkSent] = useState<PendingMarkSentItem[]>([])
   const [markSentTarget, setMarkSentTarget] = useState<PendingMarkSentItem | null>(null)
@@ -1123,13 +1127,15 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Take action</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
             {[
-              { label: 'New client',   onClick: () => setShowNewClientModal(true) },
-              { label: 'Draft invoice', onClick: () => setShowInvoiceModal(true) },
-              { label: 'New job',      onClick: () => setShowNewJobModal(true) },
-              { label: 'New quote',    onClick: () => setShowNewQuoteModal(true) },
-              { label: 'Log time',     onClick: () => setShowLogTimeModal(true) },
-              { label: 'New estimate', onClick: () => setShowNewEstimateModal(true) },
-              { label: 'Add receipt',  onClick: () => router.push('/receipts?upload=1') },
+              { label: 'New client',      onClick: () => setShowNewClientModal(true) },
+              { label: 'Draft invoice',   onClick: () => setShowInvoiceModal(true) },
+              { label: 'New job',         onClick: () => setShowNewJobModal(true) },
+              { label: 'New quote',       onClick: () => setShowNewQuoteModal(true) },
+              { label: 'Log time',        onClick: () => setShowLogTimeModal(true) },
+              { label: 'New estimate',    onClick: () => setShowNewEstimateModal(true) },
+              { label: 'Add receipt',     onClick: () => router.push('/receipts?upload=1') },
+              { label: 'New work order',  onClick: () => setShowNewWorkOrderModal(true) },
+              { label: 'Intake bill',     onClick: () => setShowIntakeBillModal(true) },
             ].map(item => (
               <button
                 key={item.label}
@@ -1514,6 +1520,17 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         <LogTimeModal
           clients={clients.map(c => ({ id: c.id, name: c.name, slug: c.slug, jobs: c.jobs }))}
           onClose={() => setShowLogTimeModal(false)}
+        />
+      )}
+      {showNewWorkOrderModal && (
+        <NewWorkOrderModal
+          defaultType="CLIENT"
+          onClose={() => setShowNewWorkOrderModal(false)}
+        />
+      )}
+      {showIntakeBillModal && (
+        <IntakeBillModal
+          onClose={() => setShowIntakeBillModal(false)}
         />
       )}
       {markSentTarget && (
