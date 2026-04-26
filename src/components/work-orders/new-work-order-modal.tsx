@@ -21,12 +21,23 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(true)
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null)
+  const [selectedWsId, setSelectedWsId] = useState('')
+
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false)
+  const [newWsName, setNewWsName] = useState('')
+  const [newWsType, setNewWsType] = useState<'CLIENT' | 'PROPERTY'>(defaultType ?? 'CLIENT')
+  const [newWsAddress, setNewWsAddress] = useState('')
+  const [savingWs, setSavingWs] = useState(false)
 
   const [jobs, setJobs] = useState<Job[]>([])
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([])
   const [loadingContext, setLoadingContext] = useState(false)
   const [selectedJobId, setSelectedJobId] = useState('')
   const [selectedMaintenanceId, setSelectedMaintenanceId] = useState('')
+
+  const [creatingJob, setCreatingJob] = useState(false)
+  const [newJobName, setNewJobName] = useState('')
+  const [savingJob, setSavingJob] = useState(false)
 
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [form, setForm] = useState({ title: '', description: '', vendorId: '', agreedCost: '', scheduledDate: '' })
@@ -46,8 +57,37 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
       .finally(() => setLoadingWorkspaces(false))
   }, [defaultType])
 
+  async function createWorkspace() {
+    const type = defaultType ?? newWsType
+    if (!newWsName.trim()) return
+    if (type === 'PROPERTY' && !newWsAddress.trim()) return
+    setSavingWs(true)
+    try {
+      const body: Record<string, unknown> = { name: newWsName.trim(), type }
+      if (type === 'PROPERTY') body.property = { address: newWsAddress.trim() }
+      const r = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (r.ok) {
+        const j = await r.json()
+        const ws = j.data as Workspace
+        setWorkspaces(prev => [...prev, ws])
+        setCreatingWorkspace(false)
+        setNewWsName('')
+        setNewWsAddress('')
+        setSelectedWsId(ws.id)
+        selectWorkspace(ws)
+      }
+    } finally {
+      setSavingWs(false)
+    }
+  }
+
   async function selectWorkspace(ws: Workspace) {
     setSelectedWorkspace(ws)
+    setSelectedWsId(ws.id)
     setLoadingContext(true)
     try {
       if (ws.type === 'CLIENT') {
@@ -63,6 +103,29 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
       setLoadingContext(false)
     }
     setStep(2)
+  }
+
+  async function createJob() {
+    if (!newJobName.trim() || !selectedWorkspace) return
+    setSavingJob(true)
+    try {
+      const r = await fetch(`/api/projects/${selectedWorkspace.id}/jobs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newJobName.trim() }),
+      })
+      if (r.ok) {
+        const j = await r.json()
+        const job = j.data as Job
+        setJobs(prev => [...prev, job])
+        setSelectedJobId(job.id)
+        setCreatingJob(false)
+        setNewJobName('')
+        goToStep3()
+      }
+    } finally {
+      setSavingJob(false)
+    }
   }
 
   async function goToStep3() {
@@ -128,6 +191,8 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
     ? ['Project', 'Job', 'Details']
     : ['Property', 'Request', 'Details']
 
+  const needsAddress = (defaultType === 'PROPERTY') || (!defaultType && newWsType === 'PROPERTY')
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-background rounded-lg border shadow-lg w-full max-w-md">
@@ -151,99 +216,159 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
         <div className="p-5 space-y-4">
           {/* Step 1: Pick workspace */}
           {step === 1 && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
                 {defaultType === 'CLIENT' ? 'Which client project is this for?' : defaultType === 'PROPERTY' ? 'Which property is this for?' : 'Which project is this for?'}
               </p>
               {loadingWorkspaces ? (
                 <p className="text-xs text-muted-foreground">Loading…</p>
-              ) : workspaces.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No projects found.</p>
-              ) : (
-                <div className="space-y-1 max-h-64 overflow-y-auto">
-                  {workspaces.map(ws => (
-                    <button
-                      key={ws.id}
-                      type="button"
-                      onClick={() => selectWorkspace(ws)}
-                      className="w-full text-left rounded-md border px-3 py-2 text-sm hover:border-primary hover:bg-muted/30 transition-colors"
+              ) : creatingWorkspace ? (
+                <div className="space-y-2">
+                  <input
+                    autoFocus
+                    value={newWsName}
+                    onChange={e => setNewWsName(e.target.value)}
+                    placeholder={defaultType === 'PROPERTY' ? 'Property name *' : 'Project name *'}
+                    className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                  />
+                  {!defaultType && (
+                    <select
+                      value={newWsType}
+                      onChange={e => setNewWsType(e.target.value as 'CLIENT' | 'PROPERTY')}
+                      className="w-full rounded border px-2 py-1.5 text-sm bg-background"
                     >
-                      <span className="font-medium">{ws.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{ws.type === 'CLIENT' ? 'Client' : ws.type === 'PROPERTY' ? 'Property' : ws.type}</span>
+                      <option value="CLIENT">Client project</option>
+                      <option value="PROPERTY">Property</option>
+                    </select>
+                  )}
+                  {needsAddress && (
+                    <input
+                      value={newWsAddress}
+                      onChange={e => setNewWsAddress(e.target.value)}
+                      placeholder="Property address *"
+                      className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                    />
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={createWorkspace}
+                      disabled={savingWs || !newWsName.trim() || (needsAddress && !newWsAddress.trim())}
+                      className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      {savingWs ? 'Creating…' : 'Create'}
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => { setCreatingWorkspace(false); setNewWsName(''); setNewWsAddress('') }}
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                <select
+                  value={selectedWsId}
+                  onChange={e => {
+                    if (e.target.value === '__new__') { setCreatingWorkspace(true); return }
+                    if (e.target.value) {
+                      const ws = workspaces.find(w => w.id === e.target.value)
+                      if (ws) selectWorkspace(ws)
+                    }
+                  }}
+                  className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                >
+                  <option value="" disabled>Select a project…</option>
+                  {workspaces.map(ws => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.name}{!defaultType ? ` (${ws.type === 'CLIENT' ? 'Client' : 'Property'})` : ''}
+                    </option>
+                  ))}
+                  <option value="__new__">
+                    {defaultType === 'CLIENT' ? '+ New client project…' : defaultType === 'PROPERTY' ? '+ New property…' : '+ New project…'}
+                  </option>
+                </select>
               )}
             </div>
           )}
 
           {/* Step 2: Pick context (job or maintenance request) */}
           {step === 2 && selectedWorkspace && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {loadingContext ? (
                 <p className="text-xs text-muted-foreground">Loading…</p>
               ) : selectedWorkspace.type === 'CLIENT' ? (
                 <>
                   <p className="text-xs text-muted-foreground">Which job is this for? (optional)</p>
-                  <div className="space-y-1 max-h-52 overflow-y-auto">
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedJobId(''); goToStep3() }}
-                      className={cn('w-full text-left rounded-md border px-3 py-2 text-sm transition-colors hover:border-primary hover:bg-muted/30', !selectedJobId && 'border-primary bg-muted/20')}
+                  {creatingJob ? (
+                    <div className="space-y-2">
+                      <input
+                        autoFocus
+                        value={newJobName}
+                        onChange={e => setNewJobName(e.target.value)}
+                        placeholder="Job name *"
+                        className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={createJob}
+                          disabled={savingJob || !newJobName.trim()}
+                          className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                        >
+                          {savingJob ? 'Creating…' : 'Create'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setCreatingJob(false); setNewJobName('') }}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <select
+                      defaultValue=""
+                      onChange={e => {
+                        if (e.target.value === '__new__') { setCreatingJob(true); return }
+                        if (e.target.value === '__none__') { setSelectedJobId(''); goToStep3(); return }
+                        if (e.target.value) { setSelectedJobId(e.target.value); goToStep3() }
+                      }}
+                      className="w-full rounded border px-2 py-1.5 text-sm bg-background"
                     >
-                      <span className="text-muted-foreground italic">No specific job</span>
-                    </button>
-                    {jobs.map(job => (
-                      <button
-                        key={job.id}
-                        type="button"
-                        onClick={() => { setSelectedJobId(job.id); goToStep3() }}
-                        className="w-full text-left rounded-md border px-3 py-2 text-sm hover:border-primary hover:bg-muted/30 transition-colors"
-                      >
-                        {job.name}
-                        <span className="ml-2 text-xs text-muted-foreground">{job.status}</span>
-                      </button>
-                    ))}
-                    {jobs.length === 0 && <p className="text-xs text-muted-foreground px-1">No active jobs — work order will link to the project only.</p>}
-                  </div>
-                  {jobs.length === 0 && (
-                    <button type="button" onClick={() => goToStep3()} className="rounded-md bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 w-full">
-                      Continue
-                    </button>
+                      <option value="" disabled>Select a job…</option>
+                      <option value="__none__">— No specific job —</option>
+                      {jobs.map(job => (
+                        <option key={job.id} value={job.id}>{job.name} ({job.status})</option>
+                      ))}
+                      <option value="__new__">+ New job…</option>
+                    </select>
                   )}
                 </>
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">Which maintenance request is this for? (optional)</p>
-                  <div className="space-y-1 max-h-52 overflow-y-auto">
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedMaintenanceId(''); goToStep3() }}
-                      className="w-full text-left rounded-md border px-3 py-2 text-sm text-muted-foreground italic hover:border-primary hover:bg-muted/30 transition-colors"
-                    >
-                      No specific request
-                    </button>
+                  <select
+                    defaultValue=""
+                    onChange={e => {
+                      if (e.target.value === '__none__') { setSelectedMaintenanceId(''); goToStep3(); return }
+                      if (e.target.value) { setSelectedMaintenanceId(e.target.value); goToStep3() }
+                    }}
+                    className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                  >
+                    <option value="" disabled>Select a request…</option>
+                    <option value="__none__">— No specific request —</option>
                     {maintenanceRequests.map(mr => (
-                      <button
-                        key={mr.id}
-                        type="button"
-                        onClick={() => { setSelectedMaintenanceId(mr.id); goToStep3() }}
-                        className="w-full text-left rounded-md border px-3 py-2 text-sm hover:border-primary hover:bg-muted/30 transition-colors"
-                      >
-                        {mr.title}
-                        <span className="ml-2 text-xs text-muted-foreground">{mr.status}</span>
-                      </button>
+                      <option key={mr.id} value={mr.id}>{mr.title} ({mr.status})</option>
                     ))}
-                    {maintenanceRequests.length === 0 && <p className="text-xs text-muted-foreground px-1">No open requests — work order will link to the property only.</p>}
-                  </div>
-                  {maintenanceRequests.length === 0 && (
-                    <button type="button" onClick={() => goToStep3()} className="rounded-md bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 w-full">
-                      Continue
-                    </button>
-                  )}
+                  </select>
                 </>
               )}
-              <button type="button" onClick={() => setStep(1)} className="text-xs text-muted-foreground hover:text-foreground">← Back</button>
+              {!creatingJob && (
+                <button type="button" onClick={() => setStep(1)} className="text-xs text-muted-foreground hover:text-foreground">← Back</button>
+              )}
             </div>
           )}
 
