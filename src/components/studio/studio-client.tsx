@@ -1128,33 +1128,44 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         {/* Take action — 2-column pill buttons */}
         <div style={{ border: '1.5px solid #e0ddd5', borderRadius: 10, padding: '10px 12px', background: '#fafaf8' }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Take action</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
-            {[
-              { label: 'New client',      onClick: () => setShowNewClientModal(true) },
-              { label: 'Draft invoice',   onClick: () => setShowInvoiceModal(true) },
-              { label: 'New job',         onClick: () => setShowNewJobModal(true) },
-              { label: 'New quote',       onClick: () => setShowNewQuoteModal(true) },
-              { label: 'Log time',        onClick: () => setShowLogTimeModal(true) },
-              { label: 'New estimate',    onClick: () => setShowNewEstimateModal(true) },
-              { label: 'Add receipt',     onClick: () => router.push('/receipts?upload=1') },
-              { label: 'New work order',  onClick: () => setShowNewWorkOrderModal(true) },
-              { label: 'Intake bill',     onClick: () => setShowIntakeBillModal(true) },
-            ].map(item => (
-              <button
-                key={item.label}
-                onClick={item.onClick}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, whiteSpace: 'nowrap',
-                  border: '1.5px solid #e0ddd5', background: 'transparent',
-                  padding: '5px 12px', fontSize: 11, fontWeight: 600,
-                  color: '#555', cursor: 'pointer',
-                }}
-              >
-                <Plus size={11} />
-                {item.label}
-              </button>
-            ))}
-          </div>
+          {[
+            [
+              { label: 'New client',  onClick: () => setShowNewClientModal(true) },
+              { label: 'New job',     onClick: () => setShowNewJobModal(true) },
+            ],
+            [
+              { label: 'Draft invoice',  onClick: () => setShowInvoiceModal(true) },
+              { label: 'New quote',      onClick: () => setShowNewQuoteModal(true) },
+              { label: 'Log time',       onClick: () => setShowLogTimeModal(true) },
+              { label: 'New estimate',   onClick: () => setShowNewEstimateModal(true) },
+            ],
+            [
+              { label: 'Add receipt',    onClick: () => router.push('/receipts?upload=1') },
+              { label: 'New work order', onClick: () => setShowNewWorkOrderModal(true) },
+              { label: 'Intake bill',    onClick: () => setShowIntakeBillModal(true) },
+            ],
+          ].map((group, gi) => (
+            <div key={gi}>
+              {gi > 0 && <div style={{ borderTop: '1px solid #e8e6df', margin: '6px 0' }} />}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+                {group.map(item => (
+                  <button
+                    key={item.label}
+                    onClick={item.onClick}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 99, whiteSpace: 'nowrap',
+                      border: '1.5px solid #e0ddd5', background: 'transparent',
+                      padding: '5px 12px', fontSize: 11, fontWeight: 600,
+                      color: '#555', cursor: 'pointer',
+                    }}
+                  >
+                    <Plus size={11} />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Take notice — dense, no extra padding */}
