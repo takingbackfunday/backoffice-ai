@@ -115,8 +115,8 @@ Both CLIENT (freelance) and PROPERTY workspaces share the same schema. `WorkOrde
 | Bill create (with optional PDF upload) | `POST /api/projects/[id]/work-orders/[woId]/bills` |
 | Bill update (status, link transaction) + delete | `PATCH/DELETE /api/projects/[id]/work-orders/[woId]/bills/[billId]` |
 | Interactive CRUD panel (create WO, add bills, link txns, assign vendor) | `src/components/projects/work-order-panel.tsx` — used by job detail and maintenance detail |
-| Global "New work order" modal (3-step: project → context → details) | `src/components/work-orders/new-work-order-modal.tsx` |
-| Global "Intake subcontractor bill" modal (3-step: project → WO → bill) | `src/components/work-orders/intake-bill-modal.tsx` |
+| Global "New work order" modal (3-step: project → context → details) | `src/components/work-orders/new-work-order-modal.tsx` — inline creation for project (step 1) and job (step 2 CLIENT) |
+| Global "Intake subcontractor bill" modal (3-step: project → WO → bill) | `src/components/work-orders/intake-bill-modal.tsx` — inline creation for project (step 1) and work order with nested vendor (step 2) |
 | Vendor list UI | `src/components/vendors/vendor-list.tsx` |
 | Vendor detail UI (docs vault, payment history) | `src/components/vendors/vendor-detail.tsx` |
 | UploadThing routers | `vendorDocument`, `billPdf` — both in `src/lib/uploadthing.ts` |
@@ -128,7 +128,13 @@ Both CLIENT (freelance) and PROPERTY workspaces share the same schema. `WorkOrde
 - Client Hub (`/studio`, `src/components/studio/studio-client.tsx`) — "New work order" (pre-filtered CLIENT) and "Intake bill" in the *Take Action* strip
 - Projects page (`/projects`, `src/components/projects/project-list.tsx`) — "New work order" (pre-filtered PROPERTY) and "Intake bill" in the header
 
-**Inline vendor creation** is available in both `WorkOrderPanel` (WO form + expanded panel picker) and `NewWorkOrderModal`. Vendors created inline are appended to the component's local `vendorsList` state — no page reload needed. The `POST /api/vendors` endpoint is called directly.
+**Inline entity creation** — all picker dropdowns across the modals use a `+ New [entity]…` sentinel (`__new__`) that swaps the select for an inline mini-form. Supported in:
+- `WorkOrderPanel` — vendor (WO form + expanded panel picker)
+- `NewWorkOrderModal` — project (step 1, calls `POST /api/projects`; PROPERTY type requires address), job (step 2 CLIENT, calls `POST /api/projects/[id]/jobs`)
+- `IntakeBillModal` — project (step 1), work order with nested vendor creation (step 2, calls `POST /api/projects/[id]/work-orders`)
+- Maintenance request creation is intentionally absent — the API requires `unitId`, which is unavailable in modal context.
+
+Newly created entities are appended to the component's local state list — no page reload needed.
 
 **Bill vendor inheritance:** the bill creation form has no vendor picker. The bill always inherits `vendorId` from its parent work order. "Add bill" is blocked (replaced by a prompt) until the work order has a vendor assigned. When creating a bill via `IntakeBillModal`, the work order's vendor is shown read-only in the confirmation strip.
 

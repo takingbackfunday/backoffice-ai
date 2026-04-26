@@ -159,8 +159,10 @@ Work orders created via `NewWorkOrderModal` (the global shortcut) may have both 
 ### Bill — vendorId is required and auto-inherited
 `Bill.vendorId` is a required field. The bill creation UI (both `WorkOrderPanel` and `IntakeBillModal`) has **no vendor picker** — the work order's vendor is silently passed as `vendorId`. If the work order has no vendor, "Add bill" is blocked. Always pass `vendorId` equal to the work order's vendor when creating a bill via the API.
 
-### Inline vendor creation — local state, not refetched
-`WorkOrderPanel` and `NewWorkOrderModal` support `+ New vendor…` inline creation. Newly created vendors are appended to a local `vendorsList` state; the server is not re-queried. On the next page load the new vendor appears from the DB normally.
+### Inline entity creation — `__new__` sentinel, local state only
+All entity picker `<select>` elements in the modals (`NewWorkOrderModal`, `IntakeBillModal`) and `WorkOrderPanel` use a `__new__` sentinel value to trigger an inline mini-form. Pattern: `onChange` checks `value === '__new__'` → shows creation form; on success, appends to local state list and auto-selects. The server is never re-queried — newly created entities are only in local state until the next page load.
+
+Maintenance request creation is intentionally absent from the modals — the API requires `unitId`, unavailable in modal context.
 
 ### Job detail — margin is server-computed
 The Costs and Margin summary cards on the job detail page (`/projects/[slug]/jobs/[jobId]`) are calculated at server render time. `WorkOrderPanel` mutates its own local state after creating work orders/bills, but the summary cards don't update until the page is hard-reloaded. If you add live margin tracking, move the calculation into a client-side derived value from the panel's state.
