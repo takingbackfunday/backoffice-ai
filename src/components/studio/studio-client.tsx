@@ -892,6 +892,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [pendingMarkSent, setPendingMarkSent] = useState<PendingMarkSentItem[]>([])
   const [markSentTarget, setMarkSentTarget] = useState<PendingMarkSentItem | null>(null)
   const [pendingMarkSentQuote, setPendingMarkSentQuote] = useState<PendingMarkSentQuoteItem[]>([])
+  const [activityOpen, setActivityOpen] = useState(true)
   const [markSentQuoteTarget, setMarkSentQuoteTarget] = useState<PendingMarkSentQuoteItem | null>(null)
 
   // Load pending mark-as-sent notifications from localStorage on mount
@@ -1120,7 +1121,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       })()}
 
       {/* 3-col strip: Take action | Take notice | Recent activity */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: activityOpen ? 'auto 1fr 1fr' : 'auto 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
 
         {/* Take action — 3 vertical groups side by side */}
         <div style={{ border: '1.5px solid #e0ddd5', borderRadius: 10, padding: '10px 12px', background: '#fafaf8' }}>
@@ -1214,10 +1215,21 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           )}
         </div>
 
-        {/* Recent activity — dense rows */}
+        {/* Recent activity — dense rows, collapsible */}
         <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Recent activity</p>
-          {(() => {
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, margin: 0, paddingLeft: 2 }}>Recent activity</p>
+            <button
+              onClick={() => setActivityOpen(o => !o)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', padding: '0 2px', fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}
+            >
+              {activityOpen ? 'Hide' : 'Show'}
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style={{ transform: activityOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+          {activityOpen && (() => {
             const activity = deriveRecentActivity(clients, flat)
             if (activity.length === 0) return <p style={{ fontSize: 11, color: '#bbb', paddingLeft: 2, margin: 0 }}>No activity yet</p>
             return (
