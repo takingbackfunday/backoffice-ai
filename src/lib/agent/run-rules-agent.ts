@@ -41,9 +41,9 @@ Workflow:
 
 SOURCES OF PATTERNS — SELF-LEARNING:
 Use tools to fetch FIVE sources of patterns. Treat all five equally:
-1. get_uncategorised_transactions — no category yet; suggest a category + payee rule
-2. get_no_payee_transactions — already categorised; suggest a payee-assignment rule that reinforces the user's manual work
-3. get_ruleless_patterns — the user manually tagged these; create rules to automate future occurrences. Use the "category" field shown to confirm the right category name
+1. get_uncategorised_transactions — no category yet; suggest a category + payee rule using description contains
+2. get_no_payee_transactions — already categorised; suggest a rule that assigns the missing payee. Use description contains as the primary condition. Copy categoryName VERBATIM from the "category:" field shown for that group — do NOT guess or substitute a different name. The rule formalises the existing label and assigns the payee; it must fire on fresh imports that arrive without a payee.
+3. get_ruleless_patterns — the user manually tagged these; formalise them as rules. Use description contains as the primary condition, NOT payeeName equals — even when a payee is shown, the rule must fire on raw transactions that don't yet have a payee assigned. Copy both categoryName and payeeName VERBATIM from the "category:" and "payee:" fields in the data.
 4. get_project_transactions — the user assigned these to a project; create rules so future similar transactions are auto-assigned. Set workspaceName from the "project" field shown
 5. get_transfer_candidates — same-day debit/credit pairs across different accounts whose amounts match closely. These are almost certainly internal fund movements (bank transfer, moving money between accounts). Suggest a rule with category "Account transfer" (or the closest match in the AVAILABLE CATEGORIES list) for the description keywords found on each side. Transfer rules are HIGH priority — they prevent fund movements from inflating spending or income reports. Use description contains with the common keyword from the debit or credit side.
 
@@ -64,6 +64,7 @@ RULE CONDITIONS — CRITICAL:
 - ALWAYS use description contains as the PRIMARY condition. It matches the raw transaction text and is the most reliable.
 - payeeName equals is SECONDARY — only add it if there is already a payee in the payees list.
 - NEVER use "payeeName equals X" as the condition when you are also setting payeeName to X in the action — that is a no-op.
+- More broadly, NEVER use payeeName as the SOLE non-amount condition — a rule whose only meaningful condition is payeeName only fires on transactions that already have that payee set and will never catch new bank imports. Always anchor on description contains; payeeName equals is only useful as a secondary narrowing condition when the payee already exists.
 - Never add a date condition. Rules are not time-bound.
 - "all" means AND — every condition must match the SAME transaction. Do NOT put multiple description variants in "all".
 - For multiple description variants use "any" (OR logic) — or better, pick the ONE keyword that appears in all variants.
@@ -73,7 +74,7 @@ RULE CONDITIONS — CRITICAL:
 RULE QUALITY:
 - 2+ matching transactions = high confidence; 1 or world-knowledge = medium
 - 1 sentence reasoning referencing the specific pattern observed
-- Aim for 5–20 suggestions prioritised by financial impact (highest absolute spend first)
+- Aim for 5–20 suggestions prioritised by transaction count and financial impact, ordered across ALL sources — do not cluster all suggestions of one type before moving to the next source
 - SKIP any merchant that appears in the existing rules (from get_rules) — a rule already covers it
 
 TRANSACTION ANALYSIS — LOOK AT INDIVIDUAL AMOUNTS:

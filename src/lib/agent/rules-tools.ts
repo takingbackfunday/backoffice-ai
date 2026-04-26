@@ -395,23 +395,36 @@ export async function emit_rule_suggestion(
   //   2. Rules based on payeeName conditions — precise selectors, not generic keywords.
   //   3. Self-learning rules that assign the SAME category as already on the transactions (formalising, not reclassifying).
   //   4. Project-assignment rules (workspaceName set) — additive, never a reclassification.
-  const isPayeeConditionRule = defs.every((d) => d.field === 'payeeName' || d.field === 'amount')
+  // Project-assignment rules are always additive (they never change a category), so skip the
+  // reclassification check for them. All other rules — including payee-only rules — are checked.
   const isProjectAssignment = !!args.workspaceName
-  if (!isPayeeConditionRule && !isProjectAssignment) {
+  if (!isProjectAssignment) {
     const alreadyCategorised = [...matchedIds]
       .map(id => ctx.transactions.find(t => t.id === id))
       .filter(t => t?.categoryId != null && !ctx.sourceEditIds?.has(t.id)).length
     if (matchedIds.size > 0 && alreadyCategorised / matchedIds.size > 0.4) {
-      // Allow if this is a self-learning rule that assigns the same category already on those transactions
-      const catId = ctx.categoryMap.get(args.categoryName ?? '')
-      const allMatchSameCategory = catId
+      // Allow if every matched transaction already has exactly the category this rule assigns
+      // (self-learning / formalisation — not a reclassification).
+      const catId = ctx.categoryMap.get(args.categoryName.toLowerCase())
+      const allMatchSameCategory = catId != null
         ? [...matchedIds].every(id => {
             const t = ctx.transactions.find(tx => tx.id === id)
             return !t || t.categoryId === catId
           })
         : false
       if (!allMatchSameCategory) {
-        return `Rejected: ${alreadyCategorised} of ${matchedIds.size} matched transactions already have a category — this rule would reclassify them incorrectly. The keyword "${defs.find(d => d.field === 'description')?.value}" is too generic (likely a payment processor or shared term). Use a more specific keyword that only matches uncategorised transactions.`
+        // Build the list of existing categories on the matched transactions so the agent can
+        // self-correct by choosing the right categoryName and resubmitting.
+        const categoryIdToName = new Map<string, string>()
+        for (const [name, id] of ctx.categoryMap) categoryIdToName.set(id, name)
+        const existingCats = [...new Set(
+          [...matchedIds]
+            .map(id => ctx.transactions.find(t => t.id === id)?.categoryId)
+            .filter((cid): cid is string => cid != null)
+            .map(cid => categoryIdToName.get(cid))
+            .filter((n): n is string => n != null)
+        )].join(', ')
+        return `Rejected: ${alreadyCategorised} of ${matchedIds.size} matched transactions already have a category and this rule would reclassify them. The existing categories on those transactions are: ${existingCats || '(unknown)'}. Either (a) set categoryName to one of those exact values so the rule formalises rather than reclassifies, or (b) narrow the condition so it only targets uncategorised transactions.`
       }
     }
   }

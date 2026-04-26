@@ -2,6 +2,10 @@
 /**
  * Run the rules agent for a specific userId and print all suggestions.
  * Usage: pnpm tsx scripts/run-rules-agent.ts <userId>
+ *
+ * Architecture: pre-load mode — all data sections are fetched once and injected
+ * into the user message. The LLM never needs to call the fetch tools; it goes
+ * straight to record_plan → emit_rule_suggestion → finish_analysis.
  */
 
 import type { ChatMessage } from '../src/lib/llm/openrouter'
@@ -18,7 +22,7 @@ if (!userId) {
 
 const SYSTEM_PROMPT = `You are an expert financial categorisation assistant. Your job is to analyse the user's transaction data and suggest high-quality automation rules.
 
-ALL data is pre-loaded in the user message. Do NOT call get_rules, get_categories, get_uncategorised_transactions, get_no_payee_transactions, get_payees, get_ruleless_patterns, or get_project_transactions — the data is already there.
+ALL data is pre-loaded in the user message. Do NOT call get_rules, get_categories, get_uncategorised_transactions, get_no_payee_transactions, get_payees, get_ruleless_patterns, get_project_transactions, or get_transfer_candidates — the data is already there.
 
 CRITICAL — CATEGORY NAMES:
 - The user message contains an "AVAILABLE CATEGORIES" section. Read it FIRST before doing anything else.
@@ -35,11 +39,12 @@ Workflow:
 5. Call finish_analysis
 
 SOURCES OF PATTERNS — SELF-LEARNING:
-The user message contains FOUR sources of patterns. Treat all four equally:
-1. UNCATEGORISED TRANSACTIONS — no category yet; suggest a category + payee rule
-2. TRANSACTIONS WITH CATEGORY BUT NO PAYEE — already categorised; suggest a payee-assignment rule that reinforces the user's manual work
-3. ALREADY-LABELLED PATTERNS WITHOUT A RULE — the user manually tagged these; create rules to automate future occurrences. Use the "category" field shown to confirm the right category name
+The user message contains SIX sources of patterns. Treat all six equally:
+1. UNCATEGORISED TRANSACTIONS — no category yet; suggest a category + payee rule using description contains
+2. TRANSACTIONS WITH CATEGORY BUT NO PAYEE — already categorised; suggest a rule that assigns the missing payee. Use description contains as the primary condition. Copy categoryName VERBATIM from the "category:" field shown for that group — do NOT guess or substitute a different name. The rule formalises the existing label and assigns the payee; it must fire on fresh imports that arrive without a payee.
+3. ALREADY-LABELLED PATTERNS WITHOUT A RULE — the user manually tagged these; formalise them as rules. Use description contains as the primary condition, NOT payeeName equals — even when a payee is shown, the rule must fire on raw transactions that don't yet have a payee assigned. Copy both categoryName and payeeName VERBATIM from the "category:" and "payee:" fields in the data.
 4. PROJECT-TAGGED TRANSACTIONS WITHOUT A PROJECT RULE — the user assigned these to a project; create rules so future similar transactions are auto-assigned. Set workspaceName from the "project" field shown
+5. LIKELY ACCOUNT TRANSFERS — same-day debit/credit pairs across different accounts. These are almost certainly internal fund movements. Suggest a rule with category "Account transfer" (or the closest match) for the description keywords shown. Transfer rules are HIGH priority — they prevent fund movements from inflating spending or income reports.
 
 PAYEE ASSIGNMENT — CRITICAL:
 - ALWAYS set payeeName on every suggestion where the merchant/counterparty is identifiable — this means nearly every suggestion should have a payee
@@ -61,6 +66,7 @@ RULE CONDITIONS — CRITICAL:
 - ALWAYS use description contains as the PRIMARY condition. It matches the raw transaction text and is the most reliable.
 - payeeName equals is SECONDARY — only add it if there is already a payee in the EXISTING PAYEES list. Do not use it as the sole condition because payees may not exist yet.
 - NEVER use "payeeName equals X" as the condition when you are also setting payeeName to X in the action — that is a no-op (the rule only matches transactions that already have payee X, so setting it again does nothing). Always use "description contains" as the primary condition so the rule fires on raw transactions before a payee is assigned.
+- More broadly, NEVER use payeeName as the SOLE non-amount condition — a rule whose only meaningful condition is payeeName only fires on transactions that already have that payee set and will never catch new bank imports. Always anchor on description contains; payeeName equals is only useful as a secondary narrowing condition when the payee already exists.
 - Never add a date condition. Rules are not time-bound.
 - "all" means AND — every condition must match the SAME transaction. Do NOT put multiple description variants in "all" — a single transaction cannot contain "Zalando Payments" AND "Www Zalando De" at the same time.
 - For multiple description variants (different spellings of the same merchant), use "any" (OR logic): { "any": [{ "field": "description", "operator": "contains", "value": "Zalando" }] } — or better, pick the ONE keyword that appears in all variants (e.g. "Zalando" matches all of them).
@@ -72,14 +78,15 @@ RULE QUALITY:
 - The "descriptions" field in the data shows the actual raw transaction text — use it to pick the right keyword for a description contains condition
 - 2+ matching transactions = high confidence; 1 or world-knowledge = medium
 - 1 sentence reasoning referencing the specific pattern observed
-- Aim for 5–20 suggestions prioritised by financial impact (highest absolute spend first)
+- Aim for 5–20 suggestions prioritised by transaction count and financial impact, ordered across ALL sources — do not cluster all suggestions of one type before moving to the next source
 - SKIP any merchant that appears in the EXISTING RULES list — a rule already covers it
 - For ALREADY-LABELLED PATTERNS, the "category" and "payee" fields tell you what the user already set — use exactly those values
 
 TRANSACTION ANALYSIS — LOOK AT INDIVIDUAL AMOUNTS:
 - Each description now shows its individual amount in parentheses. ALWAYS examine these before suggesting a rule for a group.
 - Round amounts (−50.00, −100.00, −200.00, −500.00) at convenience stores, gas stations, kiosks, or supermarkets almost always indicate ATM cash withdrawals, NOT purchases at that merchant. Do NOT categorise these as groceries, fuel, etc. — skip the group or flag it as "Cash withdrawal" if that category exists.
-- When a group mixes round amounts and small irregular amounts, the round amounts are likely ATM withdrawals. Consider whether a single rule for the whole group is appropriate.
+- When a group mixes round amounts and small irregular amounts (e.g. "Spaetkauf (−100.00) | Spaetkauf (−200.00) | Spaetkauf Friesen (−12.00)"), the round amounts are likely ATM withdrawals and only the small amounts are actual purchases. Consider whether a single rule for the whole group is appropriate — it may be better to skip the group entirely or add an amount condition to exclude round withdrawals.
+- Numeric prefixes in descriptions (e.g. "49005007 Spaetkauf") are typically ATM terminal or POS terminal IDs — the merchant name follows.
 - Amounts that are exact multiples of 10 or 50 with no cents at a physical retail location are a strong signal of cash withdrawal, not a purchase.`
 
 const MAX_TOOL_ROUNDS = 16
@@ -146,7 +153,7 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
   console.log(`   Projects: ${preloaded.workspaceMap.size} (${[...preloaded.workspaceMap.keys()].join(', ') || 'none'})`)
 
   console.log('\n⏳ Fetching all data sections...')
-  const [uncatData, catsData, noPayeeData, payeesData, rulesData, rulelessData, projectTxData] = await Promise.all([
+  const [uncatData, catsData, noPayeeData, payeesData, rulesData, rulelessData, projectTxData, transferData] = await Promise.all([
     dispatchRulesTool(userId, 'get_uncategorised_transactions', { topN: 25 }, ctx),
     dispatchRulesTool(userId, 'get_categories', {}, ctx),
     dispatchRulesTool(userId, 'get_no_payee_transactions', { topN: 15 }, ctx),
@@ -154,6 +161,7 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
     dispatchRulesTool(userId, 'get_rules', {}, ctx),
     dispatchRulesTool(userId, 'get_ruleless_patterns', { topN: 20 }, ctx),
     dispatchRulesTool(userId, 'get_project_transactions', { topN: 15 }, ctx),
+    dispatchRulesTool(userId, 'get_transfer_candidates', { topN: 20 }, ctx),
   ])
 
   const projectsList = preloaded.workspaceMap.size > 0
@@ -166,6 +174,7 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
   console.log(`   No-payee groups:         ${noPayeeData.split('\n').length} lines`)
   console.log(`   Ruleless patterns:       ${rulelessData.split('\n').length} lines`)
   console.log(`   Project tx patterns:     ${projectTxData.split('\n').length} lines`)
+  console.log(`   Transfer candidates:     ${transferData.split('\n').length} lines`)
   console.log(`   Existing rules:          ${rulesData.split('\n').length} lines`)
 
   // Print raw data sections for assessment
@@ -178,6 +187,9 @@ Focus first on patterns from the last 18 months (since ${recentCutoff.toISOStrin
   console.log('\n' + '─'.repeat(80))
   console.log('PROJECT-TAGGED TRANSACTIONS:')
   console.log(projectTxData.slice(0, 3000))
+  console.log('\n' + '─'.repeat(80))
+  console.log('LIKELY ACCOUNT TRANSFERS:')
+  console.log(transferData.slice(0, 2000))
   console.log('\n' + '─'.repeat(80))
 
   // ── Step 3: LLM ──────────────────────────────────────────────────────────────
@@ -209,6 +221,10 @@ ${rulelessData}
 These transactions already have a project assigned. Create rules so future similar transactions are automatically assigned to the same project. Set workspaceName using the "project" field shown (copy VERBATIM from AVAILABLE PROJECTS).
 ${projectTxData}
 
+--- LIKELY ACCOUNT TRANSFERS (top 20) ---
+Same-day debit/credit pairs across different accounts. Suggest a rule with category "Account transfer" (or closest match) for the description keywords shown. These are HIGH priority — they prevent fund movements from inflating spending/income reports.
+${transferData}
+
 Instructions:
 1. Call record_plan listing every merchant group you spotted → category → payee → [project if applicable]
 2. Emit ALL suggestions in ONE response (call emit_rule_suggestion multiple times at once)
@@ -236,7 +252,7 @@ Instructions:
 
   const STRATEGY_MODEL = 'anthropic/claude-sonnet-4.6'
   const EXECUTION_MODEL = 'anthropic/claude-haiku-4.5'
-  const PRELOADED = ['get_rules', 'get_categories', 'get_uncategorised_transactions', 'get_no_payee_transactions', 'get_payees', 'get_ruleless_patterns', 'get_project_transactions']
+  const PRELOADED = ['get_rules', 'get_categories', 'get_uncategorised_transactions', 'get_no_payee_transactions', 'get_payees', 'get_ruleless_patterns', 'get_project_transactions', 'get_transfer_candidates']
 
   for (let round = 0; round < MAX_TOOL_ROUNDS && !finished; round++) {
     const lastMsg = messages.at(-1)
@@ -379,7 +395,6 @@ Instructions:
     console.log()
   }
 
-  // Stats
   const withProject = (suggestions as Suggestion[]).filter(s => s.rule.workspaceName).length
   const withPayee = (suggestions as Suggestion[]).filter(s => s.rule.payeeName).length
   const highConf = (suggestions as Suggestion[]).filter(s => s.rule.confidence === 'high').length
