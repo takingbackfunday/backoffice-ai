@@ -32,7 +32,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
           jobs: { where: { status: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { createdAt: 'desc' } },
           quotes: {
             where: { status: { in: ['ACCEPTED', 'SENT'] } },
-            select: { id: true, quoteNumber: true, title: true, totalQuoted: true, currency: true, status: true, sentAt: true, _count: { select: { invoices: true } } },
+            select: { id: true, quoteNumber: true, title: true, totalQuoted: true, currency: true, status: true, sentAt: true, job: { select: { name: true } }, _count: { select: { invoices: true } } },
             orderBy: { createdAt: 'desc' },
           },
         },
@@ -121,6 +121,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
             totalQuoted: q.totalQuoted ? Number(q.totalQuoted) : null,
             currency: q.currency,
             hasInvoice: q._count.invoices > 0,
+            jobName: q.job?.name ?? null,
           })),
         sentQuotes: profile.quotes
           .filter(q => q.status === 'SENT')
@@ -131,6 +132,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
             totalQuoted: q.totalQuoted ? Number(q.totalQuoted) : null,
             currency: q.currency,
             sentAt: q.sentAt ? q.sentAt.toISOString() : null,
+            jobName: q.job?.name ?? null,
           })),
         invoices: invoicesWithTotals.map(({ inv, total, paid }) => ({
           id: inv.id,

@@ -53,8 +53,8 @@ interface Client {
   paymentTermDays: number
   billingType: string
   jobs: { id: string; name: string }[]
-  acceptedQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; hasInvoice: boolean }[]
-  sentQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; sentAt: string | null }[]
+  acceptedQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; hasInvoice: boolean; jobName: string | null }[]
+  sentQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; sentAt: string | null; jobName: string | null }[]
   receiptCount: number
 }
 
@@ -1119,8 +1119,11 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         )
       })()}
 
-      {/* 3-col strip: Take action | Take notice | Recent activity */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
+      {/* 2-col strip: [Take action + Take notice stacked] | Recent activity */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
+
+        {/* Left column: Take action + Take notice stacked */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         {/* Take action — 2-column pill buttons */}
         <div style={{ border: '1.5px solid #e0ddd5', borderRadius: 10, padding: '10px 12px', background: '#fafaf8' }}>
@@ -1191,24 +1194,24 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           )}
         </div>
 
-        {/* Recent activity — dense, no extra padding */}
+        </div>{/* end left column */}
+
+        {/* Recent activity — right half, dense rows */}
         <div>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingLeft: 2 }}>Recent activity</p>
           {(() => {
             const activity = deriveRecentActivity(clients, flat)
-            if (activity.length === 0) return <p style={{ fontSize: 12, color: '#bbb', paddingLeft: 2, margin: 0 }}>No activity yet</p>
+            if (activity.length === 0) return <p style={{ fontSize: 11, color: '#bbb', paddingLeft: 2, margin: 0 }}>No activity yet</p>
             return (
               <div style={{ borderRadius: 10, border: '1px solid #e8e6df', background: '#fff', overflow: 'hidden' }}>
                 {activity.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', borderBottom: i < activity.length - 1 ? '1px solid #f5f4f0' : 'none' }}>
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.color, flexShrink: 0, marginTop: 4 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 12, fontWeight: 500, margin: 0, lineHeight: 1.3, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.event}</p>
-                      <div style={{ display: 'flex', gap: 6, marginTop: 1 }}>
-                        <Link href={`/projects/${item.clientSlug}`} style={{ fontSize: 11, color: '#888', textDecoration: 'none' }}>{item.clientName}</Link>
-                        <span style={{ fontSize: 11, color: '#ccc' }}>·</span>
-                        <span style={{ fontSize: 11, color: '#bbb' }}>{item.time}</span>
-                      </div>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px', borderBottom: i < activity.length - 1 ? '1px solid #f5f4f0' : 'none' }}>
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <p style={{ fontSize: 11, fontWeight: 500, margin: 0, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{item.event}</p>
+                      <Link href={`/projects/${item.clientSlug}`} style={{ fontSize: 10, color: '#aaa', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.clientName}</Link>
+                      <span style={{ fontSize: 10, color: '#ddd', flexShrink: 0 }}>·</span>
+                      <span style={{ fontSize: 10, color: '#bbb', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.time}</span>
                     </div>
                   </div>
                 ))}
@@ -1416,6 +1419,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                                   onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df'}
                                 >
                                   <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', flexShrink: 0 }}>{q.quoteNumber}</span>
+                                  {q.jobName && <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', flexShrink: 0, whiteSpace: 'nowrap' }}>{q.jobName}</span>}
                                   <span style={{ fontSize: 12, color: '#555', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{q.title}</span>
                                   {q.totalQuoted != null && (
                                     <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: '#1a1a1a', flexShrink: 0 }}>{fmt(q.totalQuoted, q.currency)}</span>
