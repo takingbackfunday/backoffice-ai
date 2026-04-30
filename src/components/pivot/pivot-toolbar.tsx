@@ -10,6 +10,7 @@ interface PivotToolbarProps {
   viewMode: ViewMode
   showSubtotals: boolean
   showGrandTotals: boolean
+  truncateNumbers: boolean
   rowCount: number
   filteredCount: number
   totalCount: number
@@ -17,6 +18,7 @@ interface PivotToolbarProps {
   onViewMode: (v: ViewMode) => void
   onShowSubtotals: (v: boolean) => void
   onShowGrandTotals: (v: boolean) => void
+  onTruncateNumbers: (v: boolean) => void
   onApplyPreset: (config: Partial<PivotConfig>) => void
   onExport: () => void
 }
@@ -26,6 +28,7 @@ export function PivotToolbar({
   viewMode,
   showSubtotals,
   showGrandTotals,
+  truncateNumbers,
   rowCount,
   filteredCount,
   totalCount,
@@ -33,6 +36,7 @@ export function PivotToolbar({
   onViewMode,
   onShowSubtotals,
   onShowGrandTotals,
+  onTruncateNumbers,
   onApplyPreset,
   onExport,
 }: PivotToolbarProps) {
@@ -107,6 +111,17 @@ export function PivotToolbar({
           onChange={e => onShowGrandTotals(e.target.checked)}
         />
         Grand Totals
+      </label>
+
+      {/* Truncate toggle */}
+      <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
+        <input
+          type="checkbox"
+          className="w-4 h-4 accent-indigo-600"
+          checked={truncateNumbers}
+          onChange={e => onTruncateNumbers(e.target.checked)}
+        />
+        No decimals
       </label>
 
       {/* Presets */}

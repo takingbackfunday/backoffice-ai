@@ -1,4 +1,4 @@
-import type { PivotRow, PivotConfig, PivotResult, PivotGroup, PivotFlatRow, AggregationType, FieldDef } from './types'
+import type { PivotRow, PivotConfig, PivotResult, PivotGroup, PivotFlatRow, AggregationType, FieldDef, SortRule } from './types'
 import { compareFieldValues } from './field-definitions'
 
 export function aggregate(values: number[], type: AggregationType): number {
@@ -13,14 +13,16 @@ export function aggregate(values: number[], type: AggregationType): number {
   }
 }
 
-export function formatValue(value: number, aggregationType: AggregationType): string {
+export function formatValue(value: number, aggregationType: AggregationType, truncate?: boolean): string {
   if (aggregationType === 'count') {
     return Math.round(value).toLocaleString()
   }
   const abs = Math.abs(value)
-  const formatted = abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const formatted = truncate
+    ? Math.round(abs).toLocaleString()
+    : abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   if (value < 0) return `($${formatted})`
-  if (value === 0) return '$0.00'
+  if (value === 0) return truncate ? '$0' : '$0.00'
   return `$${formatted}`
 }
 
@@ -50,11 +52,20 @@ export function computePivot(
     colKeySet.add(colKey)
   }
 
-  // Sort col keys
+  // Sort col keys — respect sortRules for col fields, else default chrono/alpha
+  const colRules = (config.sortRules ?? []).filter(r => config.cols.includes(r.field))
   const colKeys = Array.from(colKeySet).sort((a, b) => {
-    if (config.cols.length === 1) {
-      return compareFieldValues(config.cols[0], a, b)
+    if (colRules.length > 0) {
+      for (const rule of colRules) {
+        const fieldIdx = config.cols.indexOf(rule.field)
+        const aPart = a.split(' · ')[fieldIdx] ?? ''
+        const bPart = b.split(' · ')[fieldIdx] ?? ''
+        const cmp = compareFieldValues(rule.field, aPart, bPart)
+        if (cmp !== 0) return rule.direction === 'asc' ? cmp : -cmp
+      }
+      return 0
     }
+    if (config.cols.length === 1) return compareFieldValues(config.cols[0], a, b)
     return a.localeCompare(b)
   })
 
@@ -75,31 +86,11 @@ export function computePivot(
     colMap.get(colKey)!.push(row.amount)
   }
 
-  // Step 4: Aggregate and build flat rows
-  // Sort row keys
-  const sortedRowKeys = Array.from(rowKeySet).sort((a, b) => {
-    // Sort by first row field value
-    if (config.rows.length === 0) return 0
-    const aFirst = a.split(' · ')[0]
-    const bFirst = b.split(' · ')[0]
-    const cmp = compareFieldValues(config.rows[0], aFirst, bFirst)
-    if (cmp !== 0) return cmp
-    // Then second field
-    if (config.rows.length >= 2) {
-      const aParts = a.split(' · ')
-      const bParts = b.split(' · ')
-      for (let i = 1; i < config.rows.length; i++) {
-        const c2 = compareFieldValues(config.rows[i], aParts[i] ?? '', bParts[i] ?? '')
-        if (c2 !== 0) return c2
-      }
-    }
-    return 0
-  })
-
+  // Step 4: Aggregate and build flat rows (unsorted first, sort after)
   const flatRows: PivotFlatRow[] = []
   const effectiveColKeys = config.cols.length > 0 ? colKeys : ['__total__']
 
-  for (const rowKey of sortedRowKeys) {
+  for (const rowKey of Array.from(rowKeySet)) {
     const colMap = valueMap.get(rowKey) ?? new Map()
     const cells: Record<string, number> = {}
     let rowTotal = 0
@@ -119,6 +110,33 @@ export function computePivot(
       rowTotal,
     })
   }
+
+  // Sort flat rows using sortRules (or default field sort)
+  const rowSortRules = (config.sortRules ?? []).filter(r => r.field === '__value__' || config.rows.includes(r.field))
+  flatRows.sort((a, b) => {
+    if (rowSortRules.length > 0) {
+      for (const rule of rowSortRules) {
+        let cmp = 0
+        if (rule.field === '__value__') {
+          cmp = a.rowTotal - b.rowTotal
+        } else {
+          const fieldIdx = config.rows.indexOf(rule.field)
+          if (fieldIdx >= 0) {
+            cmp = compareFieldValues(rule.field, a.rowValues[fieldIdx] ?? '', b.rowValues[fieldIdx] ?? '')
+          }
+        }
+        if (cmp !== 0) return rule.direction === 'asc' ? cmp : -cmp
+      }
+      return 0
+    }
+    // Default: sort by each row field in order
+    if (config.rows.length === 0) return 0
+    for (let i = 0; i < config.rows.length; i++) {
+      const cmp = compareFieldValues(config.rows[i], a.rowValues[i] ?? '', b.rowValues[i] ?? '')
+      if (cmp !== 0) return cmp
+    }
+    return 0
+  })
 
   // Step 5: Build groups (outline mode)
   const groups: PivotGroup[] = []

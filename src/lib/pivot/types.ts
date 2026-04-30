@@ -1,5 +1,11 @@
 export type AggregationType = 'sum' | 'count' | 'avg' | 'min' | 'max'
 export type ViewMode = 'tabular' | 'outline'
+export type SortDirection = 'asc' | 'desc'
+
+export interface SortRule {
+  field: string // row/col field key, or '__value__' for aggregate row total
+  direction: SortDirection
+}
 
 export interface PivotRow {
   id: string
@@ -31,6 +37,8 @@ export interface PivotConfig {
   viewMode: ViewMode
   showSubtotals: boolean
   showGrandTotals: boolean
+  sortRules?: SortRule[]
+  truncateNumbers?: boolean
 }
 
 export interface PivotResult {

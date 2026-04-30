@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { FIELD_DEFINITIONS } from '@/lib/pivot/field-definitions'
 import { FieldPill } from './field-pill'
 import { DropZone } from './drop-zone'
-import type { FieldDef } from '@/lib/pivot/types'
+import { PivotSortPanel } from './pivot-sort-panel'
+import type { FieldDef, SortRule } from '@/lib/pivot/types'
 import { cn } from '@/lib/utils'
 
 interface PivotFieldBarProps {
@@ -17,6 +18,8 @@ interface PivotFieldBarProps {
   onSetFilter: (key: string, values: string[]) => void
   onClearFilter: (key: string) => void
   uniqueValues: Record<string, string[]>
+  sortRules: SortRule[]
+  onSortRulesChange: (rules: SortRule[]) => void
 }
 
 const FIELD_GROUP_ORDER = ['Time', 'Categories & Tax', 'Parties', 'Projects', 'Other']
@@ -31,6 +34,8 @@ export function PivotFieldBar({
   onSetFilter,
   onClearFilter,
   uniqueValues,
+  sortRules,
+  onSortRulesChange,
 }: PivotFieldBarProps) {
   const [fieldsOpen, setFieldsOpen] = useState(true)
 
@@ -92,46 +97,60 @@ export function PivotFieldBar({
       </div>
 
       {/* Drop Zones */}
-      <div className="px-3 py-2 grid grid-cols-3 gap-2">
-        <DropZone
-          zone="rows"
-          label="Rows"
-          fields={rows}
-          fieldDefs={FIELD_DEFINITIONS}
-          filterValues={filterValues}
-          uniqueValues={uniqueValues}
-          onDrop={(key, from) => onDrop(key, from, 'rows')}
-          onRemove={key => onRemove(key, 'rows')}
-          onFieldDragStart={() => {}}
-          onFilter={onSetFilter}
-          onClearFilter={onClearFilter}
-        />
-        <DropZone
-          zone="cols"
-          label="Columns"
-          fields={cols}
-          fieldDefs={FIELD_DEFINITIONS}
-          filterValues={filterValues}
-          uniqueValues={uniqueValues}
-          onDrop={(key, from) => onDrop(key, from, 'cols')}
-          onRemove={key => onRemove(key, 'cols')}
-          onFieldDragStart={() => {}}
-          onFilter={onSetFilter}
-          onClearFilter={onClearFilter}
-        />
-        <DropZone
-          zone="reportFilters"
-          label="Report Filters"
-          fields={reportFilters}
-          fieldDefs={FIELD_DEFINITIONS}
-          filterValues={filterValues}
-          uniqueValues={uniqueValues}
-          onDrop={(key, from) => onDrop(key, from, 'reportFilters')}
-          onRemove={key => onRemove(key, 'reportFilters')}
-          onFieldDragStart={() => {}}
-          onFilter={onSetFilter}
-          onClearFilter={onClearFilter}
-        />
+      <div className="px-3 py-2 flex gap-2 items-start">
+        <div className="flex-1">
+          <DropZone
+            zone="rows"
+            label="Rows"
+            fields={rows}
+            fieldDefs={FIELD_DEFINITIONS}
+            filterValues={filterValues}
+            uniqueValues={uniqueValues}
+            onDrop={(key, from) => onDrop(key, from, 'rows')}
+            onRemove={key => onRemove(key, 'rows')}
+            onFieldDragStart={() => {}}
+            onFilter={onSetFilter}
+            onClearFilter={onClearFilter}
+          />
+        </div>
+        <div className="flex-1">
+          <DropZone
+            zone="cols"
+            label="Columns"
+            fields={cols}
+            fieldDefs={FIELD_DEFINITIONS}
+            filterValues={filterValues}
+            uniqueValues={uniqueValues}
+            onDrop={(key, from) => onDrop(key, from, 'cols')}
+            onRemove={key => onRemove(key, 'cols')}
+            onFieldDragStart={() => {}}
+            onFilter={onSetFilter}
+            onClearFilter={onClearFilter}
+          />
+        </div>
+        <div className="flex-1">
+          <DropZone
+            zone="reportFilters"
+            label="Report Filters"
+            fields={reportFilters}
+            fieldDefs={FIELD_DEFINITIONS}
+            filterValues={filterValues}
+            uniqueValues={uniqueValues}
+            onDrop={(key, from) => onDrop(key, from, 'reportFilters')}
+            onRemove={key => onRemove(key, 'reportFilters')}
+            onFieldDragStart={() => {}}
+            onFilter={onSetFilter}
+            onClearFilter={onClearFilter}
+          />
+        </div>
+        <div className="shrink-0 pt-5">
+          <PivotSortPanel
+            rows={rows}
+            cols={cols}
+            sortRules={sortRules}
+            onSortRulesChange={onSortRulesChange}
+          />
+        </div>
       </div>
     </div>
   )

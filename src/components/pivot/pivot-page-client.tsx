@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import type { PivotRow, PivotConfig, AggregationType, ViewMode } from '@/lib/pivot/types'
+import type { PivotRow, PivotConfig, AggregationType, ViewMode, SortRule } from '@/lib/pivot/types'
 import { FIELD_DEFINITIONS } from '@/lib/pivot/field-definitions'
 import { computePivot } from '@/lib/pivot/engine'
 import { PivotToolbar } from './pivot-toolbar'
@@ -120,6 +120,8 @@ export function PivotPageClient() {
   const setViewMode = useCallback((vm: ViewMode) => setConfig(c => ({ ...c, viewMode: vm })), [])
   const setShowSubtotals = useCallback((v: boolean) => setConfig(c => ({ ...c, showSubtotals: v })), [])
   const setShowGrandTotals = useCallback((v: boolean) => setConfig(c => ({ ...c, showGrandTotals: v })), [])
+  const setTruncateNumbers = useCallback((v: boolean) => setConfig(c => ({ ...c, truncateNumbers: v })), [])
+  const setSortRules = useCallback((rules: SortRule[]) => setConfig(c => ({ ...c, sortRules: rules })), [])
 
   const setFieldFilter = useCallback((key: string, values: string[]) =>
     setConfig(c => ({ ...c, filterValues: { ...c.filterValues, [key]: values } })), [])
@@ -241,6 +243,7 @@ export function PivotPageClient() {
         viewMode={config.viewMode}
         showSubtotals={config.showSubtotals}
         showGrandTotals={config.showGrandTotals}
+        truncateNumbers={config.truncateNumbers ?? false}
         rowCount={config.rows.length}
         filteredCount={pivotResult.filteredCount}
         totalCount={pivotResult.totalCount}
@@ -248,6 +251,7 @@ export function PivotPageClient() {
         onViewMode={setViewMode}
         onShowSubtotals={setShowSubtotals}
         onShowGrandTotals={setShowGrandTotals}
+        onTruncateNumbers={setTruncateNumbers}
         onApplyPreset={applyPreset}
         onExport={exportCsv}
       />
@@ -261,6 +265,8 @@ export function PivotPageClient() {
         onSetFilter={setFieldFilter}
         onClearFilter={clearFieldFilter}
         uniqueValues={uniqueValues}
+        sortRules={config.sortRules ?? []}
+        onSortRulesChange={setSortRules}
       />
       <PivotTable
         result={pivotResult}
