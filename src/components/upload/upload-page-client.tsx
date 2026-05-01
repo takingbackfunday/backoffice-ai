@@ -8,6 +8,8 @@ import { CsvDropzone } from '@/components/upload/csv-dropzone'
 import { ColumnMapper } from '@/components/upload/column-mapper'
 import { useUploadStore } from '@/stores/upload-store'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 interface Account {
   id: string
@@ -16,7 +18,7 @@ interface Account {
   institution: { name: string }
 }
 
-const STEPS = ['upload', 'map & import', 'done'] as const
+const STEPS = ['upload', 'map & import'] as const
 
 type DisplayStep = typeof STEPS[number]
 
@@ -27,7 +29,7 @@ function toDisplayStep(step: string): DisplayStep {
 
 export function UploadPageClient({ initialAccounts, onboarding }: { initialAccounts?: Account[]; onboarding?: boolean }) {
   const router = useRouter()
-  const { step } = useUploadStore()
+  const { step, reset } = useUploadStore()
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
   const [loadingAccounts, setLoadingAccounts] = useState(!initialAccounts)
 
@@ -39,21 +41,24 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
       .finally(() => setLoadingAccounts(false))
   }, [initialAccounts])
 
-  useEffect(() => {
-    if (!onboarding || step !== 'done') return
-    fetch('/api/preferences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ onboardingStep: 'done' }),
-    }).then(() => router.push('/transactions'))
-  }, [onboarding, step, router])
-
   async function handleSkipOnboarding() {
     await fetch('/api/preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ onboardingStep: 'done' }),
     })
+    router.push('/transactions')
+  }
+
+  async function handleImportDone() {
+    if (onboarding) {
+      await fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onboardingStep: 'done' }),
+      })
+    }
+    reset()
     router.push('/transactions')
   }
 
@@ -98,17 +103,20 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
             />
           )}
 
-          {/* Done */}
-          {step === 'done' && (
-            <div className="text-center py-12">
-              <h2 className="text-2xl font-semibold text-green-600 mb-2">Import complete!</h2>
-              <p className="text-muted-foreground mb-4">Your transactions have been imported successfully.</p>
-              <a href="/transactions" className="underline text-primary">View transactions →</a>
-            </div>
-          )}
-
         </main>
       </div>
+
+      <Dialog open={step === 'done'}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import complete!</DialogTitle>
+            <DialogDescription>Your transactions have been imported successfully.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={handleImportDone}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

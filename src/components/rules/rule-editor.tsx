@@ -199,12 +199,15 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
 
   async function loadAll() {
     setLoadingAll(true)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
     try {
       const defs = buildDefs(conditions)
       const res = await fetch('/api/rules/preview?all=1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conditions: { op, defs } }),
+        signal: controller.signal,
       })
       const json = await res.json()
       setResults(json.data ?? [])
@@ -212,6 +215,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
     } catch {
       setShowAll(true) // fall back to showing what we have
     } finally {
+      clearTimeout(timeoutId)
       setLoadingAll(false)
     }
   }

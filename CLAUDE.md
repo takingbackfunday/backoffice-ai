@@ -180,3 +180,12 @@ The "Sum of Amount / Count / Average…" select lives in `src/components/pivot/p
 
 ### CSV column mapper — AI confidence goes inside `<option>` text
 The pattern throughout `column-mapper.tsx` is to embed confidence as a ` — X%` suffix directly in the option label (e.g. `Description — 95%`). There is no `ConfidenceBadge` component and no external "AI suggests" links. Follow this pattern for any new selects that receive LLM validation.
+
+### Upload flow — no "done" page
+The upload flow has two steps in the progress bar (`upload`, `map & import`). There is no "done" step rendered inline. When the import completes and `step === 'done'`, a shadcn `Dialog` modal appears over the page with "Import complete!" copy. The OK button resets the store and navigates to `/transactions`. For the onboarding path it also POSTs to `/api/preferences` first.
+
+### Make-rule snap — always merge, never overwrite
+`pendingRuleSnapRef.current` in `transaction-table.tsx` is written on every `commitEdit` for category/payee fields. Each write **merges** with the previous snap for the same row (`payeeName ?? prevSnap?.payeeName`, etc.) so that editing both fields in any order preserves both values. Overwriting directly loses whichever field was committed first when React's state update from the first commit hasn't propagated to the closure yet.
+
+### Rules live preview — loadAll needs AbortController
+`runPreview` has a 10-second `AbortController` timeout. `loadAll` (the "+ N more" button handler) must also use an `AbortController` with the same timeout — without it the button sticks at "Loading…" if the request hangs (Fly idle wake-up, slow Neon query).

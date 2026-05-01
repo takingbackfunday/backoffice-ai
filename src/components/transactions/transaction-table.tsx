@@ -1400,14 +1400,16 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
         editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
 
         // Stage the popup snap — don't show it yet.
-        // promoteIfLeft is called from exitRowEdit once the user leaves the row.
+        // Merge with previous snap for this row so both payee and category are
+        // preserved when the user edits them in either order.
+        const prevSnap = pendingRuleSnapRef.current?.rowId === id ? pendingRuleSnapRef.current.snap : null
         pendingRuleSnapRef.current = {
           rowId: id,
           snap: {
             description: row.description,
-            payeeName: resolvedPayeeName,
-            categoryId: resolvedCatId,
-            categoryName: resolvedCatName,
+            payeeName: resolvedPayeeName ?? prevSnap?.payeeName ?? null,
+            categoryId: resolvedCatId ?? prevSnap?.categoryId ?? null,
+            categoryName: resolvedCatName ?? prevSnap?.categoryName ?? null,
           },
         }
 
