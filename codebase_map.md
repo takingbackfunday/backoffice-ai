@@ -70,7 +70,6 @@ Keep this updated when feature areas are added or moved.
 | Dedup logic | `src/lib/dedup.ts` → `buildDuplicateHash` |
 | After import fires | → `runRulesAgentInBackground` + `matchInvoicePayments` |
 | AI plain-language search | `POST /api/agent/search-transactions` |
-| Upload flow completion | `src/components/upload/upload-page-client.tsx` — no "done" page; completion shows a Dialog modal, OK navigates to `/transactions` and resets the store |
 
 ### Rules engine
 
