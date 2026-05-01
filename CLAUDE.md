@@ -171,3 +171,12 @@ The Costs and Margin summary cards on the job detail page (`/projects/[slug]/job
 The table wrapper has `overflow-auto`, which clips absolutely-positioned dropdowns. Any new dropdown/popover inside `transaction-table.tsx` must render via `ReactDOM.createPortal` into `document.body`, positioned with `position: fixed` coords from `getBoundingClientRect`. Use the existing `useAnchorRect` hook in that file.
 
 Portal elements have no `[data-row-id]` ancestor, so the row outside-click handler would exit row-edit when the user clicks a dropdown item. Add `data-portal-dropdown` to any new portal root element — the handler skips exit for clicks inside `[data-portal-dropdown]`.
+
+### Pivot — aggregation dropdown is in PivotFieldBar, not PivotToolbar
+The "Sum of Amount / Count / Average…" select lives in `src/components/pivot/pivot-field-bar.tsx` (between Report Filters and Sort). `PivotToolbar` owns view mode, subtotals, grand totals, no-decimals, presets, and export only. Don't add aggregation back to the toolbar.
+
+### Pivot table — sticky column widths are measured, not fixed
+`PivotTable` uses `useLayoutEffect` to read actual `offsetWidth` from header `<th>` elements and stores them as `stickyOffsets[]` for the `left` CSS property. Do not add `minWidth` to sticky cells — it would break the auto-fit measurement.
+
+### CSV column mapper — AI confidence goes inside `<option>` text
+The pattern throughout `column-mapper.tsx` is to embed confidence as a ` — X%` suffix directly in the option label (e.g. `Description — 95%`). There is no `ConfidenceBadge` component and no external "AI suggests" links. Follow this pattern for any new selects that receive LLM validation.

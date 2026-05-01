@@ -313,7 +313,10 @@ Routes using this pattern: `agent/ask`, `agent/rules`, `invoices/ai-assist`, `es
 | FX conversion | `src/lib/fx.ts` → `getRate()`, `convertAmounts()` |
 | FX seed script | `scripts/seed-fx-rates.ts` |
 | FX refresh | `POST /api/fx-rates/refresh` |
-| Pivot table | `src/components/pivot/pivot-page-client.tsx` + `src/lib/pivot/engine.ts` |
+| Pivot table page + state | `src/components/pivot/pivot-page-client.tsx` + `src/lib/pivot/engine.ts` |
+| Pivot toolbar (view mode, subtotals, grand totals, no decimals, presets, export) | `src/components/pivot/pivot-toolbar.tsx` |
+| Pivot field bar (field groups as columns, drop zones, **aggregation dropdown**, sort) | `src/components/pivot/pivot-field-bar.tsx` |
+| Pivot table renderer (tabular/outline, collapsible groups, sticky cols auto-fit) | `src/components/pivot/pivot-table.tsx` |
 
 ### Client Hub (`/studio`)
 
