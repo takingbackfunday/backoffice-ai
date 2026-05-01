@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Papa from 'papaparse'
 import { useUploadStore } from '@/stores/upload-store'
 import type { CsvMapping } from '@/lib/csv-processor'
@@ -148,8 +148,8 @@ function ColSelect({
   headers,
   onChange,
   validation,
-  onApplySuggestion,
   candidates,
+  required,
 }: {
   id: string
   label: string
@@ -157,10 +157,25 @@ function ColSelect({
   headers: string[]
   onChange: (v: string | undefined) => void
   validation?: ColValidation
-  onApplySuggestion?: () => void
   candidates?: { col: string; score: number }[]
+  required?: boolean
 }) {
-  const visibleCandidates = candidates?.filter((c) => c.col !== value) ?? []
+  const suggestions = useMemo(() => {
+    const map = new Map<string, number>()
+    if (validation?.col && validation.confidence > 0) {
+      map.set(validation.col, validation.confidence)
+    }
+    for (const c of candidates ?? []) {
+      if (!map.has(c.col)) map.set(c.col, Math.round(c.score * 100))
+    }
+    return Array.from(map.entries())
+      .map(([col, pct]) => ({ col, pct }))
+      .sort((a, b) => b.pct - a.pct)
+  }, [candidates, validation])
+
+  const suggestedKeys = new Set(suggestions.map((s) => s.col))
+  const otherHeaders = headers.filter((h) => !suggestedKeys.has(h))
+  const needsThrob = required && !value
 
   return (
     <div>
@@ -169,46 +184,31 @@ function ColSelect({
         id={id}
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value || undefined)}
-        className="w-full rounded-md border px-3 py-1.5 text-sm"
+        className={`w-full rounded-md border px-3 py-1.5 text-sm${needsThrob ? ' col-throb' : ''}`}
         data-testid={id}
       >
         <option value="">— select —</option>
-        {headers.map((h) => (
-          <option key={h} value={h}>{h}</option>
-        ))}
+        {suggestions.length > 0 ? (
+          <>
+            <optgroup label="Suggested">
+              {suggestions.map((s) => (
+                <option key={s.col} value={s.col}>{s.col} — {s.pct}%</option>
+              ))}
+            </optgroup>
+            {otherHeaders.length > 0 && (
+              <optgroup label="All columns">
+                {otherHeaders.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </optgroup>
+            )}
+          </>
+        ) : (
+          headers.map((h) => (
+            <option key={h} value={h}>{h}</option>
+          ))
+        )}
       </select>
-
-      {/* AI confidence badge */}
-      {validation && (
-        <>
-          <ConfidenceBadge value={validation} />
-          {validation.col !== null && validation.col !== value && (
-            <p className="text-xs text-amber-700 mt-0.5">
-              AI suggests:{' '}
-              <button className="underline" onClick={onApplySuggestion}>
-                {validation.col}
-              </button>
-            </p>
-          )}
-        </>
-      )}
-
-      {/* 80%+ candidate chips */}
-      {visibleCandidates.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1.5">
-          {visibleCandidates.map((c) => (
-            <button
-              key={c.col}
-              type="button"
-              onClick={() => onChange(c.col)}
-              className="rounded-full border bg-muted px-2 py-0.5 text-xs hover:bg-primary/10 hover:border-primary/40 transition-colors"
-              title={`Use "${c.col}" (${Math.round(c.score * 100)}% match)`}
-            >
-              {c.col} <span className="text-muted-foreground">{Math.round(c.score * 100)}%</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -461,11 +461,6 @@ export function ColumnMapper({
   const set = (field: keyof CsvMapping) => (v: string | undefined) =>
     setMapping((m) => ({ ...m, [field]: v }))
 
-  const applyAI = (field: 'dateCol' | 'amountCol' | 'descCol' | 'notesCol') => {
-    const col = (validation?.[field] as ColValidation | undefined)?.col
-    if (col) setMapping((m) => ({ ...m, [field]: col }))
-  }
-
   const newRows = previewRows.filter((r) => !r.isDuplicate)
 
   // Auto-preview whenever mapping + accountId are complete, debounced 400ms
@@ -540,6 +535,19 @@ export function ColumnMapper({
   }
 
   return (
+    <>
+    <style>{`
+      @keyframes account-throb {
+        0%, 100% { box-shadow: 0 0 0 0 rgb(99 102 241 / 0); border-color: hsl(var(--border)); }
+        50%       { box-shadow: 0 0 0 4px rgb(99 102 241 / 0.25); border-color: rgb(99 102 241); }
+      }
+      @keyframes col-throb {
+        0%, 100% { box-shadow: 0 0 0 0 transparent; border-color: hsl(var(--border)); }
+        50%       { box-shadow: 0 0 0 2px rgb(245 158 11 / 0.35); border-color: rgb(245 158 11 / 0.55); }
+      }
+      .account-throb { animation: account-throb 1.4s ease-in-out infinite; }
+      .col-throb     { animation: col-throb 2s ease-in-out infinite; }
+    `}</style>
     <div className="flex gap-6 h-full min-h-0" data-testid="column-mapper-form">
       {/* Left: account selector + mapping controls */}
       <div className="w-72 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
@@ -586,7 +594,7 @@ export function ColumnMapper({
             <select
               value={accountId ?? ''}
               onChange={(e) => setAccountId(e.target.value || '')}
-              className="w-full rounded-md border px-3 py-1.5 text-sm"
+              className={`w-full rounded-md border px-3 py-1.5 text-sm${!accountId ? ' account-throb' : ''}`}
               data-testid="account-select"
             >
               <option value="">— select account —</option>
@@ -618,8 +626,8 @@ export function ColumnMapper({
           headers={csvHeaders}
           onChange={set('dateCol')}
           validation={validation?.dateCol}
-          onApplySuggestion={() => applyAI('dateCol')}
           candidates={candidates.dateCol}
+          required
         />
         <div>
           <label htmlFor="select-dateFormat" className="block text-xs font-medium mb-1">Date format *</label>
@@ -655,8 +663,8 @@ export function ColumnMapper({
           headers={csvHeaders}
           onChange={set('amountCol')}
           validation={validation?.amountCol}
-          onApplySuggestion={() => applyAI('amountCol')}
           candidates={candidates.amountCol}
+          required
         />
         <div>
           <label htmlFor="select-amountSign" className="block text-xs font-medium mb-1">Amount sign *</label>
@@ -692,8 +700,8 @@ export function ColumnMapper({
           headers={csvHeaders}
           onChange={set('descCol')}
           validation={validation?.descCol}
-          onApplySuggestion={() => applyAI('descCol')}
           candidates={candidates.descCol}
+          required
         />
 
         <ColSelect
@@ -703,7 +711,6 @@ export function ColumnMapper({
           headers={csvHeaders}
           onChange={set('notesCol')}
           validation={validation?.notesCol}
-          onApplySuggestion={() => applyAI('notesCol')}
           candidates={candidates.notesCol}
         />
 
@@ -843,5 +850,6 @@ export function ColumnMapper({
         </div>
       </div>
     </div>
+    </>
   )
 }

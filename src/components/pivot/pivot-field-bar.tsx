@@ -5,7 +5,7 @@ import { FIELD_DEFINITIONS } from '@/lib/pivot/field-definitions'
 import { FieldPill } from './field-pill'
 import { DropZone } from './drop-zone'
 import { PivotSortPanel } from './pivot-sort-panel'
-import type { FieldDef, SortRule } from '@/lib/pivot/types'
+import type { AggregationType, FieldDef, SortRule } from '@/lib/pivot/types'
 import { cn } from '@/lib/utils'
 
 interface PivotFieldBarProps {
@@ -20,6 +20,8 @@ interface PivotFieldBarProps {
   uniqueValues: Record<string, string[]>
   sortRules: SortRule[]
   onSortRulesChange: (rules: SortRule[]) => void
+  aggregation: AggregationType
+  onAggregation: (v: AggregationType) => void
 }
 
 const FIELD_GROUP_ORDER = ['Time', 'Categories & Tax', 'Parties', 'Projects', 'Other']
@@ -36,6 +38,8 @@ export function PivotFieldBar({
   uniqueValues,
   sortRules,
   onSortRulesChange,
+  aggregation,
+  onAggregation,
 }: PivotFieldBarProps) {
   const [fieldsOpen, setFieldsOpen] = useState(true)
 
@@ -71,11 +75,11 @@ export function PivotFieldBar({
             {availableFields.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">All fields in use</p>
             ) : (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex gap-4 overflow-x-auto">
                 {FIELD_GROUP_ORDER.filter(g => grouped[g]?.length).map(groupName => (
-                  <div key={groupName} className="flex items-start gap-2">
-                    <span className="text-xs text-muted-foreground w-28 shrink-0 pt-0.5">{groupName}</span>
-                    <div className="flex flex-wrap gap-1">
+                  <div key={groupName} className="flex flex-col gap-1 shrink-0">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{groupName}</span>
+                    <div className="flex flex-col gap-1">
                       {grouped[groupName].map(f => (
                         <FieldPill
                           key={f.key}
@@ -142,6 +146,20 @@ export function PivotFieldBar({
             onFilter={onSetFilter}
             onClearFilter={onClearFilter}
           />
+        </div>
+        <div className="shrink-0 flex flex-col gap-1 pt-0">
+          <span className="text-xs font-medium text-muted-foreground">Values</span>
+          <select
+            value={aggregation}
+            onChange={e => onAggregation(e.target.value as AggregationType)}
+            className="text-sm border rounded-md px-2 h-8 bg-background"
+          >
+            <option value="sum">Sum of Amount</option>
+            <option value="count">Count</option>
+            <option value="avg">Average</option>
+            <option value="min">Min</option>
+            <option value="max">Max</option>
+          </select>
         </div>
         <div className="shrink-0 pt-5">
           <PivotSortPanel

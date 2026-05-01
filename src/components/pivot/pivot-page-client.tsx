@@ -239,7 +239,6 @@ export function PivotPageClient() {
   return (
     <div className="flex flex-col rounded-lg border overflow-hidden bg-background">
       <PivotToolbar
-        aggregation={config.aggregation}
         viewMode={config.viewMode}
         showSubtotals={config.showSubtotals}
         showGrandTotals={config.showGrandTotals}
@@ -247,7 +246,6 @@ export function PivotPageClient() {
         rowCount={config.rows.length}
         filteredCount={pivotResult.filteredCount}
         totalCount={pivotResult.totalCount}
-        onAggregation={setAggregation}
         onViewMode={setViewMode}
         onShowSubtotals={setShowSubtotals}
         onShowGrandTotals={setShowGrandTotals}
@@ -267,6 +265,8 @@ export function PivotPageClient() {
         uniqueValues={uniqueValues}
         sortRules={config.sortRules ?? []}
         onSortRulesChange={setSortRules}
+        aggregation={config.aggregation}
+        onAggregation={setAggregation}
       />
       <PivotTable
         result={pivotResult}

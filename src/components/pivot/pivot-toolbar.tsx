@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import type { AggregationType, ViewMode } from '@/lib/pivot/types'
+import type { ViewMode } from '@/lib/pivot/types'
 import { PIVOT_PRESETS } from '@/lib/pivot/presets'
 import type { PivotConfig } from '@/lib/pivot/types'
 
 interface PivotToolbarProps {
-  aggregation: AggregationType
   viewMode: ViewMode
   showSubtotals: boolean
   showGrandTotals: boolean
@@ -14,7 +13,6 @@ interface PivotToolbarProps {
   rowCount: number
   filteredCount: number
   totalCount: number
-  onAggregation: (v: AggregationType) => void
   onViewMode: (v: ViewMode) => void
   onShowSubtotals: (v: boolean) => void
   onShowGrandTotals: (v: boolean) => void
@@ -24,7 +22,6 @@ interface PivotToolbarProps {
 }
 
 export function PivotToolbar({
-  aggregation,
   viewMode,
   showSubtotals,
   showGrandTotals,
@@ -32,7 +29,6 @@ export function PivotToolbar({
   rowCount,
   filteredCount,
   totalCount,
-  onAggregation,
   onViewMode,
   onShowSubtotals,
   onShowGrandTotals,
@@ -56,23 +52,6 @@ export function PivotToolbar({
 
   return (
     <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b bg-background">
-      {/* Aggregation */}
-      <div className="flex items-center gap-1.5">
-        <label htmlFor="pivot-agg" className="text-sm text-muted-foreground whitespace-nowrap">Show:</label>
-        <select
-          id="pivot-agg"
-          value={aggregation}
-          onChange={e => onAggregation(e.target.value as AggregationType)}
-          className="text-sm border rounded-md px-2 h-9 bg-background min-w-[160px]"
-        >
-          <option value="sum">Sum of Amount</option>
-          <option value="count">Count</option>
-          <option value="avg">Average</option>
-          <option value="min">Min</option>
-          <option value="max">Max</option>
-        </select>
-      </div>
-
       {/* View mode toggle */}
       <div className="flex items-center rounded-md border overflow-hidden text-sm">
         <button

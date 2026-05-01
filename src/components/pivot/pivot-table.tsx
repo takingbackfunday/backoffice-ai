@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import type { PivotResult, PivotConfig, AggregationType } from '@/lib/pivot/types'
 import { FIELD_DEFINITIONS } from '@/lib/pivot/field-definitions'
 import { formatValue } from '@/lib/pivot/engine'
@@ -22,9 +22,26 @@ function cellClass(value: number): string {
 
 export function PivotTable({ result, config }: PivotTableProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const tableRef = useRef<HTMLTableElement>(null)
+  const [stickyOffsets, setStickyOffsets] = useState<number[]>([])
 
   const { flatRows, groups, colKeys, colTotals, grandTotal } = result
   const { rows, cols, viewMode, showSubtotals, showGrandTotals, aggregation, filterValues } = config
+
+  useLayoutEffect(() => {
+    const table = tableRef.current
+    if (!table) return
+    const headerRow = table.querySelector('thead tr')
+    if (!headerRow) return
+    const ths = Array.from(headerRow.querySelectorAll('th'))
+    let acc = 0
+    const offsets = ths.slice(0, rows.length).map(th => {
+      const offset = acc
+      acc += th.offsetWidth
+      return offset
+    })
+    setStickyOffsets(offsets)
+  }, [rows, flatRows, groups])
 
   if (flatRows.length === 0 && colKeys.filter(k => k !== '__total__').length === 0) {
     if (rows.length === 0 && cols.length === 0) {
@@ -55,11 +72,8 @@ export function PivotTable({ result, config }: PivotTableProps) {
     })
   }
 
-  const COL_WIDTH = 140
-
   function stickyStyle(index: number) {
-    // Subtract 1px per column after the first to overlap the border and close the gap
-    return { minWidth: COL_WIDTH, left: index * COL_WIDTH - (index > 0 ? 1 : 0) }
+    return { left: stickyOffsets[index] ?? index * 140 }
   }
 
   function renderHeaderCells() {
@@ -114,7 +128,7 @@ export function PivotTable({ result, config }: PivotTableProps) {
   if (viewMode === 'tabular' || rows.length <= 1) {
     return (
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+        <table ref={tableRef} className="w-full text-sm border-collapse">
           <thead className="bg-muted/50">{renderHeaderCells()}</thead>
           <tbody>
             {flatRows.map((fr, idx) => {
@@ -155,7 +169,7 @@ export function PivotTable({ result, config }: PivotTableProps) {
   // Outline mode (rows.length >= 2)
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
+      <table ref={tableRef} className="w-full text-sm border-collapse">
         <thead className="bg-muted/50">{renderHeaderCells()}</thead>
         <tbody>
           {groups.map(group => {
