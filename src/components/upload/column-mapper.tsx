@@ -124,20 +124,6 @@ function guessMapping(headers: string[]): Partial<CsvMapping> {
 }
 
 /* ------------------------------------------------------------------ */
-/*  ConfidenceBadge                                                     */
-/* ------------------------------------------------------------------ */
-
-function ConfidenceBadge({ value }: { value: ColValidation | ValValidation }) {
-  const color = value.confidence >= 80 ? 'text-green-600' : value.confidence >= 50 ? 'text-amber-600' : 'text-red-600'
-  const icon  = value.confidence >= 80 ? '✓' : value.confidence >= 50 ? '~' : '✗'
-  return (
-    <p className={`text-xs mt-0.5 ${color}`} title={value.reason}>
-      {icon} {value.confidence}% confident
-    </p>
-  )
-}
-
-/* ------------------------------------------------------------------ */
 /*  ColSelect                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -638,21 +624,11 @@ export function ColumnMapper({
             className="w-full rounded-md border px-3 py-1.5 text-sm"
             data-testid="select-dateFormat"
           >
-            {DATE_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
+            {DATE_FORMATS.map((f) => {
+            const aiPct = validation?.dateFormat?.value === f ? validation.dateFormat.confidence : null
+            return <option key={f} value={f}>{f}{aiPct ? ` — ${aiPct}%` : ''}</option>
+          })}
           </select>
-          {validation?.dateFormat && (
-            <>
-              <ConfidenceBadge value={validation.dateFormat} />
-              {validation.dateFormat.value && validation.dateFormat.value !== mapping.dateFormat && (
-                <p className="text-xs text-amber-700 mt-0.5">
-                  AI suggests:{' '}
-                  <button className="underline" onClick={() => setMapping((m) => ({ ...m, dateFormat: validation!.dateFormat!.value }))}>
-                    {validation.dateFormat.value}
-                  </button>
-                </p>
-              )}
-            </>
-          )}
         </div>
 
         {/* Amount column + Amount sign */}
@@ -675,22 +651,12 @@ export function ColumnMapper({
             className="w-full rounded-md border px-3 py-1.5 text-sm"
             data-testid="select-amountSign"
           >
-            <option value="normal">Expenses are negative</option>
-            <option value="inverted">Expenses are positive</option>
+            {(['normal', 'inverted'] as const).map((v) => {
+              const label = v === 'normal' ? 'Expenses are negative' : 'Expenses are positive'
+              const aiPct = validation?.amountSign?.value === v ? validation.amountSign.confidence : null
+              return <option key={v} value={v}>{label}{aiPct ? ` — ${aiPct}%` : ''}</option>
+            })}
           </select>
-          {validation?.amountSign && (
-            <>
-              <ConfidenceBadge value={validation.amountSign} />
-              {validation.amountSign.value && validation.amountSign.value !== mapping.amountSign && (
-                <p className="text-xs text-amber-700 mt-0.5">
-                  AI suggests:{' '}
-                  <button className="underline" onClick={() => setMapping((m) => ({ ...m, amountSign: validation!.amountSign!.value as 'normal' | 'inverted' }))}>
-                    {validation.amountSign.value === 'normal' ? 'Expenses are negative' : 'Expenses are positive'}
-                  </button>
-                </p>
-              )}
-            </>
-          )}
         </div>
 
         <ColSelect
