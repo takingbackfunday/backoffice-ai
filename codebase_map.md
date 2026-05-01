@@ -97,7 +97,7 @@ Keep this updated when feature areas are added or moved.
   - `description contains` is always the primary condition — never `payeeName equals` as the sole condition (it only matches already-tagged transactions, not fresh imports).
   - For sources 2 (no-payee) and 3 (ruleless patterns), `categoryName` must be copied verbatim from the data — never guessed.
   - Suggestions are ordered by transaction count across all sources, not clustered by source type.
-- **`emit_rule_suggestion` validator** (`rules-tools.ts`) rejects rules that would reclassify already-categorised transactions unless every matched transaction already has exactly the target category. Rejection messages include the actual existing categories on matched transactions so the agent can self-correct. Project-assignment rules bypass this check (they are additive, never reclassify).
+- **`emit_rule_suggestion` validator** (`rules-tools.ts`) rejects: (1) rules that would reclassify already-categorised transactions unless every matched transaction already has exactly the target category (project-assignment rules bypass this — they are additive); (2) rules where every non-amount condition uses the `payeeName` field — payee conditions only fire on transactions that already have a payee, so they never match raw bank imports. The rejection messages guide the LLM to self-correct (e.g. switch to `description contains`).
 - **Project-tag rules** (assigning `workspaceName`) for patterns like Zelle rent payments are intentionally left to manual user creation — the descriptions are too varied to safely infer which property a transfer belongs to.
 
 ### Vendor / Work Order / Bill (outbound money flow)

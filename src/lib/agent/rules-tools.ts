@@ -289,16 +289,17 @@ export async function emit_rule_suggestion(
   const hasNonAmount = defs.some((d) => d.field !== 'amount')
   if (!hasNonAmount) return 'Rejected: must have at least one non-amount condition. Add a description or payeeName condition alongside the amount condition and resubmit.'
 
-  // Reject self-referential payee rules: condition "payeeName equals X" + action ONLY sets same payeeName X
-  // These are no-ops — the payee is already set. But if the rule also assigns a category or project,
-  // "payeeName equals X" is a valid and useful selector — do not reject it.
-  if (args.payeeName && !args.categoryName && !args.workspaceName) {
-    const payeeCondition = defs.find(
-      (d) => d.field === 'payeeName' && (d.operator === 'equals' || d.operator === 'contains') &&
-        String(d.value).toLowerCase() === args.payeeName!.toLowerCase()
-    )
-    if (payeeCondition && defs.every((d) => d.field === 'payeeName' || d.field === 'amount')) {
-      return `Rejected: this rule uses "payeeName equals ${args.payeeName}" as its only meaningful condition, then sets payeeName to "${args.payeeName}" — that's a no-op (the payee is already set on those transactions). Use "description contains" as the primary condition instead, so the rule can assign the payee on future transactions that don't have it yet.`
+  // Reject any rule where every meaningful condition uses the payeeName field.
+  // Payee conditions only fire on transactions that already have the payee assigned — they
+  // never match raw bank imports (which arrive with description only, payeeName = null).
+  // This is true regardless of what actions the rule sets (category, payee, workspace).
+  // Always anchor on description contains; payeeName equals is valid only as a secondary narrower.
+  {
+    const allPayeeOrAmount = defs.every((d) => d.field === 'payeeName' || d.field === 'amount')
+    if (allPayeeOrAmount) {
+      const payeeDef = defs.find((d) => d.field === 'payeeName')
+      const condVal = payeeDef ? String(payeeDef.value) : (args.payeeName ?? '')
+      return `Rejected: this rule has no "description" condition — its only non-amount condition is "payeeName ${payeeDef?.operator ?? 'equals'} ${condVal}". Payee conditions only fire on transactions that already have the payee assigned; they never match raw bank imports (which arrive with description only, payeeName = null). Use "description contains \\"${condVal}\\"" as the primary condition instead, then optionally add payeeName as a secondary narrower. Resubmit with a description-based condition.`
     }
   }
 
