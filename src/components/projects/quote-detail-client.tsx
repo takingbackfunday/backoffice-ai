@@ -150,6 +150,21 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
     if (result) router.push(`/projects/${projectSlug}/quotes/${result.id}/generate`)
   }
 
+  async function handleDelete() {
+    if (!confirm('Delete this draft quote? This cannot be undone.')) return
+    setLoading('delete')
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}`, { method: 'DELETE' })
+      if (!res.ok) { const j = await res.json(); setError(j.error ?? 'Delete failed'); return }
+      router.push(`/projects/${projectSlug}/quotes`)
+    } catch {
+      setError('Delete failed')
+    } finally {
+      setLoading(null)
+    }
+  }
+
   async function handleCreateInvoice() {
     if (!dueDate) { setError('Due date is required'); return }
     const result = await action('create-invoice', 'POST', { dueDate })
@@ -185,6 +200,14 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
         <div className="flex items-center gap-2">
           {quote.status === 'DRAFT' && (
             <>
+              <button
+                onClick={handleDelete}
+                disabled={loading === 'delete'}
+                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                {loading === 'delete' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                Delete
+              </button>
               <Link
                 href={`/projects/${projectSlug}/quotes/${quote.id}/generate`}
                 className="text-sm px-3 py-1.5 rounded border hover:bg-accent"
