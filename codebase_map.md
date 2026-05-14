@@ -60,7 +60,7 @@ Keep this updated when feature areas are added or moved.
 
 | Task | File |
 |---|---|
-| Table UI + bulk delete + make-rule prompt | `src/components/transactions/transaction-table.tsx` |
+| Table UI + bulk delete | `src/components/transactions/transaction-table.tsx` |
 | Fetch list | `GET /api/transactions` → `src/app/api/transactions/route.ts` |
 | Edit single | `PATCH /api/transactions/[id]` → `src/app/api/transactions/[id]/route.ts` |
 | CSV upload step 1 (parse) | `src/components/upload/csv-dropzone.tsx` |

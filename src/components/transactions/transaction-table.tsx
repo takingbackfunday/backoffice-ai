@@ -301,127 +301,7 @@ function CategoryCell({
   )
 }
 
-// ── Top-of-page rule prompt banner ────────────────────────────────
 const SUGGEST_DELAY_MS = 30000
-
-type RulePromptState = 'watching' | 'analysing' | 'ready' | 'error' | 'idle'
-
-function RulePromptPanel({
-  state,
-  editCount,
-  onAnalyseNow,
-  onDismiss,
-}: {
-  state: RulePromptState
-  editCount: number
-  onAnalyseNow: () => void
-  onDismiss: () => void
-}) {
-  const [secondsLeft, setSecondsLeft] = useState(Math.round(SUGGEST_DELAY_MS / 1000))
-
-  useEffect(() => {
-    if (state !== 'watching') return
-    setSecondsLeft(Math.round(SUGGEST_DELAY_MS / 1000))
-    const interval = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) { clearInterval(interval); return 0 }
-        return s - 1
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [state, editCount])
-
-  // ready state is persistent — user must dismiss manually
-  // error state also stays until dismissed
-
-  if (state === 'idle') return null
-
-  if (state === 'ready') {
-    return (
-      <div className="mb-3 flex items-center gap-3 rounded-lg border border-[#534AB7]/30 bg-[#EEEDFE]/60 px-4 py-2.5 text-sm">
-        <span className="relative flex h-2 w-2 shrink-0">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#534AB7] opacity-60" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#534AB7]" />
-        </span>
-        <span className="flex-1 text-[#3C3489] font-medium">
-          Backoffice AI has some rules for you to review
-        </span>
-        <a
-          href="/rules"
-          className="shrink-0 rounded-md bg-[#534AB7] px-3 py-1 text-xs text-white font-medium hover:bg-[#4338CA] transition-colors"
-        >
-          Review rules
-        </a>
-        <button
-          onClick={onDismiss}
-          className="shrink-0 text-[#534AB7]/50 hover:text-[#534AB7] leading-none"
-          aria-label="Dismiss"
-        >✕</button>
-      </div>
-    )
-  }
-
-  return (
-    <div className={`mb-3 flex items-center gap-3 rounded-lg border px-4 py-2 text-xs ${
-      state === 'error' ? 'border-red-200 bg-red-50' : 'border-black/8 bg-muted/40'
-    }`}>
-
-      {/* Icon / spinner */}
-      {state === 'watching' && (
-        <span className="relative flex h-2 w-2 shrink-0">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#534AB7] opacity-60" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#534AB7]" />
-        </span>
-      )}
-      {state === 'analysing' && (
-        <span className="shrink-0 w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" />
-      )}
-      {state === 'error' && <span className="shrink-0">⚠️</span>}
-
-      {/* Text */}
-      <div className="flex-1 flex items-center gap-1.5 min-w-0">
-        {state === 'watching' && (
-          <span className="text-muted-foreground">
-            Watching <span className="font-medium text-foreground">{editCount} edit{editCount !== 1 ? 's' : ''}</span> — suggesting rules in {secondsLeft}s
-          </span>
-        )}
-        {state === 'analysing' && (
-          <span className="text-muted-foreground">Analysing edits for rule patterns…</span>
-        )}
-        {state === 'error' && (
-          <span className="text-red-600">Analysis failed — edit a transaction again to retry</span>
-        )}
-      </div>
-
-      {/* Action */}
-      {state === 'watching' && (
-        <button
-          onClick={onAnalyseNow}
-          className="shrink-0 rounded-md bg-[#534AB7] px-2.5 py-1 text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
-        >
-          Analyse now
-        </button>
-      )}
-
-      {/* Dismiss — not shown while analysing */}
-      {state !== 'analysing' && (
-        <button
-          onClick={onDismiss}
-          className="shrink-0 text-muted-foreground hover:text-foreground leading-none"
-          aria-label="Dismiss"
-        >✕</button>
-      )}
-    </div>
-  )
-}
-
-// ── Inline "Make rule from this change" — row-level ──────────────
-interface MakeRuleSnapType {
-  description: string
-  payeeName: string | null
-  categoryId: string | null
-  categoryName: string | null
-}
 
 // ── Inline payee combobox (type to filter or create new) ──────────
 function PayeeCell({
@@ -514,7 +394,7 @@ function PayeeCell({
   }, [draft, payees])
 
   return (
-    <div ref={wrapRef} className="relative w-full min-w-[140px]">
+    <div ref={wrapRef} className="relative w-full min-w-[280px]">
       <input
         ref={inputRef}
         value={draft}
@@ -1034,16 +914,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // ── Edit queue for deferred rule suggestions ──────────────────────
   const editQueueRef = useRef<Map<string, TransactionWithRelations>>(new Map())
   const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [rulePromptState, setRulePromptState] = useState<RulePromptState>('idle')
-  const [watchingEditCount, setWatchingEditCount] = useState(0)
-
-  // ── "Make rule from this change" ─────────────────────────────────
-  const [makeRuleSnap, setMakeRuleSnap] = useState<MakeRuleSnapType | null>(null)
-  const [showMakeRuleEditor, setShowMakeRuleEditor] = useState(false)
-  const [lastEditedRowId, setLastEditedRowId] = useState<string | null>(null)
-  // Pending snap accumulates edits while the user is still on the same row.
-  // It only becomes the visible popup once the user moves to a different row.
-  const pendingRuleSnapRef = useRef<{ rowId: string; snap: MakeRuleSnapType } | null>(null)
+  const pendingRuleSnapRef = useRef<{ rowId: string; snap: { description: string; payeeName: string | null; categoryId: string | null; categoryName: string | null } } | null>(null)
 
   // ── Toolbar modals ────────────────────────────────────────────────
   const [showNewRuleModal, setShowNewRuleModal] = useState(false)
@@ -1051,34 +922,18 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
 
   const pageSize = 200
 
-  // ── Fire suggestion request (shared between timer + manual trigger) ─
+  // ── Fire suggestion request (deferred, background) ─────────────────
   const fireSuggestions = useCallback(() => {
     if (suggestionTimerRef.current) { clearTimeout(suggestionTimerRef.current); suggestionTimerRef.current = null }
     const queue = editQueueRef.current
-    if (queue.size === 0) { setRulePromptState('idle'); return }
+    if (queue.size === 0) return
     const snapshots = Array.from(queue.values())
     editQueueRef.current = new Map()
-    setWatchingEditCount(0)
-    setRulePromptState('analysing')
-    console.log('[suggest-from-edits] firing for', snapshots.length, 'edits', snapshots)
     fetch('/api/rules/suggest-from-edits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ edits: snapshots }),
-    })
-      .then((r) => r.json())
-      .then((j) => {
-        console.log('[suggest-from-edits] response:', j)
-        if (!j.error && j.data?.count > 0) {
-          setRulePromptState('ready')
-        } else {
-          setRulePromptState('idle')
-        }
-      })
-      .catch((e) => {
-        console.error('[suggest-from-edits] fetch error:', e)
-        setRulePromptState('error')
-      })
+    }).catch(() => {})
   }, [])
 
   // Tracks the current editingRowId in a ref to avoid stale closure issues.
@@ -1112,21 +967,9 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   const promoteIfLeft = useCallback((fromRowId: string) => {
     const pending = pendingRuleSnapRef.current
     if (!pending || pending.rowId !== fromRowId) return
-    if (editingRowIdRef.current === fromRowId) return // still editing same row
-
-    // User has genuinely left — show popup and start banner
-    setMakeRuleSnap(null)
-    setShowMakeRuleEditor(false)
-    requestAnimationFrame(() => {
-      setMakeRuleSnap(pending.snap)
-      setLastEditedRowId(pending.rowId)
-      pendingRuleSnapRef.current = null
-    })
-
-    const queueSize = editQueueRef.current.size
-    if (queueSize > 0) {
-      setWatchingEditCount(queueSize)
-      setRulePromptState('watching')
+    if (editingRowIdRef.current === fromRowId) return
+    pendingRuleSnapRef.current = null
+    if (editQueueRef.current.size > 0) {
       if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
       suggestionTimerRef.current = setTimeout(fireSuggestions, SUGGEST_DELAY_MS)
     }
@@ -1290,9 +1133,6 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // ── Inline edit ──────────────────────────────────────────────────
   function startEdit(id: string, field: EditableField) {
     if (selectMode || savingIds.has(id) || deletingIds.has(id)) return
-    // Clear any lingering "make rule" popup from a previous row
-    setMakeRuleSnap(null)
-    setShowMakeRuleEditor(false)
     pendingRuleSnapRef.current = null
     setEditingRowId(id)
     setEditingRowInitialField(field)
@@ -1592,7 +1432,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
 
       if (field === 'payeeId') {
         return (
-          <td key={field} className="px-3 py-0.5 min-w-[140px]">
+          <td key={field} className="px-3 py-0.5 min-w-[280px]">
             <PayeeCell
               value={row.payeeId ?? null}
               payees={payees}
@@ -1683,14 +1523,6 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="space-y-3" data-testid="transaction-table">
-      {/* Rule prompt — watching / analysing / ready / error */}
-      <RulePromptPanel
-        state={rulePromptState}
-        editCount={watchingEditCount}
-        onAnalyseNow={fireSuggestions}
-        onDismiss={() => setRulePromptState('idle')}
-      />
-
       {/* Toolbar */}
       <style>{`
         @keyframes bulkDeletePulse {
@@ -2133,7 +1965,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                 <td className="px-3 py-1 text-xs text-muted-foreground">—</td>
 
                 {/* Payee */}
-                <td className="px-3 py-1 min-w-[140px]">
+                <td className="px-3 py-1 min-w-[280px]">
                   <PayeeCell
                     value={newRow.payeeId || null}
                     payees={payees}
@@ -2280,66 +2112,10 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                           Done
                         </button>
                       </td>
-                    ) : makeRuleSnap && lastEditedRowId === row.id && !showMakeRuleEditor ? (
-                      <td className="px-2 py-0.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[11px]">💡</span>
-                          <button
-                            onClick={() => setShowMakeRuleEditor(true)}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#534AB7] text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
-                          >
-                            Make rule
-                          </button>
-                          <button
-                            onClick={() => { setMakeRuleSnap(null) }}
-                            className="text-muted-foreground hover:text-foreground leading-none text-[11px] px-0.5"
-                            aria-label="Dismiss"
-                          >✕</button>
-                        </div>
-                      </td>
                     ) : (
                       <td />
                     )}
                   </tr>
-                  {/* Rule editor sub-row — appears below the edited row */}
-                  {makeRuleSnap && lastEditedRowId === row.id && showMakeRuleEditor && (
-                    <tr className="border-t border-[#534AB7]/15 bg-[#EEEDFE]/20">
-                      <td colSpan={13} className="px-4 py-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-[11px]">💡</span>
-                          <span className="text-xs font-medium text-[#3C3489]">New rule from this change</span>
-                          <button
-                            onClick={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
-                            className="ml-auto text-muted-foreground hover:text-foreground leading-none text-sm"
-                            aria-label="Dismiss"
-                          >✕</button>
-                        </div>
-                        <RuleEditor
-                          projects={projects}
-                          payees={payees}
-                          accounts={accounts}
-                          categoryGroups={categoryGroups}
-                          editingRule={{
-                            id: '',
-                            name: '',
-                            priority: 50,
-                            categoryName: makeRuleSnap.categoryName ?? '',
-                            categoryId: makeRuleSnap.categoryId ?? null,
-                            categoryRef: null,
-                            payeeId: null,
-                            payee: makeRuleSnap.payeeName ? { id: '', name: makeRuleSnap.payeeName } : null,
-                            projectId: null,
-                            workspace: null,
-                            conditions: { all: [{ field: 'description', operator: 'contains', value: makeRuleSnap.description }] },
-                            isActive: true,
-                          }}
-                          onSave={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
-                          onCancel={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
-                          showSaveAndApply={true}
-                        />
-                      </td>
-                    </tr>
-                  )}
                   </React.Fragment>
                 )
               })
