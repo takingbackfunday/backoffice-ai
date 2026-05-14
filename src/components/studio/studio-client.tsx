@@ -1055,7 +1055,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                   return (
                     <div
                       onClick={() => setExpandedClient(isExpanded ? null : client.id)}
-                      style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto auto', alignItems: 'center', gap: 16, padding: '8px 14px', cursor: 'pointer', transition: 'background 0.15s' }}
+                      style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr auto' : '1fr auto auto auto auto auto auto', alignItems: 'center', gap: 16, padding: '8px 14px', cursor: 'pointer', transition: 'background 0.15s' }}
                       onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
                       onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                     >
@@ -1070,45 +1070,47 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                         </div>
                       </div>
 
-                      {/* Quotes accepted */}
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Quotes accepted</p>
-                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: client.acceptedQuotes.length > 0 ? '#534AB7' : '#aaa' }}>
-                          {client.acceptedQuotes.length || '—'}
-                        </p>
-                      </div>
+                      {!clientFilter && <>
+                        {/* Quotes accepted */}
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Quotes accepted</p>
+                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: client.acceptedQuotes.length > 0 ? '#534AB7' : '#aaa' }}>
+                            {client.acceptedQuotes.length || '—'}
+                          </p>
+                        </div>
 
-                      {/* Outstanding */}
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Outstanding</p>
-                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: client.outstanding > 0 ? '#a16207' : '#aaa' }}>
-                          {client.outstanding > 0 ? fmt(client.outstanding, client.currency) : '—'}
-                        </p>
-                      </div>
+                        {/* Outstanding */}
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Outstanding</p>
+                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: client.outstanding > 0 ? '#a16207' : '#aaa' }}>
+                            {client.outstanding > 0 ? fmt(client.outstanding, client.currency) : '—'}
+                          </p>
+                        </div>
 
-                      {/* Overdue */}
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Overdue</p>
-                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientOverdueTotal > 0 ? '#dc2626' : '#aaa' }}>
-                          {clientOverdueTotal > 0 ? fmt(clientOverdueTotal, client.currency) : '—'}
-                        </p>
-                      </div>
+                        {/* Overdue */}
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Overdue</p>
+                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientOverdueTotal > 0 ? '#dc2626' : '#aaa' }}>
+                            {clientOverdueTotal > 0 ? fmt(clientOverdueTotal, client.currency) : '—'}
+                          </p>
+                        </div>
 
-                      {/* Collected past 30 days */}
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected Past 30 Days</p>
-                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedPast30 > 0 ? '#15803d' : '#aaa' }}>
-                          {clientCollectedPast30 > 0 ? fmt(clientCollectedPast30, client.currency) : '—'}
-                        </p>
-                      </div>
+                        {/* Collected past 30 days */}
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected Past 30 Days</p>
+                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedPast30 > 0 ? '#15803d' : '#aaa' }}>
+                            {clientCollectedPast30 > 0 ? fmt(clientCollectedPast30, client.currency) : '—'}
+                          </p>
+                        </div>
 
-                      {/* Collected YTD */}
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected since Jan 1</p>
-                        <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedYtd > 0 ? '#15803d' : '#aaa' }}>
-                          {clientCollectedYtd > 0 ? fmt(clientCollectedYtd, client.currency) : '—'}
-                        </p>
-                      </div>
+                        {/* Collected YTD */}
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected since Jan 1</p>
+                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedYtd > 0 ? '#15803d' : '#aaa' }}>
+                            {clientCollectedYtd > 0 ? fmt(clientCollectedYtd, client.currency) : '—'}
+                          </p>
+                        </div>
+                      </>}
 
                       {/* Chevron */}
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#bbb', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
@@ -1127,11 +1129,21 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
                         {/* Invoices */}
-                        {clientInvoices.length > 0 && (
+                        {(() => {
+                          const visibleInvoices = clientFilter === 'overdue'
+                            ? clientInvoices.filter(i => getDisplayStatus(i) === 'OVERDUE')
+                            : clientFilter === 'unsent'
+                            ? clientInvoices.filter(i => i.status === 'DRAFT')
+                            : clientFilter === 'outstanding'
+                            ? clientInvoices.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' || s === 'OVERDUE' })
+                            : clientFilter === 'collected'
+                            ? clientInvoices.filter(i => getDisplayStatus(i) === 'PAID')
+                            : clientInvoices
+                          return visibleInvoices.length > 0 ? (
                           <div>
-                            <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Invoices</p>
+                            {!clientFilter && <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Invoices</p>}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {clientInvoices.map(inv => {
+                              {visibleInvoices.map(inv => {
                                 const ds = getDisplayStatus(inv)
                                 const balance = inv.total - inv.paid
                                 const days = daysUntil(inv.dueDate)
@@ -1158,14 +1170,50 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                               })}
                             </div>
                           </div>
-                        )}
+                          ) : null
+                        })()}
+
+                        {/* Sent quotes (awaiting acceptance) */}
+                        {(() => {
+                          if (clientFilter && clientFilter !== 'awaiting-quotes') return null
+                          const visibleSentQuotes = clientFilter === 'awaiting-quotes' ? client.sentQuotes : []
+                          return visibleSentQuotes.length > 0 ? (
+                            <div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {visibleSentQuotes.map(q => (
+                                  <Link
+                                    key={q.id}
+                                    href={`/projects/${client.slug}/quotes/${q.id}`}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: '#fff', border: '1px solid #e8e6df', textDecoration: 'none', transition: 'border-color 0.15s' }}
+                                    onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8'}
+                                    onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df'}
+                                  >
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', flexShrink: 0 }}>{q.quoteNumber}</span>
+                                    {q.jobName && <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', flexShrink: 0, whiteSpace: 'nowrap' }}>{q.jobName}</span>}
+                                    <span style={{ fontSize: 12, color: '#555', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{q.title}</span>
+                                    {q.totalQuoted != null && (
+                                      <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: '#1a1a1a', flexShrink: 0 }}>{fmt(q.totalQuoted, q.currency)}</span>
+                                    )}
+                                    <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: '#dbeafe', color: '#1e40af', flexShrink: 0 }}>Sent</span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null
+                        })()}
 
                         {/* Accepted quotes */}
-                        {client.acceptedQuotes.length > 0 && (
+                        {(() => {
+                          if (clientFilter && clientFilter !== 'uninvoiced-quotes' && clientFilter !== 'awaiting-quotes') return null
+                          const visibleAcceptedQuotes = clientFilter === 'uninvoiced-quotes'
+                            ? client.acceptedQuotes.filter(q => !q.hasInvoice)
+                            : clientFilter ? []
+                            : client.acceptedQuotes
+                          return visibleAcceptedQuotes.length > 0 ? (
                           <div>
-                            <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Accepted quotes</p>
+                            {!clientFilter && <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Accepted quotes</p>}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {client.acceptedQuotes.map(q => (
+                              {visibleAcceptedQuotes.map(q => (
                                 <Link
                                   key={q.id}
                                   href={`/projects/${client.slug}/quotes/${q.id}`}
@@ -1184,9 +1232,10 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                               ))}
                             </div>
                           </div>
-                        )}
+                          ) : null
+                        })()}
 
-                        {clientInvoices.length === 0 && client.acceptedQuotes.length === 0 && (
+                        {clientInvoices.length === 0 && client.acceptedQuotes.length === 0 && !clientFilter && (
                           <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No invoices or quotes yet</p>
                         )}
 

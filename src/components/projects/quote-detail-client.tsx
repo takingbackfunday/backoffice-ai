@@ -140,6 +140,11 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
     if (result) router.refresh()
   }
 
+  async function handleMarkSent() {
+    const result = await action('send', 'POST', { markOnly: true })
+    if (result) router.refresh()
+  }
+
   async function handleAccept() {
     const result = await action('accept')
     if (result) router.refresh()
@@ -220,6 +225,14 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
               >
                 Edit
               </Link>
+              <button
+                onClick={handleMarkSent}
+                disabled={loading === 'send'}
+                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
+              >
+                {loading === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Mark as sent
+              </button>
               <button
                 onClick={handleSend}
                 disabled={loading === 'send'}

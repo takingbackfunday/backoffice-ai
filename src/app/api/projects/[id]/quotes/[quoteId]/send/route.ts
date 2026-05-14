@@ -14,6 +14,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     const body = await request.json().catch(() => ({}))
     const message: string | undefined = body.message
+    const markOnly: boolean = body.markOnly === true
 
     const quote = await prisma.quote.findFirst({
       where: { id: quoteId, clientProfile: { workspace: { id, userId } } },
@@ -27,6 +28,14 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!quote) return notFound('Quote not found')
     if (!['DRAFT', 'REJECTED'].includes(quote.status)) {
       return badRequest('Quote cannot be sent in its current status')
+    }
+
+    if (markOnly) {
+      const updated = await prisma.quote.update({
+        where: { id: quoteId },
+        data: { status: 'SENT', sentAt: new Date() },
+      })
+      return ok({ ...JSON.parse(JSON.stringify(updated)), emailSent: false })
     }
 
     const email = quote.clientProfile.email
