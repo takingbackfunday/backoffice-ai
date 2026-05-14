@@ -402,7 +402,7 @@ function PayeeCell({
   }, [draft, payees])
 
   return (
-    <div ref={wrapRef} className="relative w-full min-w-[280px]">
+    <div ref={wrapRef} className="relative w-full min-w-[140px]">
       <input
         ref={inputRef}
         value={draft}
@@ -1455,7 +1455,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
 
       if (field === 'payeeId') {
         return (
-          <td key={field} className="px-3 py-0.5 min-w-[280px]">
+          <td key={field} className="px-3 py-0.5 min-w-[140px]">
             <PayeeCell
               value={row.payeeId ?? null}
               payees={payees}
@@ -1862,7 +1862,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                 onFilterChange={(v) => setFilters((f) => ({ ...f, payeeName: v }))}
                 filterType="text"
                 sortable={false}
-                className="min-w-[280px]"
+                className="min-w-[140px]"
               />
 
               {/* Category */}
@@ -1989,7 +1989,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                 <td className="px-3 py-1 text-xs text-muted-foreground">—</td>
 
                 {/* Payee */}
-                <td className="px-3 py-1 min-w-[280px]">
+                <td className="px-3 py-1 min-w-[140px]">
                   <PayeeCell
                     value={newRow.payeeId || null}
                     payees={payees}
