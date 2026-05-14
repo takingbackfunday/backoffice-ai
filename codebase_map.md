@@ -330,7 +330,9 @@ Routes using this pattern: `agent/ask`, `agent/rules`, `invoices/ai-assist`, `es
 
 **Take notice — filter behaviour:** clicking a notice filters the client card list in-place and expands all matching cards (same pattern as KPI bar filters). `clientFilter` state accepts `'outstanding' | 'overdue' | 'unsent' | 'collected' | 'awaiting-quotes' | 'uninvoiced-quotes'`. Notices that are informational-only (payment matches, recent payments) have no `onClick`. Clicking an invoice row in a client card navigates directly to the invoice detail page — there is no preview modal.
 
-**Filtered card appearance:** when `clientFilter` is active, card headers collapse to client name + chevron only (stat columns hidden). The expanded body shows only the items relevant to the active filter: `overdue` → overdue invoices; `unsent` → draft invoices; `outstanding` → sent/partial/overdue invoices; `collected` → paid invoices; `awaiting-quotes` → sent quotes; `uninvoiced-quotes` → accepted quotes without an invoice. Section labels ("Invoices", "Accepted quotes") are also hidden in filter mode.
+**Filtered card appearance:** when `clientFilter` is active, card headers collapse to client name + chevron only (stat columns hidden). The expanded body shows only the items relevant to the active filter: `overdue` → overdue invoices; `unsent` → draft invoices; `outstanding` → sent/partial invoices only (overdue excluded); `collected` → paid invoices; `awaiting-quotes` → sent quotes; `uninvoiced-quotes` → accepted quotes without an invoice. Section labels ("Invoices", "Accepted quotes") are also hidden in filter mode.
+
+**Outstanding vs Overdue — mutually exclusive amounts:** `outstanding` covers SENT + PARTIAL invoices only; `overdue` covers OVERDUE invoices only. An overdue invoice's amount never appears in the Outstanding KPI, client card Outstanding column, or outstanding filter — only in Overdue. Both KPI totals and per-client card figures are derived from invoice statuses client-side, not from the server-computed `client.outstanding` field (which includes overdue).
 
 ---
 
