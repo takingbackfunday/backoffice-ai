@@ -811,7 +811,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               sub={outstandingInvs.length > 0 ? `${outstandingInvs.length} invoice${outstandingInvs.length !== 1 ? 's' : ''}` : ''}
               color={outstandingTotal > 0 ? 'amber' : 'neutral'}
               active={clientFilter === 'outstanding'}
-              onClick={outstandingTotal > 0 ? () => handleKpiClick('outstanding', c => c.outstanding > 0) : undefined}
+              onClick={outstandingTotal > 0 ? () => handleKpiClick('outstanding', c => flat.some(i => i.clientId === c.id && (getDisplayStatus(i) === 'SENT' || getDisplayStatus(i) === 'PARTIAL'))) : undefined}
             />
             <KpiCard
               label="Invoices Overdue"
@@ -1048,6 +1048,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                 {/* Card header — always visible */}
                 {(() => {
                   const clientOverdueTotal = clientInvoices.filter(i => getDisplayStatus(i) === 'OVERDUE').reduce((s, i) => s + (i.total - i.paid), 0)
+                  const clientOutstandingTotal = clientInvoices.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' }).reduce((s, i) => s + (i.total - i.paid), 0)
                   const now = new Date()
                   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
                   const startOfYear = new Date(now.getFullYear(), 0, 1)
@@ -1083,8 +1084,8 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                         {/* Outstanding */}
                         <div style={{ textAlign: 'right' }}>
                           <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Outstanding</p>
-                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: client.outstanding > 0 ? '#a16207' : '#aaa' }}>
-                            {client.outstanding > 0 ? fmt(client.outstanding, client.currency) : '—'}
+                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientOutstandingTotal > 0 ? '#a16207' : '#aaa' }}>
+                            {clientOutstandingTotal > 0 ? fmt(clientOutstandingTotal, client.currency) : '—'}
                           </p>
                         </div>
 
