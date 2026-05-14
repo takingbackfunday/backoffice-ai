@@ -383,6 +383,7 @@ interface ClientWithJobs extends ClientWithSlug {
 
 interface LogTimeModalProps {
   clients: ClientWithJobs[]
+  initialClientId?: string
   onClose: () => void
 }
 
@@ -396,8 +397,8 @@ const emptyTimeForm = () => ({
   jobId: '',
 })
 
-export function LogTimeModal({ clients, onClose }: LogTimeModalProps) {
-  const [clientId, setClientId] = useState(clients.length === 1 ? clients[0].id : '')
+export function LogTimeModal({ clients, initialClientId, onClose }: LogTimeModalProps) {
+  const [clientId, setClientId] = useState(initialClientId ?? (clients.length === 1 ? clients[0].id : ''))
   const [form, setForm] = useState(emptyTimeForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)

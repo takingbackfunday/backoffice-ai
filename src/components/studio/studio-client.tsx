@@ -888,6 +888,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [showLogTimeModal, setShowLogTimeModal] = useState(false)
   const [showNewWorkOrderModal, setShowNewWorkOrderModal] = useState(false)
   const [showIntakeBillModal, setShowIntakeBillModal] = useState(false)
+  const [preselectedClientId, setPreselectedClientId] = useState<string | null>(null)
   const [suggestionTxCount] = useState(pendingSuggestions)
   const [pendingMarkSent, setPendingMarkSent] = useState<PendingMarkSentItem[]>([])
   const [markSentTarget, setMarkSentTarget] = useState<PendingMarkSentItem | null>(null)
@@ -1473,10 +1474,10 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                           <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Quick actions</p>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                             {[
-                              { label: 'Draft invoice', action: () => setShowInvoiceModal(true) },
-                              { label: 'New estimate', action: () => setShowNewEstimateModal(true) },
-                              { label: 'New quote', action: () => setShowNewQuoteModal(true) },
-                              { label: 'Log time', action: () => setShowLogTimeModal(true) },
+                              { label: 'Draft invoice', action: () => { setPreselectedClientId(client.id); setShowInvoiceModal(true) } },
+                              { label: 'New estimate', action: () => router.push(`/projects/${client.slug}/estimates/new`) },
+                              { label: 'New quote', action: () => router.push(`/projects/${client.slug}/quotes/new`) },
+                              { label: 'Log time', action: () => { setPreselectedClientId(client.id); setShowLogTimeModal(true) } },
                               { label: 'Add receipt', action: () => router.push(`/receipts?upload=1&workspaceId=${client.id}`) },
                               { label: 'View project →', action: () => router.push(`/projects/${client.slug}`) },
                             ].map(item => (
@@ -1522,7 +1523,8 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           paymentMethods={paymentMethods}
           invoiceDefaults={invoiceDefaults}
           hasTransactions={hasTransactions}
-          onClose={() => setShowInvoiceModal(false)}
+          initialClientId={preselectedClientId ?? undefined}
+          onClose={() => { setShowInvoiceModal(false); setPreselectedClientId(null) }}
         />
       )}
       {showNewClientModal && (
@@ -1553,7 +1555,8 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       {showLogTimeModal && (
         <LogTimeModal
           clients={clients.map(c => ({ id: c.id, name: c.name, slug: c.slug, jobs: c.jobs }))}
-          onClose={() => setShowLogTimeModal(false)}
+          initialClientId={preselectedClientId ?? undefined}
+          onClose={() => { setShowLogTimeModal(false); setPreselectedClientId(null) }}
         />
       )}
       {showNewWorkOrderModal && (
