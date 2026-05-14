@@ -177,12 +177,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
     quote.validUntil ? quote.validUntil.slice(0, 10) : ''
   )
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      quote.sections.map(s => [
-        s.id,
-        s.items.length > 1 || (s.items.length === 1 && s.items[0].description !== s.name),
-      ])
-    )
+    Object.fromEntries(quote.sections.map(s => [s.id, true]))
   )
   const [saving, setSaving] = useState(false)
 
@@ -192,12 +187,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
   useEffect(() => {
     if (prevIsShellRef.current && !estimateIsShell) {
       setSections(quote.sections)
-      setExpandedSections(Object.fromEntries(
-        quote.sections.map(s => [
-          s.id,
-          s.items.length > 1 || (s.items.length === 1 && s.items[0].description !== s.name),
-        ])
-      ))
+      setExpandedSections(Object.fromEntries(quote.sections.map(s => [s.id, true])))
     }
     prevIsShellRef.current = estimateIsShell
   }, [estimateIsShell, quote.sections])
