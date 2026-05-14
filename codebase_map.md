@@ -182,7 +182,7 @@ Newly created entities are appended to the component's local state list — no p
 | Quote generator (side-by-side) | `src/components/projects/quote-generator.tsx` + `src/stores/quote-generator-store.ts` |
 | Quote detail | `src/components/projects/quote-detail-client.tsx` |
 | Quote CRUD | `GET/POST /api/projects/[id]/quotes` |
-| Quote actions | `send`, `accept`, `revise`, `amend`, `create-invoice`, `fulfillment`, `pdf` — all under `…/quotes/[quoteId]/` |
+| Quote actions | `send`, `accept`, `revise`, `amend`, `create-invoice`, `fulfillment`, `pdf`, `cancel` (SENT/ACCEPTED→REJECTED, blocked if invoices exist), `delete` (DRAFT only) — all under `…/quotes/[quoteId]/` |
 | Quote PDF | `GET /api/projects/[id]/quotes/[quoteId]/pdf` → `src/lib/pdf/quote-pdf.tsx` |
 | Send quote by email | `src/components/projects/send-quote-modal.tsx` |
 | Margin rules (settings) | `src/components/settings/margin-rules-editor.tsx` → `GET/POST /api/margin-rules`, `DELETE /api/margin-rules/[id]` |
@@ -324,9 +324,11 @@ Routes using this pattern: `agent/ask`, `agent/rules`, `invoices/ai-assist`, `es
 |---|---|
 | Page (server, data fetch) | `src/app/studio/page.tsx` |
 | Client component | `src/components/studio/studio-client.tsx` |
-| Invoice modal | `src/components/studio/studio-invoice-modal.tsx` |
+| Draft invoice creation modal | `src/components/studio/studio-invoice-modal.tsx` |
 | Action modals | `src/components/studio/studio-action-modals.tsx` |
 | Mark sent modal | `src/components/studio/mark-sent-modal.tsx` |
+
+**Take notice — filter behaviour:** clicking a notice filters the client card list in-place and expands all matching cards (same pattern as KPI bar filters). `clientFilter` state accepts `'outstanding' | 'overdue' | 'unsent' | 'collected' | 'awaiting-quotes' | 'uninvoiced-quotes'`. Notices that are informational-only (payment matches, recent payments) have no `onClick`. Clicking an invoice row in a client card navigates directly to the invoice detail page — there is no preview modal.
 
 ---
 
