@@ -150,6 +150,12 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
     if (result) router.push(`/projects/${projectSlug}/quotes/${result.id}/generate`)
   }
 
+  async function handleCancel() {
+    if (!confirm('Mark this quote as cancelled (client withdrew)? This cannot be undone.')) return
+    const result = await action('cancel')
+    if (result) router.refresh()
+  }
+
   async function handleDelete() {
     if (!confirm('Delete this draft quote? This cannot be undone.')) return
     setLoading('delete')
@@ -235,6 +241,14 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
           {quote.status === 'SENT' && (
             <>
               <button
+                onClick={handleCancel}
+                disabled={loading === 'cancel'}
+                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                {loading === 'cancel' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                Cancel
+              </button>
+              <button
                 onClick={handleRevise}
                 disabled={loading === 'revise'}
                 className="text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
@@ -252,12 +266,24 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
             </>
           )}
           {(quote.status === 'ACCEPTED' || quote.status === 'AMENDED') && (
-            <button
-              onClick={() => setShowCreateInvoice(true)}
-              className="flex items-center gap-1 text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Plus className="w-3.5 h-3.5" /> Create Invoice
-            </button>
+            <>
+              {quote._count?.invoices === 0 && (
+                <button
+                  onClick={handleCancel}
+                  disabled={loading === 'cancel'}
+                  className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {loading === 'cancel' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                  Cancel
+                </button>
+              )}
+              <button
+                onClick={() => setShowCreateInvoice(true)}
+                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="w-3.5 h-3.5" /> Create Invoice
+              </button>
+            </>
           )}
           <button
             type="button"
