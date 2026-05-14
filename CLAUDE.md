@@ -117,6 +117,9 @@ DIRECT_URL="postgresql://x:x@localhost/x" pnpm build
 ### Fly.io — GitHub Actions deploy token
 Store `FLY_API_TOKEN` as a **repository secret** (not environment secret) at `Settings → Secrets → Actions`.
 
+### Fly.io — Docker uses pnpm pinned to 10.32.1
+The `Dockerfile` uses `corepack prepare pnpm@10.32.1 --activate`. Do not change this to `@latest` — pnpm v11 crashes on Node 20 with `ERR_UNKNOWN_BUILTIN_MODULE`. When upgrading pnpm locally, update the pin in the Dockerfile to match.
+
 ### Uploadthing maxFileSize must be power-of-2
 Valid: `"1MB"`, `"2MB"`, `"4MB"`, `"8MB"`, `"16MB"`. `"10MB"` causes a TypeScript build error.
 
