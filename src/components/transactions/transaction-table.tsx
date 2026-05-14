@@ -303,6 +303,14 @@ function CategoryCell({
 
 const SUGGEST_DELAY_MS = 30000
 
+// ── Inline "Make rule from this change" — row-level ──────────────
+interface MakeRuleSnapType {
+  description: string
+  payeeName: string | null
+  categoryId: string | null
+  categoryName: string | null
+}
+
 // ── Inline payee combobox (type to filter or create new) ──────────
 function PayeeCell({
   value,
@@ -914,7 +922,12 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // ── Edit queue for deferred rule suggestions ──────────────────────
   const editQueueRef = useRef<Map<string, TransactionWithRelations>>(new Map())
   const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingRuleSnapRef = useRef<{ rowId: string; snap: { description: string; payeeName: string | null; categoryId: string | null; categoryName: string | null } } | null>(null)
+
+  // ── "Make rule from this change" ─────────────────────────────────
+  const [makeRuleSnap, setMakeRuleSnap] = useState<MakeRuleSnapType | null>(null)
+  const [showMakeRuleEditor, setShowMakeRuleEditor] = useState(false)
+  const [lastEditedRowId, setLastEditedRowId] = useState<string | null>(null)
+  const pendingRuleSnapRef = useRef<{ rowId: string; snap: MakeRuleSnapType } | null>(null)
 
   // ── Toolbar modals ────────────────────────────────────────────────
   const [showNewRuleModal, setShowNewRuleModal] = useState(false)
@@ -968,7 +981,15 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
     const pending = pendingRuleSnapRef.current
     if (!pending || pending.rowId !== fromRowId) return
     if (editingRowIdRef.current === fromRowId) return
-    pendingRuleSnapRef.current = null
+
+    setMakeRuleSnap(null)
+    setShowMakeRuleEditor(false)
+    requestAnimationFrame(() => {
+      setMakeRuleSnap(pending.snap)
+      setLastEditedRowId(pending.rowId)
+      pendingRuleSnapRef.current = null
+    })
+
     if (editQueueRef.current.size > 0) {
       if (suggestionTimerRef.current) clearTimeout(suggestionTimerRef.current)
       suggestionTimerRef.current = setTimeout(fireSuggestions, SUGGEST_DELAY_MS)
@@ -1133,6 +1154,8 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   // ── Inline edit ──────────────────────────────────────────────────
   function startEdit(id: string, field: EditableField) {
     if (selectMode || savingIds.has(id) || deletingIds.has(id)) return
+    setMakeRuleSnap(null)
+    setShowMakeRuleEditor(false)
     pendingRuleSnapRef.current = null
     setEditingRowId(id)
     setEditingRowInitialField(field)
@@ -1839,6 +1862,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                 onFilterChange={(v) => setFilters((f) => ({ ...f, payeeName: v }))}
                 filterType="text"
                 sortable={false}
+                className="min-w-[280px]"
               />
 
               {/* Category */}
@@ -2112,10 +2136,66 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                           Done
                         </button>
                       </td>
+                    ) : makeRuleSnap && lastEditedRowId === row.id && !showMakeRuleEditor ? (
+                      <td className="px-2 py-0.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[11px]">💡</span>
+                          <button
+                            onClick={() => setShowMakeRuleEditor(true)}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#534AB7] text-white font-medium hover:bg-[#4338CA] transition-colors whitespace-nowrap"
+                          >
+                            Make rule
+                          </button>
+                          <button
+                            onClick={() => { setMakeRuleSnap(null) }}
+                            className="text-muted-foreground hover:text-foreground leading-none text-[11px] px-0.5"
+                            aria-label="Dismiss"
+                          >✕</button>
+                        </div>
+                      </td>
                     ) : (
                       <td />
                     )}
                   </tr>
+                  {/* Rule editor sub-row — appears below the edited row */}
+                  {makeRuleSnap && lastEditedRowId === row.id && showMakeRuleEditor && (
+                    <tr className="border-t border-[#534AB7]/15 bg-[#EEEDFE]/20">
+                      <td colSpan={13} className="px-4 py-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[11px]">💡</span>
+                          <span className="text-xs font-medium text-[#3C3489]">New rule from this change</span>
+                          <button
+                            onClick={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
+                            className="ml-auto text-muted-foreground hover:text-foreground leading-none text-sm"
+                            aria-label="Dismiss"
+                          >✕</button>
+                        </div>
+                        <RuleEditor
+                          projects={projects}
+                          payees={payees}
+                          accounts={accounts}
+                          categoryGroups={categoryGroups}
+                          editingRule={{
+                            id: '',
+                            name: '',
+                            priority: 50,
+                            categoryName: makeRuleSnap.categoryName ?? '',
+                            categoryId: makeRuleSnap.categoryId ?? null,
+                            categoryRef: null,
+                            payeeId: null,
+                            payee: makeRuleSnap.payeeName ? { id: '', name: makeRuleSnap.payeeName } : null,
+                            projectId: null,
+                            workspace: null,
+                            conditions: { all: [{ field: 'description', operator: 'contains', value: makeRuleSnap.description }] },
+                            isActive: true,
+                          }}
+                          onSave={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
+                          onCancel={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
+                          showSaveAndApply={true}
+                        />
+                      </td>
+                    </tr>
+                  )}
                   </React.Fragment>
                 )
               })
