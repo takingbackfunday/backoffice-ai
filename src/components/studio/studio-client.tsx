@@ -877,7 +877,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [kpis, setKpis] = useState(initialKpis)
   const [expandedClient, setExpandedClient] = useState<string | null>(null)
   const [clientSearch, setClientSearch] = useState('')
-  const [clientFilter, setClientFilter] = useState<'outstanding' | 'overdue' | 'unsent' | 'collected' | null>(null)
+  const [clientFilter, setClientFilter] = useState<'outstanding' | 'overdue' | 'unsent' | 'collected' | 'awaiting-quotes' | 'uninvoiced-quotes' | null>(null)
   const [creatingOverhead, setCreatingOverhead] = useState(false)
   const cardsRef = useRef<HTMLDivElement>(null)
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
@@ -977,7 +977,15 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       detail: awaitingAcceptance.length === 1
         ? `${awaitingAcceptance[0].quoteNumber} sent to ${awaitingAcceptance[0].clientName}`
         : `Across ${new Set(awaitingAcceptance.map(q => q.clientSlug)).size} client${new Set(awaitingAcceptance.map(q => q.clientSlug)).size !== 1 ? 's' : ''}`,
-      onClick: () => router.push(`/projects/${awaitingAcceptance[0].clientSlug}/quotes`),
+      onClick: () => {
+        const next: typeof clientFilter = clientFilter === 'awaiting-quotes' ? null : 'awaiting-quotes'
+        setClientFilter(next)
+        if (next) {
+          const first = clients.find(c => c.sentQuotes.length > 0)
+          if (first) setExpandedClient(first.id)
+        } else setExpandedClient(null)
+        setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+      },
     })
 
     // Quote: accepted but not yet invoiced
@@ -988,7 +996,15 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       detail: uninvoiced.length === 1
         ? `${uninvoiced[0].quoteNumber} for ${uninvoiced[0].clientName}`
         : `${fmt(uninvoiced.reduce((s, q) => s + (q.totalQuoted ?? 0), 0))} ready to bill`,
-      onClick: () => router.push(`/projects/${uninvoiced[0].clientSlug}/quotes`),
+      onClick: () => {
+        const next: typeof clientFilter = clientFilter === 'uninvoiced-quotes' ? null : 'uninvoiced-quotes'
+        setClientFilter(next)
+        if (next) {
+          const first = clients.find(c => c.acceptedQuotes.some(q => !q.hasInvoice))
+          if (first) setExpandedClient(first.id)
+        } else setExpandedClient(null)
+        setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+      },
     })
 
     // PDF downloaded but not yet marked as sent
@@ -1189,24 +1205,28 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                 ...(pendingSuggestions > 0 ? [{ key: 'sug', dot: '#3b82f6', label: `${suggestionTxCount} payment match${suggestionTxCount !== 1 ? 'es' : ''} to review`, detail: 'Open the relevant invoice to accept or dismiss', onClick: undefined as (() => void) | undefined }] : []),
                 ...(recentPaymentsCount > 0 ? [{ key: 'pay', dot: '#16a34a', label: `${recentPaymentsCount} payment${recentPaymentsCount !== 1 ? 's' : ''} in the last 7 days`, detail: 'Check client cards below', onClick: undefined as (() => void) | undefined }] : []),
               ].map((item, i, arr) => {
-                const isActive = (item.label.startsWith('Invoice — ') && (
-                  (item.label.includes('overdue') && clientFilter === 'overdue') ||
-                  (item.label.includes('unsent') && clientFilter === 'unsent')
-                ))
+                const isActive = (
+                  (item.label.startsWith('Invoice — ') && (
+                    (item.label.includes('overdue') && clientFilter === 'overdue') ||
+                    (item.label.includes('unsent') && clientFilter === 'unsent')
+                  )) ||
+                  (item.label.startsWith('Quote — ') && (
+                    (item.label.includes('awaiting') && clientFilter === 'awaiting-quotes') ||
+                    (item.label.includes('not yet invoiced') && clientFilter === 'uninvoiced-quotes')
+                  ))
+                )
                 return (
                   <div
                     key={item.key}
                     onClick={item.onClick}
-                    style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', borderBottom: i < arr.length - 1 ? '1px solid #f5f4f0' : 'none', cursor: item.onClick ? 'pointer' : 'default', background: isActive ? '#f8f7fd' : 'transparent', transition: 'background 0.1s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 10px', borderBottom: i < arr.length - 1 ? '1px solid #f5f4f0' : 'none', cursor: item.onClick ? 'pointer' : 'default', background: isActive ? '#f8f7fd' : 'transparent', transition: 'background 0.1s' }}
                     onMouseEnter={e => { if (item.onClick) (e.currentTarget as HTMLDivElement).style.background = isActive ? '#f0eef9' : '#fafaf8' }}
                     onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isActive ? '#f8f7fd' : 'transparent' }}
                   >
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.dot, flexShrink: 0, marginTop: 4 }} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <p style={{ fontSize: 12, fontWeight: 600, margin: 0, lineHeight: 1.3, color: '#1a1a1a' }}>{item.label}</p>
-                      <p style={{ fontSize: 11, color: '#888', margin: '1px 0 0', lineHeight: 1.3 }}>{item.detail}</p>
-                    </div>
-                    {item.onClick && <span style={{ fontSize: 10, color: '#bbb', flexShrink: 0, marginTop: 3 }}>→</span>}
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: item.dot, flexShrink: 0 }} />
+                    <p style={{ fontSize: 11, fontWeight: 600, margin: 0, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{item.label}</p>
+                    <p style={{ fontSize: 10, color: '#aaa', margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>{item.detail}</p>
+                    {item.onClick && <span style={{ fontSize: 10, color: '#bbb', flexShrink: 0 }}>→</span>}
                   </div>
                 )
               })}
@@ -1261,12 +1281,12 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               <button
                 onClick={() => setClientFilter(null)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600,
-                  color: clientFilter === 'overdue' ? '#dc2626' : clientFilter === 'collected' ? '#16a34a' : clientFilter === 'unsent' ? '#1d4ed8' : '#a16207',
-                  background: clientFilter === 'overdue' ? '#fef2f2' : clientFilter === 'collected' ? '#f0fdf4' : clientFilter === 'unsent' ? '#eff6ff' : '#fffbeb',
-                  border: `1px solid ${clientFilter === 'overdue' ? '#fecaca' : clientFilter === 'collected' ? '#bbf7d0' : clientFilter === 'unsent' ? '#bfdbfe' : '#fde68a'}`,
+                  color: clientFilter === 'overdue' ? '#dc2626' : clientFilter === 'collected' ? '#16a34a' : clientFilter === 'unsent' ? '#1d4ed8' : clientFilter === 'awaiting-quotes' ? '#7c3aed' : clientFilter === 'uninvoiced-quotes' ? '#047857' : '#a16207',
+                  background: clientFilter === 'overdue' ? '#fef2f2' : clientFilter === 'collected' ? '#f0fdf4' : clientFilter === 'unsent' ? '#eff6ff' : clientFilter === 'awaiting-quotes' ? '#f5f3ff' : clientFilter === 'uninvoiced-quotes' ? '#ecfdf5' : '#fffbeb',
+                  border: `1px solid ${clientFilter === 'overdue' ? '#fecaca' : clientFilter === 'collected' ? '#bbf7d0' : clientFilter === 'unsent' ? '#bfdbfe' : clientFilter === 'awaiting-quotes' ? '#ddd6fe' : clientFilter === 'uninvoiced-quotes' ? '#a7f3d0' : '#fde68a'}`,
                   borderRadius: 99, padding: '2px 8px', cursor: 'pointer' }}
               >
-                {clientFilter === 'overdue' ? 'Invoices Overdue' : clientFilter === 'collected' ? 'Invoices Collected' : clientFilter === 'unsent' ? 'Unsent drafts' : 'Invoices Outstanding'} ✕
+                {clientFilter === 'overdue' ? 'Invoices Overdue' : clientFilter === 'collected' ? 'Invoices Collected' : clientFilter === 'unsent' ? 'Unsent drafts' : clientFilter === 'awaiting-quotes' ? 'Quotes awaiting acceptance' : clientFilter === 'uninvoiced-quotes' ? 'Quotes not yet invoiced' : 'Invoices Outstanding'} ✕
               </button>
             )}
           </div>
@@ -1300,6 +1320,12 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
             if (clientFilter === 'collected') {
               const clientFlat = flat.filter(i => i.clientId === client.id)
               if (!clientFlat.some(i => getDisplayStatus(i) === 'PAID')) return false
+            }
+            if (clientFilter === 'awaiting-quotes') {
+              if (client.sentQuotes.length === 0) return false
+            }
+            if (clientFilter === 'uninvoiced-quotes') {
+              if (!client.acceptedQuotes.some(q => !q.hasInvoice)) return false
             }
             // Omni search
             if (!clientSearch.trim()) return true
