@@ -13,7 +13,6 @@ import { JobSelect } from './job-select'
 export interface EstimateItemInput {
   id: string // client-only key
   description: string
-  hours: string
   costRate: string
   quantity: string
   unit: string
@@ -54,7 +53,6 @@ function newItem(): EstimateItemInput {
   return {
     id: crypto.randomUUID(),
     description: '',
-    hours: '',
     costRate: '',
     quantity: '1',
     unit: 'hrs',
@@ -135,12 +133,9 @@ function reducer(state: EstimateState, action: EstimateAction): EstimateState {
 }
 
 function itemCost(item: EstimateItemInput): number {
-  const hours = parseFloat(item.hours) || 0
   const rate = parseFloat(item.costRate) || 0
   const qty = parseFloat(item.quantity) || 1
-  if (hours > 0 && rate > 0) return hours * rate * qty
-  if (rate > 0) return rate * qty
-  return 0
+  return rate * qty
 }
 
 /* ------------------------------------------------------------------ */
@@ -203,9 +198,8 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
     items: s.items.map(i => ({
       id: i.id,
       description: i.description,
-      hours: i.hours?.toString() ?? '',
       costRate: i.costRate?.toString() ?? '',
-      quantity: i.quantity.toString(),
+      quantity: (i.hours ?? i.quantity).toString(),
       unit: i.unit ?? 'hrs',
       tags: i.tags.join(', '),
       isOptional: i.isOptional,
@@ -251,7 +245,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
       sortOrder: si,
       items: s.items.map((i, ii) => ({
         description: i.description,
-        hours: parseFloat(i.hours) || null,
+        hours: null,
         costRate: parseFloat(i.costRate) || null,
         quantity: parseFloat(i.quantity) || 1,
         unit: i.unit || null,
@@ -361,9 +355,8 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
     const toItems = (items: AiItem[]) => (items ?? []).map((i: AiItem) => ({
       id: crypto.randomUUID(),
       description: i.description ?? '',
-      hours: i.hours?.toString() ?? '',
       costRate: i.costRate?.toString() ?? '',
-      quantity: (i.quantity ?? 1).toString(),
+      quantity: (i.hours ?? i.quantity ?? 1).toString(),
       unit: i.unit ?? 'hrs',
       tags: (i.tags ?? []).join(', '),
       isOptional: i.isOptional ?? false,
@@ -434,7 +427,6 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                 name: s.name,
                 items: s.items.map(i => ({
                   description: i.description,
-                  hours: parseFloat(i.hours) || null,
                   costRate: parseFloat(i.costRate) || null,
                   quantity: parseFloat(i.quantity) || 1,
                   unit: i.unit || null,
@@ -646,10 +638,8 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
               <table className="w-full text-sm border-collapse">
                 <colgroup>
                   <col />
-                  <col className="w-14" />
+                  <col className="w-28" />
                   <col className="w-18" />
-                  <col className="w-14" />
-                  <col className="w-14" />
                   <col className="w-24" />
                   <col className="w-36" />
                   <col className="w-5" />
@@ -657,10 +647,8 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                 <thead>
                   <tr className="border-b">
                     <th className="text-left px-4 py-1 text-xs font-normal text-muted-foreground">Description</th>
-                    <th className="text-right px-1 py-1 text-xs font-normal text-muted-foreground">Hrs</th>
+                    <th className="px-1 py-1 text-xs font-normal text-muted-foreground">Qty</th>
                     <th className="text-right px-1 py-1 text-xs font-normal text-muted-foreground">Rate</th>
-                    <th className="text-right px-1 py-1 text-xs font-normal text-muted-foreground">Qty</th>
-                    <th className="px-1 py-1 text-xs font-normal text-muted-foreground">Unit</th>
                     <th className="px-1 py-1 text-xs font-normal text-muted-foreground">Tags</th>
                     <th className="px-1 py-1 text-xs font-normal text-muted-foreground">Risk / Opts</th>
                     <th />
@@ -691,14 +679,24 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                         </div>
                       </td>
                       <td className="px-1 py-1.5 align-top">
-                        <input
-                          type="number"
-                          value={item.hours}
-                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'hours', value: e.target.value })}
-                          placeholder="—"
-                          disabled={isFinalized}
-                          className="text-sm text-right bg-transparent border-none outline-none w-full"
-                        />
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
+                            placeholder="1"
+                            disabled={isFinalized}
+                            className="text-sm text-right bg-transparent border-none outline-none w-10"
+                          />
+                          <input
+                            type="text"
+                            value={item.unit}
+                            onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
+                            placeholder="hrs"
+                            disabled={isFinalized}
+                            className="text-sm bg-transparent border-none outline-none w-10 text-muted-foreground"
+                          />
+                        </div>
                       </td>
                       <td className="px-1 py-1.5 align-top">
                         <input
@@ -708,26 +706,6 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                           placeholder="—"
                           disabled={isFinalized}
                           className="text-sm text-right bg-transparent border-none outline-none w-full"
-                        />
-                      </td>
-                      <td className="px-1 py-1.5 align-top">
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
-                          placeholder="1"
-                          disabled={isFinalized}
-                          className="text-sm text-right bg-transparent border-none outline-none w-full"
-                        />
-                      </td>
-                      <td className="px-1 py-1.5 align-top">
-                        <input
-                          type="text"
-                          value={item.unit}
-                          onChange={e => dispatch({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
-                          placeholder="hrs"
-                          disabled={isFinalized}
-                          className="text-sm bg-transparent border-none outline-none w-full"
                         />
                       </td>
                       <td className="px-1 py-1.5 align-top">
@@ -780,7 +758,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
                 {!isFinalized && (
                   <tfoot>
                     <tr>
-                      <td colSpan={8} className="px-4 py-1.5">
+                      <td colSpan={6} className="px-4 py-1.5">
                         <button
                           onClick={() => dispatch({ type: 'add_item', sectionId: section.id })}
                           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"

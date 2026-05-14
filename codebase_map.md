@@ -180,7 +180,7 @@ Newly created entities are appended to the component's local state list — no p
 | Finalize / revise / duplicate | `POST …/finalize`, `…/revise`, `…/duplicate` |
 | Estimate AI assist (SSE) | `POST /api/projects/[id]/estimates/[estId]/ai-assist` (estId can be `'new'`) |
 | Quote generator (side-by-side) | `src/components/projects/quote-generator.tsx` + `src/stores/quote-generator-store.ts` |
-| Quote generator — inline estimate build mode | When `estimate.status === 'DRAFT'` (shell, no-estimate path), `QuoteGenerator` renders an editable stripped estimate editor on the left (Description/Hrs/Rate/Qty/Unit; no Tags/Risk columns). "Generate Quote →" button calls `POST …/regenerate`, finalizes the estimate, rebuilds quote sections, then `router.refresh()` to switch into review mode. |
+| Quote generator — inline estimate build mode | When `estimate.status === 'DRAFT'` (shell, no-estimate path), `QuoteGenerator` renders an editable stripped estimate editor on the left (Description/Qty+Unit/Rate; no Tags/Risk columns). "Generate Quote →" button calls `POST …/regenerate`, finalizes the estimate, rebuilds quote sections, then `router.refresh()` to switch into review mode. After refresh, `sections` state is synced from the updated props via a `useEffect` that detects the `estimateIsShell` true→false transition. |
 | Quote detail | `src/components/projects/quote-detail-client.tsx` |
 | Quote CRUD | `GET/POST /api/projects/[id]/quotes` |
 | Quote actions | `send` (emails PDF; accepts `{ markOnly: true }` to skip email and just flip status to SENT), `accept`, `revise`, `amend`, `create-invoice`, `fulfillment`, `pdf`, `cancel` (SENT/ACCEPTED→REJECTED, blocked if invoices exist), `delete` (DRAFT only), `regenerate` (DRAFT only, shell-estimate path) — all under `…/quotes/[quoteId]/` |
@@ -493,7 +493,7 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 | `Job` | Sub-unit of CLIENT project; `status` enum `ACTIVE\|COMPLETED\|CANCELLED` (no `isActive`); `billingType`/`defaultRate` override `ClientProfile` |
 | `ClientProfile` | Contact linked to project; `email`, `contactName` |
 | `Estimate` | Internal costing; `workspaceId` scoped; `status` `DRAFT\|FINAL\|SUPERSEDED`; `parentId` for version chain |
-| `EstimateSection` / `EstimateItem` | `hours`=effort/unit, `costRate`=cost/hr (never shown to client), `quantity`, `unit` label, `tags` for margin matching |
+| `EstimateSection` / `EstimateItem` | `costRate`=cost/unit (never shown to client), `quantity`=effort/count, `unit` label (e.g. "hrs", "days"), `tags` for margin matching. `hours` field is legacy — always saved as `null` for new items; existing rows with `hours` still compute correctly via `hours × costRate × quantity`. |
 | `Quote` | Client-facing; `status` `DRAFT\|SENT\|ACCEPTED\|REJECTED\|SUPERSEDED\|AMENDED`; `overrides` JSON preserves human decisions; `quoteNumber` = `QTE-XXXX` |
 | `QuoteSection` / `QuoteLineItem` | `sourceItemIds` tracks collapsed estimate items; `costBasis`/`marginPercent` internal-only |
 | `MarginRule` | Default margin per tag; `@@unique([userId,tag])` |

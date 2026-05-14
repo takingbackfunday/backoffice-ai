@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useReducer } from 'react'
+import { useState, useCallback, useReducer, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronRight, Save, Plus, Trash2, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -86,7 +86,6 @@ interface Props {
 interface BuildItem {
   id: string
   description: string
-  hours: string
   costRate: string
   quantity: string
   unit: string
@@ -108,7 +107,7 @@ type BuildAction =
   | { type: 'update_item'; sectionId: string; itemId: string; field: keyof BuildItem; value: string | boolean }
 
 function newBuildItem(): BuildItem {
-  return { id: crypto.randomUUID(), description: '', hours: '', costRate: '', quantity: '1', unit: 'hrs', isOptional: false }
+  return { id: crypto.randomUUID(), description: '', costRate: '', quantity: '1', unit: 'hrs', isOptional: false }
 }
 
 function newBuildSection(): BuildSection {
@@ -141,12 +140,9 @@ function buildReducer(state: BuildSection[], action: BuildAction): BuildSection[
 }
 
 function buildItemCost(item: BuildItem): number {
-  const hours = parseFloat(item.hours) || 0
   const rate = parseFloat(item.costRate) || 0
   const qty = parseFloat(item.quantity) || 1
-  if (hours > 0 && rate > 0) return hours * rate * qty
-  if (rate > 0) return rate * qty
-  return 0
+  return rate * qty
 }
 
 /* ------------------------------------------------------------------ */
@@ -190,6 +186,22 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
   )
   const [saving, setSaving] = useState(false)
 
+  // After build mode regenerates and router.refresh() fires, Next.js passes updated props
+  // but the sections state is still the old (empty) value. Sync it when props change.
+  const prevIsShellRef = useRef(estimateIsShell)
+  useEffect(() => {
+    if (prevIsShellRef.current && !estimateIsShell) {
+      setSections(quote.sections)
+      setExpandedSections(Object.fromEntries(
+        quote.sections.map(s => [
+          s.id,
+          s.items.length > 1 || (s.items.length === 1 && s.items[0].description !== s.name),
+        ])
+      ))
+    }
+    prevIsShellRef.current = estimateIsShell
+  }, [estimateIsShell, quote.sections])
+
   // ── Build mode state ───────────────────────────────────────────────
   const [buildSections, dispatchBuild] = useReducer(
     buildReducer,
@@ -203,9 +215,8 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
           ? s.items.map(i => ({
               id: crypto.randomUUID(),
               description: i.description,
-              hours: i.hours?.toString() ?? '',
               costRate: i.costRate?.toString() ?? '',
-              quantity: i.quantity.toString(),
+              quantity: (i.hours ?? i.quantity).toString(),
               unit: i.unit ?? 'hrs',
               isOptional: i.isOptional,
             }))
@@ -409,7 +420,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
               .filter(i => i.description.trim())
               .map((item, ii) => ({
                 description: item.description,
-                hours: parseFloat(item.hours) || null,
+                hours: null,
                 costRate: parseFloat(item.costRate) || null,
                 quantity: parseFloat(item.quantity) || 1,
                 unit: item.unit || null,
@@ -485,19 +496,15 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
                   <table className="w-full text-xs border-collapse">
                     <colgroup>
                       <col />
-                      <col className="w-12" />
+                      <col className="w-24" />
                       <col className="w-16" />
-                      <col className="w-10" />
-                      <col className="w-12" />
                       <col className="w-5" />
                     </colgroup>
                     <thead>
                       <tr className="border-b border-[#e5ddd0]">
                         <th className="text-left px-3 py-1 text-[10px] font-normal text-[#9a8e7e]">Description</th>
-                        <th className="text-right px-1 py-1 text-[10px] font-normal text-[#9a8e7e]">Hrs</th>
+                        <th className="px-1 py-1 text-[10px] font-normal text-[#9a8e7e]">Qty</th>
                         <th className="text-right px-1 py-1 text-[10px] font-normal text-[#9a8e7e]">Rate</th>
-                        <th className="text-right px-1 py-1 text-[10px] font-normal text-[#9a8e7e]">Qty</th>
-                        <th className="px-1 py-1 text-[10px] font-normal text-[#9a8e7e]">Unit</th>
                         <th />
                       </tr>
                     </thead>
@@ -530,13 +537,22 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
                               </div>
                             </td>
                             <td className="px-1 py-1.5 align-top">
-                              <input
-                                type="number"
-                                value={item.hours}
-                                onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'hours', value: e.target.value })}
-                                placeholder="—"
-                                className="text-xs text-right bg-transparent border-none outline-none w-full text-[#3a3028]"
-                              />
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
+                                  placeholder="1"
+                                  className="text-xs text-right bg-transparent border-none outline-none w-8 text-[#3a3028]"
+                                />
+                                <input
+                                  type="text"
+                                  value={item.unit}
+                                  onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
+                                  placeholder="hrs"
+                                  className="text-xs bg-transparent border-none outline-none w-10 text-[#9a8e7e]"
+                                />
+                              </div>
                             </td>
                             <td className="px-1 py-1.5 align-top">
                               <input
@@ -545,24 +561,6 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
                                 onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'costRate', value: e.target.value })}
                                 placeholder="—"
                                 className="text-xs text-right bg-transparent border-none outline-none w-full text-[#3a3028]"
-                              />
-                            </td>
-                            <td className="px-1 py-1.5 align-top">
-                              <input
-                                type="number"
-                                value={item.quantity}
-                                onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
-                                placeholder="1"
-                                className="text-xs text-right bg-transparent border-none outline-none w-full text-[#3a3028]"
-                              />
-                            </td>
-                            <td className="px-1 py-1.5 align-top">
-                              <input
-                                type="text"
-                                value={item.unit}
-                                onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
-                                placeholder="hrs"
-                                className="text-xs bg-transparent border-none outline-none w-full text-[#3a3028]"
                               />
                             </td>
                             <td className="px-1 py-1.5 align-top">
@@ -580,7 +578,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={6} className="px-3 py-1.5">
+                        <td colSpan={4} className="px-3 py-1.5">
                           <button
                             onClick={() => dispatchBuild({ type: 'add_item', sectionId: section.id })}
                             className="flex items-center gap-1 text-[10px] text-[#9a8e7e] hover:text-[#5a5040]"
