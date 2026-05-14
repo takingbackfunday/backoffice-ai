@@ -84,13 +84,13 @@ export async function POST(request: Request, { params }: RouteParams) {
         return badRequest('Finalize the estimate before generating a quote')
       }
     } else {
-      // Auto-create a shell FINAL estimate for audit trail
+      // Auto-create a shell DRAFT estimate — user will fill it in on the generate page
       estimate = await prisma.estimate.create({
         data: {
           workspaceId: id,
           title: title ?? 'Untitled Quote',
           currency: project.clientProfile.currency ?? 'USD',
-          status: 'FINAL',
+          status: 'DRAFT',
           sections: { create: [{ name: 'Services', sortOrder: 0 }] },
         },
         include: estimateInclude,

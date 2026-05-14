@@ -32,8 +32,13 @@ export default async function QuoteGeneratorPage({ params }: PageParams) {
       },
     },
   })
-  if (!quote || !quote.estimate) notFound()
+  if (!quote) notFound()
+  if (!quote.estimate) notFound()
   if (quote.status !== 'DRAFT') redirect(`/projects/${slug}/quotes/${quoteId}`)
+
+  // Shell estimate: auto-created as DRAFT when the quote was made without an existing estimate.
+  // The generate page renders an inline editor so the user can fill in scope first.
+  const estimateIsShell = quote.estimate.status === 'DRAFT'
 
   const quoteData = JSON.parse(JSON.stringify({
     ...quote,
@@ -88,6 +93,7 @@ export default async function QuoteGeneratorPage({ params }: PageParams) {
               projectSlug={slug}
               quote={quoteData}
               estimate={estimateData}
+              estimateIsShell={estimateIsShell}
             />
           </div>
         </main>

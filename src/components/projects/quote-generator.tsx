@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useReducer } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronRight, Save } from 'lucide-react'
+import { ChevronDown, ChevronRight, Save, Plus, Trash2, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
-/*  Types                                                               */
+/*  Shared types                                                         */
 /* ------------------------------------------------------------------ */
 
 interface EstimateItem {
@@ -76,10 +76,81 @@ interface Props {
   projectSlug: string
   quote: QuoteData
   estimate: EstimateData
+  estimateIsShell: boolean
 }
 
 /* ------------------------------------------------------------------ */
-/*  Helpers                                                             */
+/*  Build-mode types + reducer (inline estimate editor)                 */
+/* ------------------------------------------------------------------ */
+
+interface BuildItem {
+  id: string
+  description: string
+  hours: string
+  costRate: string
+  quantity: string
+  unit: string
+  isOptional: boolean
+}
+
+interface BuildSection {
+  id: string
+  name: string
+  items: BuildItem[]
+}
+
+type BuildAction =
+  | { type: 'add_section' }
+  | { type: 'remove_section'; sectionId: string }
+  | { type: 'rename_section'; sectionId: string; name: string }
+  | { type: 'add_item'; sectionId: string }
+  | { type: 'remove_item'; sectionId: string; itemId: string }
+  | { type: 'update_item'; sectionId: string; itemId: string; field: keyof BuildItem; value: string | boolean }
+
+function newBuildItem(): BuildItem {
+  return { id: crypto.randomUUID(), description: '', hours: '', costRate: '', quantity: '1', unit: 'hrs', isOptional: false }
+}
+
+function newBuildSection(): BuildSection {
+  return { id: crypto.randomUUID(), name: 'New Section', items: [newBuildItem()] }
+}
+
+function buildReducer(state: BuildSection[], action: BuildAction): BuildSection[] {
+  switch (action.type) {
+    case 'add_section':
+      return [...state, newBuildSection()]
+    case 'remove_section':
+      return state.filter(s => s.id !== action.sectionId)
+    case 'rename_section':
+      return state.map(s => s.id === action.sectionId ? { ...s, name: action.name } : s)
+    case 'add_item':
+      return state.map(s => s.id === action.sectionId ? { ...s, items: [...s.items, newBuildItem()] } : s)
+    case 'remove_item':
+      return state.map(s =>
+        s.id === action.sectionId ? { ...s, items: s.items.filter(i => i.id !== action.itemId) } : s
+      )
+    case 'update_item':
+      return state.map(s =>
+        s.id === action.sectionId
+          ? { ...s, items: s.items.map(i => i.id === action.itemId ? { ...i, [action.field]: action.value } : i) }
+          : s
+      )
+    default:
+      return state
+  }
+}
+
+function buildItemCost(item: BuildItem): number {
+  const hours = parseFloat(item.hours) || 0
+  const rate = parseFloat(item.costRate) || 0
+  const qty = parseFloat(item.quantity) || 1
+  if (hours > 0 && rate > 0) return hours * rate * qty
+  if (rate > 0) return rate * qty
+  return 0
+}
+
+/* ------------------------------------------------------------------ */
+/*  Review-mode helpers                                                  */
 /* ------------------------------------------------------------------ */
 
 function fmt(n: number, currency: string) {
@@ -99,16 +170,16 @@ function itemEstimatedCost(item: EstimateItem): number {
 /*  Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Props) {
+export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estimateIsShell }: Props) {
   const router = useRouter()
 
+  // ── Review mode state ──────────────────────────────────────────────
   const [sections, setSections] = useState<QuoteSection[]>(quote.sections)
   const [terms, setTerms] = useState(quote.terms ?? '')
   const [notes, setNotes] = useState(quote.notes ?? '')
   const [validUntil, setValidUntil] = useState(
     quote.validUntil ? quote.validUntil.slice(0, 10) : ''
   )
-  // Detect initial expanded state: >1 item, or single item whose description ≠ section name
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
       quote.sections.map(s => [
@@ -118,10 +189,36 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
     )
   )
   const [saving, setSaving] = useState(false)
+
+  // ── Build mode state ───────────────────────────────────────────────
+  const [buildSections, dispatchBuild] = useReducer(
+    buildReducer,
+    estimate.sections,
+    (sections): BuildSection[] => {
+      if (!estimateIsShell || sections.length === 0) return [newBuildSection()]
+      return sections.map(s => ({
+        id: crypto.randomUUID(),
+        name: s.name,
+        items: s.items.length > 0
+          ? s.items.map(i => ({
+              id: crypto.randomUUID(),
+              description: i.description,
+              hours: i.hours?.toString() ?? '',
+              costRate: i.costRate?.toString() ?? '',
+              quantity: i.quantity.toString(),
+              unit: i.unit ?? 'hrs',
+              isOptional: i.isOptional,
+            }))
+          : [newBuildItem()],
+      }))
+    }
+  )
+  const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const currency = quote.currency
 
+  // ── Review mode derived ────────────────────────────────────────────
   const totalCost = sections.reduce((sum, s) =>
     sum + s.items.reduce((si, i) => si + (i.costBasis ?? 0), 0), 0
   )
@@ -130,6 +227,13 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
   )
   const blendedMargin = totalCost > 0 ? ((totalQuoted - totalCost) / totalCost) * 100 : 0
 
+  // Build mode derived
+  const buildHasItems = buildSections.some(s => s.items.some(i => i.description.trim()))
+  const buildTotalCost = buildSections.reduce((sum, s) =>
+    sum + s.items.reduce((si, i) => si + buildItemCost(i), 0), 0
+  )
+
+  // ── Review mode handlers ───────────────────────────────────────────
   const updateMargin = useCallback((sectionId: string, itemId: string, marginPct: number) => {
     setSections(prev => prev.map(s => s.id !== sectionId ? s : {
       ...s,
@@ -176,7 +280,6 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
     const isExpanded = expandedSections[section.id]
 
     if (isExpanded) {
-      // Collapse: merge items — only include non-optional in price, but keep all source IDs
       const includedItems = section.items.filter(i => !i.isOptional)
       const optionalSourceIds = section.items.filter(i => i.isOptional).flatMap(i => i.sourceItemIds)
       const allSourceIds = section.items.flatMap(i => i.sourceItemIds)
@@ -193,7 +296,6 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
           id: crypto.randomUUID(),
           description: s.name,
           quantity: 1,
-          // Reuse unit field to store optional IDs as JSON for round-trip restore
           unit: optionalSourceIds.length > 0 ? JSON.stringify({ optionalIds: optionalSourceIds }) : null,
           unitPrice: Math.round(totalPrice * 100) / 100,
           isOptional: false,
@@ -206,7 +308,6 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
       }))
       setExpandedSections(prev => ({ ...prev, [section.id]: false }))
     } else {
-      // Expand: split to one line per source estimate item
       const estSection = estimate.sections.find(s =>
         s.items.some(ei => section.items[0]?.sourceItemIds.includes(ei.id))
       ) ?? estimate.sections.find(s => s.name === section.name)
@@ -216,19 +317,17 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
       const collapsedItem = section.items[0]
       const collapsedMargin = collapsedItem?.marginPercent ?? 0
 
-      // Restore optional IDs that were saved when collapsing
       let savedOptionalIds: string[] = []
       if (collapsedItem?.unit) {
         try {
           const parsed = JSON.parse(collapsedItem.unit) as { optionalIds?: string[] }
           savedOptionalIds = parsed.optionalIds ?? []
-        } catch { /* not JSON, ignore */ }
+        } catch { /* not JSON */ }
       }
 
       const expandedItems: QuoteLineItem[] = estSection.items.map((ei, idx) => {
         const cost = itemEstimatedCost(ei)
         const price = cost > 0 ? cost * (1 + collapsedMargin / 100) : 0
-        // Restore optional state: use saved state if available, otherwise fall back to estimate
         const isOptional = savedOptionalIds.length > 0
           ? savedOptionalIds.includes(ei.id)
           : ei.isOptional
@@ -292,6 +391,265 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
       setSaving(false)
     }
   }
+
+  // ── Build mode handler ─────────────────────────────────────────────
+  async function handleGenerate() {
+    if (!buildHasItems) return
+    setGenerating(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sections: buildSections.map((s, si) => ({
+            name: s.name,
+            sortOrder: si,
+            items: s.items
+              .filter(i => i.description.trim())
+              .map((item, ii) => ({
+                description: item.description,
+                hours: parseFloat(item.hours) || null,
+                costRate: parseFloat(item.costRate) || null,
+                quantity: parseFloat(item.quantity) || 1,
+                unit: item.unit || null,
+                isOptional: item.isOptional,
+                sortOrder: ii,
+              })),
+          })),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Failed to generate quote'); return }
+      router.refresh()
+    } catch {
+      setError('Failed to generate quote')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Build mode UI                                                       */
+  /* ------------------------------------------------------------------ */
+
+  if (estimateIsShell) {
+    return (
+      <div className="grid grid-cols-2 gap-0 h-full border rounded-lg overflow-hidden">
+
+        {/* ── Left: Inline estimate editor ────────────────────────────── */}
+        <div className="flex flex-col bg-[#f8f7f4] border-r overflow-y-auto">
+          <div className="sticky top-0 bg-[#f0ede6] border-b px-4 py-2.5 z-10 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#7a6f5e]">Build your scope</p>
+              <p className="text-xs text-[#9a8e7e] mt-0.5">Internal estimate — costs never shown to client</p>
+            </div>
+            {buildTotalCost > 0 && (
+              <span className="text-xs text-[#7a6f5e]">
+                Total cost: {fmt(buildTotalCost, currency)}
+              </span>
+            )}
+          </div>
+
+          {error && (
+            <div className="mx-3 mt-2 text-xs text-destructive bg-destructive/10 rounded px-3 py-2">{error}</div>
+          )}
+
+          <div className="p-3 space-y-3 flex-1">
+            {buildSections.map((section) => {
+              const sectionCost = section.items.reduce((sum, i) => sum + buildItemCost(i), 0)
+              return (
+                <div key={section.id} className="rounded border border-[#e5ddd0] overflow-hidden">
+                  {/* Section header */}
+                  <div className="flex items-center gap-2 px-3 py-2 bg-[#ede9e1]">
+                    <input
+                      type="text"
+                      value={section.name}
+                      onChange={e => dispatchBuild({ type: 'rename_section', sectionId: section.id, name: e.target.value })}
+                      className="flex-1 text-xs font-semibold bg-transparent border-none outline-none text-[#5a5040]"
+                    />
+                    {sectionCost > 0 && (
+                      <span className="text-xs text-[#8a7a6a] shrink-0">{fmt(sectionCost, currency)}</span>
+                    )}
+                    {buildSections.length > 1 && (
+                      <button
+                        onClick={() => dispatchBuild({ type: 'remove_section', sectionId: section.id })}
+                        className="text-[#9a8e7e] hover:text-destructive shrink-0"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Items table — stripped: no Tags, no Risk */}
+                  <table className="w-full text-xs border-collapse">
+                    <colgroup>
+                      <col />
+                      <col className="w-12" />
+                      <col className="w-16" />
+                      <col className="w-10" />
+                      <col className="w-12" />
+                      <col className="w-5" />
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b border-[#e5ddd0]">
+                        <th className="text-left px-3 py-1 text-[10px] font-normal text-[#9a8e7e]">Description</th>
+                        <th className="text-right px-1 py-1 text-[10px] font-normal text-[#9a8e7e]">Hrs</th>
+                        <th className="text-right px-1 py-1 text-[10px] font-normal text-[#9a8e7e]">Rate</th>
+                        <th className="text-right px-1 py-1 text-[10px] font-normal text-[#9a8e7e]">Qty</th>
+                        <th className="px-1 py-1 text-[10px] font-normal text-[#9a8e7e]">Unit</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {section.items.map((item) => {
+                        const cost = buildItemCost(item)
+                        return (
+                          <tr key={item.id} className="border-b border-[#ede9e1] last:border-b-0 hover:bg-[#ede9e1]/40 group">
+                            <td className="px-3 py-1.5 align-top">
+                              <input
+                                type="text"
+                                value={item.description}
+                                onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'description', value: e.target.value })}
+                                placeholder="Item description"
+                                className="text-xs bg-transparent border-none outline-none w-full text-[#3a3028]"
+                              />
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <label className="flex items-center gap-1 text-[10px] text-[#9a8e7e] cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.isOptional}
+                                    onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'isOptional', value: e.target.checked })}
+                                    className="rounded"
+                                  />
+                                  optional
+                                </label>
+                                {cost > 0 && (
+                                  <span className="text-[10px] text-[#9a8e7e]/60">{fmt(cost, currency)}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-1 py-1.5 align-top">
+                              <input
+                                type="number"
+                                value={item.hours}
+                                onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'hours', value: e.target.value })}
+                                placeholder="—"
+                                className="text-xs text-right bg-transparent border-none outline-none w-full text-[#3a3028]"
+                              />
+                            </td>
+                            <td className="px-1 py-1.5 align-top">
+                              <input
+                                type="number"
+                                value={item.costRate}
+                                onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'costRate', value: e.target.value })}
+                                placeholder="—"
+                                className="text-xs text-right bg-transparent border-none outline-none w-full text-[#3a3028]"
+                              />
+                            </td>
+                            <td className="px-1 py-1.5 align-top">
+                              <input
+                                type="number"
+                                value={item.quantity}
+                                onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'quantity', value: e.target.value })}
+                                placeholder="1"
+                                className="text-xs text-right bg-transparent border-none outline-none w-full text-[#3a3028]"
+                              />
+                            </td>
+                            <td className="px-1 py-1.5 align-top">
+                              <input
+                                type="text"
+                                value={item.unit}
+                                onChange={e => dispatchBuild({ type: 'update_item', sectionId: section.id, itemId: item.id, field: 'unit', value: e.target.value })}
+                                placeholder="hrs"
+                                className="text-xs bg-transparent border-none outline-none w-full text-[#3a3028]"
+                              />
+                            </td>
+                            <td className="px-1 py-1.5 align-top">
+                              <button
+                                onClick={() => dispatchBuild({ type: 'remove_item', sectionId: section.id, itemId: item.id })}
+                                disabled={section.items.length === 1}
+                                className="opacity-0 group-hover:opacity-100 text-[#9a8e7e] hover:text-destructive disabled:opacity-0 transition-opacity"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={6} className="px-3 py-1.5">
+                          <button
+                            onClick={() => dispatchBuild({ type: 'add_item', sectionId: section.id })}
+                            className="flex items-center gap-1 text-[10px] text-[#9a8e7e] hover:text-[#5a5040]"
+                          >
+                            <Plus className="w-3 h-3" /> Add item
+                          </button>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )
+            })}
+
+            <button
+              onClick={() => dispatchBuild({ type: 'add_section' })}
+              className="flex items-center gap-1.5 text-xs text-[#9a8e7e] hover:text-[#5a5040] border border-dashed border-[#d5cdc0] rounded-lg px-3 py-2 w-full"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add section
+            </button>
+          </div>
+        </div>
+
+        {/* ── Right: Quote placeholder ─────────────────────────────────── */}
+        <div className="flex flex-col bg-background overflow-y-auto">
+          <div className="sticky top-0 bg-background border-b px-4 py-2.5 z-10 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Quote {quote.quoteNumber}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Client-facing · {currency}</p>
+            </div>
+            <button
+              onClick={handleGenerate}
+              disabled={generating || !buildHasItems}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {generating ? 'Generating…' : (
+                <>Generate Quote <ArrowRight className="w-3 h-3" /></>
+              )}
+            </button>
+          </div>
+
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mb-3">
+              <ArrowRight className="w-5 h-5 text-muted-foreground/50" />
+            </div>
+            <p className="text-sm font-medium text-muted-foreground">
+              {buildHasItems
+                ? 'Ready to generate'
+                : 'Build your scope on the left'}
+            </p>
+            <p className="text-xs text-muted-foreground/60 mt-1 max-w-[200px]">
+              {buildHasItems
+                ? 'Click Generate Quote to apply your margin rules and create pricing.'
+                : 'Add sections and items, then click Generate Quote to create client pricing.'}
+            </p>
+            {buildHasItems && buildTotalCost > 0 && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Estimated cost: <span className="font-medium">{fmt(buildTotalCost, currency)}</span>
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Review mode UI (existing flow)                                      */
+  /* ------------------------------------------------------------------ */
 
   return (
     <div className="grid grid-cols-2 gap-0 h-full border rounded-lg overflow-hidden">
@@ -364,24 +722,21 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
         <div className="p-3 space-y-1.5">
           {sections.map(section => {
             const isExpanded = expandedSections[section.id]
-            // In collapsed state, items has 1 non-optional row — use estimate to find optional info
             const estSection = estimate.sections.find(s =>
               s.items.some(ei => section.items[0]?.sourceItemIds.includes(ei.id))
             ) ?? estimate.sections.find(s => s.name === section.name)
             const estOptionalItems = estSection?.items.filter(i => i.isOptional) ?? []
             const estOptionalCost = estOptionalItems.reduce((sum, i) => sum + itemEstimatedCost(i), 0)
 
-            // When expanded, use actual item flags
             const visibleItems = isExpanded ? section.items.filter(i => !i.isOptional) : section.items
             const optionalItems = isExpanded ? section.items.filter(i => i.isOptional) : []
             const sectionTotal = visibleItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
             const optionalTotal = isExpanded
               ? optionalItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
-              : estOptionalCost // show cost estimate as a hint when collapsed
+              : estOptionalCost
 
             return (
               <div key={section.id} className="rounded border overflow-hidden">
-                {/* Section header row */}
                 <div className="flex items-center justify-between px-3 py-1.5 bg-muted/40">
                   <button
                     onClick={() => toggleSectionExpand(section)}
@@ -409,10 +764,8 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
                   </div>
                 </div>
 
-                {/* Collapsed: no item row — section header IS the line item */}
                 {!isExpanded && (
                   <div className="px-3 py-1 border-t">
-                    {/* Margin + price controls for the collapsed row */}
                     <div className="grid grid-cols-[1fr_72px_72px_56px] gap-2 items-center">
                       <div className="text-[10px] text-muted-foreground">
                         {estOptionalItems.length > 0 && (
@@ -448,7 +801,6 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate }: Prop
                   </div>
                 )}
 
-                {/* Expanded: one row per item */}
                 {isExpanded && (
                   <>
                     <div className="grid grid-cols-[1fr_72px_72px_56px] gap-2 px-3 py-1 text-[10px] text-muted-foreground border-t bg-muted/10">

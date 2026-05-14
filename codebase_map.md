@@ -180,9 +180,10 @@ Newly created entities are appended to the component's local state list — no p
 | Finalize / revise / duplicate | `POST …/finalize`, `…/revise`, `…/duplicate` |
 | Estimate AI assist (SSE) | `POST /api/projects/[id]/estimates/[estId]/ai-assist` (estId can be `'new'`) |
 | Quote generator (side-by-side) | `src/components/projects/quote-generator.tsx` + `src/stores/quote-generator-store.ts` |
+| Quote generator — inline estimate build mode | When `estimate.status === 'DRAFT'` (shell, no-estimate path), `QuoteGenerator` renders an editable stripped estimate editor on the left (Description/Hrs/Rate/Qty/Unit; no Tags/Risk columns). "Generate Quote →" button calls `POST …/regenerate`, finalizes the estimate, rebuilds quote sections, then `router.refresh()` to switch into review mode. |
 | Quote detail | `src/components/projects/quote-detail-client.tsx` |
 | Quote CRUD | `GET/POST /api/projects/[id]/quotes` |
-| Quote actions | `send` (emails PDF; accepts `{ markOnly: true }` to skip email and just flip status to SENT), `accept`, `revise`, `amend`, `create-invoice`, `fulfillment`, `pdf`, `cancel` (SENT/ACCEPTED→REJECTED, blocked if invoices exist), `delete` (DRAFT only) — all under `…/quotes/[quoteId]/` |
+| Quote actions | `send` (emails PDF; accepts `{ markOnly: true }` to skip email and just flip status to SENT), `accept`, `revise`, `amend`, `create-invoice`, `fulfillment`, `pdf`, `cancel` (SENT/ACCEPTED→REJECTED, blocked if invoices exist), `delete` (DRAFT only), `regenerate` (DRAFT only, shell-estimate path) — all under `…/quotes/[quoteId]/` |
 | Quote PDF | `GET /api/projects/[id]/quotes/[quoteId]/pdf` → `src/lib/pdf/quote-pdf.tsx` |
 | Send quote by email | `src/components/projects/send-quote-modal.tsx` |
 | Margin rules (settings) | `src/components/settings/margin-rules-editor.tsx` → `GET/POST /api/margin-rules`, `DELETE /api/margin-rules/[id]` |
@@ -517,7 +518,7 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 
 - `costRate` and `internalNotes` on `EstimateItem` are **never** included in quote or invoice output
 - Estimate `jobId` is optional/legacy — job binding happens at Quote creation time, not estimate time
-- `POST /api/projects/[id]/quotes` requires both `estimateId` and `jobId`
+- `POST /api/projects/[id]/quotes` requires `jobId`; `estimateId` is optional. When omitted, a shell `DRAFT` estimate is auto-created and linked. The `/generate` page detects `estimate.status === 'DRAFT'` and shows the inline build mode instead of the read-only estimate panel. After the user clicks "Generate Quote →", `POST …/regenerate` saves items to the estimate, sets it `FINAL`, and rebuilds quote sections — all in one transaction.
 - Fulfillment (`GET …/fulfillment`) is computed at query time — nothing extra stored
 - Invoice number format: `{INITIALS}_{DDMMYYYY}_{SEQ}` — initials from `businessName` or `yourName`, fallback `INV`
 - `UserPreference.data` reads always go through `parsePreferences(raw)` — no inline `as Record<string,unknown>` casts
