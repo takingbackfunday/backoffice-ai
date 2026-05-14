@@ -1336,7 +1336,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
               || client.sentQuotes.some(q2 => q2.title.toLowerCase().includes(q) || q2.quoteNumber.toLowerCase().includes(q))
             return nameMatch || invoiceMatch || quoteMatch
           }).map(client => {
-            const isExpanded = expandedClient === client.id
+            const isExpanded = expandedClient === client.id || !!clientFilter
             const clientInvoices = flat.filter(i => i.clientId === client.id)
             const openInvs = clientInvoices.filter(i => { const s = getDisplayStatus(i); return s !== 'PAID' && s !== 'VOID' })
             const hasOverdue = clientInvoices.some(i => getDisplayStatus(i) === 'OVERDUE')
