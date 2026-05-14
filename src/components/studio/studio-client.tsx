@@ -778,7 +778,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
       {(() => {
         const acceptedQuotesTotal = clients.reduce((s, c) => s + c.acceptedQuotes.reduce((qs, q) => qs + (q.totalQuoted ?? 0), 0), 0)
         const acceptedQuotesCount = clients.reduce((s, c) => s + c.acceptedQuotes.length, 0)
-        const outstandingInvs = flat.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' || s === 'OVERDUE' })
+        const outstandingInvs = flat.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' })
         const overdueInvs = flat.filter(i => getDisplayStatus(i) === 'OVERDUE')
         const now = new Date()
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
@@ -1005,7 +1005,8 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
           {clients.filter(client => {
             // KPI / notice filter
             if (clientFilter === 'outstanding') {
-              if (client.outstanding <= 0) return false
+              const clientFlat = flat.filter(i => i.clientId === client.id)
+              if (!clientFlat.some(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' })) return false
             }
             if (clientFilter === 'overdue') {
               const clientFlat = flat.filter(i => i.clientId === client.id)
@@ -1135,7 +1136,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                             : clientFilter === 'unsent'
                             ? clientInvoices.filter(i => i.status === 'DRAFT')
                             : clientFilter === 'outstanding'
-                            ? clientInvoices.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' || s === 'OVERDUE' })
+                            ? clientInvoices.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' })
                             : clientFilter === 'collected'
                             ? clientInvoices.filter(i => getDisplayStatus(i) === 'PAID')
                             : clientInvoices
