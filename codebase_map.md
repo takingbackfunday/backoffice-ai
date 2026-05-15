@@ -31,6 +31,7 @@ Keep this updated when feature areas are added or moved.
 | `/projects/[slug]/quotes/[quoteId]` | `src/app/projects/[slug]/quotes/[quoteId]/page.tsx` | `src/components/projects/quote-detail-client.tsx` |
 | `/projects/[slug]/quotes/[quoteId]/generate` | `src/app/projects/[slug]/quotes/[quoteId]/generate/page.tsx` | `src/components/projects/quote-generator.tsx` |
 | `/projects/[slug]/jobs` | `src/app/projects/[slug]/jobs/page.tsx` | `src/components/projects/job-list.tsx` |
+| `/projects/[slug]/work-orders` | `src/app/projects/[slug]/work-orders/page.tsx` | `src/components/projects/work-order-list.tsx` |
 | `/projects/[slug]/units` | `src/app/projects/[slug]/units/page.tsx` | `src/components/projects/unit-board.tsx` |
 | `/projects/[slug]/units/[unitId]` | `src/app/projects/[slug]/units/[unitId]/page.tsx` | `src/components/projects/unit-detail-client.tsx` |
 | `/projects/[slug]/leases` | `src/app/projects/[slug]/leases/page.tsx` | `src/components/projects/lease-list.tsx` |
@@ -116,6 +117,7 @@ Both CLIENT (freelance) and PROPERTY workspaces share the same schema. `WorkOrde
 | Bill create (with optional PDF upload) | `POST /api/projects/[id]/work-orders/[woId]/bills` |
 | Bill update (status, link transaction) + delete | `PATCH/DELETE /api/projects/[id]/work-orders/[woId]/bills/[billId]` |
 | Interactive CRUD panel (create WO, add bills, link txns, assign vendor) | `src/components/projects/work-order-panel.tsx` — used by job detail and maintenance detail |
+| Work orders list across all jobs (CLIENT tab) | `src/components/projects/work-order-list.tsx` — read-only table, links each row to the job detail page |
 | Global "New work order" modal (3-step: project → context → details) | `src/components/work-orders/new-work-order-modal.tsx` — inline creation for project (step 1) and job (step 2 CLIENT) |
 | Global "Intake subcontractor bill" modal (3-step: project → WO → bill) | `src/components/work-orders/intake-bill-modal.tsx` — inline creation for project (step 1) and work order with nested vendor (step 2) |
 | Vendor list UI | `src/components/vendors/vendor-list.tsx` |
