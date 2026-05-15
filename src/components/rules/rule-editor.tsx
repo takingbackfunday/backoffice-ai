@@ -56,6 +56,7 @@ interface PreviewTx {
   description: string
   amount: number
   currency: string
+  accountName: string | null
   category: string | null
   payeeName: string | null
   projectName: string | null
@@ -254,6 +255,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
                   <th className="px-1.5 py-1 text-left font-medium text-[#999]">Description</th>
                   <th className="px-1.5 py-1 text-right font-medium text-[#999] whitespace-nowrap">Amount</th>
                   <th className="px-1.5 py-1 text-left font-medium text-[#999]">Ccy</th>
+                  <th className="px-1.5 py-1 text-left font-medium text-[#999]">Account</th>
                   <th className="px-1.5 py-1 text-left font-medium text-[#999]">Category</th>
                   <th className="px-1.5 py-1 text-left font-medium text-[#999]">Payee</th>
                   <th className="px-1.5 py-1 text-left font-medium text-[#999]">Workspace</th>
@@ -268,6 +270,7 @@ function LivePreview({ conditions, op, outputs, categoryGroups, projects }: {
                       {tx.amount >= 0 ? '+' : ''}{tx.amount.toFixed(2)}
                     </td>
                     <td className="px-1.5 py-1 text-[#888]">{tx.currency}</td>
+                    <td className="px-1.5 py-1 text-[#888] whitespace-nowrap max-w-[100px]"><span className="block truncate">{tx.accountName ?? '—'}</span></td>
                     <DeltaCell current={tx.category} next={newCategory} />
                     <DeltaCell current={tx.payeeName} next={newPayee} />
                     <DeltaCell current={tx.projectName} next={newWorkspaceName} />

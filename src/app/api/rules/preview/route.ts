@@ -73,6 +73,7 @@ export async function POST(request: Request) {
         description: tx.description,
         amount: Number(tx.amount),
         currency: tx.account.currency,
+        accountName: tx.account.name,
         category: tx.category,
         payeeName: tx.payee?.name ?? null,
         projectName: tx.workspace?.name ?? null,
