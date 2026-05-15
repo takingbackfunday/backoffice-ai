@@ -16,6 +16,7 @@ function getTabsForType(slug: string, type: string): Tab[] {
     return [
       { label: 'Overview', href: base },
       { label: 'Jobs', href: `${base}/jobs` },
+      { label: 'Work Orders', href: `${base}/work-orders` },
       { label: 'Estimates', href: `${base}/estimates` },
       { label: 'Quotes', href: `${base}/quotes` },
       { label: 'Invoices', href: `${base}/invoices` },
