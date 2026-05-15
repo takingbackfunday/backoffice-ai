@@ -91,9 +91,10 @@ Keep this updated when feature areas are added or moved.
 | Starter rules | `src/lib/rules/seed-rules.ts`, `src/lib/rules/score-starter-rules.ts` |
 
 **AI rules agent — architecture notes:**
-- The SSE route and background runner use *lazy* tool calling: the LLM fetches data via tools in round 0, plans in round 1 (Sonnet), then emits in round 2+ (Haiku).
-- The diagnostic script (`scripts/run-rules-agent.ts`) uses *pre-load* mode: all data is fetched up-front and injected into the user message; the LLM goes straight to `record_plan` → `emit_rule_suggestion`.
-- **System prompts across all three files must stay in sync.** The canonical reference is `src/app/api/agent/rules/route.ts`. Key behavioural rules enforced by the prompt:
+- **Single source of truth:** `src/lib/agent/run-rules-agent.ts` exports `runRulesAgent()` (core loop) and `RULES_AGENT_SYSTEM_PROMPT`. The SSE route, background runner, and diagnostic script all call this function — never duplicate the prompt or loop logic elsewhere.
+- **Pre-load mode:** all data sections (categories, payees, rules, uncategorised groups, etc.) are fetched in parallel and injected into the user message before the first LLM call. The LLM goes straight to `record_plan` (Sonnet, round 0) → `emit_rule_suggestion` (Haiku, round 1+). No lazy tool-fetch round.
+- **Model strategy:** Sonnet 4.6 for round 0 (planning), Haiku 4.5 for all emission rounds. Sonnet re-enters on escalation (2+ consecutive rejections after emission).
+- **Key behavioural rules enforced by the prompt:**
   - `description contains` is always the primary condition — never `payeeName equals` as the sole condition (it only matches already-tagged transactions, not fresh imports).
   - For sources 2 (no-payee) and 3 (ruleless patterns), `categoryName` must be copied verbatim from the data — never guessed.
   - Suggestions are ordered by transaction count across all sources, not clustered by source type.
@@ -449,10 +450,10 @@ Sender details come from `UserPreference.data` via `parsePreferences()`
 UI: `src/components/projects/quote-generator.tsx` + `src/stores/quote-generator-store.ts`
 
 ### "Change the AI rules suggestions"
-`GET /api/agent/rules` → `src/app/api/agent/rules/route.ts` → `src/lib/agent/rules-tools.ts` (tools + validator) → `src/lib/llm/openrouter.ts` (openrouterWithTools)
-Background path: `src/lib/agent/run-rules-agent.ts` (called after CSV import)
-To test locally: `pnpm tsx scripts/run-rules-agent.ts <userId>` (pre-loads all data, prints plan + suggestions to stdout)
-**Sync requirement:** the system prompt exists in three places — `route.ts`, `run-rules-agent.ts`, and `scripts/run-rules-agent.ts`. Update all three together. The script prompt is intentionally adapted for pre-load mode (no tool fetches); the logic is otherwise identical.
+Edit `src/lib/agent/run-rules-agent.ts` — this is the single source of truth for `RULES_AGENT_SYSTEM_PROMPT` and `runRulesAgent()`.
+`GET /api/agent/rules` → `src/app/api/agent/rules/route.ts` (SSE wrapper only, ~75 lines) → calls `runRulesAgent()`
+Background path: `runRulesAgentInBackground()` in the same file, also calls `runRulesAgent()`
+To test locally: `pnpm tsx scripts/run-rules-agent.ts <userId>` — runs the exact production code path, prints plan + suggestions to stdout.
 
 ### "Change what the finance AI agent can query"
 `src/lib/agent/finance-tools.ts` (add tool definition + dispatch case) → `src/lib/agent/finance-agent.ts` (max rounds config)
