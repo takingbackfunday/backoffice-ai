@@ -1057,58 +1057,58 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                   return (
                     <div
                       onClick={() => setExpandedClient(isExpanded ? null : client.id)}
-                      style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr auto' : '1fr auto auto auto auto auto auto', alignItems: 'center', gap: 16, padding: '8px 14px', cursor: 'pointer', transition: 'background 0.15s' }}
+                      style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr auto' : '1fr auto auto auto auto auto auto', alignItems: 'center', gap: 12, padding: '4px 14px', cursor: 'pointer', transition: 'background 0.15s' }}
                       onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
                       onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                     >
                       {/* Identity */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#534AB7', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#534AB7', flexShrink: 0 }}>
                           {client.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
                         </div>
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{client.name}</p>
-                          {client.company && <p style={{ fontSize: 11, color: '#aaa', margin: 0 }}>{client.company}</p>}
+                        <div style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <p style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{client.name}</p>
+                          {client.company && <p style={{ fontSize: 10, color: '#aaa', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{client.company}</p>}
                         </div>
                       </div>
 
                       {!clientFilter && <>
                         {/* Quotes accepted */}
                         <div style={{ textAlign: 'right' }}>
-                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Quotes accepted</p>
-                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: client.acceptedQuotes.length > 0 ? '#534AB7' : '#aaa' }}>
+                          <p style={{ fontSize: 9, color: '#aaa', margin: '0 0 0px', whiteSpace: 'nowrap' }}>Quotes accepted</p>
+                          <p style={{ fontSize: 12, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: client.acceptedQuotes.length > 0 ? '#534AB7' : '#aaa' }}>
                             {client.acceptedQuotes.length || '—'}
                           </p>
                         </div>
 
                         {/* Outstanding */}
                         <div style={{ textAlign: 'right' }}>
-                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Outstanding</p>
-                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientOutstandingTotal > 0 ? '#a16207' : '#aaa' }}>
+                          <p style={{ fontSize: 9, color: '#aaa', margin: '0 0 0px', whiteSpace: 'nowrap' }}>Outstanding</p>
+                          <p style={{ fontSize: 12, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientOutstandingTotal > 0 ? '#a16207' : '#aaa' }}>
                             {clientOutstandingTotal > 0 ? fmt(clientOutstandingTotal, client.currency) : '—'}
                           </p>
                         </div>
 
                         {/* Overdue */}
                         <div style={{ textAlign: 'right' }}>
-                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Overdue</p>
-                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientOverdueTotal > 0 ? '#dc2626' : '#aaa' }}>
+                          <p style={{ fontSize: 9, color: '#aaa', margin: '0 0 0px', whiteSpace: 'nowrap' }}>Overdue</p>
+                          <p style={{ fontSize: 12, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientOverdueTotal > 0 ? '#dc2626' : '#aaa' }}>
                             {clientOverdueTotal > 0 ? fmt(clientOverdueTotal, client.currency) : '—'}
                           </p>
                         </div>
 
                         {/* Collected past 30 days */}
                         <div style={{ textAlign: 'right' }}>
-                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected Past 30 Days</p>
-                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedPast30 > 0 ? '#15803d' : '#aaa' }}>
+                          <p style={{ fontSize: 9, color: '#aaa', margin: '0 0 0px', whiteSpace: 'nowrap' }}>Collected Past 30 Days</p>
+                          <p style={{ fontSize: 12, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedPast30 > 0 ? '#15803d' : '#aaa' }}>
                             {clientCollectedPast30 > 0 ? fmt(clientCollectedPast30, client.currency) : '—'}
                           </p>
                         </div>
 
                         {/* Collected YTD */}
                         <div style={{ textAlign: 'right' }}>
-                          <p style={{ fontSize: 10, color: '#aaa', margin: '0 0 1px', whiteSpace: 'nowrap' }}>Collected since Jan 1</p>
-                          <p style={{ fontSize: 14, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedYtd > 0 ? '#15803d' : '#aaa' }}>
+                          <p style={{ fontSize: 9, color: '#aaa', margin: '0 0 0px', whiteSpace: 'nowrap' }}>Collected since Jan 1</p>
+                          <p style={{ fontSize: 12, fontWeight: 600, margin: 0, fontVariantNumeric: 'tabular-nums', color: clientCollectedYtd > 0 ? '#15803d' : '#aaa' }}>
                             {clientCollectedYtd > 0 ? fmt(clientCollectedYtd, client.currency) : '—'}
                           </p>
                         </div>
