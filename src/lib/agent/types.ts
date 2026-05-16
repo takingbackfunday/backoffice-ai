@@ -53,13 +53,21 @@ export interface Agent {
 // ── SSE Events ───────────────────────────────────────────────────
 
 export interface SseEvent {
-  type: 'status' | 'token' | 'answer' | 'done' | 'error' | 'session'
+  type: 'status' | 'token' | 'answer' | 'done' | 'error' | 'session' | 'action' | 'link'
   message?: string
   text?: string
   answer?: string
   error?: string
   sessionId?: string
   turnCount?: number
+  // action events
+  target?: 'invoice' | 'estimate'
+  action?: import('./page-context').EditorAction
+  // link events
+  route?: string
+  anchor?: string
+  label?: string
+  reason?: string
 }
 
 // Suppress unused import warning — these types are re-exported for consumers

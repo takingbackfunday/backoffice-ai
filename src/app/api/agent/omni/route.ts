@@ -7,8 +7,6 @@ function encode(event: SseEvent): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
 }
 
-// Thin proxy to the omni agent. Kept for backward-compat with existing clients.
-// Will be deleted in Phase 5 once all clients point at /api/agent/omni.
 export async function POST(request: Request) {
   const { userId } = await auth()
   if (!userId) return new Response('Unauthorized', { status: 401 })
@@ -50,11 +48,11 @@ export async function POST(request: Request) {
           pageContext,
           onStatus: (message) => send({ type: 'status', message }),
           onToken: (text) => send({ type: 'token', text }),
-          onAction: () => {},  // no editor dispatch in the legacy ask route
-          onLink: () => {},    // no link card rendering in legacy clients
+          onAction: (target, action) => send({ type: 'action', target, action }),
+          onLink: (link) => send({ type: 'link', route: link.route, anchor: link.anchor, label: link.label, reason: link.reason }),
         })
 
-        console.log('[ask-route] done', JSON.stringify({
+        console.log('[omni-route] done', JSON.stringify({
           totalMs: Date.now() - t0,
           toolsUsed,
           answerLen: answer.length,
