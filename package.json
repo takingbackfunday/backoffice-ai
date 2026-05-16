@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && echo \"export * from './client'\" > src/generated/prisma/index.ts && next build",
+    "dev": "pnpm run build:capabilities && next dev",
+    "build": "pnpm run build:capabilities && prisma generate && echo \"export * from './client'\" > src/generated/prisma/index.ts && next build",
     "start": "next start",
     "lint": "eslint",
+    "build:capabilities": "tsx scripts/build-site-capabilities.ts",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio"
