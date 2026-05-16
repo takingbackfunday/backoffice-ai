@@ -2,6 +2,8 @@
 
 import { useReducer, useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { usePageContext } from '@/components/chat/page-context-provider'
+import type { EditorAction } from '@/lib/agent/page-context'
 import { Plus, Trash2, Sparkles, ChevronDown, ChevronUp, ChevronRight, Check, AlertTriangle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { JobSelect } from './job-select'
@@ -213,6 +215,29 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
     currency: existingEstimate?.currency ?? 'USD',
     notes: existingEstimate?.notes ?? '',
     sections: initialSections,
+  })
+
+  const applyEditorAction = useCallback((action: EditorAction) => {
+    switch (action.type) {
+      case 'set_notes':
+        dispatch({ type: 'set_notes', value: action.value })
+        break
+      // set_line_items, set_tax, set_due_date, set_currency: estimate-specific
+      // mappings defined in Phase 3 when apply_estimate_edits tool is built
+    }
+  }, [dispatch])
+
+  usePageContext({
+    entityType: 'estimate',
+    entityId: existingEstimate?.id,
+    entityName: existingEstimate?.title,
+    snapshot: {
+      title: state.title,
+      currency: state.currency,
+      notes: state.notes,
+      sections: state.sections,
+    },
+    dispatch: applyEditorAction,
   })
 
   const [saving, setSaving] = useState(false)

@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     question = (body.question ?? '').trim()
     conversationHistory = Array.isArray(body.conversationHistory) ? body.conversationHistory : []
     sessionId = body.sessionId ?? undefined
+    // pageContext accepted for forward-compat; Phase 3 omni route will use it
   } catch {
     return new Response('Bad request', { status: 400 })
   }

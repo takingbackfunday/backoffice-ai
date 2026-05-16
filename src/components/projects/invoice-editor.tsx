@@ -1,7 +1,9 @@
 'use client'
 
-import { useReducer, useState, useRef, useEffect } from 'react'
+import { useReducer, useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { usePageContext } from '@/components/chat/page-context-provider'
+import type { EditorAction } from '@/lib/agent/page-context'
 import Link from 'next/link'
 import { Plus, Trash2, X, Sparkles, Eye, ChevronRight, CheckCircle, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -256,6 +258,44 @@ export function InvoiceEditor({
       }
 
   const [state, dispatch] = useReducer(reducer, initial)
+
+  const applyEditorAction = useCallback((action: EditorAction) => {
+    switch (action.type) {
+      case 'set_line_items':
+        dispatch({ type: 'SET_LINE_ITEMS', items: action.lineItems })
+        break
+      case 'set_tax':
+        dispatch({ type: 'SET_TAX_FROM_AI', label: action.label, amount: action.amount })
+        break
+      case 'set_due_date':
+        dispatch({ type: 'SET_DUE_DATE', value: action.value })
+        break
+      case 'set_notes':
+        dispatch({ type: 'SET_NOTES', value: action.value, aiSuggested: true })
+        break
+      case 'set_currency':
+        dispatch({ type: 'SET_CURRENCY', value: action.value })
+        break
+    }
+  }, [dispatch])
+
+  usePageContext({
+    entityType: 'invoice',
+    entityId: existingInvoice?.id,
+    entityName: existingInvoice?.invoiceNumber,
+    snapshot: {
+      lineItems: state.lineItems,
+      taxEnabled: state.taxEnabled,
+      taxLabel: state.taxLabel,
+      taxRate: state.taxRate,
+      dueDate: state.dueDate,
+      issueDate: state.issueDate,
+      currency: state.currency,
+      notes: state.notes,
+      jobId: state.jobId,
+    },
+    dispatch: applyEditorAction,
+  })
 
   // AI chat
   const [chatVisible, setChatVisible] = useState(false)

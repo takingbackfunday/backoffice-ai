@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from 'react'
 import { useChatStore } from '@/stores/chat-store'
+import { usePageContextStore } from '@/stores/page-context-store'
 import type { AgentDomain } from '@/lib/agent/types'
 
 type Status = 'idle' | 'running' | 'done' | 'error'
@@ -30,6 +31,7 @@ export function AgentQA() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { sessionId, turns, addTurn, clearHistory, pendingMessage, clearPendingMessage } = useChatStore()
+  const { context } = usePageContextStore()
 
   // Auto-submit a pending message (e.g. triggered from another page)
   useEffect(() => {
@@ -65,6 +67,7 @@ export function AgentQA() {
     const ac = new AbortController()
     esRef.current = ac
 
+    const { dispatch: _dispatch, ...serializableContext } = context ?? {}
     fetch('/api/agent/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -72,6 +75,7 @@ export function AgentQA() {
         question: q_,
         conversationHistory: turns,
         sessionId,
+        ...(context && { pageContext: serializableContext }),
       }),
       signal: ac.signal,
     }).then(async (res) => {
