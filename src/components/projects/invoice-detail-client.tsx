@@ -897,14 +897,39 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
         >
           <div className="flex items-center justify-between px-4 py-2.5 border-b">
             <span className="text-sm font-semibold">Invoice preview — {invoice.invoiceNumber}</span>
-            <button
-              type="button"
-              onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }}
-              className="text-muted-foreground hover:text-foreground text-lg leading-none px-1"
-              aria-label="Close"
-            >
-              ×
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const a = document.createElement('a')
+                  a.href = previewUrl
+                  a.download = `${invoice.invoiceNumber}.pdf`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+
+                  if (invoice.status !== 'DRAFT') return
+                  try {
+                    const key = 'pending-mark-sent'
+                    const existing: { invoiceId: string; invoiceNumber: string; projectId: string; projectSlug: string; downloadedAt: number }[] = JSON.parse(localStorage.getItem(key) ?? '[]')
+                    if (existing.some(e => e.invoiceId === invoice.id)) return
+                    existing.push({ invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, projectId, projectSlug, downloadedAt: Date.now() })
+                    localStorage.setItem(key, JSON.stringify(existing))
+                  } catch {}
+                }}
+                className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
+              >
+                <Download className="h-3 w-3" /> Download
+              </button>
+              <button
+                type="button"
+                onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }}
+                className="text-muted-foreground hover:text-foreground text-lg leading-none px-1"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
           </div>
           <iframe
             src={previewUrl}

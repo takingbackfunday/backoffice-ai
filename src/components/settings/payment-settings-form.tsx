@@ -111,15 +111,15 @@ export function PaymentSettingsForm({
 
     return {
       paymentMethods,
-      businessName: businessName || undefined,
-      yourName: yourName || undefined,
-      invoicePaymentNote: paymentNote || undefined,
-      invoiceNotesDefault: notesDefault || undefined,
-      fromEmail: email || undefined,
-      fromPhone: phone || undefined,
-      fromAddress: address || undefined,
-      fromVatNumber: vatNumber || undefined,
-      fromWebsite: website || undefined,
+      businessName: businessName || null,
+      yourName: yourName || null,
+      invoicePaymentNote: paymentNote || null,
+      invoiceNotesDefault: notesDefault || null,
+      fromEmail: email || null,
+      fromPhone: phone || null,
+      fromAddress: address || null,
+      fromVatNumber: vatNumber || null,
+      fromWebsite: website || null,
     }
   }
 

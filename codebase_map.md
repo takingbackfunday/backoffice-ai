@@ -524,7 +524,9 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 - `POST /api/projects/[id]/quotes` requires `jobId`; `estimateId` is optional. When omitted, a shell `DRAFT` estimate is auto-created and linked. The `/generate` page detects `estimate.status === 'DRAFT'` and shows the inline build mode instead of the read-only estimate panel. After the user clicks "Generate Quote →", `POST …/regenerate` saves items to the estimate, sets it `FINAL`, and rebuilds quote sections — all in one transaction.
 - Fulfillment (`GET …/fulfillment`) is computed at query time — nothing extra stored
 - Invoice number format: `{INITIALS}_{DDMMYYYY}_{SEQ}` — initials from `businessName` or `yourName`, fallback `INV`
+- Invoice `businessName` falls back to `yourName` via `||`; only works if the field is absent (not empty string). `POST /api/preferences` strips `null` keys from the merged object so clearing a field actually removes it from the DB rather than storing `""`.
 - `UserPreference.data` reads always go through `parsePreferences(raw)` — no inline `as Record<string,unknown>` casts
+- Invoice download (both "Download PDF" button and the Download button inside the PDF preview modal) writes to `localStorage['pending-mark-sent']` when the invoice is a DRAFT, triggering the mark-sent prompt on next page load. The preview modal has its own Download button for this; the browser's native PDF toolbar download does not trigger the flow.
 - Quote collapse: collapsing sums non-optional items; optional `sourceItemIds` stashed in collapsed item's `unit` field as `JSON.stringify({ optionalIds: [...] })`
 - Workspace filter in `GET /api/transactions` reads from `projectId` param — do not rename to `workspaceId` on the client
 - Background work (rules agent, invoice matching) runs fire-and-forget after CSV import; use `Promise.allSettled` for critical paths

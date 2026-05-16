@@ -27,6 +27,12 @@ export async function POST(request: Request) {
     const existing = await prisma.userPreference.findUnique({ where: { userId } })
     const current = parsePreferences(existing?.data)
     const merged = { ...current, ...patch }
+    // null means "user cleared this field" — remove it entirely so fallbacks work
+    for (const k of Object.keys(merged)) {
+      if ((merged as Record<string, unknown>)[k] === null) {
+        delete (merged as Record<string, unknown>)[k]
+      }
+    }
 
     await prisma.userPreference.upsert({
       where: { userId },
