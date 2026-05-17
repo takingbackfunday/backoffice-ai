@@ -174,8 +174,8 @@ export function AgentQA() {
                 if (!streamingStarted) {
                   setMessages((prev) => [...prev, { role: 'assistant', content: finalAnswer, links: [...pendingLinksRef.current] }])
                 }
-                addTurn('user', q_, 'cross-domain')
-                addTurn('assistant', finalAnswer, 'cross-domain')
+                addTurn('user', q_)
+                addTurn('assistant', finalAnswer)
               }
               if (missedActionsRef.current) {
                 setMessages((prev) => [...prev, { role: 'assistant', content: 'Tried to apply an edit but the editor is no longer open.' }])

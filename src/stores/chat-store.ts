@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ConversationTurn, AgentDomain } from '@/lib/agent/types'
+import type { ConversationTurn } from '@/lib/agent/types'
 
 const MAX_TURNS = 5
 
@@ -18,7 +18,7 @@ interface ChatStore {
   // Conversation memory
   sessionId: string
   turns: ConversationTurn[]
-  addTurn: (role: 'user' | 'assistant', content: string, domain: AgentDomain | 'cross-domain') => void
+  addTurn: (role: 'user' | 'assistant', content: string) => void
   clearHistory: () => void
 }
 
@@ -40,9 +40,9 @@ export const useChatStore = create<ChatStore>((set) => ({
   sessionId: makeSessionId(),
   turns: [],
 
-  addTurn(role, content, domain) {
+  addTurn(role, content) {
     set((s) => {
-      const next: ConversationTurn = { role, content, domain, timestamp: Date.now() }
+      const next: ConversationTurn = { role, content, timestamp: Date.now() }
       // Keep only the last MAX_TURNS pairs (user+assistant), so 2×MAX_TURNS items total
       const updated = [...s.turns, next].slice(-(MAX_TURNS * 2))
       return { turns: updated }
