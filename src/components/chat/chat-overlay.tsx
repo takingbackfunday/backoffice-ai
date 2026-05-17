@@ -8,7 +8,6 @@ import { AgentQA } from '@/components/dashboard/agent-qa'
 
 export function ChatOverlay() {
   const pathname = usePathname()
-  if (pathname.startsWith('/portal') || pathname.startsWith('/apply') || pathname.startsWith('/sign')) return null
   const { open, toggle, close } = useChatStore()
 
   // Close on Escape
@@ -20,6 +19,8 @@ export function ChatOverlay() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, close])
+
+  if (pathname.startsWith('/portal') || pathname.startsWith('/apply') || pathname.startsWith('/sign')) return null
 
   return (
     <>
