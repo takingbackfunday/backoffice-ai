@@ -249,7 +249,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
           job: { select: { id: true, name: true } },
           lineItems: true,
           payments: true,
-          clientProfile: { include: { workspace: { select: { id: true, name: true } } } },
+          clientProfile: { include: { workspace: { select: { id: true, name: true, slug: true } } } },
         },
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -270,6 +270,7 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
           dueDate: inv.dueDate.toISOString().slice(0, 10),
           clientName: inv.clientProfile?.workspace.name ?? null,
           clientId: inv.clientProfile?.workspace.id ?? null,
+          projectSlug: inv.clientProfile?.workspace.slug ?? null,
           jobName: inv.job?.name ?? null,
           currency: inv.currency,
         }

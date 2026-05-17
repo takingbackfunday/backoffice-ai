@@ -28,7 +28,7 @@ export interface OmniResult {
 }
 
 async function buildSnapshot(userId: string): Promise<string> {
-  const [txCount, accounts, activeRules, nonDeductibleGroups, dateRange] = await Promise.all([
+  const [txCount, accounts, activeRules, nonDeductibleGroups, dateRange, workspaces] = await Promise.all([
     prisma.transaction.count({ where: { account: { userId } } }),
     prisma.account.findMany({ where: { userId }, select: { name: true, currency: true } }),
     prisma.categorizationRule.count({ where: { userId, isActive: true } }),
@@ -41,11 +41,16 @@ async function buildSnapshot(userId: string): Promise<string> {
       _min: { date: true },
       _max: { date: true },
     }),
+    prisma.workspace.findMany({ where: { userId }, select: { type: true } }),
   ])
 
   const nonDeductibleCategoryNames = nonDeductibleGroups.flatMap(g => g.categories.map(c => c.name))
+  const workspaceTypes = [...new Set(workspaces.map(w => w.type))]
+  const hasProperty = workspaceTypes.includes('PROPERTY')
+  const hasClient = workspaceTypes.includes('CLIENT')
 
   return `Financial database snapshot:
+- Workspace types active: ${workspaceTypes.join(', ') || 'none'}${!hasProperty ? '\n- NOTE: This user has NO property workspaces. Never mention tenants, rent, maintenance requests, or property-related features.' : ''}${!hasClient ? '\n- NOTE: This user has NO freelance/client workspaces. Never mention invoices, clients, or studio features.' : ''}
 - Accounts: ${accounts.length ? accounts.map(a => `${a.name} (${a.currency})`).join(', ') : 'none'}
 - Transactions: ${txCount} total
 - Date range: ${dateRange._min.date?.toISOString().slice(0, 10) ?? 'n/a'} → ${dateRange._max.date?.toISOString().slice(0, 10) ?? 'n/a'}
@@ -104,7 +109,7 @@ CRITICAL RULES:
 1. NEVER state a dollar amount you have not directly read from a tool result. No estimates, no sums in your head.
 2. For any total/sum, call aggregate_transactions — do NOT compute it yourself from a list of rows.
 3. Non-deductible categories are excluded from revenue/expense queries unless the user explicitly asks about them.
-4. If the user asks where to do something or find a feature, call lookup_site_capability first, then call link_user_to to give them a clickable destination. Always explain in one short sentence what they will do there.
+4. If the user asks where to do something or find a feature, call lookup_site_capability first, then call link_user_to to give them a clickable destination. Always explain in one short sentence what they will do there. When linking to a specific invoice, use the projectSlug from the tool result (not the clientId/projectId). Invoice URLs follow the pattern /projects/{projectSlug}/invoices/{invoiceId}.
 5. If on an editor page and the user asks for a change to the entity they're editing, prefer apply_*_edits over instructing them to type. Confirm destructive changes (delete a line item, change currency) before applying.
 6. Plain text only. No markdown formatting — no #, no **, no bullet syntax, no backticks.`
 }
