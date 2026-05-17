@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useChatStore } from '@/stores/chat-store'
 import { usePageContextStore } from '@/stores/page-context-store'
 import { findCapability } from '@/lib/agent/site-capabilities-loader'
@@ -36,11 +36,12 @@ export function AgentQA() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const router = useRouter()
+  const pathname = usePathname()
   const { sessionId, turns, addTurn, clearHistory, pendingMessage, clearPendingMessage } = useChatStore()
   const { context } = usePageContextStore()
 
-  // Contextual greeting — derived from page context, never stored in history
-  const cap = context?.pathname ? findCapability(context.pathname) : null
+  // Contextual greeting — prefer registered context, fall back to current pathname
+  const cap = findCapability(context?.pathname ?? pathname)
   const greetingText =
     context?.entityType && context?.entityName
       ? `I see you're working on ${context.entityType} ${context.entityName}. What would you like to do?`
