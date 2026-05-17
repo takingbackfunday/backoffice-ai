@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { usePageContext } from '@/components/chat/page-context-provider'
 import type { EditorAction } from '@/lib/agent/page-context'
 import Link from 'next/link'
-import { Plus, Trash2, X, Sparkles, Eye, ChevronRight, CheckCircle, Undo2 } from 'lucide-react'
+import { Plus, Trash2, X, Sparkles, Eye, CheckCircle, Undo2 } from 'lucide-react'
+import { useChatStore } from '@/stores/chat-store'
 import { cn } from '@/lib/utils'
 import { JobSelect } from './job-select'
 import { PaymentSummary } from '@/components/projects/payment-summary'
@@ -24,22 +25,6 @@ export interface LineItemInput {
   isTaxLine: boolean
 }
 
-interface ChatMessage {
-  role: 'user' | 'assistant'
-  text: string
-  actions?: AiAction[]
-}
-
-type AiAction =
-  | { type: 'set_line_items'; lineItems: { description: string; quantity: number; unitPrice: number }[] }
-  | { type: 'set_due_date'; value: string }
-  | { type: 'set_issue_date'; value: string }
-  | { type: 'set_notes'; value: string }
-  | { type: 'set_tax'; label: string; amount: number }
-  | { type: 'set_currency'; value: string }
-  | { type: 'set_job'; jobId: string }
-  | { type: 'set_qty_unit'; lineItemIndex: number; unit: string }
-  | { type: 'ask_clarification'; question: string }
 
 interface InvoiceState {
   lineItems: LineItemInput[]
@@ -259,7 +244,27 @@ export function InvoiceEditor({
 
   const [state, dispatch] = useReducer(reducer, initial)
 
+  // HITL — track which elements the AI just changed so we can throb + confirm
+  const noChanges: PendingAiChanges = { lineItems: false, notes: false, dueDate: false, issueDate: false, currency: false, tax: false, jobId: false }
+  const [pendingAiChanges, setPendingAiChanges] = useState<PendingAiChanges>(noChanges)
+  const [preAiSnapshot, setPreAiSnapshot] = useState<InvoiceState | null>(null)
+  const hasPendingChanges = Object.values(pendingAiChanges).some(Boolean)
+
+  const stateRef = useRef(state)
+  useEffect(() => { stateRef.current = state }, [state])
+
   const applyEditorAction = useCallback((action: EditorAction) => {
+    // Take a pre-snapshot on the first AI action so Undo can restore it
+    setPreAiSnapshot(prev => prev ?? { ...stateRef.current, lineItems: stateRef.current.lineItems.map(i => ({ ...i })) })
+    setPendingAiChanges(prev => {
+      const next = { ...prev }
+      if (action.type === 'set_line_items') next.lineItems = true
+      if (action.type === 'set_tax') next.tax = true
+      if (action.type === 'set_due_date') next.dueDate = true
+      if (action.type === 'set_notes') next.notes = true
+      if (action.type === 'set_currency') next.currency = true
+      return next
+    })
     switch (action.type) {
       case 'set_line_items':
         dispatch({ type: 'SET_LINE_ITEMS', items: action.lineItems })
@@ -297,25 +302,9 @@ export function InvoiceEditor({
     dispatch: applyEditorAction,
   })
 
-  // AI chat
-  const [chatVisible, setChatVisible] = useState(false)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', text: mode === 'create'
-      ? `Hi! I can help you build this invoice for ${clientName}. Just describe the work — I'll fill in the line items, due date, and notes.`
-      : `I can help you adjust this invoice for ${clientName}. What would you like to change?`
-    },
-  ])
-  const [chatInput, setChatInput] = useState('')
-  const [chatLoading, setChatLoading] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-
-  // HITL — track which elements the AI just changed so we can throb + confirm
-  const noChanges: PendingAiChanges = { lineItems: false, notes: false, dueDate: false, issueDate: false, currency: false, tax: false, jobId: false }
-  const [pendingAiChanges, setPendingAiChanges] = useState<PendingAiChanges>(noChanges)
-  const [preAiSnapshot, setPreAiSnapshot] = useState<InvoiceState | null>(null)
-  const hasPendingChanges = Object.values(pendingAiChanges).some(Boolean)
   const [showCopyPicker, setShowCopyPicker] = useState(false)
   const [unitPopoverId, setUnitPopoverId] = useState<string | null>(null)
   const [unitPopoverPos, setUnitPopoverPos] = useState<{ top: number; right: number } | null>(null)
@@ -371,22 +360,14 @@ export function InvoiceEditor({
     } catch { /* silent */ }
   }
 
-  const chatEndRef = useRef<HTMLDivElement>(null)
-  const chatInputRef = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
-
   // Listen for shortcut triggers from NewInvoiceShortcuts
   useEffect(() => {
-    // AI prompt trigger
+    // AI prompt trigger — open the omni chat widget with the pre-seeded message
     function onAiTrigger() {
       const pending = sessionStorage.getItem('invoice-ai-prompt')
       if (!pending) return
       sessionStorage.removeItem('invoice-ai-prompt')
-      setChatVisible(true)
-      setTimeout(() => sendChatMessage(pending), 50)
+      useChatStore.getState().openWithMessage(pending)
     }
     // Copy picker trigger
     function onCopyPickerTrigger() {
@@ -417,10 +398,6 @@ export function InvoiceEditor({
   const totalBelowPaid = paymentsExist && total < (existingInvoice?.totalPaid ?? 0)
   const isSent = existingInvoice && ['SENT', 'PARTIAL'].includes(existingInvoice.status)
 
-  /* ---------------------------------------------------------------- */
-  /*  AI chat                                                           */
-  /* ---------------------------------------------------------------- */
-
   function buildCurrentInvoiceSnapshot() {
     return {
       lineItems: state.lineItems
@@ -433,163 +410,6 @@ export function InvoiceEditor({
       notes: state.notes,
       subtotal,
       total,
-    }
-  }
-
-  async function sendChatMessage(overrideText?: string) {
-    const text = (overrideText ?? chatInput).trim()
-    if (!text || chatLoading) return
-
-    const userMsg: ChatMessage = { role: 'user', text }
-    setChatInput('')
-    setChatLoading(true)
-
-    // Append user message and assistant placeholder atomically so placeholderIdx
-    // is always consistent with the resulting array length (avoids stale-closure issues
-    // with React 18 automatic batching when two separate setChatMessages calls run).
-    const placeholderIdx = chatMessages.length + 1  // user msg lands at +0, placeholder at +1
-    setChatMessages(prev => [...prev, userMsg, { role: 'assistant', text: '' }])
-
-    try {
-      const history = [...chatMessages, userMsg].map(m => ({ role: m.role, content: m.text }))
-      const res = await fetch(`/api/projects/${projectId}/invoices/ai-assist`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: history,
-          currentInvoice: buildCurrentInvoiceSnapshot(),
-          clientName,
-          company,
-          paymentTermDays,
-        }),
-      })
-
-      if (!res.ok || !res.body) {
-        setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: 'Something went wrong. Please try again.' } : m))
-        return
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let streamedText = ''
-      let finalActions: AiAction[] = []
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          let event: { type: string; text?: string; actions?: AiAction[] }
-          try { event = JSON.parse(line.slice(6)) } catch { continue }
-
-          if (event.type === 'status' && event.text) {
-            setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: `_${event.text}_` } : m))
-          } else if (event.type === 'token' && event.text) {
-            streamedText += event.text
-            // The model streams raw JSON like {"text":"...","actions":[...]}
-            // Extract just the visible text value progressively.
-            const display = extractStreamingText(streamedText)
-            setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: display } : m))
-          } else if (event.type === 'done') {
-            finalActions = (event.actions ?? []) as AiAction[]
-            const finalText = event.text ?? streamedText
-            setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: finalText, actions: finalActions } : m))
-          } else if (event.type === 'error') {
-            setChatMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: event.text ?? 'Something went wrong. Please try again.' } : m))
-          }
-        }
-      }
-
-      // HITL — only flag actions that actually change the current state
-      const changed: PendingAiChanges = { ...noChanges }
-      for (const action of finalActions) {
-        if (action.type === 'set_line_items') {
-          // Only flag if line items content actually differs
-          const incoming = action.lineItems.map(i => `${i.description}|${i.quantity}|${i.unitPrice}`).join(',')
-          const current = state.lineItems.filter(i => i.description.trim()).map(i => `${i.description}|${parseFloat(i.quantity)||1}|${parseFloat(i.unitPrice)||0}`).join(',')
-          if (incoming !== current) changed.lineItems = true
-        }
-        if (action.type === 'set_notes' && action.value !== state.notes) changed.notes = true
-        if (action.type === 'set_due_date' && action.value !== state.dueDate) changed.dueDate = true
-        if (action.type === 'set_issue_date' && action.value !== state.issueDate) changed.issueDate = true
-        if (action.type === 'set_currency' && action.value !== state.currency) changed.currency = true
-        if (action.type === 'set_tax') changed.tax = true
-        if (action.type === 'set_job' && action.jobId !== state.jobId) changed.jobId = true
-      }
-      const hasTrueChanges = Object.values(changed).some(Boolean)
-      if (hasTrueChanges) {
-        setPreAiSnapshot({ ...state, lineItems: state.lineItems.map(i => ({ ...i })) })
-        setPendingAiChanges(changed)
-      }
-
-      // Apply actions to form state
-      for (const action of finalActions) {
-        applyAiAction(action)
-      }
-    } finally {
-      setChatLoading(false)
-    }
-  }
-
-  /** Extract the visible text value from a partially-streamed JSON response.
-   *  The model streams raw JSON like: {"text":"Hello world","actions":[...]}
-   *  We parse the "text" field progressively so the user sees clean text.
-   *  Uses a char-by-char walk instead of regex to correctly handle embedded
-   *  quotes and escape sequences inside the text value. */
-  function extractStreamingText(raw: string): string {
-    // Try full parse first (works once streaming is complete or near-complete)
-    const parsed = parsePartialInvoiceText(raw)
-    if (parsed !== null) return parsed
-
-    // Locate the "text" key
-    const textKeyIdx = raw.indexOf('"text"')
-    if (textKeyIdx === -1) return ''
-    const colonIdx = raw.indexOf(':', textKeyIdx + 6)
-    if (colonIdx === -1) return ''
-
-    // Skip whitespace to find the opening quote of the value
-    let i = colonIdx + 1
-    while (i < raw.length && (raw[i] === ' ' || raw[i] === '\t')) i++
-    if (i >= raw.length || raw[i] !== '"') return ''
-    i++ // skip opening quote
-
-    // Walk character-by-character, handling escape sequences
-    let result = ''
-    while (i < raw.length) {
-      if (raw[i] === '\\' && i + 1 < raw.length) {
-        const esc = raw[i + 1]
-        if (esc === '"') result += '"'
-        else if (esc === 'n') result += '\n'
-        else if (esc === 't') result += '\t'
-        else if (esc === '\\') result += '\\'
-        else result += esc
-        i += 2
-      } else if (raw[i] === '"') {
-        break // closing quote — string complete
-      } else {
-        result += raw[i]
-        i++
-      }
-    }
-    return result
-  }
-
-  function parsePartialInvoiceText(raw: string): string | null {
-    let jsonStr = raw.trim()
-    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (fenceMatch) jsonStr = fenceMatch[1].trim()
-    const braceMatch = jsonStr.match(/\{[\s\S]*\}/)
-    if (braceMatch) jsonStr = braceMatch[0]
-    try {
-      const p = JSON.parse(jsonStr)
-      return typeof p.text === 'string' ? p.text : null
-    } catch {
-      return null
     }
   }
 
@@ -614,48 +434,6 @@ export function InvoiceEditor({
     }
     setPendingAiChanges(noChanges)
     setPreAiSnapshot(null)
-  }
-
-  function applyAiAction(action: AiAction) {
-    switch (action.type) {
-      case 'set_line_items':
-        dispatch({
-          type: 'SET_LINE_ITEMS',
-          items: action.lineItems.map(i => ({
-            id: uid(),
-            description: i.description,
-            quantity: String(i.quantity),
-            qtyUnit: 'x',
-            unitPrice: String(i.unitPrice),
-            isTaxLine: false,
-          })),
-        })
-        break
-      case 'set_due_date':
-        dispatch({ type: 'SET_DUE_DATE', value: action.value })
-        break
-      case 'set_issue_date':
-        dispatch({ type: 'SET_ISSUE_DATE', value: action.value })
-        break
-      case 'set_notes':
-        dispatch({ type: 'SET_NOTES', value: action.value })
-        break
-      case 'set_tax':
-        dispatch({ type: 'SET_TAX_FROM_AI', label: action.label, amount: action.amount })
-        break
-      case 'set_currency':
-        dispatch({ type: 'SET_CURRENCY', value: action.value })
-        break
-      case 'set_job':
-        dispatch({ type: 'SET_JOB', jobId: action.jobId })
-        break
-      case 'set_qty_unit':
-        dispatch({ type: 'UPDATE_LINE_ITEM', id: state.lineItems[action.lineItemIndex]?.id ?? '', key: 'qtyUnit', value: action.unit })
-        break
-      case 'ask_clarification':
-        // Will be shown as a chat message — no form change
-        break
-    }
   }
 
   /* ---------------------------------------------------------------- */
@@ -694,18 +472,13 @@ export function InvoiceEditor({
         dispatch({ type: 'SET_NOTES', value: suggestedNotes, aiSuggested: true })
       }
 
-      // Always open chat after finalize so the user can see what happened
-      setChatVisible(true)
-      if (questions.length > 0) {
-        setChatMessages(prev => [
-          ...prev,
-          ...questions.map(q => ({ role: 'assistant' as const, text: q })),
-        ])
-      } else if (suggestedNotes) {
-        setChatMessages(prev => [...prev, { role: 'assistant', text: 'I\'ve filled in payment terms and notes based on your setup. Feel free to edit them.' }])
-      } else {
-        setChatMessages(prev => [...prev, { role: 'assistant', text: 'Your invoice looks good — notes are already thorough. Nothing to add.' }])
-      }
+      // Open the omni chat so the user can follow up on the finalize result
+      const followUp = questions.length > 0
+        ? questions.join(' ')
+        : suggestedNotes
+          ? 'I\'ve applied suggested notes to the invoice — let me know if you\'d like any changes.'
+          : 'Your invoice looks good. Let me know if you\'d like any changes.'
+      useChatStore.getState().openWithMessage(followUp)
     } catch (err) {
       console.error('[ai-finalize] client error:', err)
       setSaveError('AI Finalize failed — check console for details')
@@ -822,8 +595,8 @@ export function InvoiceEditor({
   return (
     <div className="flex gap-0 min-h-0">
 
-      {/* ── LEFT: Form ─────────────────────────────────────────── */}
-      <div className={cn('flex-1 min-w-0 transition-all duration-300', chatVisible ? 'max-w-[60%]' : 'max-w-full')}>
+      {/* ── Form ─────────────────────────────────────────────────── */}
+      <div className="flex-1 min-w-0">
         <div className="pr-6">
 
           {/* Quote link badge */}
@@ -1291,6 +1064,15 @@ export function InvoiceEditor({
               {finalizing ? 'Reviewing…' : 'Review with AI'}
             </button>
 
+            <button
+              type="button"
+              onClick={() => useChatStore.getState().toggle()}
+              className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Ask AI
+            </button>
+
             <div className="flex-1" />
 
             <button
@@ -1317,96 +1099,6 @@ export function InvoiceEditor({
           </div>
         </div>
       </div>
-
-      {/* ── RIGHT: AI chat panel ─────────────────────────────────── */}
-      {chatVisible && (
-        <div className="w-[380px] flex-shrink-0 border-l flex flex-col bg-background">
-          {/* Chat header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                <Sparkles className="h-3 w-3 text-primary-foreground" />
-              </div>
-              <span className="text-sm font-semibold">AI Invoice Assistant</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setChatVisible(false)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-            {chatMessages.map((msg, idx) => msg.role === 'assistant' && !msg.text ? null : (
-              <div key={idx} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
-                <div className={cn(
-                  'max-w-[85%] rounded-2xl px-3 py-2 text-sm',
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground rounded-br-sm'
-                    : 'bg-muted text-foreground rounded-bl-sm'
-                )}>
-                  <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-                  {/* Action confirmations */}
-                  {msg.actions?.filter(a => a.type !== 'ask_clarification').map((a, i) => (
-                    <p key={i} className="text-[10px] mt-1 opacity-60 flex items-center gap-1">
-                      <span>✓</span>
-                      <span>
-                        {a.type === 'set_line_items' ? `Updated ${(a as { type: 'set_line_items'; lineItems: unknown[] }).lineItems.length} line item(s)` :
-                         a.type === 'set_due_date' ? `Due date → ${(a as { type: 'set_due_date'; value: string }).value}` :
-                         a.type === 'set_notes' ? 'Updated notes' :
-                         a.type === 'set_tax' ? `Tax → ${(a as { type: 'set_tax'; label: string; amount: number }).label} ${fmtFull((a as { type: 'set_tax'; label: string; amount: number }).amount, state.currency)}` :
-                         a.type === 'set_currency' ? `Currency → ${(a as { type: 'set_currency'; value: string }).value}` : ''}
-                      </span>
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {chatLoading && chatMessages[chatMessages.length - 1]?.text === '' && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
-                  {[0, 1, 2].map(i => (
-                    <span key={i} className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />
-                  ))}
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Input */}
-          <div className="p-3 border-t">
-            <div className="flex gap-2 items-end">
-              <textarea
-                ref={chatInputRef}
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    sendChatMessage()
-                  }
-                }}
-                placeholder="Describe the work, ask to change something…"
-                rows={2}
-                className="flex-1 rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary min-h-[60px]"
-              />
-              <button
-                type="button"
-                onClick={() => sendChatMessage()}
-                disabled={!chatInput.trim() || chatLoading}
-                className="rounded-xl bg-primary p-2.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors self-end"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5">Enter to send · Shift+Enter for newline</p>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,9 +1,11 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useChatStore } from '@/stores/chat-store'
 import { usePageContextStore } from '@/stores/page-context-store'
-import type { AgentDomain } from '@/lib/agent/types'
+import { findCapability } from '@/lib/agent/site-capabilities-loader'
+import type { LinkPayload } from '@/lib/agent/omni-tools'
 
 type Status = 'idle' | 'running' | 'done' | 'error'
 
@@ -18,6 +20,7 @@ const EXAMPLE_QUESTIONS = [
 interface Message {
   role: 'user' | 'assistant'
   content: string
+  links?: LinkPayload[]
 }
 
 export function AgentQA() {
@@ -28,10 +31,22 @@ export function AgentQA() {
   const [error, setError] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const esRef = useRef<AbortController | null>(null)
+  const pendingLinksRef = useRef<LinkPayload[]>([])
+  const missedActionsRef = useRef(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  const router = useRouter()
   const { sessionId, turns, addTurn, clearHistory, pendingMessage, clearPendingMessage } = useChatStore()
   const { context } = usePageContextStore()
+
+  // Contextual greeting — derived from page context, never stored in history
+  const cap = context?.pathname ? findCapability(context.pathname) : null
+  const greetingText =
+    context?.entityType && context?.entityName
+      ? `I see you're working on ${context.entityType} ${context.entityName}. What would you like to do?`
+      : cap?.title
+        ? `You're on ${cap.title}. ${cap.jobsToBeDone?.[0] ?? ''} — or ask me anything about your business.`
+        : `Ask me about your finances, properties, or clients.`
 
   // Auto-submit a pending message (e.g. triggered from another page)
   useEffect(() => {
@@ -60,6 +75,8 @@ export function AgentQA() {
     setStatus('running')
     setStatusMsg('')
     setIsStreaming(false)
+    pendingLinksRef.current = []
+    missedActionsRef.current = false
 
     // Optimistically add user message
     setMessages((prev) => [...prev, { role: 'user', content: q_ }])
@@ -68,7 +85,7 @@ export function AgentQA() {
     esRef.current = ac
 
     const { dispatch: _dispatch, ...serializableContext } = context ?? {}
-    fetch('/api/agent/ask', {
+    fetch('/api/agent/omni', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -90,7 +107,6 @@ export function AgentQA() {
       let buf = ''
       let streamedAnswer = ''
       let streamingStarted = false
-      let detectedDomain: AgentDomain | 'cross-domain' = 'finance'
 
       while (true) {
         const { done, value } = await reader.read()
@@ -104,40 +120,67 @@ export function AgentQA() {
           if (!line.startsWith('data: ')) continue
           try {
             const event = JSON.parse(line.slice(6))
-            if (event.type === 'status') setStatusMsg(event.message ?? '')
+
+            if (event.type === 'status') {
+              setStatusMsg(event.message ?? '')
+            }
+
+            if (event.type === 'action') {
+              const editorDispatch = usePageContextStore.getState().context?.dispatch
+              if (editorDispatch) {
+                editorDispatch(event.action)
+              } else {
+                missedActionsRef.current = true
+              }
+            }
+
+            if (event.type === 'link') {
+              const link = event as LinkPayload & { type: string }
+              const payload: LinkPayload = { route: link.route, anchor: link.anchor, label: link.label, reason: link.reason }
+              pendingLinksRef.current.push(payload)
+              if (streamingStarted) {
+                // attach to the in-progress assistant message
+                setMessages((prev) => {
+                  const updated = [...prev]
+                  const last = updated[updated.length - 1]
+                  updated[updated.length - 1] = { ...last, links: [...(last.links ?? []), payload] }
+                  return updated
+                })
+              }
+            }
+
             if (event.type === 'token' && event.text) {
               streamedAnswer += event.text
               if (!streamingStarted) {
-                // First token — push an assistant bubble and hide the spinner
                 streamingStarted = true
                 setIsStreaming(true)
                 setStatusMsg('')
-                setMessages((prev) => [...prev, { role: 'assistant', content: streamedAnswer }])
+                setMessages((prev) => [...prev, { role: 'assistant', content: streamedAnswer, links: [...pendingLinksRef.current] }])
               } else {
-                // Subsequent tokens — update the last message in place
                 setMessages((prev) => {
                   const updated = [...prev]
-                  updated[updated.length - 1] = { role: 'assistant', content: streamedAnswer }
+                  updated[updated.length - 1] = { ...updated[updated.length - 1], content: streamedAnswer }
                   return updated
                 })
               }
               messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
             }
-            if (event.type === 'session' && event.sessionId) {
-              detectedDomain = 'cross-domain'
-            }
+
             if (event.type === 'done') {
               setStatus('done')
               const finalAnswer = streamedAnswer || event.answer || ''
               if (finalAnswer) {
                 if (!streamingStarted) {
-                  // No tokens were streamed (shouldn't happen, but fallback)
-                  setMessages((prev) => [...prev, { role: 'assistant', content: finalAnswer }])
+                  setMessages((prev) => [...prev, { role: 'assistant', content: finalAnswer, links: [...pendingLinksRef.current] }])
                 }
-                addTurn('user', q_, detectedDomain)
-                addTurn('assistant', finalAnswer, detectedDomain)
+                addTurn('user', q_, 'cross-domain')
+                addTurn('assistant', finalAnswer, 'cross-domain')
+              }
+              if (missedActionsRef.current) {
+                setMessages((prev) => [...prev, { role: 'assistant', content: 'Tried to apply an edit but the editor is no longer open.' }])
               }
             }
+
             if (event.type === 'error') {
               setError(event.error ?? 'Error')
               setStatus('error')
@@ -184,6 +227,17 @@ export function AgentQA() {
         )}
       </div>
 
+      {/* Contextual greeting — ephemeral, not stored in history */}
+      {!showHistory && (
+        <div className="mb-4">
+          <div className="flex justify-start">
+            <div className="text-[11px] font-mono bg-[#1a1a2e] text-[#a8d8a8] rounded-xl rounded-bl-sm px-3 py-2 max-w-[90%] whitespace-pre-wrap leading-relaxed">
+              {greetingText}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Conversation history */}
       {showHistory && (
         <div className="mb-4 space-y-3 max-h-80 overflow-y-auto">
@@ -196,7 +250,18 @@ export function AgentQA() {
                     : 'text-[11px] font-mono bg-[#1a1a2e] text-[#a8d8a8] rounded-xl rounded-bl-sm px-3 py-2 max-w-[90%] whitespace-pre-wrap leading-relaxed'
                 }
               >
-                {m.content}
+                <span>{m.content}</span>
+                {m.links?.map((link, li) => (
+                  <div key={li} className="mt-2 pt-2 border-t border-[#a8d8a8]/30">
+                    <button
+                      onClick={() => router.push(link.route + (link.anchor ?? ''))}
+                      className="text-[11px] font-semibold underline block text-left hover:opacity-80"
+                    >
+                      {link.label ?? link.route}
+                    </button>
+                    <p className="text-[10px] opacity-70 mt-0.5">{link.reason}</p>
+                  </div>
+                ))}
               </div>
             </div>
           ))}

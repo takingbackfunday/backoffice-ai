@@ -1,11 +1,11 @@
 'use client'
 
-import { useReducer, useState, useCallback, useRef, useEffect } from 'react'
+import { useReducer, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { usePageContext } from '@/components/chat/page-context-provider'
 import type { EditorAction } from '@/lib/agent/page-context'
-import { Plus, Trash2, Sparkles, ChevronDown, ChevronUp, ChevronRight, Check, AlertTriangle, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Plus, Trash2, Sparkles, ChevronDown, ChevronUp, Check, AlertTriangle } from 'lucide-react'
+import { useChatStore } from '@/stores/chat-store'
 import { JobSelect } from './job-select'
 
 /* ------------------------------------------------------------------ */
@@ -247,13 +247,6 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
   const [quoteJobId, setQuoteJobId] = useState('')
   const [quoteGenerating, setQuoteGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [aiOpen, setAiOpen] = useState(false)
-  const [aiInput, setAiInput] = useState('')
-  const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([])
-  const [aiLoading, setAiLoading] = useState(false)
-  const aiEndRef = useRef<HTMLDivElement>(null)
-  const aiInputRef = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => { aiEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [aiMessages])
 
   const isFinalized = existingEstimate?.status === 'FINAL' || existingEstimate?.status === 'SUPERSEDED'
 
@@ -367,150 +360,6 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
     }
   }
 
-  async function handleAiSend() {
-    if (!aiInput.trim() || aiLoading) return
-    const userMsg = { role: 'user' as const, text: aiInput }
-    setAiInput('')
-    setAiLoading(true)
-
-    // Append user message and assistant placeholder atomically (same pattern as invoice-editor)
-    const placeholderIdx = aiMessages.length + 1
-    setAiMessages(prev => [...prev, userMsg, { role: 'assistant', text: '' }])
-
-    const toItems = (items: AiItem[]) => (items ?? []).map((i: AiItem) => ({
-      id: crypto.randomUUID(),
-      description: i.description ?? '',
-      costRate: i.costRate?.toString() ?? '',
-      quantity: (i.hours ?? i.quantity ?? 1).toString(),
-      unit: i.unit ?? 'hrs',
-      tags: (i.tags ?? []).join(', '),
-      isOptional: i.isOptional ?? false,
-      internalNotes: i.internalNotes ?? '',
-      riskLevel: i.riskLevel ?? 'low',
-    }))
-
-    function applyActions(actions: AiActionDef[]) {
-      for (const action of (actions ?? [])) {
-        if (action.type === 'set_sections' && action.sections) {
-          dispatch({
-            type: 'set_sections',
-            sections: action.sections.map((s: AiSection) => ({
-              id: crypto.randomUUID(),
-              name: s.name,
-              collapsed: false,
-              items: toItems(s.items ?? []),
-            })),
-          })
-        } else if (action.type === 'add_section' && action.name) {
-          dispatch({
-            type: 'set_sections',
-            sections: [
-              ...state.sections,
-              {
-                id: crypto.randomUUID(),
-                name: action.name,
-                collapsed: false,
-                items: action.items ? toItems(action.items) : [newItem()],
-              },
-            ],
-          })
-        } else if (action.type === 'add_items' && action.sectionName && action.items) {
-          const targetSection = state.sections.find(
-            s => s.name.toLowerCase() === (action.sectionName as string).toLowerCase()
-          )
-          if (targetSection) {
-            dispatch({
-              type: 'set_sections',
-              sections: state.sections.map(s =>
-                s.id === targetSection.id
-                  ? { ...s, items: [...s.items, ...toItems(action.items as AiItem[])] }
-                  : s
-              ),
-            })
-          }
-        } else if (action.type === 'set_title' && action.title) {
-          dispatch({ type: 'set_title', value: action.title })
-        } else if (action.type === 'set_notes' && action.notes) {
-          dispatch({ type: 'set_notes', value: action.notes })
-        }
-      }
-    }
-
-    try {
-      const estId = existingEstimate?.id ?? 'new'
-      const res = await fetch(
-        `/api/projects/${projectId}/estimates/${estId}/ai-assist`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [...aiMessages.map(m => ({ role: m.role, content: m.text })), { role: 'user', content: aiInput }],
-            currentEstimate: {
-              title: state.title,
-              currency: state.currency,
-              sections: state.sections.map(s => ({
-                name: s.name,
-                items: s.items.map(i => ({
-                  description: i.description,
-                  costRate: parseFloat(i.costRate) || null,
-                  quantity: parseFloat(i.quantity) || 1,
-                  unit: i.unit || null,
-                  tags: i.tags.split(',').map(t => t.trim()).filter(Boolean),
-                  isOptional: i.isOptional,
-                  riskLevel: i.riskLevel,
-                })),
-              })),
-            },
-            clientName,
-            billingType,
-          }),
-        }
-      )
-
-      if (!res.ok || !res.body) {
-        setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: 'Something went wrong. Please try again.' } : m))
-        return
-      }
-
-      // Read the SSE stream — same event shape as invoice ai-assist
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          let event: { type: string; text?: string; actions?: AiActionDef[] }
-          try { event = JSON.parse(line.slice(6)) } catch { continue }
-
-          if (event.type === 'status' && event.text) {
-            setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: `_${event.text}_` } : m))
-          } else if (event.type === 'token' && event.text) {
-            // token carries the full extracted text so far (not a delta), just set it
-            setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: event.text! } : m))
-          } else if (event.type === 'done') {
-            const finalText = event.text ?? ''
-            setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: finalText } : m))
-            applyActions(event.actions ?? [])
-          } else if (event.type === 'error') {
-            setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: event.text ?? 'Something went wrong. Please try again.' } : m))
-          }
-        }
-      }
-    } catch (e) {
-      console.error('[ai-assist] client error', e)
-      setAiMessages(prev => prev.map((m, i) => i === placeholderIdx ? { ...m, text: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` } : m))
-    } finally {
-      setAiLoading(false)
-    }
-  }
-
   return (
     <div className="flex gap-0 min-h-0">
     <div className="flex-1 min-w-0 space-y-6">
@@ -536,11 +385,11 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
             {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <button
-            onClick={() => setAiOpen(prev => !prev)}
+            onClick={() => useChatStore.getState().toggle()}
             className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            AI Assist
+            Ask AI
           </button>
           {!isFinalized && (
             <>
@@ -832,110 +681,6 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
       </div>
     </div>{/* end left form */}
 
-      {/* ── RIGHT: AI chat panel ─────────────────────────────────── */}
-      {aiOpen && (
-        <div className="w-[380px] flex-shrink-0 border-l flex flex-col bg-background">
-          {/* Chat header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                <Sparkles className="h-3 w-3 text-primary-foreground" />
-              </div>
-              <span className="text-sm font-semibold">AI Estimation Assistant</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setAiOpen(false)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-            {aiMessages.map((msg, idx) => msg.role === 'assistant' && !msg.text ? null : (
-              <div key={idx} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
-                <div className={cn(
-                  'max-w-[85%] rounded-2xl px-3 py-2 text-sm',
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground rounded-br-sm'
-                    : 'bg-muted text-foreground rounded-bl-sm'
-                )}>
-                  <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-                </div>
-              </div>
-            ))}
-            {aiLoading && aiMessages[aiMessages.length - 1]?.text === '' && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
-                  {[0, 1, 2].map(i => (
-                    <span key={i} className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />
-                  ))}
-                </div>
-              </div>
-            )}
-            <div ref={aiEndRef} />
-          </div>
-
-          {/* Input */}
-          <div className="p-3 border-t">
-            <div className="flex gap-2 items-end">
-              <textarea
-                ref={aiInputRef}
-                value={aiInput}
-                onChange={e => setAiInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleAiSend()
-                  }
-                }}
-                placeholder="Describe the project scope, ask to add or change items…"
-                rows={2}
-                className="flex-1 rounded-xl border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary min-h-[60px]"
-              />
-              <button
-                type="button"
-                onClick={handleAiSend}
-                disabled={!aiInput.trim() || aiLoading}
-                className="rounded-xl bg-primary p-2.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors self-end"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5">Enter to send · Shift+Enter for newline</p>
-          </div>
-        </div>
-      )}
     </div>
   )
-}
-
-/* ------------------------------------------------------------------ */
-/*  AI action types (internal)                                          */
-/* ------------------------------------------------------------------ */
-
-interface AiSection { name: string; items?: AiItem[] }
-interface AiItem {
-  description?: string
-  hours?: number
-  costRate?: number
-  quantity?: number
-  unit?: string
-  tags?: string[]
-  isOptional?: boolean
-  internalNotes?: string
-  riskLevel?: string
-}
-
-interface AiActionDef {
-  type: string
-  sections?: AiSection[]
-  name?: string
-  items?: AiItem[]
-  sectionName?: string
-  title?: string
-  notes?: string
-  question?: string
 }

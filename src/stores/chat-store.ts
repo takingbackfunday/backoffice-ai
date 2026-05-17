@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { ConversationTurn, AgentDomain } from '@/lib/agent/types'
 
-const MAX_TURNS = 3
+const MAX_TURNS = 5
 
 interface ChatStore {
   open: boolean
