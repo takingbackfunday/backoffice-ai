@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Send, Check, X, GitBranch, Plus, Download, ChevronRight, Loader2 } from 'lucide-react'
 import { FulfillmentBar } from './fulfillment-bar'
 import { cn } from '@/lib/utils'
+import { usePageContext } from '@/components/chat/page-context-provider'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -105,6 +106,7 @@ const STATUS_STYLES: Record<string, string> = {
 /* ------------------------------------------------------------------ */
 
 export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }: Props) {
+  usePageContext({ entityType: 'quote', entityId: quote.id, entityName: quote.quoteNumber })
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)

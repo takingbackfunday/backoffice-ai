@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DOC_TYPES, docTypeLabel } from '@/lib/doc-types'
+import { usePageContext } from '@/components/chat/page-context-provider'
 
 const STATUS_OPTIONS = [
   'INQUIRY', 'APPLICATION_SENT', 'APPLIED', 'SCREENING',
@@ -104,6 +105,7 @@ function AppRow({ label, value }: { label: string; value: string | number | null
 
 export function ApplicantDetail({ projectId, applicant: initial, units, listings = [], onClose, onUpdated }: Props) {
   const [applicant, setApplicant] = useState<Applicant>(initial)
+  usePageContext({ entityType: 'applicant', entityId: applicant.id, entityName: applicant.name })
   const [saving, setSaving] = useState(false)
   const [converting, setConverting] = useState(false)
   const [conflictTenant, setConflictTenant] = useState<{ id: string; name: string; email: string } | null>(null)

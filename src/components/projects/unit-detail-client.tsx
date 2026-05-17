@@ -9,6 +9,7 @@ import {
 } from '@/types'
 import { cn } from '@/lib/utils'
 import { MessageThread } from './message-thread'
+import { usePageContext } from '@/components/chat/page-context-provider'
 import { CheckCircle2, CheckCircle, Clock, Plus, X, Mail, ChevronDown, ChevronRight } from 'lucide-react'
 
 interface Tenant {
@@ -267,6 +268,7 @@ function InvoiceRow({ inv, projectId, invoiceId, onDone }: {
 /*  Main component                                                      */
 /* ------------------------------------------------------------------ */
 export function UnitDetailClient({ projectId, unit }: Props) {
+  usePageContext({ entityType: 'unit', entityId: unit.id, entityName: unit.unitLabel })
   const router = useRouter()
   const [unitStatus, setUnitStatus] = useState(unit.status)
   const [statusUpdating, setStatusUpdating] = useState(false)

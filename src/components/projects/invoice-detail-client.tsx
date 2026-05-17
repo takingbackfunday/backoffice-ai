@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { SendInvoiceModal } from '@/components/projects/send-invoice-modal'
 import { PaymentSummary } from '@/components/projects/payment-summary'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { usePageContext } from '@/components/chat/page-context-provider'
 
 interface Suggestion {
   id: string
@@ -80,6 +81,8 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
   const router = useRouter()
   const searchParams = useSearchParams()
   const [invoice, setInvoice] = useState<Invoice>(initial)
+
+  usePageContext({ entityType: 'invoice', entityId: invoice.id, entityName: invoice.invoiceNumber })
   const [suggestions, setSuggestions] = useState<Suggestion[]>(initialSuggestions)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [showSendModal, setShowSendModal] = useState(false)

@@ -6,6 +6,7 @@ import { Plus, FileText, Trash2, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WORK_ORDER_STATUS_LABELS, WORK_ORDER_STATUS_COLORS, BILL_STATUS_LABELS, BILL_STATUS_COLORS, VENDOR_DOCUMENT_TYPE_LABELS } from '@/types'
 import { useUploadThing } from '@/lib/uploadthing-client'
+import { usePageContext } from '@/components/chat/page-context-provider'
 
 interface Transaction { id: string; date: string; amount: string | number; description: string }
 interface Bill {
@@ -37,6 +38,7 @@ const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 
 
 export function VendorDetail({ vendor: initial }: { vendor: Vendor }) {
   const [vendor, setVendor] = useState<Vendor>(initial)
+  usePageContext({ entityType: 'vendor', entityId: vendor.id, entityName: vendor.name })
   const [editMode, setEditMode] = useState(false)
   const [form, setForm] = useState({ name: initial.name, email: initial.email ?? '', phone: initial.phone ?? '', taxId: initial.taxId ?? '', specialty: initial.specialty ?? '', notes: initial.notes ?? '' })
   const [saving, setSaving] = useState(false)

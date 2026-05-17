@@ -19,7 +19,7 @@ export type EditorActionDispatcher = (action: EditorAction) => void
 export interface PageContext {
   pathname: string
   routeTemplate: string | null
-  entityType?: 'invoice' | 'estimate' | 'quote' | 'transaction' | 'project' | 'tenant'
+  entityType?: 'invoice' | 'estimate' | 'quote' | 'transaction' | 'project' | 'tenant' | 'vendor' | 'applicant' | 'unit'
   entityId?: string
   entityName?: string
   snapshot?: Record<string, unknown>

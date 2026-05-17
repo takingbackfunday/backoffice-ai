@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Mail, CheckCircle, Clock } from 'lucide-react'
 import { LEASE_STATUS_LABELS, LEASE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
+import { usePageContext } from '@/components/chat/page-context-provider'
 
 interface InvoiceSummary {
   id: string; lineItemTotal: number; paymentTotal: number;
@@ -39,6 +40,7 @@ const INVITE_COLORS: Record<string, string> = {
 }
 
 export function TenantDetailClient({ projectId, tenant }: Props) {
+  usePageContext({ entityType: 'tenant', entityId: tenant.id, entityName: tenant.name })
   const [inviteStatus, setInviteStatus] = useState(tenant.portalInviteStatus)
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
