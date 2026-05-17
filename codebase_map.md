@@ -53,6 +53,8 @@ Keep this updated when feature areas are added or moved.
 | `/apply/docs/[token]` | `src/app/(public)/apply/docs/[token]/page.tsx` | `src/components/public/doc-upload-client.tsx` |
 | `/sign/[token]` | `src/app/(public)/sign/[token]/page.tsx` | `src/components/public/lease-signing-client.tsx` |
 
+Every page listed above has a sibling `page.capabilities.ts` file in the same directory. That file is the authoritative one-liner on what the page does, its jobs-to-be-done, Prisma models it reads/writes, and deep-link anchors. Read it before modifying a page. Run `pnpm run build:capabilities` after adding or editing any sidecar to regenerate `src/lib/agent/site-capabilities.generated.ts`.
+
 ---
 
 ## Feature entry points
@@ -157,7 +159,6 @@ Newly created entities are appended to the component's local state list — no p
 | Invoice list | `src/components/projects/invoice-list.tsx` |
 | CRUD | `GET/POST /api/projects/[id]/invoices` → `route.ts` |
 | Single invoice | `GET/PATCH/DELETE /api/projects/[id]/invoices/[invoiceId]` → `route.ts` |
-| AI assist (SSE) | `POST /api/projects/[id]/invoices/ai-assist` → `route.ts` |
 | AI finalize (JSON) | `POST /api/projects/[id]/invoices/ai-finalize` → `route.ts` |
 | PDF generate | `GET /api/projects/[id]/invoices/[invoiceId]/pdf` → `src/lib/pdf/invoice-pdf.tsx` |
 | Send by email | `POST /api/projects/[id]/invoices/[invoiceId]/send` + `src/components/projects/send-invoice-modal.tsx` |
@@ -181,7 +182,6 @@ Newly created entities are appended to the component's local state list — no p
 | Estimate list (+ job picker for quote gen) | `src/components/projects/estimate-list.tsx` |
 | Estimate CRUD | `GET/POST /api/projects/[id]/estimates` |
 | Finalize / revise / duplicate | `POST …/finalize`, `…/revise`, `…/duplicate` |
-| Estimate AI assist (SSE) | `POST /api/projects/[id]/estimates/[estId]/ai-assist` (estId can be `'new'`) |
 | Quote generator (side-by-side) | `src/components/projects/quote-generator.tsx` + `src/stores/quote-generator-store.ts` |
 | Quote generator — inline estimate build mode | When `estimate.status === 'DRAFT'` (shell, no-estimate path), `QuoteGenerator` renders an editable stripped estimate editor on the left (Description/Qty+Unit/Rate; no Tags/Risk columns). "Generate Quote →" button calls `POST …/regenerate`, finalizes the estimate, rebuilds quote sections, then `router.refresh()` to switch into review mode. After refresh, `sections` state is synced from the updated props via a `useEffect` that detects the `estimateIsShell` true→false transition. |
 | Quote detail | `src/components/projects/quote-detail-client.tsx` |
@@ -208,25 +208,56 @@ Newly created entities are appended to the component's local state list — no p
 | Receipt ↔ transaction link | `src/lib/receipt-matching.ts` |
 | Key type | `src/types/index.ts` → `Receipt`, `ExtractedReceiptData` |
 
-### Multi-agent AI
+### Omni AI Agent
+
+Single agent at `POST /api/agent/omni` replaces the old multi-agent stack. No domain classifier; one flat tool inventory covering finance, property, and studio data. Context-aware: receives the current page and active entity on every request.
+
+**Entry points**
 
 | Task | File |
 |---|---|
-| Ask route (SSE entry) | `POST /api/agent/ask` → `src/app/api/agent/ask/route.ts` |
-| Orchestrator | `src/lib/agent/orchestrator.ts` |
-| Domain classifier (Gemini) | `src/lib/agent/domain-classifier.ts` |
-| Finance agent | `src/lib/agent/finance-agent.ts` |
+| Omni route (SSE) | `POST /api/agent/omni` → `src/app/api/agent/omni/route.ts` |
+| Agent runner | `src/lib/agent/omni-agent.ts` → `runOmniAgent()` |
+| Tool aggregator | `src/lib/agent/omni-tools.ts` → `getOmniTools()`, `dispatchOmniTool()` |
 | Finance tools | `src/lib/agent/finance-tools.ts` → `FINANCE_TOOLS`, `dispatchTool()` |
-| Property agent | `src/lib/agent/property-agent.ts` |
-| Property tools (13 tools) | `src/lib/agent/property-tools.ts` |
+| Property tools | `src/lib/agent/property-tools.ts` → `PROPERTY_TOOLS`, `dispatchPropertyTool()` |
+| Studio tools | `src/lib/agent/studio-tools.ts` → `STUDIO_TOOLS`, `dispatchStudioTool()` |
 | Reusable tool loop | `src/lib/agent/tool-loop.ts` → `runToolLoop()` |
 | Conversation history format | `src/lib/agent/format-history.ts` → `formatHistory()` |
-| Agent types | `src/lib/agent/types.ts` → `AgentDomain`, `ConversationTurn`, `SseEvent` |
+| Agent + SSE types | `src/lib/agent/types.ts` → `ConversationTurn`, `SseEvent` |
+| Editor action + page context types | `src/lib/agent/page-context.ts` → `EditorAction`, `SerializablePageContext` |
 | Chat UI | `src/components/dashboard/agent-qa.tsx` |
 | Chat overlay (global pill) | `src/components/chat/chat-overlay.tsx` |
-| Client state (session + turns) | `src/stores/chat-store.ts` → `addTurn()`, `openWithMessage()` |
-| Studio agent | `src/lib/agent/studio-agent.ts` + `studio-tools.ts` |
-| Dashboard analyze | `POST /api/agent/analyze` |
+| Client state (session + turns) | `src/stores/chat-store.ts` → `addTurn(role, content)`, `openWithMessage()` |
+| Dashboard analyze (separate flow) | `POST /api/agent/analyze` → `src/app/api/agent/analyze/route.ts` |
+| NL transaction search | `POST /api/agent/search-transactions` |
+
+**Site capability map** — keeps the agent aware of every page in the app
+
+| Task | File |
+|---|---|
+| Type definition | `src/lib/agent/site-capabilities-types.ts` → `PageCapability` |
+| Loader + search | `src/lib/agent/site-capabilities-loader.ts` → `findCapability()`, `searchCapabilities()`, `capabilityIndexSummary()` |
+| Generated manifest | `src/lib/agent/site-capabilities.generated.ts` — do not edit; run `pnpm run build:capabilities` |
+| Build script | `scripts/build-site-capabilities.ts` — globs `page.capabilities.ts` sidecars, validates, writes manifest; `--check` exits non-zero if any page.tsx is missing a sidecar |
+| Per-page sidecars | `src/app/**/page.capabilities.ts` — one per `page.tsx`; defines route, purpose, jobsToBeDone, deepLinks, editorContext |
+
+**Page context** — passes current page/entity state to the agent on every request
+
+| Task | File |
+|---|---|
+| Zustand store | `src/stores/page-context-store.ts` → `usePageContextStore`, `setContext()` |
+| Hook (page registers itself) | `src/components/chat/page-context-provider.tsx` → `usePageContext(partial)` |
+| Editor pages register | call `usePageContext({ entityType, entityId, entityName, snapshot, dispatch })` inside the editor component; `dispatch` stays client-only, never serialized |
+
+**Rules agent** (separate, subordinate to omni)
+
+| Task | File |
+|---|---|
+| Rules agent core | `src/lib/agent/run-rules-agent.ts` → `runRulesAgent()`, `runRulesAgentInBackground()` |
+| Rules agent SSE route | `GET /api/agent/rules` → `src/app/api/agent/rules/route.ts` |
+| Rules tools + suggestion validator | `src/lib/agent/rules-tools.ts` |
+| Diagnostic script | `scripts/run-rules-agent.ts` — `pnpm tsx scripts/run-rules-agent.ts <userId>` |
 
 ### LLM primitives
 
@@ -238,16 +269,20 @@ Newly created entities are appended to the component's local state list — no p
 
 ### SSE event pattern (all streaming routes)
 
-All SSE routes emit the same 4 event types over `text/event-stream`:
+All SSE routes emit over `text/event-stream`. The `agent/omni` route emits all event types; `agent/rules` emits the base four only.
 
-| Event | Payload | Client action |
+| Event | Payload | Notes |
 |---|---|---|
-| `status` | `{ type, text }` | Show italic status text |
-| `token` | `{ type, text }` | Set message to full text so far (not a delta) |
-| `done` | `{ type, text, actions[] }` | Set final text, apply actions |
-| `error` | `{ type, text }` | Show error |
+| `session` | `{ sessionId, turnCount }` | First event; omni only |
+| `status` | `{ message }` | Italic status text |
+| `token` | `{ text }` | Full streamed text so far — client sets, not appends |
+| `answer` | `{ answer }` | Final complete text |
+| `done` | `{}` | Stream end |
+| `error` | `{ error }` | Show error |
+| `action` | `{ target, action }` | **Omni only** — editor action (set_line_items, set_tax, etc.) dispatched client-side via `pageContext.dispatch` |
+| `link` | `{ route, anchor?, label, reason }` | **Omni only** — deep-link card rendered inline in chat |
 
-Routes using this pattern: `agent/ask`, `agent/rules`, `invoices/ai-assist`, `estimates/[estId]/ai-assist`
+Routes: `POST /api/agent/omni` (all events), `GET /api/agent/rules` (status/token/answer/done/error only)
 
 ### Bank sync
 
@@ -390,7 +425,8 @@ All routes use helpers from `src/lib/api-response.ts`:
 | Store | File | Holds |
 |---|---|---|
 | CSV import flow | `src/stores/upload-store.ts` | Multi-step upload state |
-| Chat / AI overlay | `src/stores/chat-store.ts` | `sessionId`, `turns`, `addTurn()`, `openWithMessage()` |
+| Chat / AI overlay | `src/stores/chat-store.ts` | `sessionId`, `turns`, `addTurn(role, content)`, `openWithMessage()` |
+| Page context (AI) | `src/stores/page-context-store.ts` | Current page pathname, entity, snapshot, editor dispatch callback |
 | Quote generator | `src/stores/quote-generator-store.ts` | Margins, grouping, scope edits, optional toggles |
 
 ### Email
@@ -457,8 +493,8 @@ Edit `src/lib/agent/run-rules-agent.ts` — this is the single source of truth f
 Background path: `runRulesAgentInBackground()` in the same file, also calls `runRulesAgent()`
 To test locally: `pnpm tsx scripts/run-rules-agent.ts <userId>` — runs the exact production code path, prints plan + suggestions to stdout.
 
-### "Change what the finance AI agent can query"
-`src/lib/agent/finance-tools.ts` (add tool definition + dispatch case) → `src/lib/agent/finance-agent.ts` (max rounds config)
+### "Change what the omni AI can query"
+Add a tool definition + dispatch case to the relevant tools file (`finance-tools.ts`, `property-tools.ts`, or `studio-tools.ts`). It is automatically included by `src/lib/agent/omni-tools.ts` via the `READ_TOOLS` spread — no other wiring needed.
 
 ### "Add a new user preference key"
 1. `src/types/preferences.ts` → add to `UserPreferenceData` interface

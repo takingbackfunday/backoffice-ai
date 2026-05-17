@@ -44,9 +44,11 @@ DIRECT_URL=postgresql://neondb_owner:npg_NGJVWsFuk58h@ep-super-wave-alq120gl.c-3
 ## Commands
 
 ```bash
-pnpm dev          # Start development server
-pnpm build        # Build for production (includes prisma generate)
-pnpm lint         # Run ESLint
+pnpm dev                      # Start development server (also runs build:capabilities first)
+pnpm build                    # Build for production (includes prisma generate + build:capabilities)
+pnpm lint                     # Run ESLint
+pnpm run build:capabilities   # Regenerate src/lib/agent/site-capabilities.generated.ts from page sidecars
+pnpm run build:capabilities --check  # Same, but exit non-zero if any page.tsx is missing a sidecar
 pnpm db:push      # Push Prisma schema changes to database
 pnpm db:seed      # Seed database with initial data
 pnpm db:studio    # Open Prisma Studio (DB browser)
@@ -142,7 +144,7 @@ The DB column is `projectId` but Prisma maps it to `workspaceId` via `@map("proj
 `useState`/`useReducer` must be at the top level of component functions. The linter enforces `react-hooks/rules-of-hooks`.
 
 ### Invoice editor — description column uses `minmax`, not `1fr`
-The line-items grid is `grid-cols-[minmax(120px,1fr)_140px_110px_100px_32px]`. The description column must use `minmax(120px,1fr)` — plain `1fr` collapses to zero when the AI sidebar constrains the form to `max-w-[60%]`, making descriptions invisible.
+The line-items grid is `grid-cols-[minmax(120px,1fr)_140px_110px_100px_32px]`. The description column must use `minmax(120px,1fr)` — plain `1fr` collapses to zero in constrained grid contexts.
 
 ### Invoice notes and payment instructions — preference-scoped, not per-invoice
 Two fields in `UserPreference.data` drive invoice defaults:
