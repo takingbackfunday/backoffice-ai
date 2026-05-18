@@ -248,7 +248,7 @@ Single agent at `POST /api/agent/omni` replaces the old multi-agent stack. No do
 |---|---|
 | Zustand store | `src/stores/page-context-store.ts` → `usePageContextStore`, `setContext()` |
 | Hook (page registers itself) | `src/components/chat/page-context-provider.tsx` → `usePageContext(partial)` |
-| Editor pages register | call `usePageContext({ entityType, entityId, entityName, snapshot, dispatch })` inside the editor component; `dispatch` stays client-only, never serialized |
+| Editor pages register | call `usePageContext({ entityType, entityId, entityName, snapshot, dispatch })` inside the editor component; `dispatch` stays client-only, never serialized. Registered editors: `invoice-editor.tsx` (editorContext `invoice`), `estimate-editor.tsx` (editorContext `estimate`), `quote-generator.tsx` (editorContext `quote`) |
 
 **Rules agent** (separate, subordinate to omni)
 
@@ -279,7 +279,7 @@ All SSE routes emit over `text/event-stream`. The `agent/omni` route emits all e
 | `answer` | `{ answer }` | Final complete text |
 | `done` | `{}` | Stream end |
 | `error` | `{ error }` | Show error |
-| `action` | `{ target, action }` | **Omni only** — editor action (set_line_items, set_tax, etc.) dispatched client-side via `pageContext.dispatch` |
+| `action` | `{ target, action }` | **Omni only** — editor action dispatched client-side via `pageContext.dispatch`. `target`: `invoice` (set_line_items, set_tax, set_due_date, set_notes, set_currency), `estimate` (set_sections, set_title, set_notes, set_currency), `quote` (set_item_prices, set_notes, set_quote_terms, set_valid_until) |
 | `link` | `{ route, anchor?, label, reason }` | **Omni only** — deep-link card rendered inline in chat |
 
 Routes: `POST /api/agent/omni` (all events), `GET /api/agent/rules` (status/token/answer/done/error only)
