@@ -249,6 +249,7 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
 
   useEffect(() => {
     if (status === 'running') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setThinkingIdx(0)
       thinkingRef.current = setInterval(() => {
         setThinkingIdx((i) => (i + 1) % THINKING_MESSAGES.length)

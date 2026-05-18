@@ -182,8 +182,8 @@ async function handle2FA(
 
   if (hasOtpInput) {
     try {
-      const result = await cdpSession.send('Browserless.liveURL' as any)
-      const liveURL = (result as any).liveURL
+      const result = await (cdpSession.send as (method: string) => Promise<unknown>)('Browserless.liveURL')
+      const liveURL = (result as { liveURL: string }).liveURL
       onEvent({
         type: 'twofa_required',
         message: 'Your bank needs a verification code entered in the browser. Use the link below to enter it, then close that tab.',

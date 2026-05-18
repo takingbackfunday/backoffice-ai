@@ -83,7 +83,7 @@ export function StarterRules({ onInstalled }: { onInstalled?: (count: number) =>
         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        Starter rules installed! They'll run on every future import.
+        Starter rules installed! They&apos;ll run on every future import.
       </div>
     )
   }
