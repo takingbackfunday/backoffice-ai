@@ -249,6 +249,7 @@ Single agent at `POST /api/agent/omni` replaces the old multi-agent stack. No do
 | Zustand store | `src/stores/page-context-store.ts` → `usePageContextStore`, `setContext()` |
 | Hook (page registers itself) | `src/components/chat/page-context-provider.tsx` → `usePageContext(partial)` |
 | Editor pages register | call `usePageContext({ entityType, entityId, entityName, snapshot, dispatch })` inside the editor component; `dispatch` stays client-only, never serialized. Registered editors: `invoice-editor.tsx` (editorContext `invoice`), `estimate-editor.tsx` (editorContext `estimate`), `quote-generator.tsx` (editorContext `quote`) |
+| HITL confirm hook | `src/hooks/use-pending-ai-changes.ts` → `usePendingAiChanges<T>()` — all editor write paths must use this. Returns `pendingFields`, `hasPendingChanges`, `markPending(field, snapshot)`, `confirm()`, `undo(apply)`. See CLAUDE.md for the full pattern. |
 
 **Rules agent** (separate, subordinate to omni)
 

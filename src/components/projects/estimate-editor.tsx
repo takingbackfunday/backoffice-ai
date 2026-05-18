@@ -1,12 +1,14 @@
 'use client'
 
-import { useReducer, useState, useCallback } from 'react'
+import { useReducer, useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { usePageContext } from '@/components/chat/page-context-provider'
 import type { EditorAction } from '@/lib/agent/page-context'
-import { Plus, Trash2, Sparkles, ChevronDown, ChevronUp, Check, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Sparkles, ChevronDown, ChevronUp, Check, AlertTriangle, Undo2, CheckCircle } from 'lucide-react'
 import { useChatStore } from '@/stores/chat-store'
 import { JobSelect } from './job-select'
+import { cn } from '@/lib/utils'
+import { usePendingAiChanges } from '@/hooks/use-pending-ai-changes'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -217,18 +219,27 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
     sections: initialSections,
   })
 
+  const stateRef = useRef(state)
+  useEffect(() => { stateRef.current = state }, [state])
+
+  const { pendingFields, hasPendingChanges, markPending, confirm, undo } = usePendingAiChanges<EstimateState>()
+
   const applyEditorAction = useCallback((action: EditorAction) => {
     switch (action.type) {
       case 'set_notes':
+        markPending('notes', stateRef.current)
         dispatch({ type: 'set_notes', value: action.value })
         break
       case 'set_title':
+        markPending('title', stateRef.current)
         dispatch({ type: 'set_title', value: action.value })
         break
       case 'set_currency':
+        markPending('currency', stateRef.current)
         dispatch({ type: 'set_currency', value: action.value })
         break
       case 'set_sections':
+        markPending('sections', stateRef.current)
         dispatch({
           type: 'set_sections',
           sections: action.sections.map(s => ({
@@ -250,7 +261,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
         })
         break
     }
-  }, [dispatch])
+  }, [dispatch, markPending])
 
   usePageContext({
     entityType: 'estimate',
@@ -390,7 +401,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
     <div className="flex-1 min-w-0 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex-1 mr-4">
+        <div className={cn('flex-1 mr-4 rounded-lg', pendingFields.has('title') && 'ai-changed p-1')}>
           <input
             type="text"
             value={state.title}
@@ -405,7 +416,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
             value={state.currency}
             onChange={e => dispatch({ type: 'set_currency', value: e.target.value })}
             disabled={isFinalized}
-            className="text-sm border rounded px-2 py-1 bg-background"
+            className={cn('text-sm border rounded px-2 py-1 bg-background', pendingFields.has('currency') && 'ai-changed')}
           >
             {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -498,7 +509,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
 
 
       {/* Sections */}
-      <div className="space-y-4">
+      <div className={cn('space-y-4', pendingFields.has('sections') && 'ai-changed rounded-lg p-1')}>
         {state.sections.map((section, si) => (
           <div key={section.id} className="border rounded-lg">
             {/* Section header */}
@@ -685,7 +696,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
 
       {/* Notes */}
       {!isFinalized && (
-        <div>
+        <div className={cn('rounded-lg', pendingFields.has('notes') && 'ai-changed p-1')}>
           <label className="text-xs text-muted-foreground uppercase tracking-wide">Internal notes</label>
           <textarea
             value={state.notes}
@@ -694,6 +705,39 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
             rows={3}
             className="mt-1 w-full text-sm border rounded p-2 bg-background resize-none"
           />
+        </div>
+      )}
+
+      {/* HITL — AI change confirmation banner */}
+      {hasPendingChanges && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/8 px-3 py-2.5">
+          <div className="flex items-center gap-2 text-xs text-primary font-medium">
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            AI made changes — review the highlighted fields above
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => undo(snapshot => {
+                dispatch({ type: 'set_title', value: snapshot.title })
+                dispatch({ type: 'set_currency', value: snapshot.currency })
+                dispatch({ type: 'set_notes', value: snapshot.notes })
+                dispatch({ type: 'set_sections', sections: snapshot.sections })
+              })}
+              className="flex items-center gap-1 rounded-md border border-primary/30 px-2.5 py-1 text-xs text-primary hover:bg-primary/10 transition-colors"
+            >
+              <Undo2 className="h-3 w-3" />
+              Undo
+            </button>
+            <button
+              type="button"
+              onClick={confirm}
+              className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <CheckCircle className="h-3 w-3" />
+              Confirm
+            </button>
+          </div>
         </div>
       )}
 

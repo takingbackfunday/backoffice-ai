@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useReducer, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronRight, Save, Plus, Trash2, ArrowRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Save, Plus, Trash2, ArrowRight, Sparkles, Undo2, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePageContext } from '@/components/chat/page-context-provider'
 import type { EditorAction } from '@/lib/agent/page-context'
+import { usePendingAiChanges } from '@/hooks/use-pending-ai-changes'
 
 /* ------------------------------------------------------------------ */
 /*  Shared types                                                         */
@@ -237,9 +238,18 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
   )
 
   // ── Agent integration ──────────────────────────────────────────────
+  type QuoteSnapshot = { sections: QuoteSection[]; notes: string; terms: string; validUntil: string }
+  const currentSnapshotRef = useRef<QuoteSnapshot>({ sections, notes, terms, validUntil })
+  useEffect(() => {
+    currentSnapshotRef.current = { sections, notes, terms, validUntil }
+  }, [sections, notes, terms, validUntil])
+
+  const { pendingFields, hasPendingChanges, markPending, confirm, undo } = usePendingAiChanges<QuoteSnapshot>()
+
   const applyEditorAction = useCallback((action: EditorAction) => {
     switch (action.type) {
       case 'set_item_prices':
+        markPending('items', currentSnapshotRef.current)
         setSections(prev => prev.map(section => ({
           ...section,
           items: section.items.map(item => {
@@ -254,16 +264,19 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
         })))
         break
       case 'set_notes':
+        markPending('notes', currentSnapshotRef.current)
         setNotes(action.value)
         break
       case 'set_quote_terms':
+        markPending('terms', currentSnapshotRef.current)
         setTerms(action.value)
         break
       case 'set_valid_until':
+        markPending('validUntil', currentSnapshotRef.current)
         setValidUntil(action.value)
         break
     }
-  }, [])
+  }, [markPending])
 
   usePageContext({
     entityType: 'quote',
@@ -754,6 +767,39 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
           <div className="mx-3 mt-2 text-xs text-destructive bg-destructive/10 rounded px-3 py-2">{error}</div>
         )}
 
+        {/* HITL — AI change confirmation banner */}
+        {hasPendingChanges && (
+          <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/8 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-xs text-primary font-medium">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              AI made changes — review the highlighted fields
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => undo(snapshot => {
+                  setSections(snapshot.sections)
+                  setNotes(snapshot.notes)
+                  setTerms(snapshot.terms)
+                  setValidUntil(snapshot.validUntil)
+                })}
+                className="flex items-center gap-1 rounded-md border border-primary/30 px-2.5 py-1 text-xs text-primary hover:bg-primary/10 transition-colors"
+              >
+                <Undo2 className="h-3 w-3" />
+                Undo
+              </button>
+              <button
+                type="button"
+                onClick={confirm}
+                className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <CheckCircle className="h-3 w-3" />
+                Confirm
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="p-3 space-y-1.5">
           {sections.map(section => {
             const isExpanded = expandedSections[section.id]
@@ -771,7 +817,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
               : estOptionalCost
 
             return (
-              <div key={section.id} className="rounded border overflow-hidden">
+              <div key={section.id} className={cn('rounded border overflow-hidden', pendingFields.has('items') && 'ai-changed')}>
                 <div className="flex items-center justify-between px-3 py-1.5 bg-muted/40">
                   <button
                     onClick={() => toggleSectionExpand(section)}
@@ -899,7 +945,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
 
           {/* Terms panel */}
           <div className="border rounded divide-y mt-2">
-            <div className="px-3 py-1.5">
+            <div className={cn('px-3 py-1.5', pendingFields.has('validUntil') && 'ai-changed')}>
               <label className="text-[10px] text-muted-foreground block mb-0.5">Valid Until</label>
               <input
                 type="date"
@@ -908,7 +954,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
                 className="text-xs bg-transparent border-none outline-none"
               />
             </div>
-            <div className="px-3 py-1.5">
+            <div className={cn('px-3 py-1.5', pendingFields.has('notes') && 'ai-changed')}>
               <label className="text-[10px] text-muted-foreground block mb-0.5">Client-facing notes</label>
               <textarea
                 value={notes}
@@ -918,7 +964,7 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
                 className="text-xs w-full bg-transparent border-none outline-none resize-none"
               />
             </div>
-            <div className="px-3 py-1.5">
+            <div className={cn('px-3 py-1.5', pendingFields.has('terms') && 'ai-changed')}>
               <label className="text-[10px] text-muted-foreground block mb-0.5">Terms &amp; conditions</label>
               <textarea
                 value={terms}

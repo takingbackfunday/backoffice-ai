@@ -194,3 +194,12 @@ The progress bar has two steps: `upload` and `map & import`. When the import com
 
 ### Rules live preview — both preview functions use AbortController
 `runPreview` and `loadAll` both use an `AbortController` with a 10-second timeout. The abort clears `loading`/`loadingAll` state via the `finally` block, preventing the UI from getting stuck if the request hangs.
+
+### AI write actions — always use the HITL confirm pattern
+Every AI/agent write path (`applyEditorAction` or any future editor dispatch) **must** highlight changes and require user confirmation before they take effect — never apply silently. Use `usePendingAiChanges<T>()` from `src/hooks/use-pending-ai-changes.ts`:
+1. Keep a `stateRef` synced via `useEffect` so the snapshot can be captured without adding state to `useCallback` deps.
+2. Call `markPending(fieldName, stateRef.current)` before each state change in `applyEditorAction`.
+3. Apply the `ai-changed` CSS class (defined in `globals.css` — throb animation) to the affected UI regions when `pendingFields.has(fieldName)`.
+4. Render a Confirm / Undo banner when `hasPendingChanges` is true (copy the JSX from any of the three existing editors — invoice, estimate, quote).
+
+Canonical implementations: `invoice-editor.tsx` (inline), `estimate-editor.tsx` and `quote-generator.tsx` (use the hook).
