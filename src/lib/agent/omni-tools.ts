@@ -124,8 +124,74 @@ const APPLY_ESTIMATE_EDITS_TOOL: ToolDefinition = {
             type: 'object',
             required: ['type'],
             properties: {
-              type: { type: 'string', enum: ['set_notes', 'set_currency'] },
-              value: { type: 'string' },
+              type: { type: 'string', enum: ['set_sections', 'set_title', 'set_notes', 'set_currency'] },
+              value: { type: 'string', description: 'String value for set_title, set_notes, or set_currency' },
+              sections: {
+                type: 'array',
+                description: 'Full replacement sections (for set_sections — replaces all existing sections)',
+                items: {
+                  type: 'object',
+                  required: ['name', 'items'],
+                  properties: {
+                    name: { type: 'string' },
+                    items: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        required: ['description', 'quantity', 'qtyUnit', 'costRate'],
+                        properties: {
+                          description: { type: 'string' },
+                          quantity: { type: 'string', description: 'Number as string, e.g. "6"' },
+                          qtyUnit: { type: 'string', description: 'Unit label, e.g. "hrs", "days", "eps"' },
+                          costRate: { type: 'string', description: 'Internal cost rate per unit as string, e.g. "120"' },
+                          tags: { type: 'string', description: 'Comma-separated tags, e.g. "design, dev"' },
+                          isOptional: { type: 'boolean' },
+                          riskLevel: { type: 'string', enum: ['low', 'medium', 'high'] },
+                          internalNotes: { type: 'string' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+}
+
+const APPLY_QUOTE_EDITS_TOOL: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'apply_quote_edits',
+    description: 'Apply structured edits to the quote the user is currently reviewing. ONLY available when the user is on the quote generate/review page.',
+    parameters: {
+      type: 'object',
+      required: ['actions'],
+      properties: {
+        actions: {
+          type: 'array',
+          description: 'List of editor actions to apply',
+          items: {
+            type: 'object',
+            required: ['type'],
+            properties: {
+              type: { type: 'string', enum: ['set_item_prices', 'set_notes', 'set_quote_terms', 'set_valid_until'] },
+              value: { type: 'string', description: 'String value for set_notes, set_quote_terms, or set_valid_until (YYYY-MM-DD)' },
+              items: {
+                type: 'array',
+                description: 'Item prices to set (for set_item_prices — matched by description)',
+                items: {
+                  type: 'object',
+                  required: ['description', 'unitPrice'],
+                  properties: {
+                    description: { type: 'string', description: 'Exact item description to match' },
+                    unitPrice: { type: 'number', description: 'New sell price for this item' },
+                  },
+                },
+              },
             },
           },
         },
@@ -142,6 +208,7 @@ export function getOmniTools(pageContext?: SerializablePageContext): ToolDefinit
   const cap = findCapability(pageContext.pathname)
   if (cap?.editorContext === 'invoice') base.push(APPLY_INVOICE_EDITS_TOOL)
   if (cap?.editorContext === 'estimate') base.push(APPLY_ESTIMATE_EDITS_TOOL)
+  if (cap?.editorContext === 'quote') base.push(APPLY_QUOTE_EDITS_TOOL)
 
   return base
 }
@@ -151,7 +218,7 @@ export async function dispatchOmniTool(opts: {
   name: string
   args: unknown
   pageContext?: SerializablePageContext
-  onAction: (target: 'invoice' | 'estimate', action: EditorAction) => void
+  onAction: (target: 'invoice' | 'estimate' | 'quote', action: EditorAction) => void
   onLink: (link: LinkPayload) => void
 }): Promise<string> {
   const { userId, name, args, onAction, onLink } = opts
@@ -197,6 +264,12 @@ export async function dispatchOmniTool(opts: {
     const actions = (args as { actions: EditorAction[] }).actions ?? []
     for (const a of actions) onAction('estimate', a)
     return `Applied ${actions.length} edit(s) to the estimate. The user will see them highlighted with a confirm/undo bar.`
+  }
+
+  if (name === 'apply_quote_edits') {
+    const actions = (args as { actions: EditorAction[] }).actions ?? []
+    for (const a of actions) onAction('quote', a)
+    return `Applied ${actions.length} edit(s) to the quote. The user will see them updated in their editor.`
   }
 
   if (PROPERTY_TOOL_NAMES.has(name)) return dispatchPropertyTool(userId, name, args)

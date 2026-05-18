@@ -747,6 +747,7 @@ const _data: any[] = [
       "QuoteSection",
       "QuoteItem"
     ],
+    "editorContext": "quote",
     "relatedRoutes": [
       "/projects/[slug]/quotes/[quoteId]",
       "/settings"

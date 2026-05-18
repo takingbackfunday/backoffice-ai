@@ -222,8 +222,33 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
       case 'set_notes':
         dispatch({ type: 'set_notes', value: action.value })
         break
-      // set_line_items, set_tax, set_due_date, set_currency: estimate-specific
-      // mappings defined in Phase 3 when apply_estimate_edits tool is built
+      case 'set_title':
+        dispatch({ type: 'set_title', value: action.value })
+        break
+      case 'set_currency':
+        dispatch({ type: 'set_currency', value: action.value })
+        break
+      case 'set_sections':
+        dispatch({
+          type: 'set_sections',
+          sections: action.sections.map(s => ({
+            id: crypto.randomUUID(),
+            name: s.name,
+            collapsed: false,
+            items: s.items.map(i => ({
+              id: crypto.randomUUID(),
+              description: i.description,
+              quantity: i.quantity,
+              unit: i.qtyUnit,
+              costRate: i.costRate,
+              tags: i.tags ?? '',
+              isOptional: i.isOptional ?? false,
+              riskLevel: i.riskLevel ?? 'low',
+              internalNotes: i.internalNotes ?? '',
+            })),
+          })),
+        })
+        break
     }
   }, [dispatch])
 

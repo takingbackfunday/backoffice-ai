@@ -18,7 +18,7 @@ export interface OmniContext {
   pageContext?: SerializablePageContext
   onStatus: (message: string) => void
   onToken: (text: string) => void
-  onAction: (target: 'invoice' | 'estimate', action: EditorAction) => void
+  onAction: (target: 'invoice' | 'estimate' | 'quote', action: EditorAction) => void
   onLink: (link: LinkPayload) => void
 }
 

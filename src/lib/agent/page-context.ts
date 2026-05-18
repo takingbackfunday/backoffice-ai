@@ -7,12 +7,40 @@ export interface SerializableLineItem {
   isTaxLine: boolean
 }
 
+export interface SerializableEstimateItem {
+  description: string
+  quantity: string
+  qtyUnit: string
+  costRate: string
+  tags?: string
+  isOptional?: boolean
+  riskLevel?: string
+  internalNotes?: string
+}
+
+export interface SerializableEstimateSection {
+  name: string
+  items: SerializableEstimateItem[]
+}
+
+export interface SerializableQuoteItemPrice {
+  description: string
+  unitPrice: number
+}
+
 export type EditorAction =
   | { type: 'set_line_items'; lineItems: SerializableLineItem[] }
   | { type: 'set_tax'; label: string; amount: number }
   | { type: 'set_due_date'; value: string }
   | { type: 'set_notes'; value: string }
   | { type: 'set_currency'; value: string }
+  // estimate-specific
+  | { type: 'set_sections'; sections: SerializableEstimateSection[] }
+  | { type: 'set_title'; value: string }
+  // quote-specific
+  | { type: 'set_item_prices'; items: SerializableQuoteItemPrice[] }
+  | { type: 'set_quote_terms'; value: string }
+  | { type: 'set_valid_until'; value: string }
 
 export type EditorActionDispatcher = (action: EditorAction) => void
 

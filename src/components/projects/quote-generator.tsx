@@ -4,6 +4,8 @@ import { useState, useCallback, useReducer, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronRight, Save, Plus, Trash2, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { usePageContext } from '@/components/chat/page-context-provider'
+import type { EditorAction } from '@/lib/agent/page-context'
 
 /* ------------------------------------------------------------------ */
 /*  Shared types                                                         */
@@ -233,6 +235,51 @@ export function QuoteGenerator({ projectId, projectSlug, quote, estimate, estima
   const buildTotalCost = buildSections.reduce((sum, s) =>
     sum + s.items.reduce((si, i) => si + buildItemCost(i), 0), 0
   )
+
+  // ── Agent integration ──────────────────────────────────────────────
+  const applyEditorAction = useCallback((action: EditorAction) => {
+    switch (action.type) {
+      case 'set_item_prices':
+        setSections(prev => prev.map(section => ({
+          ...section,
+          items: section.items.map(item => {
+            const match = action.items.find(
+              p => p.description.toLowerCase() === item.description.toLowerCase()
+            )
+            if (!match) return item
+            const cost = item.costBasis ?? 0
+            const newMargin = cost > 0 ? ((match.unitPrice - cost) / cost) * 100 : 0
+            return { ...item, unitPrice: match.unitPrice, marginPercent: Math.round(newMargin * 100) / 100 }
+          }),
+        })))
+        break
+      case 'set_notes':
+        setNotes(action.value)
+        break
+      case 'set_quote_terms':
+        setTerms(action.value)
+        break
+      case 'set_valid_until':
+        setValidUntil(action.value)
+        break
+    }
+  }, [])
+
+  usePageContext({
+    entityType: 'quote',
+    entityId: quote.id,
+    entityName: quote.quoteNumber,
+    snapshot: {
+      sections,
+      terms,
+      notes,
+      validUntil,
+      currency,
+      totalCost,
+      totalQuoted,
+    },
+    dispatch: applyEditorAction,
+  })
 
   // ── Review mode handlers ───────────────────────────────────────────
   const updateMargin = useCallback((sectionId: string, itemId: string, marginPct: number) => {

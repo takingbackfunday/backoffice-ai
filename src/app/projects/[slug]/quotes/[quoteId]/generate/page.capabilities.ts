@@ -13,6 +13,7 @@ export const capability: PageCapability = {
   deepLinks: {},
   reads: ['Quote', 'QuoteSection', 'QuoteItem', 'Estimate', 'EstimateSection', 'EstimateItem'],
   writes: ['Quote', 'QuoteSection', 'QuoteItem'],
+  editorContext: 'quote',
   relatedRoutes: [
     '/projects/[slug]/quotes/[quoteId]',
     '/settings',
