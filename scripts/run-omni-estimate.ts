@@ -10,6 +10,8 @@
  *   pnpm tsx scripts/run-omni-estimate.ts user_abc123 "3 part series, 40 mins each..."
  */
 
+export {}
+
 process.env.DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://neondb_owner:npg_NGJVWsFuk58h@ep-super-wave-alq120gl.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 process.env.DIRECT_URL = process.env.DIRECT_URL ?? process.env.DATABASE_URL
 process.env.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? ''
