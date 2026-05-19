@@ -186,8 +186,8 @@ export function AgentQA() {
               setError(event.error ?? 'Error')
               setStatus('error')
             }
-          } catch {
-            // ignore malformed lines
+          } catch (parseErr) {
+            console.error('[agent-qa] SSE event error', parseErr)
           }
         }
       }

@@ -238,11 +238,16 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
         markPending('currency', stateRef.current)
         dispatch({ type: 'set_currency', value: action.value })
         break
-      case 'set_sections':
+      case 'set_sections': {
+        const incoming = action.sections
+        if (!Array.isArray(incoming)) {
+          console.error('[estimate-editor] set_sections: action.sections is not an array', action)
+          break
+        }
         markPending('sections', stateRef.current)
         dispatch({
           type: 'set_sections',
-          sections: action.sections.map(s => ({
+          sections: incoming.map(s => ({
             id: crypto.randomUUID(),
             name: s.name,
             collapsed: false,
@@ -260,6 +265,7 @@ export function EstimateEditor({ projectId, projectSlug, clientName, billingType
           })),
         })
         break
+      }
     }
   }, [dispatch, markPending])
 
