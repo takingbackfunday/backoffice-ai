@@ -38,8 +38,6 @@ export default async function PortalPaymentsPage() {
     )
   }
 
-  let totalCharged = 0
-  let totalPaid = 0
   const invoiceSummaries = lease.invoices.map(inv => {
     const lineItemTotal = inv.lineItems
       .filter(li => !li.forgivenAt)
@@ -47,10 +45,11 @@ export default async function PortalPaymentsPage() {
     const paymentTotal = inv.payments
       .filter(p => !p.voidedAt)
       .reduce((s, p) => s + Number(p.amount), 0)
-    totalCharged += lineItemTotal
-    totalPaid += paymentTotal
     return { ...inv, lineItemTotal, paymentTotal, outstanding: lineItemTotal - paymentTotal }
   })
+
+  const totalCharged = invoiceSummaries.reduce((s, inv) => s + inv.lineItemTotal, 0)
+  const totalPaid = invoiceSummaries.reduce((s, inv) => s + inv.paymentTotal, 0)
   const balance = totalCharged - totalPaid
 
   return (

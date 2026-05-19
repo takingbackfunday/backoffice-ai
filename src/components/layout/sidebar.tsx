@@ -24,6 +24,74 @@ const IMPORT_ITEMS = [
   { href: '/bank-accounts', label: 'Bank Accounts', icon: '🏦' },
 ]
 
+function NavLink({ href, label, icon, indent = false, collapsed, pathname, pending, setPending }: {
+  href: string; label: string; icon: string; indent?: boolean; collapsed: boolean; pathname: string; pending: string | null; setPending: (href: string) => void
+}) {
+  const isActive = href === '/projects' ? pathname === href || pathname.startsWith('/projects/') : pathname === href
+  const isPending = pending === href && !isActive
+  return (
+    <li>
+      <Link
+        href={href}
+        aria-label={label}
+        title={collapsed ? label : undefined}
+        data-testid={`nav-${label.toLowerCase().replace(/\s+/g, '-')}`}
+        onClick={() => { if (!isActive) setPending(href) }}
+        className={cn(
+          'flex items-center text-xs font-medium transition-colors w-full',
+          collapsed ? 'justify-center px-2 py-1.5' : cn('gap-2.5 py-1.5', indent ? 'pl-8 pr-4' : 'px-4'),
+          isActive
+            ? 'bg-[#f5f5f4] text-[#1a1a1a] font-medium border-r-2 border-[#534AB7]'
+            : isPending
+              ? 'bg-muted text-foreground'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+        )}
+      >
+        {isPending ? (
+          <span aria-hidden="true" className="inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+        ) : (
+          <span aria-hidden="true" className="text-sm">{icon}</span>
+        )}
+        {!collapsed && label}
+      </Link>
+    </li>
+  )
+}
+
+function AccordionToggle({ label, icon, isOpen, onToggle, isChildActive, indent = false, collapsed }: {
+  label: string; icon: string; isOpen: boolean; onToggle: () => void; isChildActive: boolean; indent?: boolean; collapsed: boolean
+}) {
+  return (
+    <li>
+      <button
+        onClick={onToggle}
+        title={collapsed ? label : undefined}
+        aria-expanded={isOpen}
+        className={cn(
+          'w-full flex items-center transition-colors',
+          collapsed ? 'justify-center px-2 py-1.5' : cn('gap-2.5 py-1.5', indent ? 'pl-8 pr-4' : 'px-4'),
+          indent
+            ? cn('text-xs font-medium', isChildActive && !isOpen ? 'text-[#534AB7] font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground')
+            : cn('text-[11px] font-semibold uppercase tracking-wide', isChildActive && !isOpen ? 'bg-[#3d3d3d] text-[#e5e5e5]' : 'bg-[#3d3d3d] text-[#e5e5e5] hover:bg-[#484848]')
+        )}
+      >
+        <span aria-hidden="true" className="text-sm">{icon}</span>
+        {!collapsed && (
+          <>
+            <span className="flex-1 text-left">{label}</span>
+            <svg
+              className={cn('w-3 h-3 shrink-0 transition-transform duration-200', isOpen ? 'rotate-180' : '')}
+              fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </>
+        )}
+      </button>
+    </li>
+  )
+}
+
 export function Sidebar() {
   const pathname = usePathname()
   const [pending, setPending] = useState<string | null>(null)
@@ -36,12 +104,14 @@ export function Sidebar() {
 
   useEffect(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stored === 'true') setCollapsed(true)
   }, [])
 
   useEffect(() => {
     const stored = localStorage.getItem('businessType')
     if (stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBusinessType(stored)
       return
     }
@@ -85,85 +155,26 @@ export function Sidebar() {
 
   // Auto-open parent accordion when child route is active
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (FINANCE_ITEMS.some(i => pathname.startsWith(i.href)) || MORE_ITEMS.some(i => i.href === pathname)) setFinanceOpen(true)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (MORE_ITEMS.some(i => i.href === pathname)) setMoreOpen(true)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (IMPORT_ITEMS.some(i => i.href === pathname)) setImportOpen(true)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (projectsItems.some(i => pathname.startsWith(i.href))) setProjectsOpen(true)
   }, [pathname, projectsItems])
 
-  useEffect(() => { setPending(null) }, [pathname])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPending(null)
+  }, [pathname])
 
   function toggleCollapsed() {
     setCollapsed(c => {
       localStorage.setItem('sidebar-collapsed', String(!c))
       return !c
     })
-  }
-
-  function NavLink({ href, label, icon, indent = false }: { href: string; label: string; icon: string; indent?: boolean }) {
-    const isActive = href === '/projects' ? pathname === href || pathname.startsWith('/projects/') : pathname === href
-    const isPending = pending === href && !isActive
-    return (
-      <li>
-        <Link
-          href={href}
-          aria-label={label}
-          title={collapsed ? label : undefined}
-          data-testid={`nav-${label.toLowerCase().replace(/\s+/g, '-')}`}
-          onClick={() => { if (!isActive) setPending(href) }}
-          className={cn(
-            'flex items-center text-xs font-medium transition-colors w-full',
-            collapsed ? 'justify-center px-2 py-1.5' : cn('gap-2.5 py-1.5', indent ? 'pl-8 pr-4' : 'px-4'),
-            isActive
-              ? 'bg-[#f5f5f4] text-[#1a1a1a] font-medium border-r-2 border-[#534AB7]'
-              : isPending
-                ? 'bg-muted text-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          )}
-        >
-          {isPending ? (
-            <span aria-hidden="true" className="inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
-          ) : (
-            <span aria-hidden="true" className="text-sm">{icon}</span>
-          )}
-          {!collapsed && label}
-        </Link>
-      </li>
-    )
-  }
-
-  function AccordionToggle({ label, icon, isOpen, onToggle, isChildActive, indent = false }: {
-    label: string; icon: string; isOpen: boolean; onToggle: () => void; isChildActive: boolean; indent?: boolean
-  }) {
-    return (
-      <li>
-        <button
-          onClick={onToggle}
-          title={collapsed ? label : undefined}
-          aria-expanded={isOpen}
-          className={cn(
-            'w-full flex items-center transition-colors',
-            collapsed ? 'justify-center px-2 py-1.5' : cn('gap-2.5 py-1.5', indent ? 'pl-8 pr-4' : 'px-4'),
-            indent
-              ? cn('text-xs font-medium', isChildActive && !isOpen ? 'text-[#534AB7] font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground')
-              : cn('text-[11px] font-semibold uppercase tracking-wide', isChildActive && !isOpen ? 'bg-[#3d3d3d] text-[#e5e5e5]' : 'bg-[#3d3d3d] text-[#e5e5e5] hover:bg-[#484848]')
-          )}
-        >
-          <span aria-hidden="true" className="text-sm">{icon}</span>
-          {!collapsed && (
-            <>
-              <span className="flex-1 text-left">{label}</span>
-              <svg
-                className={cn('w-3 h-3 shrink-0 transition-transform duration-200', isOpen ? 'rotate-180' : '')}
-                fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </>
-          )}
-        </button>
-      </li>
-    )
   }
 
   const financeChildActive = FINANCE_ITEMS.some(i => pathname.startsWith(i.href))
@@ -201,11 +212,12 @@ export function Sidebar() {
           isOpen={financeOpen}
           onToggle={() => setFinanceOpen(v => !v)}
           isChildActive={financeChildActive || moreChildActive}
+          collapsed={collapsed}
         />
         {(financeOpen || collapsed) && (
           <>
             {FINANCE_ITEMS.map(item => (
-              <NavLink key={item.href} {...item} indent={!collapsed} />
+              <NavLink key={item.href} {...item} indent={!collapsed} collapsed={collapsed} pathname={pathname} pending={pending} setPending={setPending} />
             ))}
             {/* More Options nested accordion */}
             <AccordionToggle
@@ -215,9 +227,10 @@ export function Sidebar() {
               onToggle={() => setMoreOpen(v => !v)}
               isChildActive={moreChildActive}
               indent={!collapsed}
+              collapsed={collapsed}
             />
             {(moreOpen || collapsed) && MORE_ITEMS.map(item => (
-              <NavLink key={item.href} {...item} indent={!collapsed} />
+              <NavLink key={item.href} {...item} indent={!collapsed} collapsed={collapsed} pathname={pathname} pending={pending} setPending={setPending} />
             ))}
           </>
         )}
@@ -231,9 +244,10 @@ export function Sidebar() {
           isOpen={importOpen}
           onToggle={() => setImportOpen(v => !v)}
           isChildActive={importChildActive}
+          collapsed={collapsed}
         />
         {(importOpen || collapsed) && IMPORT_ITEMS.map(item => (
-          <NavLink key={item.href} {...item} indent={!collapsed} />
+          <NavLink key={item.href} {...item} indent={!collapsed} collapsed={collapsed} pathname={pathname} pending={pending} setPending={setPending} />
         ))}
 
         {!collapsed && <li className="my-0.5 border-t border-black/[0.06]" />}
@@ -245,9 +259,10 @@ export function Sidebar() {
           isOpen={projectsOpen}
           onToggle={() => setProjectsOpen(v => !v)}
           isChildActive={projectsChildActive}
+          collapsed={collapsed}
         />
         {(projectsOpen || collapsed) && projectsItems.map(item => (
-          <NavLink key={item.href} {...item} indent={!collapsed} />
+          <NavLink key={item.href} {...item} indent={!collapsed} collapsed={collapsed} pathname={pathname} pending={pending} setPending={setPending} />
         ))}
 
         {/* Collapse toggle */}

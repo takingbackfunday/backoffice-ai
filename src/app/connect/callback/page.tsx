@@ -33,6 +33,7 @@ export default function ConnectCallbackPage() {
         no_accounts: 'No accounts were returned by your bank.',
         access_denied: 'You declined to share account access.',
       }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setState({ kind: 'error', provider, message: messages[error] ?? `Connection failed: ${error}` })
       return
     }

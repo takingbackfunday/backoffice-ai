@@ -17,7 +17,7 @@ const userId = 'collision-test-user'
 // Intercept creates to find collisions
 const seen = new Map<string, string>()
 const origCreate = prisma.categoryGroup.create.bind(prisma.categoryGroup)
-let collision: string | null = null
+const collision: string | null = null
 
 try {
   await seedDefaultCategories(userId, prisma, 'both')

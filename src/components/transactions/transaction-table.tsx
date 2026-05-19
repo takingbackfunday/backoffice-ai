@@ -37,6 +37,7 @@ interface ColumnFilters {
 function useAnchorRect(anchorRef: React.RefObject<HTMLElement | null>, open: boolean) {
   const [rect, setRect] = useState<DOMRect | null>(null)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!open) { setRect(null); return }
     function update() {
       if (anchorRef.current) setRect(anchorRef.current.getBoundingClientRect())

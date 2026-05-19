@@ -242,7 +242,9 @@ export function ExpensesByCategoryWidget({ currency }: ExpensesByCategoryWidgetP
 
   // Fetch chart data whenever config or currency changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null)
     fetch('/api/widgets/data', {
       method: 'POST',

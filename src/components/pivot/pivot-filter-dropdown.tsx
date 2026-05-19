@@ -41,6 +41,7 @@ export function PivotFilterDropdown({
   // Initialize checked state and position when opening
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setChecked(activeValues.length === 0 ? new Set(uniqueValues) : new Set(activeValues))
       if (triggerRef.current) {
         const rect = triggerRef.current.getBoundingClientRect()

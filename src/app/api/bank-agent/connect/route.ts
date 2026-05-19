@@ -21,9 +21,7 @@ const ConnectBodySchema = z.object({
   password: z.string().min(1),
 })
 
-interface SseEvent extends SyncJobEvent {
-  // Extend if needed
-}
+type SseEvent = SyncJobEvent
 
 function encode(event: SseEvent): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
