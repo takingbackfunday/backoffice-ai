@@ -247,7 +247,7 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
 
       {/* Review / result panel */}
       {receipt && fields && (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-lg overflow-hidden w-full md:max-w-xl mx-auto">
           <div className="flex items-center justify-between p-3 bg-muted/40 border-b">
             <span
               className={cn(

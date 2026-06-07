@@ -650,8 +650,9 @@ export function ReceiptsPageClient({
                     {isReviewing && reviewFields && (
                       <tr key={`${receipt.id}-review`} className="border-b bg-amber-50/40">
                         <td colSpan={8} className="px-4 py-3">
-                          <p className="text-xs text-muted-foreground mb-3">Correct any errors then confirm.</p>
-                          <div className="grid grid-cols-3 gap-2 max-w-xl">
+                          <div className="w-full md:max-w-xl mx-auto">
+                            <p className="text-xs text-muted-foreground mb-3">Correct any errors then confirm.</p>
+                            <div className="grid grid-cols-3 gap-2">
                             {(['vendor', 'date', 'total', 'tax', 'paymentMethod', 'rawCategory'] as (keyof ReviewFields)[]).map(key => (
                               <div key={key} className="space-y-1">
                                 <label className="text-xs text-muted-foreground capitalize">{key === 'rawCategory' ? 'Category' : key === 'paymentMethod' ? 'Payment' : key}</label>
@@ -672,6 +673,7 @@ export function ReceiptsPageClient({
                               {confirming ? 'Saving...' : 'Confirm & save'}
                             </Button>
                             <button className="text-xs text-muted-foreground underline" onClick={closeReview}>Cancel</button>
+                          </div>
                           </div>
                         </td>
                       </tr>
