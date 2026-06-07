@@ -3,18 +3,15 @@ import type { PageCapability } from '@/lib/agent/site-capabilities-types'
 export const capability: PageCapability = {
   route: '/bank-accounts',
   title: 'Bank accounts',
-  purpose: 'View and manage all connected and manually added bank accounts — sync status, balances, and connection health.',
+  purpose: 'View and manage all bank accounts and cards — manual sync via browser agent.',
   jobsToBeDone: [
-    'See all bank accounts and their current balance',
-    'Check the sync status of each connected account',
+    'See all bank accounts and cards',
     'Add a new bank account manually',
-    'Connect a bank account via open banking (Plaid, Finexer, Enable Banking)',
-    'Reconnect a disconnected bank account',
-    'Refresh transactions for a connected account',
+    'Connect a bank account via browser automation (manual sync)',
   ],
   deepLinks: {},
-  reads: ['Account', 'Institution', 'BankConnection'],
-  writes: ['Account', 'BankConnection'],
+  reads: ['Account', 'Institution'],
+  writes: ['Account'],
   relatedRoutes: [
     '/accounts/new',
     '/bank-sync',

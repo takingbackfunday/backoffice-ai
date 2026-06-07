@@ -16,12 +16,12 @@ export default async function BankAccountsPage({
   if (!userId) redirect('/sign-in')
 
   const { tab, onboarding } = await searchParams
+  const initialTab = tab === 'manual-sync' ? 'manual-sync' : 'accounts'
 
   const accounts = await prisma.account.findMany({
     where: { userId },
     include: {
       institution: true,
-      bankConnection: true,
       bankPlaybook: {
         select: { id: true, status: true, lastVerifiedAt: true, twoFaType: true },
       },
@@ -37,13 +37,6 @@ export default async function BankAccountsPage({
     lastImportAt: a.lastImportAt?.toISOString() ?? null,
     createdAt: a.createdAt.toISOString(),
     institution: { name: a.institution.name },
-    bankConnection: a.bankConnection ? {
-      id: a.bankConnection.id,
-      provider: a.bankConnection.provider as 'PLAID' | 'ENABLE_BANKING' | 'BROWSER_AGENT',
-      status: a.bankConnection.status as 'ACTIVE' | 'DISCONNECTED' | 'DEGRADED' | 'REVOKED',
-      lastSyncAt: a.bankConnection.lastSyncAt?.toISOString() ?? null,
-      disconnectReason: a.bankConnection.disconnectReason,
-    } : null,
     bankPlaybook: a.bankPlaybook ? {
       id: a.bankPlaybook.id,
       status: a.bankPlaybook.status,
@@ -60,7 +53,7 @@ export default async function BankAccountsPage({
         <main className="flex-1 p-6 max-w-4xl" role="main">
           <BankAccountsClient
             accounts={serialized}
-            initialTab={(tab as 'accounts' | 'auto-sync' | 'manual-sync') ?? 'accounts'}
+            initialTab={initialTab}
             onboarding={onboarding === '1'}
           />
         </main>

@@ -17,9 +17,7 @@ model InstitutionSchema {
   createdByUserId          String?
   csvMapping               Json
   accounts                 Account[]
-  preferredProvider        BankProvider?
-  plaidInstitutionId       String?
-  enableBankingAspspId     String?
+
   createdAt                DateTime      @default(now())
   updatedAt                DateTime      @updatedAt
 }
@@ -37,7 +35,6 @@ model Account {
   importBatches       ImportBatch[]
   bankPlaybook        BankPlaybook?
   encryptedCredential EncryptedCredential?
-  bankConnection      BankConnection?
   syncJobs            SyncJob[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -242,65 +239,13 @@ model SyncJob {
   imported         Int?
   skipped          Int?
   batchId          String?
-  provider         BankProvider?
-  bankConnectionId String?
-  bankConnection   BankConnection? @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
   @@index([accountId])
 }
 
-enum BankProvider {
-  PLAID
-  ENABLE_BANKING
-  BROWSER_AGENT
-}
 
-enum ConnectionStatus {
-  ACTIVE
-  DISCONNECTED
-  DEGRADED
-  REVOKED
-}
-
-model BankConnection {
-  id                       String           @id @default(cuid())
-  accountId                String           @unique
-  account                  Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  userId                   String
-  provider                 BankProvider
-  status                   ConnectionStatus @default(ACTIVE)
-  // Plaid
-  plaidItemId              String?
-  plaidAccountId           String?
-  plaidInstitutionId       String?
-  // Enable Banking (UK + EU PSD2)
-  enableBankingSessionId   String?
-  enableBankingAccountId   String?
-  enableBankingAspspId     String?
-  // Shared encrypted token storage
-  tokenCiphertext          String?
-  tokenIv                  String?
-  tokenAuthTag             String?
-  // Refresh token (Finexer + Enable Banking use OAuth refresh)
-  refreshCiphertext        String?
-  refreshIv                String?
-  refreshAuthTag           String?
-  tokenExpiresAt           DateTime?
-  lastSyncAt               DateTime?
-  lastSyncCursor           String?
-  errorCount               Int              @default(0)
-  disconnectReason         String?
-  metadata                 Json             @default("{}")
-  syncJobs                 SyncJob[]
-  createdAt                DateTime         @default(now())
-  updatedAt                DateTime         @updatedAt
-
-  @@index([userId])
-  @@index([plaidItemId])
-  @@index([enableBankingSessionId])
-}
 
 enum SyncJobStatus {
   PENDING

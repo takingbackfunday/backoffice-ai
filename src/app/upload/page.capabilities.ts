@@ -13,5 +13,5 @@ export const capability: PageCapability = {
   deepLinks: {},
   reads: ['InstitutionSchema', 'CategorizationRule'],
   writes: ['Transaction', 'ImportBatch'],
-  relatedRoutes: ['/transactions', '/connections', '/rules'],
+  relatedRoutes: ['/transactions', '/rules'],
 }

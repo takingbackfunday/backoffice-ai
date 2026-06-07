@@ -65,11 +65,9 @@ Financial management tool for freelancers, consultants, and small property manag
 - Conversation memory across turns within a session
 
 ### Bank Sync
-- **US** → Plaid (cursor-based incremental sync via PlaidLink)
-- **GB** → Finexer (UK Open Banking, 99% coverage, OAuth redirect)
-- **EU** → Enable Banking (PSD2/Berlin Group, 2,500+ banks across 29 countries, OAuth redirect)
-- Browser-agent fallback (Playwright + Browserless.io) for institutions not covered by Open Banking APIs
-- AES-256-GCM encrypted token storage per user
+- CSV upload for direct transaction imports
+- Manual browser-agent sync (Playwright + Browserless.io) for bank sites that support CSV export
+- AES-256-GCM encrypted credential storage per user
 
 ## Stack
 
@@ -80,7 +78,7 @@ Financial management tool for freelancers, consultants, and small property manag
 - **Styling**: Tailwind CSS 4 + shadcn/ui (base-nova)
 - **AI**: OpenRouter (`anthropic/claude-sonnet-4.6` for reasoning, Gemini Flash Lite for classification)
 - **PDF**: react-pdf/renderer
-- **Bank sync**: Plaid (US), Finexer (GB), Enable Banking (EU); playwright-core + Browserless.io as fallback
+- **Bank sync**: CSV upload plus manual browser-agent sync via playwright-core + Browserless.io
 
 ## Development
 

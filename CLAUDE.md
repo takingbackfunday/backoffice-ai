@@ -78,10 +78,7 @@ Required in `.env.local`:
 - `ENCRYPTION_SECRET` — AES-256 key derivation + HMAC secret for doc upload tokens
 - `UPLOADTHING_TOKEN` — file storage
 - `MISTRAL_API_KEY` — receipt OCR (`mistral-ocr-latest`)
-- `PLAID_CLIENT_ID`, `PLAID_SECRET` — US bank sync; `PLAID_ENV`: `sandbox | development | production`
-- `FINEXER_CLIENT_ID`, `FINEXER_CLIENT_SECRET` — UK bank sync
-- `ENABLE_BANKING_CLIENT_ID`, `ENABLE_BANKING_CLIENT_SECRET` — EU bank sync (29 countries)
-- `BROWSERLESS_TOKEN` — cloud browser sessions (bank-agent fallback only)
+- `BROWSERLESS_TOKEN` — cloud browser sessions for manual bank sync
 - `RESEND_API_KEY` — transactional email; optional, skipped gracefully if absent
 - `RESEND_FROM` — sender address (defaults to `Backoffice <noreply@backoffice.cv>`)
 - `NEXT_PUBLIC_APP_URL` — public base URL for email links (defaults to `https://backoffice.cv`)

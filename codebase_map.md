@@ -44,7 +44,7 @@ Keep this updated when feature areas are added or moved.
 | `/projects/[slug]/messages` | `src/app/projects/[slug]/messages/page.tsx` | `src/components/projects/messages-inbox.tsx` |
 | `/projects/[slug]/listings` | `src/app/projects/[slug]/listings/page.tsx` | `src/components/projects/listings-client.tsx` |
 | `/accounts` | `src/app/accounts/page.tsx` | `src/components/accounts/accounts-client.tsx` |
-| `/connections` | `src/app/connections/page.tsx` | `src/components/connections/connections-client.tsx` |
+| `/bank-accounts` | `src/app/bank-accounts/page.tsx` | `src/components/bank-accounts/bank-accounts-client.tsx` |
 | `/bank-sync` | `src/app/bank-sync/page.tsx` | `src/components/bank-sync/bank-sync-page-client.tsx` |
 | `/payees` | `src/app/payees/page.tsx` | `src/components/payees/payee-manager.tsx` |
 | `/settings` | `src/app/settings/page.tsx` | `src/components/settings/` (multiple) |
@@ -287,24 +287,17 @@ Routes: `POST /api/agent/omni` (all events), `GET /api/agent/rules` (status/toke
 
 ### Bank sync
 
+Auto-sync/open-banking providers have been removed. Users import transactions by CSV upload or the manual browser-agent sync.
+
 | Task | File |
 |---|---|
-| Plaid (US) | `src/lib/bank-providers/plaid.ts` |
-| Finexer (UK) | — (integrated in sync-engine) |
-| Enable Banking (EU) | `src/lib/bank-providers/enable-banking.ts` |
-| Shared sync pipeline | `src/lib/bank-providers/sync-engine.ts` → `importNormalizedTransactions()` |
-| Provider adapter type | `src/types/bank-providers.ts` → `BankProviderAdapter` |
-| All providers index | `src/lib/bank-providers/index.ts` |
-| OAuth init | `POST /api/connections/init` |
-| Enable Banking OAuth callback | `GET /api/connections/enable-banking/callback` |
-| Connections CRUD | `GET/POST /api/connections`, `GET/PATCH/DELETE /api/connections/[id]` |
-| Manual sync | `POST /api/connections/[id]/sync` |
-| Scheduled sync (every 6h) | `POST /api/sync/scheduled` |
-| Webhooks | `POST /api/webhooks/plaid`, `/webhooks/enable-banking`, `/webhooks/clerk` |
-| Credential encryption | `src/lib/bank-agent/crypto.ts` → AES-256-GCM |
-| Browser agent fallback (Browserless) | `src/lib/bank-agent/worker.ts` |
+| Bank accounts page + manual sync tab | `src/app/bank-accounts/page.tsx` → `src/components/bank-accounts/bank-accounts-client.tsx` |
+| Standalone manual sync page | `src/app/bank-sync/page.tsx` → `src/components/bank-sync/bank-sync-page-client.tsx` |
+| Browser agent worker (Browserless) | `src/lib/bank-agent/worker.ts` |
 | Browser agent routes (SSE) | `src/app/api/bank-agent/` (connect, sync, status, disconnect) |
-| Connections UI | `src/components/connections/connect-bank-dialog.tsx` |
+| Credential encryption | `src/lib/bank-agent/crypto.ts` → AES-256-GCM |
+| Manual sync storage | `BankPlaybook`, `EncryptedCredential`, `SyncJob` |
+| CSV upload alternative | `/upload` → `POST /api/transactions/import` |
 
 ### Property management
 
@@ -419,7 +412,6 @@ All routes use helpers from `src/lib/api-response.ts`:
 | Preferences | `src/types/preferences.ts` |
 | Application form data | `src/types/application-data.ts` |
 | Bank agent types | `src/types/bank-agent.ts` |
-| Bank provider adapter | `src/types/bank-providers.ts` |
 
 ### Client state (Zustand stores)
 

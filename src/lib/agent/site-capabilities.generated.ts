@@ -8,8 +8,7 @@ const _data: any[] = [
     "jobsToBeDone": [
       "Add a checking, savings, business, or credit card account manually",
       "Set the account currency and country",
-      "Set an opening balance",
-      "Link the account to an existing bank connection"
+      "Set an opening balance"
     ],
     "deepLinks": {},
     "reads": [],
@@ -41,31 +40,25 @@ const _data: any[] = [
     ],
     "relatedRoutes": [
       "/transactions",
-      "/connections",
       "/bank-sync"
     ]
   },
   {
     "route": "/bank-accounts",
     "title": "Bank accounts",
-    "purpose": "View and manage all connected and manually added bank accounts — sync status, balances, and connection health.",
+    "purpose": "View and manage all bank accounts and cards — manual sync via browser agent.",
     "jobsToBeDone": [
-      "See all bank accounts and their current balance",
-      "Check the sync status of each connected account",
+      "See all bank accounts and cards",
       "Add a new bank account manually",
-      "Connect a bank account via open banking (Plaid, Finexer, Enable Banking)",
-      "Reconnect a disconnected bank account",
-      "Refresh transactions for a connected account"
+      "Connect a bank account via browser automation (manual sync)"
     ],
     "deepLinks": {},
     "reads": [
       "Account",
-      "Institution",
-      "BankConnection"
+      "Institution"
     ],
     "writes": [
-      "Account",
-      "BankConnection"
+      "Account"
     ],
     "relatedRoutes": [
       "/accounts/new",
@@ -92,7 +85,6 @@ const _data: any[] = [
       "SyncJob"
     ],
     "relatedRoutes": [
-      "/connections",
       "/transactions",
       "/accounts"
     ]
@@ -124,32 +116,6 @@ const _data: any[] = [
       "/transactions",
       "/rules",
       "/settings"
-    ]
-  },
-  {
-    "route": "/connections",
-    "title": "Bank connections",
-    "purpose": "Connect bank accounts for automatic transaction sync via Plaid (US), Finexer (UK), or Enable Banking (EU).",
-    "jobsToBeDone": [
-      "Connect a US bank account via Plaid",
-      "Connect a UK bank account via Finexer",
-      "Connect a European bank account via Enable Banking (29 countries)",
-      "Disconnect or refresh an existing bank connection",
-      "View connection status and last sync time"
-    ],
-    "deepLinks": {},
-    "reads": [
-      "Account",
-      "SyncJob"
-    ],
-    "writes": [
-      "Account",
-      "EncryptedCredential"
-    ],
-    "relatedRoutes": [
-      "/bank-sync",
-      "/accounts",
-      "/transactions"
     ]
   },
   {
@@ -1207,7 +1173,6 @@ const _data: any[] = [
     ],
     "relatedRoutes": [
       "/transactions",
-      "/connections",
       "/rules"
     ]
   },
@@ -1274,45 +1239,43 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     1,
     2,
     3,
-    5,
-    8,
-    43
+    7,
+    42
   ],
   "manually": [
     0,
     2,
     3,
-    15
+    14
   ],
   "bank": [
     0,
     1,
     2,
     3,
-    5,
-    39,
-    41,
-    43,
-    44
+    38,
+    40,
+    42,
+    43
   ],
   "financial": [
     0,
     1,
-    13
+    12
   ],
   "type": [
     0,
     4,
-    19,
-    37,
-    38
+    18,
+    36,
+    37
   ],
   "currency": [
     0,
     1,
-    6,
-    14,
-    16
+    5,
+    13,
+    15
   ],
   "country": [
     0
@@ -1322,9 +1285,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "balance": [
     0,
-    2,
-    6,
-    15
+    5,
+    14
   ],
   "checking": [
     0
@@ -1335,7 +1297,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "business": [
     0,
     4,
-    41
+    40
   ],
   "credit": [
     0
@@ -1343,80 +1305,55 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "card": [
     0
   ],
-  "link": [
-    0,
-    10,
-    11,
-    16,
-    29,
-    39
-  ],
-  "existing": [
-    0,
-    4,
-    5,
-    10,
-    14,
-    18,
-    29
-  ],
-  "connection": [
-    0,
-    2,
-    5
-  ],
   "accounts": [
     0,
     1,
     2,
     3,
-    5,
-    6
+    5
   ],
   "manage": [
     1,
     2,
     4,
-    7,
-    18,
-    21,
-    22,
-    28,
-    34,
-    35,
-    36,
-    40,
-    41,
-    46
-  ],
-  "view": [
-    1,
-    2,
-    5,
-    9,
-    10,
-    12,
-    13,
-    15,
-    18,
+    6,
+    17,
     20,
-    22,
-    23,
-    28,
-    30,
-    31,
+    21,
+    27,
     33,
     34,
     35,
     39,
     40,
-    45,
-    46
+    45
+  ],
+  "view": [
+    1,
+    2,
+    8,
+    9,
+    11,
+    12,
+    14,
+    17,
+    19,
+    21,
+    22,
+    27,
+    29,
+    30,
+    32,
+    33,
+    34,
+    38,
+    39,
+    44,
+    45
   ],
   "balances": [
     1,
-    2,
-    42
+    41
   ],
   "types": [
     1
@@ -1424,36 +1361,35 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "transaction": [
     1,
     4,
-    5,
+    6,
     7,
-    8,
-    39,
-    43
+    38,
+    42
   ],
   "counts": [
     1,
-    7
+    6
   ],
   "with": [
     1,
-    7,
-    11,
-    22,
+    6,
+    10,
+    21,
+    23,
     24,
-    25,
-    38,
-    44,
-    46
+    37,
+    43,
+    45
   ],
   "current": [
     1,
-    2,
-    31,
-    34,
-    35
+    30,
+    33,
+    34
   ],
   "manual": [
     1,
+    2,
     3
   ],
   "what": [
@@ -1461,139 +1397,63 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "each": [
     1,
-    2,
     4,
-    19,
-    32
+    18,
+    31
   ],
   "uses": [
     1
   ],
-  "connected": [
+  "cards": [
     2,
-    3
-  ],
-  "added": [
-    2
+    41
   ],
   "sync": [
     2,
-    3,
-    5
+    3
   ],
-  "status": [
-    2,
-    3,
-    5,
-    10,
-    12,
-    15,
-    17,
-    18,
-    19,
-    20,
-    22,
-    26,
-    28,
-    30,
-    31,
-    32,
-    35,
-    36,
-    42
-  ],
-  "health": [
+  "browser": [
     2
   ],
-  "their": [
+  "agent": [
     2,
-    7,
-    12,
-    19,
-    30,
-    36,
-    38,
-    46
-  ],
-  "check": [
-    2,
-    3,
-    9,
-    20,
-    23,
-    27,
-    30,
-    31,
-    32,
-    34,
-    36
+    39
   ],
   "connect": [
-    2,
-    5
-  ],
-  "open": [
-    2,
-    9,
-    22,
-    23,
-    31,
-    34
-  ],
-  "banking": [
-    2,
-    5
-  ],
-  "plaid": [
-    2,
-    5
-  ],
-  "finexer": [
-    2,
-    5
-  ],
-  "enable": [
-    2,
-    5
-  ],
-  "reconnect": [
     2
   ],
-  "disconnected": [
+  "automation": [
     2
-  ],
-  "refresh": [
-    2,
-    5
-  ],
-  "transactions": [
-    2,
-    3,
-    4,
-    8,
-    13,
-    40,
-    43,
-    44,
-    45
   ],
   "trigger": [
     3,
-    44
+    43
+  ],
+  "connected": [
+    3
   ],
   "pull": [
     3
   ],
   "latest": [
     3,
-    25
+    24
+  ],
+  "transactions": [
+    3,
+    4,
+    7,
+    12,
+    39,
+    42,
+    43,
+    44
   ],
   "when": [
     3
   ],
   "last": [
-    3,
-    5
+    3
   ],
   "many": [
     3,
@@ -1604,24 +1464,55 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "imported": [
     3,
-    44
+    43
+  ],
+  "check": [
+    3,
+    8,
+    19,
+    22,
+    26,
+    29,
+    30,
+    31,
+    33,
+    35
+  ],
+  "status": [
+    3,
+    9,
+    11,
+    14,
+    16,
+    17,
+    18,
+    19,
+    21,
+    25,
+    27,
+    29,
+    30,
+    31,
+    34,
+    35,
+    41
   ],
   "running": [
     3
   ],
   "categories": [
     4,
+    5,
     6,
-    7,
-    40
+    39
   ],
   "category": [
     4,
+    5,
     6,
     7,
-    8,
-    13,
-    43
+    12,
+    42
   ],
   "groups": [
     4
@@ -1631,29 +1522,36 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "reorder": [
     4,
-    40
+    39
   ],
   "mark": [
     4,
-    15,
-    28,
-    34,
-    42
+    14,
+    27,
+    33,
+    41
   ],
   "deductible": [
     4
   ],
   "group": [
     4,
-    8
+    7
   ],
   "delete": [
     4,
-    7,
-    33,
+    6,
+    32,
+    38,
     39,
-    40,
-    43
+    42
+  ],
+  "existing": [
+    4,
+    9,
+    13,
+    17,
+    28
   ],
   "within": [
     4
@@ -1663,10 +1561,10 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "from": [
     4,
-    20,
-    27,
-    43,
-    44
+    19,
+    26,
+    42,
+    43
   ],
   "reports": [
     4
@@ -1676,1630 +1574,1633 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "defaults": [
     4,
-    41
+    40
   ],
   "specific": [
     4,
-    9,
-    16,
-    18,
-    25,
-    38
+    8,
+    15,
+    17,
+    24,
+    37
   ],
   "tagged": [
     4
   ],
-  "connections": [
-    5
-  ],
-  "automatic": [
-    5,
-    44
-  ],
-  "european": [
-    5
-  ],
-  "countries": [
-    5
-  ],
-  "disconnect": [
-    5
-  ],
-  "time": [
-    5,
-    8,
-    19,
-    33
-  ],
   "dashboard": [
-    6,
-    9
+    5,
+    8
   ],
   "overview": [
-    6,
-    9,
-    26,
-    42
+    5,
+    8,
+    25,
+    41
   ],
   "finances": [
-    6
+    5
   ],
   "kpis": [
-    6
+    5
   ],
   "cashflow": [
-    6
+    5
   ],
   "chart": [
-    6
+    5
   ],
   "worth": [
-    6
+    5
   ],
   "expenses": [
-    6,
-    8,
-    13,
-    37
+    5,
+    7,
+    12,
+    36
   ],
   "income": [
+    5,
     6,
     7,
-    8,
-    13
-  ],
-  "glance": [
-    6
-  ],
-  "over": [
-    6
-  ],
-  "custom": [
-    6,
-    41
-  ],
-  "date": [
-    6,
-    13,
-    14,
-    16,
-    39,
-    43
-  ],
-  "range": [
-    6,
-    13
-  ],
-  "track": [
-    6,
-    21,
-    23,
-    33
-  ],
-  "across": [
-    6,
-    8,
-    9,
-    46
-  ],
-  "expense": [
-    6,
-    13
-  ],
-  "period": [
-    6,
-    8
-  ],
-  "switch": [
-    6
-  ],
-  "display": [
-    6,
-    8
-  ],
-  "payees": [
-    7,
-    40
-  ],
-  "assign": [
-    7,
-    22,
-    23,
-    36,
-    40
-  ],
-  "default": [
-    7,
-    41
-  ],
-  "vendors": [
-    7,
-    45,
-    46
-  ],
-  "merchants": [
-    7
-  ],
-  "sources": [
-    7
-  ],
-  "change": [
-    7,
-    10,
-    14,
-    18,
-    36,
-    41
-  ],
-  "payee": [
-    7,
-    8,
-    43
-  ],
-  "search": [
-    7,
-    43
-  ],
-  "name": [
-    7,
-    26,
-    31,
-    37,
-    41
-  ],
-  "unused": [
-    7
-  ],
-  "pivot": [
-    8
-  ],
-  "table": [
-    8
-  ],
-  "flexible": [
-    8
-  ],
-  "slicing": [
-    8
-  ],
-  "aggregating": [
-    8
-  ],
-  "data": [
-    8,
-    39
-  ],
-  "dimension": [
-    8
-  ],
-  "project": [
-    8,
-    12,
-    13,
-    16,
-    17,
-    19,
-    26,
-    29,
-    30,
-    33,
-    36,
-    37,
-    38,
-    43
-  ],
-  "compare": [
-    8
-  ],
-  "different": [
-    8
-  ],
-  "dimensions": [
-    8
-  ],
-  "toggle": [
-    8
-  ],
-  "subtotals": [
-    8
-  ],
-  "grand": [
-    8
-  ],
-  "totals": [
-    8,
-    12,
-    13,
-    17,
-    27,
-    30,
-    33
-  ],
-  "decimal": [
-    8
-  ],
-  "export": [
-    8
-  ],
-  "save": [
-    8,
-    11,
-    14,
-    16
-  ],
-  "load": [
-    8
-  ],
-  "named": [
-    8
-  ],
-  "presets": [
-    8
-  ],
-  "portfolio": [
-    9
-  ],
-  "property": [
-    9,
-    16,
-    17,
-    20,
-    21,
-    23,
-    25,
-    26,
-    32,
-    35,
-    37,
-    38
-  ],
-  "showing": [
-    9
-  ],
-  "occupancy": [
-    9,
-    26,
-    35
-  ],
-  "rates": [
-    9,
-    10,
-    11
-  ],
-  "rent": [
-    9,
-    20,
-    21,
-    26,
-    31,
-    34,
-    35
-  ],
-  "roll": [
-    9
-  ],
-  "maintenance": [
-    9,
-    22,
-    23,
-    26,
-    31,
-    34
-  ],
-  "properties": [
-    9
-  ],
-  "total": [
-    9,
-    18,
-    28,
-    33,
-    46
-  ],
-  "monthly": [
-    9
-  ],
-  "vacancy": [
-    9
-  ],
-  "loss": [
-    9
-  ],
-  "which": [
-    9,
-    20,
-    22,
-    23,
-    25,
-    30,
-    32,
-    35,
-    36,
-    40,
-    42,
-    44
-  ],
-  "leases": [
-    9,
-    20,
-    26,
-    31,
-    32
-  ],
-  "expiring": [
-    9,
-    20,
-    32,
-    35
-  ],
-  "soon": [
-    9,
-    20,
-    35
-  ],
-  "requests": [
-    9,
-    23,
-    31,
-    34
-  ],
-  "navigate": [
-    9,
-    12,
-    15,
-    17,
-    19,
-    20,
-    23,
-    25,
-    26,
-    30,
-    32,
-    35,
-    38,
-    46
-  ],
-  "edit": [
-    10,
-    12,
-    14,
-    15,
-    17,
-    21,
-    26,
-    27,
-    30,
-    31,
-    33,
-    34,
-    39,
-    40,
-    41,
-    43,
-    45
-  ],
-  "estimate": [
-    10,
-    11,
-    12,
-    27,
-    29
-  ],
-  "cost": [
-    10,
-    11,
-    12,
-    18,
-    27,
-    36
-  ],
-  "modify": [
-    10,
-    14
-  ],
-  "sections": [
-    10,
-    11,
-    27,
-    28
-  ],
-  "line": [
-    10,
-    11,
-    14,
-    15,
-    16,
-    27,
-    28
-  ],
-  "items": [
-    10,
-    11,
-    14,
-    15,
-    16,
-    27,
-    28
-  ],
-  "hours": [
-    10,
-    11,
-    33
-  ],
-  "quantities": [
-    10,
-    11
-  ],
-  "remove": [
-    10,
-    14
-  ],
-  "update": [
-    10,
-    14,
-    22
-  ],
-  "final": [
-    10,
     12
   ],
-  "this": [
-    10,
-    13,
-    17,
-    18,
-    19,
-    21,
-    22,
-    24,
-    28,
-    31,
-    33,
-    34,
-    36,
-    45
+  "glance": [
+    5
   ],
-  "basis": [
-    10
+  "over": [
+    5
   ],
-  "quote": [
-    10,
-    27,
-    28,
-    29,
-    30,
-    41
-  ],
-  "projects": [
-    10,
-    11,
-    12,
-    13,
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-    22,
-    23,
-    24,
-    25,
-    26,
-    27,
-    28,
-    29,
-    30,
-    31,
-    32,
-    33,
-    34,
-    35,
-    36,
-    37,
-    38
-  ],
-  "slug": [
-    10,
-    11,
-    12,
-    13,
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-    22,
-    23,
-    24,
-    25,
-    26,
-    27,
-    28,
-    29,
-    30,
-    31,
-    32,
-    33,
-    34,
-    35,
-    36
-  ],
-  "estimates": [
-    10,
-    11,
-    12,
-    26
-  ],
-  "estid": [
-    10
-  ],
-  "create": [
-    11,
-    12,
-    16,
-    17,
-    18,
-    19,
-    21,
-    22,
-    23,
-    28,
-    29,
-    30,
-    34,
-    36,
-    37,
-    38,
-    40,
-    42,
-    43,
-    45
-  ],
-  "item": [
-    11
-  ],
-  "active": [
-    11,
-    18,
-    19,
-    20,
-    21,
-    26,
-    29,
-    32
-  ],
-  "draft": [
-    11,
-    12,
-    16,
-    17,
-    19,
-    21,
-    30,
-    42
-  ],
-  "list": [
-    12,
-    17,
-    19,
-    20,
-    30,
-    32,
-    36,
-    38
-  ],
-  "client": [
-    12,
-    16,
-    17,
-    19,
-    26,
-    27,
-    28,
-    29,
-    30,
-    33,
-    36,
-    37,
-    38,
-    42
-  ],
-  "superseded": [
-    12,
-    30
-  ],
-  "financials": [
-    13,
-    26
-  ],
-  "summary": [
-    13,
-    18,
-    26
-  ],
-  "single": [
-    13,
-    15,
-    18,
-    22,
-    24,
-    26,
-    31,
-    34,
-    45
-  ],
-  "receipts": [
-    13,
-    39
-  ],
-  "categorisation": [
-    13,
-    40,
-    43,
-    44
-  ],
-  "attributed": [
-    13
-  ],
-  "categorise": [
-    13,
-    40,
-    43
-  ],
-  "linked": [
-    13,
-    18,
-    29,
-    45
-  ],
-  "filter": [
-    13,
-    17,
-    23,
-    42,
-    43
-  ],
-  "invoice": [
-    14,
-    15,
-    16,
-    17,
-    28,
-    31,
-    33,
-    41,
-    42
-  ],
-  "dates": [
-    14,
-    16,
-    20
-  ],
-  "notes": [
-    14,
-    16,
-    41,
-    43
-  ],
-  "payment": [
-    14,
-    15,
-    16,
-    17,
-    41,
-    42,
-    46
-  ],
-  "instructions": [
-    14,
-    16,
-    41
-  ],
-  "issue": [
-    14,
-    16,
-    22
-  ],
-  "sales": [
-    14,
-    16
-  ],
-  "terms": [
-    14
-  ],
-  "changes": [
-    14,
-    15
-  ],
-  "send": [
-    14,
-    15,
-    16,
-    17,
-    24,
-    27,
-    28,
-    30,
-    31,
-    32
-  ],
-  "updated": [
-    14
-  ],
-  "invoices": [
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    26,
-    31,
-    34,
-    42
-  ],
-  "invoiceid": [
-    14,
-    15
-  ],
-  "detail": [
-    15,
-    17,
-    18,
-    28,
-    31,
-    32,
-    34,
-    38,
-    45,
-    46
-  ],
-  "history": [
-    15,
-    24,
-    31,
-    34,
-    46
-  ],
-  "download": [
-    15,
-    17
-  ],
-  "options": [
-    15
-  ],
-  "review": [
-    15,
-    27,
-    28
-  ],
-  "sent": [
-    15,
-    17,
-    30,
-    42
-  ],
-  "paid": [
-    15,
-    17,
-    31,
-    34,
-    46
-  ],
-  "outstanding": [
-    15,
-    26,
-    31,
-    34,
-    36,
-    42
-  ],
-  "resend": [
-    15
-  ],
-  "email": [
-    15,
-    17,
-    26,
-    28,
-    31,
-    41
-  ],
-  "void": [
-    15,
-    17
-  ],
-  "page": [
-    15,
-    17,
-    26,
-    32,
-    38,
-    46
-  ],
-  "make": [
-    15
-  ],
-  "apply": [
-    16
-  ],
-  "immediately": [
-    16
-  ],
-  "overdue": [
-    17,
-    42
-  ],
-  "summaries": [
-    17
-  ],
-  "quotes": [
-    18,
-    19,
-    26,
-    27,
-    28,
-    29,
-    30
-  ],
-  "work": [
-    18,
-    19,
-    22,
-    23,
-    26,
-    36,
-    38,
-    42,
-    45,
-    46
-  ],
-  "orders": [
-    18,
-    19,
-    26,
-    36,
-    45,
-    46
-  ],
-  "margin": [
-    18,
-    41
-  ],
-  "subcontractor": [
-    18,
-    36,
-    38,
-    42,
-    46
-  ],
-  "revenue": [
-    18
-  ],
-  "order": [
-    18,
-    22,
-    23,
-    36,
-    38,
-    42,
-    45
-  ],
-  "bill": [
-    18,
-    22,
-    36,
-    38,
-    42
-  ],
-  "against": [
-    18,
-    33,
-    36
-  ],
-  "hold": [
-    18,
-    19
-  ],
-  "completed": [
-    18,
-    19,
-    22,
-    23,
-    36
-  ],
-  "billed": [
-    18,
-    36
-  ],
-  "percentage": [
-    18
-  ],
-  "jobs": [
-    18,
-    19,
-    26,
-    33
-  ],
-  "jobid": [
-    18
-  ],
-  "billing": [
-    19
-  ],
-  "details": [
-    19,
-    20,
-    21,
-    23,
-    26,
-    29,
-    31,
-    34,
-    45
-  ],
-  "fixed": [
-    19
-  ],
-  "price": [
-    19,
-    27
-  ],
-  "materials": [
-    19
-  ],
-  "retainer": [
-    19
-  ],
-  "start": [
-    20,
-    25,
-    29
-  ],
-  "amounts": [
-    20,
-    42
-  ],
-  "tenant": [
-    20,
-    24,
-    25,
-    31,
-    32,
-    34,
-    35
-  ],
-  "expired": [
-    20
-  ],
-  "month": [
-    20,
-    34
-  ],
-  "amount": [
-    20,
-    34,
-    35,
-    36,
-    39
-  ],
-  "lease": [
-    20,
-    24,
-    26,
-    31,
-    32,
-    34,
-    35
-  ],
-  "term": [
-    20
-  ],
-  "unit": [
-    20,
-    21,
-    22,
-    23,
-    24,
-    26,
-    32,
-    34,
-    35
-  ],
-  "record": [
-    20
-  ],
-  "listings": [
-    21
-  ],
-  "rental": [
-    21,
-    34,
-    35,
-    37
-  ],
-  "vacant": [
-    21,
-    34,
-    35
-  ],
-  "units": [
-    21,
-    26,
-    34,
-    35
-  ],
-  "publish": [
-    21
-  ],
-  "applicant": [
-    21
-  ],
-  "enquiries": [
-    21
-  ],
-  "listing": [
-    21
-  ],
-  "description": [
-    21,
-    22,
-    37,
-    43
-  ],
-  "photos": [
-    21
-  ],
-  "unpublish": [
-    21
-  ],
-  "request": [
-    22,
-    23
-  ],
-  "bills": [
-    22,
-    45
-  ],
-  "full": [
-    22,
-    24
-  ],
-  "priority": [
-    22,
-    23
-  ],
-  "vendor": [
-    22,
-    23,
-    36,
-    39,
-    45,
-    46
-  ],
-  "once": [
-    22
-  ],
-  "progress": [
-    22,
-    23
-  ],
-  "associated": [
-    22
-  ],
-  "requestid": [
-    22
-  ],
-  "board": [
-    23,
-    35
-  ],
-  "have": [
-    23,
-    25,
-    30,
-    32,
-    36
-  ],
-  "assigned": [
-    23,
-    32,
-    45
-  ],
-  "conversation": [
-    24,
-    25
-  ],
-  "message": [
-    24,
-    25,
-    31,
-    32
-  ],
-  "thread": [
-    24,
-    25
-  ],
-  "receive": [
-    24
-  ],
-  "messages": [
-    24,
-    25
-  ],
-  "read": [
-    24
-  ],
-  "context": [
-    24
-  ],
-  "alongside": [
-    24
-  ],
-  "tenantid": [
-    24,
-    31
-  ],
-  "inbox": [
-    25
-  ],
-  "threads": [
-    25
-  ],
-  "individual": [
-    25
-  ],
-  "conversations": [
-    25
-  ],
-  "place": [
-    25
-  ],
-  "identify": [
-    25
-  ],
-  "tenants": [
-    25,
-    26,
-    31,
-    32
-  ],
-  "unread": [
-    25
-  ],
-  "shows": [
-    26
-  ],
-  "info": [
-    26,
-    31,
-    32,
-    34,
-    41,
-    45,
-    46
-  ],
-  "upcoming": [
-    26
-  ],
-  "renewals": [
-    26
-  ],
-  "contact": [
-    26,
-    31,
-    32,
-    45,
-    46
-  ],
-  "phone": [
-    26,
-    31,
-    41
-  ],
-  "company": [
-    26
-  ],
-  "generate": [
-    27,
+  "custom": [
+    5,
     40
   ],
-  "finalise": [
-    27
-  ],
-  "before": [
-    27
-  ],
-  "sending": [
-    27
-  ],
-  "margins": [
-    27
-  ],
-  "confirm": [
-    27
-  ],
-  "pricing": [
-    27,
-    28
-  ],
-  "sell": [
-    27
-  ],
-  "prices": [
-    27
-  ],
-  "profitability": [
-    27
-  ],
-  "inline": [
-    27
-  ],
-  "while": [
-    27
-  ],
-  "reviewing": [
-    27
-  ],
-  "ready": [
-    27,
-    33
-  ],
-  "quoteid": [
-    27,
-    28
-  ],
-  "signatures": [
-    28
-  ],
-  "amendments": [
-    28
-  ],
-  "accepted": [
-    28,
-    30
-  ],
-  "rejected": [
-    28,
-    30
-  ],
-  "amendment": [
-    28
-  ],
-  "signed": [
-    28,
-    30
-  ],
-  "convert": [
-    28
-  ],
-  "previous": [
-    28
-  ],
-  "next": [
-    28
-  ],
-  "versions": [
-    28
-  ],
-  "facing": [
-    29,
-    30
-  ],
-  "optionally": [
-    29
-  ],
-  "base": [
-    29
-  ],
-  "title": [
-    29
-  ],
-  "initial": [
-    29
-  ],
-  "been": [
-    30,
-    36
-  ],
-  "past": [
-    31
-  ],
-  "submitted": [
-    31
-  ],
-  "information": [
-    31
-  ],
-  "assignment": [
-    32
-  ],
-  "ended": [
-    32
-  ],
-  "tracking": [
-    33,
-    37
-  ],
-  "billable": [
-    33
-  ],
-  "entries": [
-    33
-  ],
-  "entry": [
-    33
-  ],
-  "logged": [
-    33
-  ],
-  "label": [
-    34
-  ],
-  "bedrooms": [
-    34
-  ],
-  "unitid": [
-    34
-  ],
-  "occupied": [
-    35
-  ],
-  "assignments": [
-    36
-  ],
-  "agreed": [
-    36
-  ],
-  "costs": [
-    36
-  ],
-  "actual": [
-    36
-  ],
-  "workspace": [
-    37
-  ],
-  "choose": [
-    37
-  ],
-  "other": [
-    37,
-    38
-  ],
-  "freelance": [
-    37,
+  "date": [
+    5,
+    12,
+    13,
+    15,
     38,
     42
   ],
-  "general": [
-    37
+  "range": [
+    5,
+    12
   ],
-  "miscellaneous": [
-    37
+  "track": [
+    5,
+    20,
+    22,
+    32
   ],
-  "workspaces": [
-    38
+  "across": [
+    5,
+    7,
+    8,
+    45
   ],
-  "creation": [
-    38
+  "expense": [
+    5,
+    12
   ],
-  "shortcuts": [
-    38
+  "period": [
+    5,
+    7
   ],
-  "intake": [
-    38,
-    42
+  "switch": [
+    5
   ],
-  "upload": [
-    39,
+  "display": [
+    5,
+    7
+  ],
+  "payees": [
+    6,
+    39
+  ],
+  "assign": [
+    6,
+    21,
+    22,
+    35,
+    39
+  ],
+  "default": [
+    6,
+    40
+  ],
+  "vendors": [
+    6,
     44,
     45
   ],
-  "automatically": [
-    39
+  "merchants": [
+    6
   ],
-  "extracts": [
-    39
+  "sources": [
+    6
   ],
-  "receipt": [
-    39
+  "their": [
+    6,
+    11,
+    18,
+    29,
+    35,
+    37,
+    45
   ],
-  "image": [
-    39
+  "change": [
+    6,
+    9,
+    13,
+    17,
+    35,
+    40
   ],
-  "processing": [
-    39
+  "payee": [
+    6,
+    7,
+    42
   ],
-  "extracted": [
-    39
+  "search": [
+    6,
+    42
   ],
-  "matching": [
-    39
+  "name": [
+    6,
+    25,
+    30,
+    36,
+    40
   ],
-  "retry": [
-    39
+  "unused": [
+    6
   ],
-  "failed": [
-    39
+  "pivot": [
+    7
   ],
-  "records": [
-    39
+  "table": [
+    7
   ],
-  "rules": [
+  "flexible": [
+    7
+  ],
+  "slicing": [
+    7
+  ],
+  "aggregating": [
+    7
+  ],
+  "data": [
+    7,
+    38
+  ],
+  "dimension": [
+    7
+  ],
+  "project": [
+    7,
+    11,
+    12,
+    15,
+    16,
+    18,
+    25,
+    28,
+    29,
+    32,
+    35,
+    36,
+    37,
+    42
+  ],
+  "time": [
+    7,
+    18,
+    32
+  ],
+  "compare": [
+    7
+  ],
+  "different": [
+    7
+  ],
+  "dimensions": [
+    7
+  ],
+  "toggle": [
+    7
+  ],
+  "subtotals": [
+    7
+  ],
+  "grand": [
+    7
+  ],
+  "totals": [
+    7,
+    11,
+    12,
+    16,
+    26,
+    29,
+    32
+  ],
+  "decimal": [
+    7
+  ],
+  "export": [
+    7
+  ],
+  "save": [
+    7,
+    10,
+    13,
+    15
+  ],
+  "load": [
+    7
+  ],
+  "named": [
+    7
+  ],
+  "presets": [
+    7
+  ],
+  "portfolio": [
+    8
+  ],
+  "property": [
+    8,
+    15,
+    16,
+    19,
+    20,
+    22,
+    24,
+    25,
+    31,
+    34,
+    36,
+    37
+  ],
+  "showing": [
+    8
+  ],
+  "occupancy": [
+    8,
+    25,
+    34
+  ],
+  "rates": [
+    8,
+    9,
+    10
+  ],
+  "rent": [
+    8,
+    19,
+    20,
+    25,
+    30,
+    33,
+    34
+  ],
+  "roll": [
+    8
+  ],
+  "maintenance": [
+    8,
+    21,
+    22,
+    25,
+    30,
+    33
+  ],
+  "properties": [
+    8
+  ],
+  "total": [
+    8,
+    17,
+    27,
+    32,
+    45
+  ],
+  "monthly": [
+    8
+  ],
+  "vacancy": [
+    8
+  ],
+  "loss": [
+    8
+  ],
+  "which": [
+    8,
+    19,
+    21,
+    22,
+    24,
+    29,
+    31,
+    34,
+    35,
+    39,
+    41,
+    43
+  ],
+  "leases": [
+    8,
+    19,
+    25,
+    30,
+    31
+  ],
+  "expiring": [
+    8,
+    19,
+    31,
+    34
+  ],
+  "soon": [
+    8,
+    19,
+    34
+  ],
+  "open": [
+    8,
+    21,
+    22,
+    30,
+    33
+  ],
+  "requests": [
+    8,
+    22,
+    30,
+    33
+  ],
+  "navigate": [
+    8,
+    11,
+    14,
+    16,
+    18,
+    19,
+    22,
+    24,
+    25,
+    29,
+    31,
+    34,
+    37,
+    45
+  ],
+  "edit": [
+    9,
+    11,
+    13,
+    14,
+    16,
+    20,
+    25,
+    26,
+    29,
+    30,
+    32,
+    33,
+    38,
+    39,
     40,
+    42,
+    44
+  ],
+  "estimate": [
+    9,
+    10,
+    11,
+    26,
+    28
+  ],
+  "cost": [
+    9,
+    10,
+    11,
+    17,
+    26,
+    35
+  ],
+  "modify": [
+    9,
+    13
+  ],
+  "sections": [
+    9,
+    10,
+    26,
+    27
+  ],
+  "line": [
+    9,
+    10,
+    13,
+    14,
+    15,
+    26,
+    27
+  ],
+  "items": [
+    9,
+    10,
+    13,
+    14,
+    15,
+    26,
+    27
+  ],
+  "hours": [
+    9,
+    10,
+    32
+  ],
+  "quantities": [
+    9,
+    10
+  ],
+  "remove": [
+    9,
+    13
+  ],
+  "update": [
+    9,
+    13,
+    21
+  ],
+  "final": [
+    9,
+    11
+  ],
+  "link": [
+    9,
+    10,
+    15,
+    28,
+    38
+  ],
+  "this": [
+    9,
+    12,
+    16,
+    17,
+    18,
+    20,
+    21,
+    23,
+    27,
+    30,
+    32,
+    33,
+    35,
+    44
+  ],
+  "basis": [
+    9
+  ],
+  "quote": [
+    9,
+    26,
+    27,
+    28,
+    29,
+    40
+  ],
+  "projects": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37
+  ],
+  "slug": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "estimates": [
+    9,
+    10,
+    11,
+    25
+  ],
+  "estid": [
+    9
+  ],
+  "create": [
+    10,
+    11,
+    15,
+    16,
+    17,
+    18,
+    20,
+    21,
+    22,
+    27,
+    28,
+    29,
+    33,
+    35,
+    36,
+    37,
+    39,
+    41,
+    42,
+    44
+  ],
+  "item": [
+    10
+  ],
+  "active": [
+    10,
+    17,
+    18,
+    19,
+    20,
+    25,
+    28,
+    31
+  ],
+  "draft": [
+    10,
+    11,
+    15,
+    16,
+    18,
+    20,
+    29,
+    41
+  ],
+  "list": [
+    11,
+    16,
+    18,
+    19,
+    29,
+    31,
+    35,
+    37
+  ],
+  "client": [
+    11,
+    15,
+    16,
+    18,
+    25,
+    26,
+    27,
+    28,
+    29,
+    32,
+    35,
+    36,
+    37,
+    41
+  ],
+  "superseded": [
+    11,
+    29
+  ],
+  "financials": [
+    12,
+    25
+  ],
+  "summary": [
+    12,
+    17,
+    25
+  ],
+  "single": [
+    12,
+    14,
+    17,
+    21,
+    23,
+    25,
+    30,
+    33,
+    44
+  ],
+  "receipts": [
+    12,
+    38
+  ],
+  "categorisation": [
+    12,
+    39,
+    42,
+    43
+  ],
+  "attributed": [
+    12
+  ],
+  "categorise": [
+    12,
+    39,
+    42
+  ],
+  "linked": [
+    12,
+    17,
+    28,
+    44
+  ],
+  "filter": [
+    12,
+    16,
+    22,
+    41,
+    42
+  ],
+  "invoice": [
+    13,
+    14,
+    15,
+    16,
+    27,
+    30,
+    32,
+    40,
+    41
+  ],
+  "dates": [
+    13,
+    15,
+    19
+  ],
+  "notes": [
+    13,
+    15,
+    40,
+    42
+  ],
+  "payment": [
+    13,
+    14,
+    15,
+    16,
+    40,
+    41,
+    45
+  ],
+  "instructions": [
+    13,
+    15,
+    40
+  ],
+  "issue": [
+    13,
+    15,
+    21
+  ],
+  "sales": [
+    13,
+    15
+  ],
+  "terms": [
+    13
+  ],
+  "changes": [
+    13,
+    14
+  ],
+  "send": [
+    13,
+    14,
+    15,
+    16,
+    23,
+    26,
+    27,
+    29,
+    30,
+    31
+  ],
+  "updated": [
+    13
+  ],
+  "invoices": [
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    25,
+    30,
+    33,
+    41
+  ],
+  "invoiceid": [
+    13,
+    14
+  ],
+  "detail": [
+    14,
+    16,
+    17,
+    27,
+    30,
+    31,
+    33,
+    37,
+    44,
+    45
+  ],
+  "history": [
+    14,
+    23,
+    30,
+    33,
+    45
+  ],
+  "download": [
+    14,
+    16
+  ],
+  "options": [
+    14
+  ],
+  "review": [
+    14,
+    26,
+    27
+  ],
+  "sent": [
+    14,
+    16,
+    29,
+    41
+  ],
+  "paid": [
+    14,
+    16,
+    30,
+    33,
+    45
+  ],
+  "outstanding": [
+    14,
+    25,
+    30,
+    33,
+    35,
+    41
+  ],
+  "resend": [
+    14
+  ],
+  "email": [
+    14,
+    16,
+    25,
+    27,
+    30,
+    40
+  ],
+  "void": [
+    14,
+    16
+  ],
+  "page": [
+    14,
+    16,
+    25,
+    31,
+    37,
+    45
+  ],
+  "make": [
+    14
+  ],
+  "apply": [
+    15
+  ],
+  "immediately": [
+    15
+  ],
+  "overdue": [
+    16,
+    41
+  ],
+  "summaries": [
+    16
+  ],
+  "quotes": [
+    17,
+    18,
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "work": [
+    17,
+    18,
+    21,
+    22,
+    25,
+    35,
+    37,
+    41,
+    44,
+    45
+  ],
+  "orders": [
+    17,
+    18,
+    25,
+    35,
+    44,
+    45
+  ],
+  "margin": [
+    17,
+    40
+  ],
+  "subcontractor": [
+    17,
+    35,
+    37,
+    41,
+    45
+  ],
+  "revenue": [
+    17
+  ],
+  "order": [
+    17,
+    21,
+    22,
+    35,
+    37,
     41,
     44
   ],
-  "that": [
+  "bill": [
+    17,
+    21,
+    35,
+    37,
+    41
+  ],
+  "against": [
+    17,
+    32,
+    35
+  ],
+  "hold": [
+    17,
+    18
+  ],
+  "completed": [
+    17,
+    18,
+    21,
+    22,
+    35
+  ],
+  "billed": [
+    17,
+    35
+  ],
+  "percentage": [
+    17
+  ],
+  "jobs": [
+    17,
+    18,
+    25,
+    32
+  ],
+  "jobid": [
+    17
+  ],
+  "billing": [
+    18
+  ],
+  "details": [
+    18,
+    19,
+    20,
+    22,
+    25,
+    28,
+    30,
+    33,
+    44
+  ],
+  "fixed": [
+    18
+  ],
+  "price": [
+    18,
+    26
+  ],
+  "materials": [
+    18
+  ],
+  "retainer": [
+    18
+  ],
+  "start": [
+    19,
+    24,
+    28
+  ],
+  "amounts": [
+    19,
+    41
+  ],
+  "tenant": [
+    19,
+    23,
+    24,
+    30,
+    31,
+    33,
+    34
+  ],
+  "expired": [
+    19
+  ],
+  "month": [
+    19,
+    33
+  ],
+  "amount": [
+    19,
+    33,
+    34,
+    35,
+    38
+  ],
+  "lease": [
+    19,
+    23,
+    25,
+    30,
+    31,
+    33,
+    34
+  ],
+  "term": [
+    19
+  ],
+  "unit": [
+    19,
+    20,
+    21,
+    22,
+    23,
+    25,
+    31,
+    33,
+    34
+  ],
+  "record": [
+    19
+  ],
+  "listings": [
+    20
+  ],
+  "rental": [
+    20,
+    33,
+    34,
+    36
+  ],
+  "vacant": [
+    20,
+    33,
+    34
+  ],
+  "units": [
+    20,
+    25,
+    33,
+    34
+  ],
+  "publish": [
+    20
+  ],
+  "applicant": [
+    20
+  ],
+  "enquiries": [
+    20
+  ],
+  "listing": [
+    20
+  ],
+  "description": [
+    20,
+    21,
+    36,
+    42
+  ],
+  "photos": [
+    20
+  ],
+  "unpublish": [
+    20
+  ],
+  "request": [
+    21,
+    22
+  ],
+  "bills": [
+    21,
+    44
+  ],
+  "full": [
+    21,
+    23
+  ],
+  "priority": [
+    21,
+    22
+  ],
+  "vendor": [
+    21,
+    22,
+    35,
+    38,
+    44,
+    45
+  ],
+  "once": [
+    21
+  ],
+  "progress": [
+    21,
+    22
+  ],
+  "associated": [
+    21
+  ],
+  "requestid": [
+    21
+  ],
+  "board": [
+    22,
+    34
+  ],
+  "have": [
+    22,
+    24,
+    29,
+    31,
+    35
+  ],
+  "assigned": [
+    22,
+    31,
+    44
+  ],
+  "conversation": [
+    23,
+    24
+  ],
+  "message": [
+    23,
+    24,
+    30,
+    31
+  ],
+  "thread": [
+    23,
+    24
+  ],
+  "receive": [
+    23
+  ],
+  "messages": [
+    23,
+    24
+  ],
+  "read": [
+    23
+  ],
+  "context": [
+    23
+  ],
+  "alongside": [
+    23
+  ],
+  "tenantid": [
+    23,
+    30
+  ],
+  "inbox": [
+    24
+  ],
+  "threads": [
+    24
+  ],
+  "individual": [
+    24
+  ],
+  "conversations": [
+    24
+  ],
+  "place": [
+    24
+  ],
+  "identify": [
+    24
+  ],
+  "tenants": [
+    24,
+    25,
+    30,
+    31
+  ],
+  "unread": [
+    24
+  ],
+  "shows": [
+    25
+  ],
+  "info": [
+    25,
+    30,
+    31,
+    33,
+    40,
+    44,
+    45
+  ],
+  "upcoming": [
+    25
+  ],
+  "renewals": [
+    25
+  ],
+  "contact": [
+    25,
+    30,
+    31,
+    44,
+    45
+  ],
+  "phone": [
+    25,
+    30,
     40
+  ],
+  "company": [
+    25
+  ],
+  "generate": [
+    26,
+    39
+  ],
+  "finalise": [
+    26
+  ],
+  "before": [
+    26
+  ],
+  "sending": [
+    26
+  ],
+  "margins": [
+    26
+  ],
+  "confirm": [
+    26
+  ],
+  "pricing": [
+    26,
+    27
+  ],
+  "sell": [
+    26
+  ],
+  "prices": [
+    26
+  ],
+  "profitability": [
+    26
+  ],
+  "inline": [
+    26
+  ],
+  "while": [
+    26
+  ],
+  "reviewing": [
+    26
+  ],
+  "ready": [
+    26,
+    32
+  ],
+  "quoteid": [
+    26,
+    27
+  ],
+  "signatures": [
+    27
+  ],
+  "amendments": [
+    27
+  ],
+  "accepted": [
+    27,
+    29
+  ],
+  "rejected": [
+    27,
+    29
+  ],
+  "amendment": [
+    27
+  ],
+  "signed": [
+    27,
+    29
+  ],
+  "convert": [
+    27
+  ],
+  "previous": [
+    27
+  ],
+  "next": [
+    27
+  ],
+  "versions": [
+    27
+  ],
+  "facing": [
+    28,
+    29
+  ],
+  "optionally": [
+    28
+  ],
+  "base": [
+    28
+  ],
+  "title": [
+    28
+  ],
+  "initial": [
+    28
+  ],
+  "been": [
+    29,
+    35
+  ],
+  "past": [
+    30
+  ],
+  "submitted": [
+    30
+  ],
+  "information": [
+    30
+  ],
+  "assignment": [
+    31
+  ],
+  "ended": [
+    31
+  ],
+  "tracking": [
+    32,
+    36
+  ],
+  "billable": [
+    32
+  ],
+  "entries": [
+    32
+  ],
+  "entry": [
+    32
+  ],
+  "logged": [
+    32
+  ],
+  "label": [
+    33
+  ],
+  "bedrooms": [
+    33
+  ],
+  "unitid": [
+    33
+  ],
+  "occupied": [
+    34
+  ],
+  "assignments": [
+    35
+  ],
+  "agreed": [
+    35
+  ],
+  "costs": [
+    35
+  ],
+  "actual": [
+    35
+  ],
+  "workspace": [
+    36
+  ],
+  "choose": [
+    36
+  ],
+  "other": [
+    36,
+    37
+  ],
+  "freelance": [
+    36,
+    37,
+    41
+  ],
+  "general": [
+    36
+  ],
+  "miscellaneous": [
+    36
+  ],
+  "workspaces": [
+    37
+  ],
+  "creation": [
+    37
+  ],
+  "shortcuts": [
+    37
+  ],
+  "intake": [
+    37,
+    41
+  ],
+  "upload": [
+    38,
+    43,
+    44
+  ],
+  "automatically": [
+    38
+  ],
+  "extracts": [
+    38
+  ],
+  "receipt": [
+    38
+  ],
+  "image": [
+    38
+  ],
+  "processing": [
+    38
+  ],
+  "extracted": [
+    38
+  ],
+  "matching": [
+    38
+  ],
+  "retry": [
+    38
+  ],
+  "failed": [
+    38
+  ],
+  "records": [
+    38
+  ],
+  "rules": [
+    39,
+    40,
+    43
+  ],
+  "that": [
+    39
   ],
   "auto": [
-    40
+    39
   ],
   "import": [
-    40,
-    44
+    39,
+    43
   ],
   "accept": [
-    40
+    39
   ],
   "suggested": [
-    40
-  ],
-  "agent": [
-    40
+    39
   ],
   "suggestions": [
-    40,
-    44
+    39,
+    43
   ],
   "settings": [
-    41
+    40
   ],
   "user": [
-    41
+    40
   ],
   "preferences": [
-    41
+    40
   ],
   "methods": [
-    41
+    40
   ],
   "address": [
-    41
+    40
   ],
   "number": [
-    41
+    40
   ],
   "website": [
-    41
+    40
   ],
   "transfer": [
-    41
+    40
   ],
   "paypal": [
-    41
+    40
   ],
   "stripe": [
-    41
+    40
   ],
   "text": [
-    41
+    40
   ],
   "configure": [
-    41
+    40
   ],
   "used": [
-    41
+    40
   ],
   "generation": [
-    41
+    40
   ],
   "clients": [
-    42
+    41
   ],
   "quick": [
-    42
+    41
   ],
   "actions": [
-    42
+    41
   ],
   "money": [
-    42
+    41
   ],
   "unsent": [
-    42
-  ],
-  "cards": [
-    42
+    41
   ],
   "collected": [
-    42
+    41
   ],
   "studio": [
-    42
+    41
   ],
   "browse": [
-    43
+    42
   ],
   "bulk": [
-    43
+    42
   ],
   "duplicate": [
-    43
+    42
   ],
   "unwanted": [
-    43
+    42
   ],
   "rule": [
-    43
+    42
   ],
   "edited": [
-    43
+    42
   ],
   "file": [
-    44
+    43
   ],
   "assisted": [
-    44
+    43
   ],
   "column": [
-    44
+    43
   ],
   "mapping": [
-    44
+    43
   ],
   "drop": [
-    44
+    43
   ],
   "columns": [
-    44
+    43
   ],
   "right": [
-    44
+    43
   ],
   "fields": [
-    44
+    43
   ],
   "preview": [
-    44
+    43
   ],
   "will": [
-    44
+    43
   ],
   "duplicates": [
-    44
+    43
+  ],
+  "automatic": [
+    43
   ],
   "after": [
-    44
+    43
   ],
   "uploaded": [
-    45
+    44
   ],
   "documents": [
-    45,
-    46
+    44,
+    45
   ],
   "payments": [
-    45
+    44
   ],
   "contracts": [
-    45
+    44
   ],
   "insurance": [
-    45
+    44
   ],
   "vendorid": [
-    45
+    44
   ],
   "subcontractors": [
-    46
+    45
   ]
 }

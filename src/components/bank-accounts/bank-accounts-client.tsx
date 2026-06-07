@@ -4,12 +4,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
-import { ConnectBankDialog } from '@/components/connections/connect-bank-dialog'
-import { ConnectionStatus } from '@/components/connections/connection-status'
 import type { SyncJobEvent } from '@/types/bank-agent'
 import { cn } from '@/lib/utils'
 
-type Tab = 'accounts' | 'auto-sync' | 'manual-sync'
+type Tab = 'accounts' | 'manual-sync'
 
 interface AccountData {
   id: string
@@ -19,13 +17,6 @@ interface AccountData {
   lastImportAt: string | null
   createdAt: string
   institution: { name: string }
-  bankConnection: {
-    id: string
-    provider: 'PLAID' | 'ENABLE_BANKING' | 'BROWSER_AGENT'
-    status: 'ACTIVE' | 'DISCONNECTED' | 'DEGRADED' | 'REVOKED'
-    lastSyncAt: string | null
-    disconnectReason: string | null
-  } | null
   bankPlaybook: {
     id: string
     status: string
@@ -102,162 +93,6 @@ function AccountsTab({ accounts, onboarding }: { accounts: AccountData[]; onboar
           ))}
         </ul>
       )}
-    </>
-  )
-}
-
-// ── Auto Sync tab ─────────────────────────────────────────────────────────────
-
-function AutoSyncTab({ accounts }: { accounts: AccountData[] }) {
-  const [connectingAccountId, setConnectingAccountId] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState<string | null>(null)
-  const [accountStates, setAccountStates] = useState<Record<string, AccountData['bankConnection']>>(() => {
-    const init: Record<string, AccountData['bankConnection']> = {}
-    for (const a of accounts) init[a.id] = a.bankConnection
-    return init
-  })
-  const [toast, setToast] = useState<string | null>(null)
-
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 4000)
-  }
-
-  async function handleSync(connectionId: string, accountId: string) {
-    setSyncing(connectionId)
-    try {
-      const res = await fetch(`/api/connections/${connectionId}/sync`, { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok || json.error) {
-        showToast(json.error || 'Sync failed')
-      } else {
-        showToast(`Synced: ${json.data.imported} imported, ${json.data.skipped} skipped`)
-        setAccountStates(prev => ({
-          ...prev,
-          [accountId]: prev[accountId] ? { ...prev[accountId]!, lastSyncAt: new Date().toISOString() } : null,
-        }))
-      }
-    } catch {
-      showToast('Network error during sync')
-    } finally {
-      setSyncing(null)
-    }
-  }
-
-  async function handleDisconnect(connectionId: string, accountId: string) {
-    if (!confirm('Disconnect this bank connection? Existing transactions will not be deleted.')) return
-    try {
-      const res = await fetch(`/api/connections/${connectionId}`, { method: 'DELETE' })
-      if (!res.ok) { showToast('Failed to disconnect'); return }
-      setAccountStates(prev => ({ ...prev, [accountId]: null }))
-      showToast('Connection removed')
-    } catch {
-      showToast('Network error')
-    }
-  }
-
-  async function handleReauth(connectionId: string) {
-    try {
-      const res = await fetch(`/api/connections/${connectionId}/reauth`, { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok || json.error) { showToast(json.error || 'Re-auth failed'); return }
-      showToast('Re-auth initiated. Reconnect via the Connect button.')
-    } catch {
-      showToast('Network error')
-    }
-  }
-
-  return (
-    <>
-      {toast && (
-        <div className="mb-4 rounded-lg bg-foreground text-background px-4 py-2 text-sm">{toast}</div>
-      )}
-
-      <p className="text-sm text-muted-foreground mb-4">
-        Connect accounts to automatically sync transactions via Teller (US) or Plaid (US + Europe).
-      </p>
-
-      <div className="flex flex-col gap-3">
-        {accounts.map(account => {
-          const conn = accountStates[account.id]
-          const isConnecting = connectingAccountId === account.id
-          const isSyncing = conn ? syncing === conn.id : false
-
-          return (
-            <div key={account.id} className="rounded-lg border bg-background p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium">{account.name}</p>
-                  <p className="text-xs text-muted-foreground">{account.institution.name} · {account.type.replace(/_/g, ' ')}</p>
-                </div>
-                {!conn && !isConnecting && (
-                  <button
-                    onClick={() => setConnectingAccountId(account.id)}
-                    className="shrink-0 text-xs px-3 py-1.5 rounded-md bg-foreground text-background hover:opacity-90 transition-opacity"
-                  >
-                    Connect
-                  </button>
-                )}
-              </div>
-
-              {isConnecting && (
-                <div className="mt-3 pt-3 border-t">
-                  <ConnectBankDialog
-                    accountId={account.id}
-                    onConnected={(result) => {
-                      setConnectingAccountId(null)
-                      setAccountStates(prev => ({
-                        ...prev,
-                        [account.id]: {
-                          id: result.connectionId,
-                          provider: result.provider as 'PLAID' | 'ENABLE_BANKING' | 'BROWSER_AGENT',
-                          status: 'ACTIVE',
-                          lastSyncAt: new Date().toISOString(),
-                          disconnectReason: null,
-                        },
-                      }))
-                      showToast(`Connected! ${result.imported} transactions imported.`)
-                    }}
-                    onCancel={() => setConnectingAccountId(null)}
-                  />
-                </div>
-              )}
-
-              {conn && (
-                <div className="mt-3 pt-3 border-t">
-                  {isSyncing ? (
-                    <span className="text-xs text-muted-foreground">Syncing…</span>
-                  ) : (
-                    <ConnectionStatus
-                      status={conn.status}
-                      provider={conn.provider}
-                      lastSyncAt={conn.lastSyncAt}
-                      disconnectReason={conn.disconnectReason}
-                      connectionId={conn.id}
-                      onSync={() => handleSync(conn.id, account.id)}
-                      onReauth={() => handleReauth(conn.id)}
-                      onDisconnect={() => handleDisconnect(conn.id, account.id)}
-                    />
-                  )}
-                </div>
-              )}
-
-              {!conn && account.bankPlaybook && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Legacy browser sync active — manage it in the Manual Sync tab.
-                </p>
-              )}
-            </div>
-          )
-        })}
-
-        {accounts.length === 0 && (
-          <div className="rounded-lg border bg-background p-8 text-center">
-            <p className="text-sm text-muted-foreground mb-2">No accounts found.</p>
-            <a href="/bank-accounts?tab=accounts&onboarding=1" className="text-sm text-blue-600 underline">Add an account first →</a>
-          </div>
-        )}
-      </div>
     </>
   )
 }
@@ -555,7 +390,6 @@ function ManualSyncTab({ accounts }: { accounts: AccountData[] }) {
 
 const TABS: { id: Tab; label: string; description: string }[] = [
   { id: 'accounts', label: 'Accounts', description: 'Manage your bank accounts and cards' },
-  { id: 'auto-sync', label: 'Auto Sync', description: 'Connect via Teller or Plaid for automatic syncing' },
   { id: 'manual-sync', label: 'Manual Sync', description: 'Use browser automation to sync any bank' },
 ]
 
@@ -586,7 +420,7 @@ export function BankAccountsClient({ accounts, initialTab, onboarding }: Props) 
             )}
           >
             {tabLoading && tab === t.id ? <span className="inline-block w-3 h-3 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" /> : t.label}
-            {(t.id === 'auto-sync' || t.id === 'manual-sync') && (
+            {t.id === 'manual-sync' && (
               <span className="text-[10px] font-normal text-muted-foreground/60 leading-none">in dev</span>
             )}
           </button>
@@ -595,7 +429,6 @@ export function BankAccountsClient({ accounts, initialTab, onboarding }: Props) 
 
       {/* Tab content */}
       {tab === 'accounts' && <AccountsTab accounts={accounts} onboarding={onboarding} />}
-      {tab === 'auto-sync' && <AutoSyncTab accounts={accounts} />}
       {tab === 'manual-sync' && <ManualSyncTab accounts={accounts} />}
     </div>
   )

@@ -64,9 +64,6 @@ export type TransactionWithRelations = Transaction & {
   receipts: { id: string }[]
 }
 
-export type { BankConnection } from '@/generated/prisma/client'
-export type { NormalizedTransaction, NormalizedAccount, BankProviderAdapter, ConnectionInitResponse } from './bank-providers'
-
 // === Projects expansion types ===
 
 export type { ClientProfile, Job, PropertyProfile, Unit, Lease, Tenant, TenantFile, Message, MaintenanceRequest, Invoice, InvoiceLineItem, InvoicePayment } from '@/generated/prisma/client'

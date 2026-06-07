@@ -8,7 +8,6 @@ export const capability: PageCapability = {
     'Add a checking, savings, business, or credit card account manually',
     'Set the account currency and country',
     'Set an opening balance',
-    'Link the account to an existing bank connection',
   ],
   deepLinks: {},
   reads: [],
