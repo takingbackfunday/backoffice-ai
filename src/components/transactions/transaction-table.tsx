@@ -900,6 +900,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
   }, [filters])
 
   const [error, setError] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const [sortBy, setSortBy] = useState<SortField>('date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -1066,7 +1067,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
 
   useEffect(() => {
     return fetchTransactions()
-  }, [fetchTransactions])
+  }, [fetchTransactions, refreshKey])
 
   // ── Active filter count ───────────────────────────────────────────
   const activeFilterCount = Object.values(debouncedFilters).filter(Boolean).length + (debouncedSearch ? 1 : 0) + (dateFrom || dateTo ? 1 : 0)
@@ -1139,6 +1140,11 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
     setAiQuery('')
     setAiExplanation('')
     clearAllFilters()
+  }
+
+  // ── Refresh after rule apply ─────────────────────────────────────
+  function handleApplyComplete() {
+    setRefreshKey((k) => k + 1)
   }
 
   // ── Sorting ──────────────────────────────────────────────────────
@@ -2193,6 +2199,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                           onSave={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
                           onCancel={() => { setMakeRuleSnap(null); setShowMakeRuleEditor(false) }}
                           showSaveAndApply={true}
+                          onApplyComplete={handleApplyComplete}
                         />
                       </td>
                     </tr>
@@ -2240,7 +2247,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
               <button onClick={() => setShowNewRuleModal(false)} className="text-muted-foreground hover:text-foreground leading-none">✕</button>
             </div>
             <div className="p-4">
-              <RuleEditor
+                <RuleEditor
                 projects={projects}
                 payees={payees}
                 accounts={accounts}
@@ -2249,6 +2256,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                 onSave={() => setShowNewRuleModal(false)}
                 onCancel={() => setShowNewRuleModal(false)}
                 showSaveAndApply={true}
+                onApplyComplete={handleApplyComplete}
               />
             </div>
           </div>
@@ -2272,6 +2280,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                 accounts={accounts}
                 onRuleAccepted={() => {}}
                 onClose={() => setShowAgentModal(false)}
+                onApplyComplete={handleApplyComplete}
               />
             </div>
           </div>
