@@ -84,6 +84,7 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
   const [showOcr, setShowOcr] = useState(false)
   const [fields, setFields] = useState<ReviewFields | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   async function handleFile(file: File) {
     setError(null)
@@ -172,6 +173,22 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
 
   return (
     <div className="space-y-4">
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt="Receipt full view"
+            className="max-w-full max-h-full object-contain rounded"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       {/* Upload area */}
       <div
         className={cn(
@@ -418,7 +435,8 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
               <img
                 src={receipt.thumbnailUrl}
                 alt="Receipt thumbnail"
-                className="max-h-40 rounded object-contain mx-auto"
+                className="max-h-40 rounded object-contain mx-auto cursor-zoom-in"
+                onClick={() => setLightboxUrl(receipt.thumbnailUrl!)}
               />
             </div>
           )}
