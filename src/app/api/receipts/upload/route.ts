@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { createHash } from 'crypto'
 import { Prisma } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
-import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { ok, badRequest, unauthorized, conflict, serverError } from '@/lib/api-response'
 import { mistralOcr } from '@/lib/ocr/mistral'
 import { extractReceiptData } from '@/lib/ocr/extract-receipt'
 import { compressReceiptImage } from '@/lib/ocr/compress-image'
@@ -21,6 +21,8 @@ const UploadSchema = z.object({
   transactionId: z.string().optional(),
   /** Optional: assign to a client workspace at upload time */
   workspaceId: z.string().optional(),
+  /** Bypass duplicate-check when user confirms they want to re-upload */
+  force: z.boolean().optional().default(false),
 })
 
 export async function POST(request: Request) {
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
-    const { image, transactionId, workspaceId } = parsed.data
+    const { image, transactionId, workspaceId, force } = parsed.data
 
     // ── Validate data URI format ──────────────────────────────────────────
     const dataUriMatch = image.match(/^data:(image\/\w+);base64,(.+)$/)
@@ -71,6 +73,18 @@ export async function POST(request: Request) {
     // ── Hash original for integrity ───────────────────────────────────────
     const originalHash = createHash('sha256').update(imageBuffer).digest('hex')
     const originalSizeKb = Math.round(imageBuffer.length / 1024)
+
+    // ── Duplicate check ─────────────────────────────────────────────────────
+    if (!force) {
+      const existing = await prisma.receipt.findFirst({
+        where: { userId, originalHash },
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      if (existing) {
+        return conflict('DUPLICATE_RECEIPT', { existingReceiptId: existing.id })
+      }
+    }
 
     // ── Create receipt row (PROCESSING) ───────────────────────────────────
     const receipt = await prisma.receipt.create({
@@ -114,7 +128,37 @@ export async function POST(request: Request) {
       const extracted = await extractReceiptData(ocrMarkdown)
       extractedData = extracted
 
-      // Step 4: Update receipt with all extracted data — lands in NEEDS_REVIEW for human confirmation
+      // Step 4: Content-based duplicate check (different photo of same receipt)
+      if (!force) {
+        const vendor = (extractedData as Record<string, unknown>).vendor
+        const date = (extractedData as Record<string, unknown>).date
+        const total = (extractedData as Record<string, unknown>).total
+        if (typeof vendor === 'string' && typeof date === 'string' && typeof total === 'number') {
+          const existingContent = await prisma.$queryRaw<Array<{ id: string }>>`
+            SELECT id
+            FROM "Receipt"
+            WHERE "userId" = ${userId}
+              AND "id" != ${receipt.id}
+              AND "status" != 'FAILED'
+              AND "extractedData"->>'vendor' ILIKE ${vendor.trim()}
+              AND "extractedData"->>'date' = ${date.trim()}
+              AND ABS(("extractedData"->>'total')::numeric - ${total}) < 0.01
+              AND "createdAt" > NOW() - INTERVAL '30 days'
+            ORDER BY "createdAt" DESC
+            LIMIT 1
+          `
+          if (existingContent.length > 0) {
+            // Clean up the row we just created — this was a duplicate
+            await prisma.receipt.delete({ where: { id: receipt.id } })
+            return conflict('DUPLICATE_RECEIPT', {
+              existingReceiptId: existingContent[0].id,
+              duplicateType: 'content',
+            })
+          }
+        }
+      }
+
+      // Step 5: Update receipt with all extracted data — lands in NEEDS_REVIEW for human confirmation
       const updated = await prisma.receipt.update({
         where: { id: receipt.id },
         data: {

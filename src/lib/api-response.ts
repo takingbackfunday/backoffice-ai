@@ -26,6 +26,10 @@ export function notFound(message = 'Resource not found'): NextResponse<ApiRespon
   return NextResponse.json({ data: null, error: message }, { status: 404 })
 }
 
+export function conflict(message: string, meta?: Record<string, unknown>): NextResponse<ApiResponse<null>> {
+  return NextResponse.json({ data: null, error: message, ...(meta ? { meta } : {}) }, { status: 409 })
+}
+
 export function serverError(message = 'An unexpected error occurred. Please try again.'): NextResponse<ApiResponse<null>> {
   return NextResponse.json({ data: null, error: message }, { status: 500 })
 }

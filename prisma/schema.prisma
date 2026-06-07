@@ -1145,6 +1145,7 @@ model Receipt {
   @@index([transactionId])
   @@index([workspaceId])
   @@index([userId, status])
+  @@index([userId, originalHash])
 }
 
 enum ReceiptStatus {

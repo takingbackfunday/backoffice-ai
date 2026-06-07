@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 
 async function compressImageClientSide(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -77,6 +78,7 @@ const inputClass =
 export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
+  const pendingFileRef = useRef<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
@@ -85,11 +87,15 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
   const [fields, setFields] = useState<ReviewFields | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const [duplicateInfo, setDuplicateInfo] = useState<{ existingReceiptId: string; duplicateType?: string } | null>(null)
 
-  async function handleFile(file: File) {
+  async function handleFile(file: File, force = false) {
     setError(null)
-    setReceipt(null)
-    setFields(null)
+    setDuplicateInfo(null)
+    if (!force) {
+      setReceipt(null)
+      setFields(null)
+    }
     setIsProcessing(true)
     setCurrentStep(0)
 
@@ -101,13 +107,21 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
       const res = await fetch('/api/receipts/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: dataUri }),
+        body: JSON.stringify({ image: dataUri, force }),
       })
 
       setCurrentStep(3)
       const json = await res.json()
 
       if (!res.ok) {
+        if (json.error === 'DUPLICATE_RECEIPT') {
+          setDuplicateInfo({
+            existingReceiptId: String(json.meta?.existingReceiptId ?? ''),
+            duplicateType: String(json.meta?.duplicateType ?? 'hash'),
+          })
+          pendingFileRef.current = file
+          return
+        }
         setError(json.error ?? 'Upload failed')
         return
       }
@@ -120,6 +134,19 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  function handleDiscardDuplicate() {
+    setDuplicateInfo(null)
+    pendingFileRef.current = null
+  }
+
+  async function handleContinueDuplicate() {
+    const file = pendingFileRef.current
+    if (!file) return
+    setDuplicateInfo(null)
+    await handleFile(file, true)
+    pendingFileRef.current = null
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -458,6 +485,28 @@ export function ReceiptUpload({ onSuccess }: ReceiptUploadProps) {
           )}
         </div>
       )}
+
+      {/* Duplicate receipt prompt */}
+      <Dialog open={duplicateInfo !== null} onOpenChange={(open) => { if (!open) handleDiscardDuplicate() }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicate receipt detected</DialogTitle>
+            <DialogDescription>
+              {duplicateInfo?.duplicateType === 'content'
+                ? 'This receipt has the same vendor, date, and total as one you already uploaded (it may be a different photo of the same receipt). Would you like to continue and upload it again, or discard it?'
+                : 'This receipt appears to be a duplicate of one you have already uploaded. Would you like to continue and upload it again, or discard it?'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleDiscardDuplicate}>
+              Discard
+            </Button>
+            <Button onClick={handleContinueDuplicate} disabled={isProcessing}>
+              {isProcessing ? 'Uploading...' : 'Continue anyway'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
