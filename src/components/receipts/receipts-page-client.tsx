@@ -30,6 +30,14 @@ interface Receipt {
   workspaceId: string | null
 }
 
+interface ReceiptFailureInfo {
+  stage?: string
+  code?: string
+  message?: string
+  retryable?: boolean
+  occurredAt?: string
+}
+
 interface ReviewFields {
   vendor: string
   date: string
@@ -78,6 +86,12 @@ function statusLabel(status: string) {
   return status
 }
 
+function receiptFailure(extracted: Record<string, unknown> | null): ReceiptFailureInfo | null {
+  const failure = extracted?.failure
+  if (!failure || typeof failure !== 'object') return null
+  return failure as ReceiptFailureInfo
+}
+
 const inputClass =
   'w-full border border-border rounded px-2 py-1 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-ring'
 
@@ -101,6 +115,7 @@ export function ReceiptsPageClient({
   const [reviewFields, setReviewFields] = useState<ReviewFields | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const [workspaceFilter, setWorkspaceFilter] = useState<string | null>(initialWorkspaceId ?? null)
   // Transaction linking state
@@ -131,10 +146,13 @@ export function ReceiptsPageClient({
 
   async function handleRetry(id: string) {
     setRetrying(id)
+    setRowErrors((prev) => ({ ...prev, [id]: '' }))
     const res = await fetch(`/api/receipts/${id}/retry`, { method: 'POST' })
     const json = await res.json()
     if (res.ok) {
       setReceipts((prev) => prev.map((r) => (r.id === id ? json.data : r)))
+    } else {
+      setRowErrors((prev) => ({ ...prev, [id]: json.error ?? 'Retry failed' }))
     }
     setRetrying(null)
   }
@@ -373,6 +391,8 @@ export function ReceiptsPageClient({
                 const isExpanded = expandedId === receipt.id
                 const isReviewing = reviewingId === receipt.id
                 const isLinking = linkingId === receipt.id
+                const failure = receiptFailure(receipt.extractedData)
+                const canRetry = receipt.status === 'FAILED' && Boolean(receipt.thumbnailUrl)
 
                 return (
                   <>
@@ -426,9 +446,21 @@ export function ReceiptsPageClient({
 
                       {/* Status */}
                       <td className="px-3 py-2">
-                        <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap', statusBadgeClass(receipt.status))}>
-                          {statusLabel(receipt.status)}
-                        </span>
+                        <div className="space-y-1">
+                          <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap', statusBadgeClass(receipt.status))}>
+                            {statusLabel(receipt.status)}
+                          </span>
+                          {receipt.status === 'FAILED' && failure?.message && (
+                            <p className="text-[11px] text-destructive max-w-[220px] leading-snug">
+                              {failure.message}
+                            </p>
+                          )}
+                          {rowErrors[receipt.id] && (
+                            <p className="text-[11px] text-destructive max-w-[220px] leading-snug">
+                              {rowErrors[receipt.id]}
+                            </p>
+                          )}
+                        </div>
                       </td>
 
                       {/* Client */}
@@ -514,8 +546,9 @@ export function ReceiptsPageClient({
                           {receipt.status === 'FAILED' && (
                             <button
                               className="text-xs text-blue-600 underline disabled:opacity-50 whitespace-nowrap"
-                              disabled={retrying === receipt.id}
+                              disabled={retrying === receipt.id || !canRetry}
                               onClick={() => handleRetry(receipt.id)}
+                              title={canRetry ? 'Retry receipt processing' : 'No saved image is available. Re-upload this receipt.'}
                             >
                               {retrying === receipt.id ? 'Retrying...' : 'Retry'}
                             </button>
@@ -651,6 +684,9 @@ export function ReceiptsPageClient({
                           <div className="flex gap-6 flex-wrap">
                             {extracted && (
                               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs min-w-[200px]">
+                                {failure?.message && (<><span className="text-muted-foreground">Failure</span><span className="text-destructive">{failure.message}</span></>)}
+                                {failure?.code && (<><span className="text-muted-foreground">Error code</span><span>{failure.code}</span></>)}
+                                {failure?.stage && (<><span className="text-muted-foreground">Stage</span><span>{failure.stage}</span></>)}
                                 {extracted.subtotal != null && (<><span className="text-muted-foreground">Subtotal</span><span>{String(extracted.subtotal)}</span></>)}
                                 {extracted.tax != null && (<><span className="text-muted-foreground">Tax</span><span>{String(extracted.tax)}</span></>)}
                                 {extracted.paymentMethod && (<><span className="text-muted-foreground">Payment</span><span className="capitalize">{String(extracted.paymentMethod).replace('_', ' ')}</span></>)}

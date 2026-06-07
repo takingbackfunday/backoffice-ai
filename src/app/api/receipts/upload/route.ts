@@ -1,11 +1,13 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { createHash } from 'crypto'
+import { Prisma } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { mistralOcr } from '@/lib/ocr/mistral'
 import { extractReceiptData } from '@/lib/ocr/extract-receipt'
 import { compressReceiptImage } from '@/lib/ocr/compress-image'
+import { classifyReceiptPipelineError, receiptFailureResponseMessage, type ReceiptPipelineStage } from '@/lib/ocr/receipt-failure'
 import { UTApi } from 'uploadthing/server'
 
 const utapi = new UTApi()
@@ -87,20 +89,16 @@ export async function POST(request: Request) {
     let ocrMarkdown = ''
     let extractedData = {}
     let thumbnailUrl: string | null = null
+    let stage: ReceiptPipelineStage = 'ocr'
 
     try {
       // Step 1: Mistral OCR
       const ocr = await mistralOcr(image) // pass the full data URI
       ocrMarkdown = ocr.markdown
 
-      // Step 2: LLM extraction (parallel with image compression)
-      const [extracted, compressed] = await Promise.all([
-        extractReceiptData(ocrMarkdown),
-        compressReceiptImage(imageBuffer),
-      ])
-      extractedData = extracted
-
-      // Step 3: Upload thumbnail to UploadThing
+      // Step 2: Save a thumbnail before AI extraction so provider failures can be retried.
+      stage = 'thumbnail'
+      const compressed = await compressReceiptImage(imageBuffer)
       const blob = new Blob([compressed.buffer.buffer as ArrayBuffer], { type: compressed.mimeType })
       const file = new File([blob], `receipt-${receipt.id}.webp`, { type: compressed.mimeType })
       const uploadResult = await utapi.uploadFiles(file)
@@ -110,6 +108,11 @@ export async function POST(request: Request) {
       } else {
         thumbnailUrl = uploadResult.data.ufsUrl
       }
+
+      // Step 3: LLM extraction
+      stage = 'extract'
+      const extracted = await extractReceiptData(ocrMarkdown)
+      extractedData = extracted
 
       // Step 4: Update receipt with all extracted data — lands in NEEDS_REVIEW for human confirmation
       const updated = await prisma.receipt.update({
@@ -124,7 +127,12 @@ export async function POST(request: Request) {
 
       return ok(updated)
     } catch (pipelineErr) {
-      console.error('[receipt:pipeline-error]', pipelineErr)
+      const failure = classifyReceiptPipelineError(stage, pipelineErr)
+      console.error('[receipt:pipeline-error]', {
+        receiptId: receipt.id,
+        ...failure,
+        cause: pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr),
+      })
 
       // Save whatever we got — partial data is better than nothing
       await prisma.receipt.update({
@@ -132,12 +140,14 @@ export async function POST(request: Request) {
         data: {
           status: 'FAILED',
           ocrMarkdown: ocrMarkdown || null,
-          extractedData: Object.keys(extractedData).length > 0 ? extractedData : undefined,
+          extractedData: Object.keys(extractedData).length > 0
+            ? extractedData as Prisma.InputJsonValue
+            : JSON.parse(JSON.stringify({ failure })) as Prisma.InputJsonValue,
           thumbnailUrl,
         },
       })
 
-      return serverError('Receipt processing failed. The receipt was saved and can be retried.')
+      return serverError(receiptFailureResponseMessage(failure))
     }
   } catch (err) {
     console.error('[/api/receipts/upload]', err)
