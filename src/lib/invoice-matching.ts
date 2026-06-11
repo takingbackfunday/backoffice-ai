@@ -28,12 +28,99 @@ import Decimal from 'decimal.js'
 import { prisma } from '@/lib/prisma'
 import { money, computeInvoiceTotals, isClose, MATCH_TOLERANCE, fmtMoney, Money } from '@/lib/money'
 
-type OpenInvoice = {
+export type OpenInvoice = {
   id: string
   invoiceNumber: string
   status: string
   lineItems: { quantity: Decimal.Value; unitPrice: Decimal.Value; forgivenAt?: Date | null }[]
   payments: { amount: Decimal.Value; voidedAt?: Date | null }[]
+}
+
+export type Suggestion = {
+  userId: string
+  transactionId: string
+  invoiceId: string
+  confidence: 'medium'
+  reasoning: string
+}
+
+/**
+ * Pure matching logic — no Prisma I/O. Given a transaction and open invoices,
+ * compute suggestions for payment application.
+ */
+export function matchTransactionToInvoices(opts: {
+  txId: string
+  txAmount: Decimal.Value
+  txDescription: string | null
+  txNotes: string | null
+  openInvoices: OpenInvoice[]
+  alreadySuggestedIds: Set<string>
+  userId: string
+}): Suggestion[] {
+  const { txId, txAmount, txDescription, txNotes, openInvoices, alreadySuggestedIds, userId } = opts
+  const txAmountDec = money(txAmount)
+  const suggestions: Suggestion[] = []
+
+  if (openInvoices.length === 0) return suggestions
+
+  const txDesc = `${txDescription ?? ''} ${txNotes ?? ''}`.toLowerCase()
+
+  const invoicesWithBalance = openInvoices.map(inv => {
+    const { total, paid } = computeInvoiceTotals(inv)
+    const balance = total.minus(paid)
+    return { inv, total, paid, balance }
+  })
+
+  // Check for invoice number reference in transaction text (HIGH confidence signal)
+  const invoiceNumberMatch = invoicesWithBalance.find(({ inv }) =>
+    inv.invoiceNumber && txDesc.includes(inv.invoiceNumber.toLowerCase())
+  )
+
+  // Exact amount match (±0.01)
+  const exactMatches = invoicesWithBalance.filter(({ balance }) => isClose(balance, txAmountDec))
+
+  // HIGH confidence: invoice number in description, or single exact amount match
+  let highConfidenceTarget = invoiceNumberMatch ?? (exactMatches.length === 1 ? exactMatches[0] : null)
+
+  // Downgrade to MEDIUM if the matched invoice is still DRAFT — user must confirm
+  if (highConfidenceTarget && highConfidenceTarget.inv.status === 'DRAFT') {
+    const { inv: fi, balance } = highConfidenceTarget
+    suggestions.push({
+      userId,
+      transactionId: txId,
+      invoiceId: fi.id,
+      confidence: 'medium',
+      reasoning: `Payment of ${fmtMoney(txAmountDec)} matches draft invoice ${fi.invoiceNumber} (balance ${fmtMoney(balance)}) — confirm to apply and activate the invoice.`,
+    })
+    return suggestions
+  }
+
+  if (highConfidenceTarget) {
+    // For HIGH confidence, we return empty suggestions — the caller auto-applies
+    return suggestions
+  }
+
+  // MEDIUM confidence — create one suggestion per open invoice so user can choose
+  const missing = invoicesWithBalance.filter(({ inv: fi }) => !alreadySuggestedIds.has(fi.id))
+
+  for (const { inv: fi, balance } of missing) {
+    const diff = txAmountDec.minus(balance)
+    const diffNote = isClose(diff, 0)
+      ? 'exact balance match'
+      : diff.gt(0)
+        ? `${fmtMoney(diff.abs())} over balance`
+        : `${fmtMoney(diff.abs())} under balance`
+
+    suggestions.push({
+      userId,
+      transactionId: txId,
+      invoiceId: fi.id,
+      confidence: 'medium',
+      reasoning: `Payment of ${fmtMoney(txAmountDec)} against ${fi.invoiceNumber} (balance ${fmtMoney(balance)}) — ${diffNote}.`,
+    })
+  }
+
+  return suggestions
 }
 
 async function getOpenInvoicesForTransaction(tx: {
@@ -156,46 +243,35 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
       continue
     }
 
-    // Skip invoices that already have a pending suggestion for this transaction
     const alreadySuggestedIds = new Set(tx.invoicePaymentSuggestions.map(s => s.invoiceId))
 
-    // Compute outstanding balance per invoice
+    // Use pure matching logic to compute suggestions
+    const pureSuggestions = matchTransactionToInvoices({
+      txId: tx.id,
+      txAmount: tx.amount,
+      txDescription: tx.description,
+      txNotes: tx.notes,
+      openInvoices,
+      alreadySuggestedIds,
+      userId,
+    })
+
+    // Check for HIGH confidence match (invoice number or exact amount)
+    const txDesc = `${tx.description ?? ''} ${tx.notes ?? ''}`.toLowerCase()
     const invoicesWithBalance = openInvoices.map(inv => {
       const { total, paid } = computeInvoiceTotals(inv)
       const balance = total.minus(paid)
       return { inv, total, paid, balance }
     })
-
-    const txDesc = `${tx.description ?? ''} ${tx.notes ?? ''}`.toLowerCase()
-
-    // Check for invoice number reference in transaction text (HIGH confidence signal)
     const invoiceNumberMatch = invoicesWithBalance.find(({ inv }) =>
       inv.invoiceNumber && txDesc.includes(inv.invoiceNumber.toLowerCase())
     )
-
-    // Exact amount match (±0.01)
     const exactMatches = invoicesWithBalance.filter(({ balance }) => isClose(balance, txAmount))
+    const highConfidenceTarget = invoiceNumberMatch ?? (exactMatches.length === 1 ? exactMatches[0] : null)
 
-    // HIGH confidence: invoice number in description, or single exact amount match
-    let highConfidenceTarget = invoiceNumberMatch ?? (exactMatches.length === 1 ? exactMatches[0] : null)
-
-    // Downgrade to MEDIUM if the matched invoice is still DRAFT — user must confirm
-    if (highConfidenceTarget && highConfidenceTarget.inv.status === 'DRAFT') {
-      console.log(`[invoice-matching]   → high confidence target ${highConfidenceTarget.inv.invoiceNumber} is DRAFT — downgrading to MEDIUM suggestion`)
-      const { inv: fi, balance } = highConfidenceTarget
-      suggestionsToCreate.push({
-        userId,
-        transactionId: tx.id,
-        invoiceId: fi.id,
-        confidence: 'medium',
-        reasoning: `Payment of ${fmtMoney(txAmount)} matches draft invoice ${fi.invoiceNumber} (balance ${fmtMoney(balance)}) — confirm to apply and activate the invoice.`,
-      })
-      highConfidenceTarget = null
-      continue
-    }
-
-    if (highConfidenceTarget) {
-      const { inv, total } = highConfidenceTarget
+    if (highConfidenceTarget && highConfidenceTarget.inv.status !== 'DRAFT') {
+      // Auto-apply HIGH confidence matches
+      const { inv } = highConfidenceTarget
       const reasoning = invoiceNumberMatch
         ? `Invoice number ${inv.invoiceNumber} found in transaction description. Auto-applied.`
         : `Transaction amount ${fmtMoney(txAmount)} exactly matches outstanding balance on ${inv.invoiceNumber}. Auto-applied.`
@@ -227,37 +303,16 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
         console.log(`[invoice-matching]   → auto-applied to ${inv.invoiceNumber}`)
       } catch {
         console.log(`[invoice-matching]   → auto-apply failed, falling back to suggestions`)
-        for (const { inv: fi, balance } of invoicesWithBalance.filter(({ inv: fi }) => !alreadySuggestedIds.has(fi.id))) {
-          suggestionsToCreate.push({
-            userId,
-            transactionId: tx.id,
-            invoiceId: fi.id,
-            confidence: 'medium',
-            reasoning: `Auto-apply failed — manual review needed. Invoice ${fi.invoiceNumber}, balance ${fmtMoney(balance)}.`,
-          })
+        for (const suggestion of pureSuggestions) {
+          suggestionsToCreate.push(suggestion)
         }
       }
     } else {
-      // MEDIUM confidence — create one suggestion per open invoice so user can choose
-      const missing = invoicesWithBalance.filter(({ inv: fi }) => !alreadySuggestedIds.has(fi.id))
-      console.log(`[invoice-matching]   → no high-confidence match, creating ${missing.length} new MEDIUM suggestion(s) (${alreadySuggestedIds.size} already exist)`)
-
-      for (const { inv: fi, balance } of missing) {
-        const diff = txAmount.minus(balance)
-        const diffNote = isClose(diff, 0)
-          ? 'exact balance match'
-          : diff.gt(0)
-            ? `${fmtMoney(diff.abs())} over balance`
-            : `${fmtMoney(diff.abs())} under balance`
-
-        suggestionsToCreate.push({
-          userId,
-          transactionId: tx.id,
-          invoiceId: fi.id,
-          confidence: 'medium',
-          reasoning: `Payment of ${fmtMoney(txAmount)} against ${fi.invoiceNumber} (balance ${fmtMoney(balance)}) — ${diffNote}.`,
-        })
+      // Add MEDIUM suggestions from pure logic
+      for (const suggestion of pureSuggestions) {
+        suggestionsToCreate.push(suggestion)
       }
+      console.log(`[invoice-matching]   → created ${pureSuggestions.length} MEDIUM suggestion(s)`)
     }
   }
 

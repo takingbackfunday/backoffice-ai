@@ -65,7 +65,14 @@ DIRECT_URL="<direct-connection-string>" pnpm prisma generate
 
 Prisma CLI does not read `.env.local`. `DIRECT_URL` must be the non-pooled Neon string (no `-pooler` in hostname). `DATABASE_URL` (pooled) is used by the running app.
 
-There are no automated tests in this project.
+### Testing
+
+```bash
+pnpm test                     # Run all Vitest tests
+pnpm test:watch               # Run tests in watch mode
+```
+
+Tests are colocated as `*.test.ts` siblings of the module under test (e.g. `src/lib/money.ts` → `src/lib/money.test.ts`). No jsdom or React Testing Library yet — pure-logic Vitest coverage only. CI runs `pnpm lint && pnpm test && pnpm build` on PRs (`.github/workflows/ci.yml`).
 
 ## Environment Variables
 
@@ -94,6 +101,12 @@ import { PrismaClient } from '@/generated/prisma/client'
 
 ### Prisma adapter — use PrismaNeon, never PrismaNeonHttp
 `PrismaNeon` (WebSocket) supports `$transaction`. `PrismaNeonHttp` does not — it breaks on any `$transaction` call including nested writes. `pg`/`adapter-pg` are not installed.
+
+### Decimal at the core, numbers at the edge
+All money arithmetic uses `decimal.js` via the `src/lib/money.ts` module. Prisma `Decimal` values stay as `Decimal` until the final serialization boundary, where `toDisplay()` is the only sanctioned escape hatch. Never do `Number(quantity) * Number(unitPrice)` — use `lineTotal(qty, unitPrice)` or the `money()` constructor. See `src/lib/money.ts` for the full API: `money`, `sum`, `lineTotal`, `gte`, `gt`, `lte`, `lt`, `eq`, `sub`, `add`, `mul`, `div`, `abs`, `toCents`, `toDisplay`, `isClose`, `fmtMoney`, `computeInvoiceTotals`.
+
+### Invoice matching — pure logic extracted
+`src/lib/invoice-matching.ts` exports `matchTransactionToInvoices()` — a pure function with no Prisma I/O. All matching/scoring logic lives there and is unit-tested. `matchInvoicePayments()` is the Prisma-wired wrapper that calls it. If you change matching behavior, update the pure function and its tests, not the I/O wrapper.
 
 ### Neon timezone mangling for `timestamptz`
 Neon serialises `timestamptz` in UTC+1 in production. JS `Date` from those strings is 1 hour off. Use `$queryRaw` with `to_char(col AT TIME ZONE 'UTC', 'YYYY-MM-DD')` instead of JS Date math. Similarly, strip bare datetime strings to `YYYY-MM-DD` before `new Date()` in `csv-processor.ts`.

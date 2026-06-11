@@ -166,7 +166,7 @@ Newly created entities are appended to the component's local state list — no p
 | Remove/move payment | `DELETE/PATCH /api/projects/[id]/invoices/[invoiceId]/payments/[paymentId]` |
 | Renegotiate (void + replace) | `POST /api/projects/[id]/invoices/[invoiceId]/renegotiate` |
 | Status logic | `src/lib/invoice-status.ts` |
-| Auto-match payments at import | `src/lib/invoice-matching.ts` → `matchInvoicePayments()` |
+| Auto-match payments at import | `src/lib/invoice-matching.ts` → `matchInvoicePayments()` (Prisma-wired wrapper); `matchTransactionToInvoices()` (pure logic, unit-tested) |
 | Quick-create shortcuts | `src/components/projects/new-invoice-shortcuts.tsx` |
 | Invoice number format | `{INITIALS}_{DDMMYYYY}_{SEQ}` — logic in create + renegotiate routes |
 | Payment methods display | `src/components/projects/payment-summary.tsx` — renders bank/PayPal/Stripe/custom from `UserPreference.data.paymentMethods` |
@@ -464,6 +464,32 @@ All routes use helpers from `src/lib/api-response.ts`:
 | Terminology (CLIENT vs PROPERTY labels) | `src/lib/terminology.ts` |
 | Rate limiting | `src/lib/rate-limit.ts` |
 | General utils (cn, etc.) | `src/lib/utils.ts` |
+
+### Money module (Decimal arithmetic)
+
+| Function | Purpose |
+|---|---|
+| `money(v)` | Wrap any value into a `Decimal` (default 0) |
+| `sum(items)` | Sum an array of values |
+| `lineTotal(qty, unitPrice)` | `qty × unitPrice`, 2 decimal places |
+| `gte`, `gt`, `lte`, `lt`, `eq` | Decimal comparisons |
+| `add`, `sub`, `mul`, `div` | Decimal arithmetic (mul/div round to 2 places) |
+| `abs` | Absolute value |
+| `toCents(m)` | Convert to integer cents (rounded) |
+| `toDisplay(m)` | **Serialization boundary only** — Decimal → number for client |
+| `isClose(a, b)` | Absolute difference ≤ `MATCH_TOLERANCE` (0.01) |
+| `fmtMoney(m)` | Fixed-2 string for display/messages |
+| `computeInvoiceTotals(invoice)` | Returns `{ total, paid, balance }` — excludes forgiven line items and voided payments |
+
+### Testing (Vitest)
+
+| Concern | Location |
+|---|---|
+| Config | `vitest.config.ts` — `@/` path alias, node environment |
+| Test files | `src/**/*.test.ts` — colocated with module under test |
+| Run | `pnpm test` (single run), `pnpm test:watch` (watch mode) |
+| CI | `.github/workflows/ci.yml` — `pnpm lint && pnpm test && pnpm build` on PRs |
+| Coverage | `@vitest/coverage-v8` — `pnpm test` runs with default config |
 
 ---
 
