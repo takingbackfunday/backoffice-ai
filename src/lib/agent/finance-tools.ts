@@ -718,14 +718,15 @@ export async function compute_runway(userId: string, args: {
 
   const monthlyBurns = [...byMonth.values()]
   const avgMonthlyBurn = monthlyBurns.reduce((s, v) => s + v, 0) / monthlyBurns.length
-  const runwayMonths = avgMonthlyBurn > 0 ? balance / avgMonthlyBurn : Infinity
+  const balanceDisplay = toDisplay(balance)
+  const runwayMonths = avgMonthlyBurn > 0 ? balanceDisplay / avgMonthlyBurn : Infinity
 
   const monthlyLines = [...byMonth.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([m, v]) => `  ${m}: ${fmtAmount(v)}`)
 
   return `Runway analysis (based on last ${lookbackMonths} months of expenses):
-  Current net balance: ${fmtAmount(balance)}
+  Current net balance: ${fmtAmount(balanceDisplay)}
   Average monthly burn: ${fmtAmount(avgMonthlyBurn)} (over ${monthlyBurns.length} months, from ${lookbackFromStr})
   Estimated runway: ${runwayMonths === Infinity ? '∞' : runwayMonths.toFixed(1)} months
 

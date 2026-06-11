@@ -110,7 +110,7 @@ export function VendorDetail({ vendor: initial }: { vendor: Vendor }) {
   const totalPaid = vendor.workOrders
     .flatMap(wo => wo.bills)
     .filter(b => b.status === 'PAID')
-    .reduce((s, b) => s + money(b.amount), money(0)).toNumber()
+    .reduce((s, b) => s.plus(money(b.amount)), money(0)).toNumber()
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -189,7 +189,7 @@ export function VendorDetail({ vendor: initial }: { vendor: Vendor }) {
         </div>
         <div className="rounded-lg border bg-card p-3">
           <p className="text-xs text-muted-foreground mb-0.5">Total billed</p>
-          <p className="text-sm font-semibold">{fmt(toDisplay(vendor.workOrders.flatMap(wo => wo.bills).reduce((s, b) => s + money(b.amount).toNumber(), 0)))}</p>
+          <p className="text-sm font-semibold">{fmt(toDisplay(vendor.workOrders.flatMap(wo => wo.bills).reduce((s, b) => s.plus(money(b.amount)), money(0)).toNumber()))}</p>
         </div>
         <div className="rounded-lg border bg-card p-3">
           <p className="text-xs text-muted-foreground mb-0.5">Total paid</p>

@@ -535,7 +535,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
               ))}
               <tr className="border-t">
                 <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold">Balance due</td>
-                <td className={cn('px-3 py-2 text-right text-xs font-bold tabular-nums', balance <= 0 ? 'text-green-700' : '')}>
+                <td className={cn('px-3 py-2 text-right text-xs font-bold tabular-nums', toDisplay(balance) <= 0 ? 'text-green-700' : '')}>
                   {fmt(toDisplay(balance), invoice.currency)}
                 </td>
               </tr>
@@ -671,7 +671,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                   value={payAmount}
                   onChange={e => setPayAmount(e.target.value)}
                   className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder={fmt(balance, invoice.currency).replace(/[^0-9.]/g, '')}
+                  placeholder={fmt(toDisplay(balance), invoice.currency).replace(/[^0-9.]/g, '')}
                   min="0.01"
                   step="0.01"
                   required
@@ -834,7 +834,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           <h3 className="text-base font-semibold">Renegotiate {invoice.invoiceNumber}?</h3>
           <p className="text-sm text-muted-foreground">
             This will void <span className="font-medium text-foreground">{invoice.invoiceNumber}</span> and open a new draft with the same line items.
-            {paid > 0 && (
+            {toDisplay(paid) > 0 && (
               <> A credit of <span className="font-medium text-foreground">{fmt(toDisplay(paid), invoice.currency)}</span> will be applied to the new invoice for payments already received.</>
             )}
           </p>
@@ -870,9 +870,9 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
         invoiceNumber={invoice.invoiceNumber}
         clientName={invoice.clientName}
         clientEmail={invoice.clientEmail || ''}
-        total={total}
-        paid={paid}
-        balance={balance}
+        total={toDisplay(total)}
+        paid={toDisplay(paid)}
+        balance={toDisplay(balance)}
         currency={invoice.currency}
         dueDate={invoice.dueDate}
         paymentMethods={paymentMethods}
