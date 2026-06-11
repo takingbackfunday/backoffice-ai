@@ -89,6 +89,7 @@ Required in `.env.local`:
 - `RESEND_API_KEY` — transactional email; optional, skipped gracefully if absent
 - `RESEND_FROM` — sender address (defaults to `Backoffice <noreply@backoffice.cv>`)
 - `NEXT_PUBLIC_APP_URL` — public base URL for email links (defaults to `https://backoffice.cv`)
+- `INTERNAL_CRON_SECRET` — shared secret for internal sweep endpoints (e.g. `POST /api/internal/sweep-overdue`). Must match the `x-cron-secret` header sent by the GitHub Actions cron workflow.
 
 ## Known Gotchas
 

@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { StudioClient } from '@/components/studio/studio-client'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
+import { deriveInvoiceStatus } from '@/lib/invoice-status'
 
 interface PageProps {
   searchParams: Promise<{ onboarding?: string }>
@@ -89,14 +90,15 @@ export default async function StudioPage({ searchParams }: PageProps) {
       const profile = p.clientProfile!
       const invoices = profile.invoices
 
-      // Compute totals per invoice
+      // Compute totals per invoice and derive status at read time
       const invoicesWithTotals = invoices.map(inv => {
         const { total, paid } = computeInvoiceTotals(inv)
-        return { inv, total: toDisplay(total), paid: toDisplay(paid) }
+        const derivedStatus = deriveInvoiceStatus(inv, now)
+        return { inv, total: toDisplay(total), paid: toDisplay(paid), derivedStatus }
       })
 
       const outstanding = invoicesWithTotals
-        .filter(({ inv }) => inv.status === 'SENT' || inv.status === 'PARTIAL' || inv.status === 'OVERDUE')
+        .filter(({ derivedStatus }) => derivedStatus === 'SENT' || derivedStatus === 'PARTIAL')
         .reduce((s, { total, paid }) => s + (total - paid), 0)
 
       return {
@@ -134,10 +136,10 @@ export default async function StudioPage({ searchParams }: PageProps) {
             sentAt: q.sentAt ? q.sentAt.toISOString() : null,
             jobName: q.job?.name ?? null,
           })),
-        invoices: invoicesWithTotals.map(({ inv, total, paid }) => ({
+        invoices: invoicesWithTotals.map(({ inv, total, paid, derivedStatus }) => ({
           id: inv.id,
           invoiceNumber: inv.invoiceNumber,
-          status: inv.status,
+          status: derivedStatus,
           issueDate: inv.issueDate.toISOString(),
           dueDate: inv.dueDate.toISOString(),
           currency: inv.currency,
@@ -154,16 +156,17 @@ export default async function StudioPage({ searchParams }: PageProps) {
     .flatMap(p => p.clientProfile?.invoices ?? [])
     .map(inv => {
       const { total, paid } = computeInvoiceTotals(inv)
-      return { inv, total: toDisplay(total), paid: toDisplay(paid) }
+      const derivedStatus = deriveInvoiceStatus(inv, now)
+      return { inv, total: toDisplay(total), paid: toDisplay(paid), derivedStatus }
     })
 
   const activeClients = clients.length
-  const openInvoices = allInvoices.filter(({ inv }) =>
-    ['DRAFT', 'SENT', 'PARTIAL'].includes(inv.status)
+  const openInvoices = allInvoices.filter(({ derivedStatus }) =>
+    ['DRAFT', 'SENT', 'PARTIAL'].includes(derivedStatus)
   ).length
 
   const totalOutstanding = allInvoices
-    .filter(({ inv }) => inv.status === 'SENT' || inv.status === 'PARTIAL' || inv.status === 'OVERDUE')
+    .filter(({ derivedStatus }) => derivedStatus === 'SENT' || derivedStatus === 'PARTIAL')
     .reduce((s, { total, paid }) => s + (total - paid), 0)
 
   const revenueThisMonth = allInvoices
@@ -171,8 +174,8 @@ export default async function StudioPage({ searchParams }: PageProps) {
     .filter(p => new Date(p.paidDate) >= startOfMonth)
     .reduce((s, p) => s + toDisplay(p.amount), 0)
 
-  const overdueCount = allInvoices.filter(({ inv }) =>
-    inv.status !== 'PAID' && inv.status !== 'VOID' && new Date(inv.dueDate) < now
+  const overdueCount = allInvoices.filter(({ derivedStatus }) =>
+    derivedStatus === 'OVERDUE'
   ).length
 
   const kpis = { activeClients, openInvoices, totalOutstanding, revenueThisMonth, overdueCount }
