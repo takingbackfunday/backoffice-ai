@@ -5,6 +5,7 @@ import { resolveDateRange } from '@/lib/widgets/date-utils'
 import { format, startOfMonth } from 'date-fns'
 import { getRate } from '@/lib/fx'
 import type { DashboardCurrency } from '@/lib/fx'
+import { toDisplay } from '@/lib/money'
 
 export interface CashflowPoint {
   label: string
@@ -95,7 +96,7 @@ export async function GET(request: Request) {
       const key = format(new Date(row.date), 'yyyy-MM')
       const bucket = buckets.get(key)
       if (!bucket) continue
-      const rawAmt = Number(row.amount)
+      const rawAmt = toDisplay(row.amount)
       const rate = await getRate(row.account.currency, currency, key)
       const amt = rawAmt * rate
       if (amt > 0) bucket.income += amt

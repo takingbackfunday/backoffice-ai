@@ -4,6 +4,7 @@ import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { loadUserRules } from '@/lib/rules/user-rules'
 import { evaluateRules } from '@/lib/rules/engine'
 import type { TransactionFact } from '@/lib/rules/categorization'
+import { toDisplay } from '@/lib/money'
 
 export async function POST() {
   try {
@@ -26,7 +27,7 @@ export async function POST() {
       const fact: TransactionFact = {
         description: tx.description,
         payeeName: tx.payee?.name ?? null,
-        amount: Number(tx.amount),
+        amount: toDisplay(tx.amount),
         currency: tx.account.currency,
         date: tx.date,
         rawDescription: tx.description,

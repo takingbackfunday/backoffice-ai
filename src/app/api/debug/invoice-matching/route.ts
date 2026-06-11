@@ -7,6 +7,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { unauthorized } from '@/lib/api-response'
 import { NextResponse } from 'next/server'
+import { toDisplay, money, lineTotal, isClose } from '@/lib/money'
 
 export async function GET(request: Request) {
   const { userId } = await auth()
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
 
     if (!tx) return NextResponse.json({ logs: ['transaction not found'], tx: null })
     log(`tx.id=${tx.id}`)
-    log(`tx.amount=${tx.amount} (positive: ${Number(tx.amount) > 0})`)
+    log(`tx.amount=${tx.amount} (positive: ${money(tx.amount).gt(0)})`)
     log(`tx.description="${tx.description}"`)
     log(`tx.workspace=${JSON.stringify(tx.workspace)}`)
     log(`tx.workspace.userId === userId: ${tx.workspace?.userId === userId}`)
@@ -67,7 +68,7 @@ export async function GET(request: Request) {
       log('STOP: workspace does not belong to this userId')
       return NextResponse.json({ logs, tx })
     }
-    if (Number(tx.amount) <= 0) {
+    if (money(tx.amount).lte(0)) {
       log('STOP: amount is not positive')
       return NextResponse.json({ logs, tx })
     }
@@ -100,19 +101,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ logs, clientProfile: clientProfile ? { id: clientProfile.id, invoiceCount: 0 } : null })
     }
 
-    const txAmount = Number(tx.amount)
+    const txAmount = money(tx.amount)
     const invoicesWithBalance = clientProfile.invoices.map(inv => {
-      const total = inv.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-      const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0)
-      const balance = total - paid
-      log(`  invoice ${inv.invoiceNumber}: total=${total} paid=${paid} balance=${balance} status=${inv.status}${inv.status === 'DRAFT' ? ' [DRAFT — will be MEDIUM only]' : ''} diff_from_tx=${Math.abs(balance - txAmount).toFixed(2)}`)
+      const total = inv.lineItems.reduce((s, i) => s.plus(lineTotal(i.quantity, i.unitPrice)), money(0))
+      const paid = inv.payments.reduce((s, p) => s.plus(p.amount), money(0))
+      const balance = total.minus(paid)
+      log(`  invoice ${inv.invoiceNumber}: total=${toDisplay(total)} paid=${toDisplay(paid)} balance=${toDisplay(balance)} status=${inv.status}${inv.status === 'DRAFT' ? ' [DRAFT — will be MEDIUM only]' : ''} diff_from_tx=${toDisplay(balance.minus(txAmount).abs())}`)
       return { inv, total, balance }
     })
 
-    const exactMatches = invoicesWithBalance.filter(({ balance }) => Math.abs(balance - txAmount) <= 0.01)
+    const exactMatches = invoicesWithBalance.filter(({ balance }) => isClose(balance, txAmount))
     log(`exactMatches (±0.01): ${exactMatches.length}`)
 
-    return NextResponse.json({ logs, invoicesWithBalance: invoicesWithBalance.map(i => ({ invoiceNumber: i.inv.invoiceNumber, total: i.total, balance: i.balance, status: i.inv.status })) })
+    return NextResponse.json({ logs, invoicesWithBalance: invoicesWithBalance.map(i => ({ invoiceNumber: i.inv.invoiceNumber, total: toDisplay(i.total), balance: toDisplay(i.balance), status: i.inv.status })) })
   } catch (err) {
     log(`ERROR: ${String(err)}`)
     return NextResponse.json({ logs, error: String(err) }, { status: 500 })

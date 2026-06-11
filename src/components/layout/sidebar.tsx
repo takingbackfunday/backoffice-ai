@@ -157,11 +157,11 @@ export function Sidebar() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (FINANCE_ITEMS.some(i => pathname.startsWith(i.href)) || MORE_ITEMS.some(i => i.href === pathname)) setFinanceOpen(true)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     if (MORE_ITEMS.some(i => i.href === pathname)) setMoreOpen(true)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     if (IMPORT_ITEMS.some(i => i.href === pathname)) setImportOpen(true)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     if (projectsItems.some(i => pathname.startsWith(i.href))) setProjectsOpen(true)
   }, [pathname, projectsItems])
 

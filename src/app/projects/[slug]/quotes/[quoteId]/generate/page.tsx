@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { QuoteGenerator } from '@/components/projects/quote-generator'
+import { toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; quoteId: string }> }
 
@@ -42,16 +43,16 @@ export default async function QuoteGeneratorPage({ params }: PageParams) {
 
   const quoteData = JSON.parse(JSON.stringify({
     ...quote,
-    totalCost: quote.totalCost ? Number(quote.totalCost) : null,
-    totalQuoted: quote.totalQuoted ? Number(quote.totalQuoted) : null,
+    totalCost: quote.totalCost ? toDisplay(quote.totalCost) : null,
+    totalQuoted: quote.totalQuoted ? toDisplay(quote.totalQuoted) : null,
     sections: quote.sections.map(s => ({
       ...s,
       items: s.items.map(i => ({
         ...i,
-        unitPrice: Number(i.unitPrice),
-        quantity: Number(i.quantity),
-        costBasis: i.costBasis ? Number(i.costBasis) : null,
-        marginPercent: i.marginPercent ? Number(i.marginPercent) : null,
+        unitPrice: toDisplay(i.unitPrice),
+        quantity: toDisplay(i.quantity),
+        costBasis: i.costBasis ? toDisplay(i.costBasis) : null,
+        marginPercent: i.marginPercent ? toDisplay(i.marginPercent) : null,
       })),
     })),
   }))
@@ -62,9 +63,9 @@ export default async function QuoteGeneratorPage({ params }: PageParams) {
       ...s,
       items: s.items.map(i => ({
         ...i,
-        hours: i.hours ? Number(i.hours) : null,
-        costRate: i.costRate ? Number(i.costRate) : null,
-        quantity: Number(i.quantity),
+        hours: i.hours ? toDisplay(i.hours) : null,
+        costRate: i.costRate ? toDisplay(i.costRate) : null,
+        quantity: toDisplay(i.quantity),
       })),
     })),
   }))

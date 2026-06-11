@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { QuoteDetailClient } from '@/components/projects/quote-detail-client'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; quoteId: string }> }
 
@@ -53,20 +54,22 @@ export default async function QuoteDetailPage({ params }: PageParams) {
       },
     })
 
-    const sumItems = (items: { unitPrice: unknown; quantity: unknown }[]) =>
-      items.reduce((s, i) => s + Number(i.unitPrice) * Number(i.quantity), 0)
-
-    const totalAgreed = quote.sections.reduce((sum, s) => sum + sumItems(s.items), 0)
+    const totalAgreed = quote.sections.reduce((sum, s) =>
+      sum + s.items.reduce((si, i) => si + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0), 0)
     const amendmentTotal = acceptedAmendments.reduce(
-      (sum, a) => sum + a.sections.reduce((ss, s) => ss + sumItems(s.items), 0), 0
+      (sum, a) => sum + a.sections.reduce((ss, s) => ss + s.items.reduce((si, i) => si + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0), 0), 0
     )
     const effectiveTotal = totalAgreed + amendmentTotal
     const totalInvoiced = invoices.reduce(
-      (sum, inv) => sum + inv.lineItems.filter(li => !li.isTaxLine)
-        .reduce((si, li) => si + Number(li.unitPrice) * Number(li.quantity), 0), 0
+      (sum, inv) => {
+        const { total } = computeInvoiceTotals(inv)
+        return sum + toDisplay(total)
+      }, 0
     )
-    const totalPaid = invoices.flatMap(inv => inv.payments)
-      .reduce((sum, p) => sum + Number(p.amount), 0)
+    const totalPaid = invoices.reduce((sum, inv) => {
+      const { paid } = computeInvoiceTotals(inv)
+      return sum + toDisplay(paid)
+    }, 0)
 
     fulfillment = {
       totalAgreed,
@@ -76,25 +79,27 @@ export default async function QuoteDetailPage({ params }: PageParams) {
       totalPaid,
       totalOutstanding: totalInvoiced - totalPaid,
       uninvoicedBalance: effectiveTotal - totalInvoiced,
-      invoices: invoices.map(inv => ({
-        id: inv.id,
-        invoiceNumber: inv.invoiceNumber,
-        status: inv.status,
-        total: inv.lineItems.filter(li => !li.isTaxLine)
-          .reduce((s, li) => s + Number(li.unitPrice) * Number(li.quantity), 0),
-        paid: inv.payments.reduce((s, p) => s + Number(p.amount), 0),
-        issuedAt: inv.issueDate.toISOString(),
-      })),
+      invoices: invoices.map(inv => {
+        const { total, paid } = computeInvoiceTotals(inv)
+        return {
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          status: inv.status,
+          total: toDisplay(total),
+          paid: toDisplay(paid),
+          issuedAt: inv.issueDate.toISOString(),
+        }
+      }),
     }
   }
 
   const quoteData = {
     ...JSON.parse(JSON.stringify(quote)),
-    totalCost: quote.totalCost ? Number(quote.totalCost) : null,
-    totalQuoted: quote.totalQuoted ? Number(quote.totalQuoted) : null,
+    totalCost: quote.totalCost ? toDisplay(quote.totalCost) : null,
+    totalQuoted: quote.totalQuoted ? toDisplay(quote.totalQuoted) : null,
     amendments: quote.amendments.map(a => ({
       ...a,
-      totalQuoted: a.totalQuoted ? Number(a.totalQuoted) : null,
+      totalQuoted: a.totalQuoted ? toDisplay(a.totalQuoted) : null,
     })),
   }
 

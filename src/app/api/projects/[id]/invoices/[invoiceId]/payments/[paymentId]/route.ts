@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { recalcInvoiceStatus } from '@/lib/invoice-status'
+import { computeInvoiceTotals, money } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string; paymentId: string }> }
 
@@ -32,7 +33,6 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
     const invoice = await getOwnedInvoice(userId, id, invoiceId)
     if (!invoice) return notFound('Invoice not found')
     if (invoice.status === 'VOID') return badRequest('Cannot modify payments on a voided invoice')
-
     const payment = invoice.payments.find(p => p.id === paymentId)
     if (!payment) return notFound('Payment not found')
 
@@ -154,17 +154,12 @@ async function handleMove(
   const payment = sourceInvoice.payments.find(p => p.id === paymentId)
   if (!payment) return notFound('Payment not found')
 
-  const targetTotal = targetInvoice.lineItems
-    .filter(li => !li.forgivenAt)
-    .reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-  const targetPaid = targetInvoice.payments
-    .filter(p => !p.voidedAt)
-    .reduce((s, p) => s + Number(p.amount), 0)
-  const targetRemaining = targetTotal - targetPaid
+  const { total: targetTotal, paid: targetPaid } = computeInvoiceTotals(targetInvoice)
+  const targetRemaining = targetTotal.minus(targetPaid)
 
-  if (Number(payment.amount) > targetRemaining + 0.001) {
+  if (money(payment.amount).gt(targetRemaining.plus(money('0.001')))) {
     return badRequest(
-      `Payment amount (${Number(payment.amount).toFixed(2)}) exceeds remaining balance on target invoice (${targetRemaining.toFixed(2)})`
+      `Payment amount (${money(payment.amount).toFixed(2)}) exceeds remaining balance on target invoice (${targetRemaining.toFixed(2)})`
     )
   }
 

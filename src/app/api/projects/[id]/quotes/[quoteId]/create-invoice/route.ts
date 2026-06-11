@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { toDisplay } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
@@ -53,8 +54,8 @@ export async function POST(request: Request, { params }: RouteParams) {
         .filter(i => !includeItemIds || includeItemIds.includes(i.id))
         .map(i => ({
           description: i.description,
-          quantity: Number(i.quantity),
-          unitPrice: Number(i.unitPrice),
+          quantity: toDisplay(i.quantity),
+          unitPrice: toDisplay(i.unitPrice),
           isTaxLine: false as const,
         }))
     )

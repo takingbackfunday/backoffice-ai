@@ -6,6 +6,7 @@ import { generateLeaseContractPdf } from '@/lib/pdf/lease-contract-pdf'
 import { sendLeaseContractEmail } from '@/lib/email'
 import { randomUUID } from 'node:crypto'
 import { parsePreferences } from '@/types/preferences'
+import { toDisplay } from '@/lib/money'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://backoffice.cv'
 
@@ -140,11 +141,11 @@ export async function POST(request: Request, { params }: RouteParams) {
         unitLabel: result.unit.unitLabel,
         startDate: result.startDate.toISOString(),
         endDate: result.endDate.toISOString(),
-        monthlyRent: Number(result.monthlyRent),
-        securityDeposit: result.securityDeposit ? Number(result.securityDeposit) : null,
+        monthlyRent: toDisplay(result.monthlyRent),
+        securityDeposit: result.securityDeposit ? toDisplay(result.securityDeposit) : null,
         currency: result.currency ?? 'USD',
         paymentDueDay: result.paymentDueDay ?? 1,
-        lateFeeAmount: result.lateFeeAmount ? Number(result.lateFeeAmount) : null,
+        lateFeeAmount: result.lateFeeAmount ? toDisplay(result.lateFeeAmount) : null,
         lateFeeGraceDays: result.lateFeeGraceDays ?? 5,
         contractNotes: result.contractNotes ?? null,
         additionalCharges: (result.additionalCharges as { label: string; amount: number; frequency: string }[]) ?? [],

@@ -255,7 +255,7 @@ export function NetWorthWidget({ currency }: NetWorthWidgetProps) {
     if (appliedRange.period === 'custom' && (!appliedRange.start || !appliedRange.end)) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setError(null)
 
     const allCategories = [...categoryGroups.flatMap((g) => g.categories).map((c) => c.name), 'Uncategorized']

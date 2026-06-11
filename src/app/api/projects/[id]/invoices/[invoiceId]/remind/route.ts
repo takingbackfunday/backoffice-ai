@@ -4,6 +4,7 @@ import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-r
 import { sendReminderEmail } from '@/lib/email'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
 import { parsePreferences } from '@/types/preferences'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
 
@@ -56,9 +57,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     const invoicePaymentNote = prefsData.invoicePaymentNote
     const fromName = prefsData.businessName || prefsData.yourName || cp?.workspace.name || 'Invoice'
 
-    const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-    const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
-    const balance = total - totalPaid
+    const { total, paid: totalPaid } = computeInvoiceTotals(invoice)
+    const balance = toDisplay(total) - toDisplay(totalPaid)
     const isOverdue = new Date(invoice.dueDate) < new Date()
 
     const pdfBuffer = await generateInvoicePdf({
@@ -80,13 +80,13 @@ export async function POST(request: Request, { params }: RouteParams) {
       fromWebsite: prefsData.fromWebsite,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
-        quantity: Number(i.quantity),
-        unitPrice: Number(i.unitPrice),
+        quantity: toDisplay(i.quantity),
+        unitPrice: toDisplay(i.unitPrice),
         isTaxLine: i.isTaxLine,
       })),
-      totalPaid,
+      totalPaid: toDisplay(totalPaid),
       payments: invoice.payments.map(p => ({
-        amount: Number(p.amount),
+        amount: toDisplay(p.amount),
         paidDate: p.paidDate.toISOString(),
         paymentMethod: p.paymentMethod,
       })),

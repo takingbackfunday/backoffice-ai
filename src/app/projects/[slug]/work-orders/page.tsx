@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { WorkOrderList } from '@/components/projects/work-order-list'
+import { toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string }> }
 
@@ -37,14 +38,14 @@ export default async function ProjectWorkOrdersPage({ params }: PageParams) {
     title: wo.title,
     description: wo.description ?? null,
     status: wo.status,
-    agreedCost: wo.agreedCost ? Number(wo.agreedCost) : null,
+    agreedCost: wo.agreedCost ? toDisplay(wo.agreedCost) : null,
     scheduledDate: wo.scheduledDate?.toISOString() ?? null,
     createdAt: wo.createdAt.toISOString(),
     vendor: wo.vendor ? { id: wo.vendor.id, name: wo.vendor.name } : null,
     job: wo.job ? { id: wo.job.id, name: wo.job.name } : null,
     bills: wo.bills.map(b => ({
       id: b.id,
-      amount: Number(b.amount),
+      amount: toDisplay(b.amount),
       status: b.status,
     })),
   }))

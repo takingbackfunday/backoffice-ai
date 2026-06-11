@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { format } from 'date-fns'
 import { recalcInvoiceStatus } from '@/lib/invoice-status'
+import { toDisplay } from '@/lib/money'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
           {
             description: `Rent — ${monthLabel}`,
             quantity: 1,
-            unitPrice: Number(lease.monthlyRent),
+            unitPrice: toDisplay(lease.monthlyRent),
             chargeType: 'RENT',
           },
         ]

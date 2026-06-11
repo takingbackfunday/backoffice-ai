@@ -10,6 +10,7 @@ import {
   BILL_STATUS_LABELS,
   BILL_STATUS_COLORS,
 } from '@/types'
+import { toDisplay, money } from '@/lib/money'
 import { useUploadThing } from '@/lib/uploadthing-client'
 
 interface Vendor { id: string; name: string; specialty: string | null }
@@ -264,7 +265,7 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
     }
   }
 
-  const totalCosts = workOrders.flatMap(wo => wo.bills).reduce((s, b) => s + Number(b.amount), 0)
+  const totalCosts = workOrders.flatMap(wo => wo.bills).reduce((s, b) => s + toDisplay(b.amount), 0)
 
   return (
     <section className="mb-8">
@@ -398,7 +399,7 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
         <div className="space-y-2">
           {workOrders.map(wo => {
             const expanded = expandedWo === wo.id
-            const woBilled = wo.bills.reduce((s, b) => s + Number(b.amount), 0)
+            const woBilled = wo.bills.reduce((s, b) => s + toDisplay(b.amount), 0)
             return (
               <div key={wo.id} className="rounded-lg border overflow-hidden">
                 {/* Work order row */}
@@ -421,7 +422,7 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {wo.agreedCost && (
-                      <span className="text-xs text-muted-foreground tabular-nums">{fmt(Number(wo.agreedCost))}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">{fmt(toDisplay(wo.agreedCost))}</span>
                     )}
                     {woBilled > 0 && (
                       <span className="text-xs tabular-nums font-medium">{fmt(woBilled)}</span>
@@ -514,7 +515,7 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="font-medium tabular-nums">{fmt(Number(bill.amount))}</span>
+                                <span className="font-medium tabular-nums">{fmt(toDisplay(bill.amount))}</span>
                                 <select
                                   value={bill.status}
                                   onChange={e => updateBillStatus(wo.id, bill.id, e.target.value)}
@@ -551,9 +552,9 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
                                     >
                                       <option value="">— Pick a transaction —</option>
                                       {unlinkedTxns.map(t => (
-                                        <option key={t.id} value={t.id}>
-                                          {fmtDate(t.date)} · {fmt(Number(t.amount))} · {t.description}
-                                        </option>
+                                       <option key={t.id} value={t.id}>
+                                         {fmtDate(t.date)} · {fmt(toDisplay(t.amount))} · {t.description}
+                                       </option>
                                       ))}
                                     </select>
                                   )}
@@ -570,7 +571,7 @@ export function WorkOrderPanel({ projectId, workOrders: initial, vendors, contex
                               )
                             ) : (
                               <p className="text-muted-foreground">
-                                {fmtDate(bill.transaction.date)} · {fmt(Number(bill.transaction.amount))} · {bill.transaction.description}
+                                {fmtDate(bill.transaction.date)} · {fmt(toDisplay(bill.transaction.amount))} · {bill.transaction.description}
                               </p>
                             )}
                           </div>

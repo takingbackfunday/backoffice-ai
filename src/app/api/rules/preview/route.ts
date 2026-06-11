@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { loadUserRules, buildCondition } from '@/lib/rules/user-rules'
 import type { TransactionFact } from '@/lib/rules/categorization'
+import { toDisplay } from '@/lib/money'
 
 const ConditionDefSchema = z.object({
   field: z.enum(['description', 'payeeName', 'rawDescription', 'amount', 'currency', 'accountName', 'notes', 'date', 'month', 'dayOfWeek']),
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
       const fact: TransactionFact = {
         description: tx.description,
         payeeName: tx.payee?.name ?? null,
-        amount: Number(tx.amount),
+        amount: toDisplay(tx.amount),
         currency: tx.account.currency,
         date: tx.date,
         rawDescription: tx.description,
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
         id: tx.id,
         date: tx.date,
         description: tx.description,
-        amount: Number(tx.amount),
+        amount: toDisplay(tx.amount),
         currency: tx.account.currency,
         accountName: tx.account.name,
         category: tx.category,

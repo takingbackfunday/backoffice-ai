@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, notFound, serverError } from '@/lib/api-response'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { toDisplay } from '@/lib/money'
 
 const UploadedDocSchema = z.object({
   fileType: z.string().min(1),
@@ -110,8 +111,8 @@ export async function POST(request: Request) {
     }
 
     // Auto-create application fee invoice if listing has fees and no invoice exists yet
-    const hasFees = (listing.applicationFee && Number(listing.applicationFee) > 0) ||
-                    (listing.screeningFee && Number(listing.screeningFee) > 0)
+    const hasFees = (listing.applicationFee && toDisplay(listing.applicationFee) > 0) ||
+                    (listing.screeningFee && toDisplay(listing.screeningFee) > 0)
 
     if (hasFees) {
       const existingInvoice = await prisma.invoice.findFirst({
@@ -124,19 +125,19 @@ export async function POST(request: Request) {
         dueDate.setDate(dueDate.getDate() + 7)
 
         const lineItems = []
-        if (listing.applicationFee && Number(listing.applicationFee) > 0) {
+        if (listing.applicationFee && toDisplay(listing.applicationFee) > 0) {
           lineItems.push({
             description: 'Application Fee',
             quantity: 1,
-            unitPrice: Number(listing.applicationFee),
+            unitPrice: toDisplay(listing.applicationFee),
             chargeType: 'OTHER',
           })
         }
-        if (listing.screeningFee && Number(listing.screeningFee) > 0) {
+        if (listing.screeningFee && toDisplay(listing.screeningFee) > 0) {
           lineItems.push({
             description: 'Screening Fee',
             quantity: 1,
-            unitPrice: Number(listing.screeningFee),
+            unitPrice: toDisplay(listing.screeningFee),
             chargeType: 'OTHER',
           })
         }

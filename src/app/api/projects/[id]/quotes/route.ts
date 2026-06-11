@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { parsePreferences } from '@/types/preferences'
+import { toDisplay, money } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string }> }
 
@@ -126,8 +127,8 @@ export async function POST(request: Request, { params }: RouteParams) {
         // Compute cost basis per item
         const itemsWithCost = section.items.map(item => {
           const hours = item.hours ? Number(item.hours) : null
-          const costRate = item.costRate ? Number(item.costRate) : null
-          const quantity = Number(item.quantity)
+          const costRate = item.costRate ? toDisplay(item.costRate) : null
+          const quantity = toDisplay(item.quantity)
 
           let costBasis = 0
           if (hours !== null && costRate !== null) {

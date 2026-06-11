@@ -24,14 +24,16 @@
  * - DRAFT invoices are always downgraded to MEDIUM — user must confirm
  */
 
+import Decimal from 'decimal.js'
 import { prisma } from '@/lib/prisma'
+import { money, computeInvoiceTotals, isClose, MATCH_TOLERANCE, fmtMoney, Money } from '@/lib/money'
 
 type OpenInvoice = {
   id: string
   invoiceNumber: string
   status: string
-  lineItems: { quantity: number | string; unitPrice: number | string }[]
-  payments: { amount: number | string }[]
+  lineItems: { quantity: Decimal.Value; unitPrice: Decimal.Value; forgivenAt?: Date | null }[]
+  payments: { amount: Decimal.Value; voidedAt?: Date | null }[]
 }
 
 async function getOpenInvoicesForTransaction(tx: {
@@ -144,10 +146,10 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
   }[] = []
 
   for (const tx of txs) {
-    const txAmount = Number(tx.amount)
+    const txAmount = money(tx.amount)
     const openInvoices = await getOpenInvoicesForTransaction(tx as Parameters<typeof getOpenInvoicesForTransaction>[0])
 
-    console.log(`[invoice-matching] tx=${tx.id} amount=${txAmount} desc="${tx.description}" project.type=${tx.workspace?.type} openInvoices=${openInvoices.length}`)
+    console.log(`[invoice-matching] tx=${tx.id} amount=${txAmount.toFixed(2)} desc="${tx.description}" project.type=${tx.workspace?.type} openInvoices=${openInvoices.length}`)
 
     if (openInvoices.length === 0) {
       console.log(`[invoice-matching]   → no open invoices for this project, skipping`)
@@ -159,10 +161,9 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
 
     // Compute outstanding balance per invoice
     const invoicesWithBalance = openInvoices.map(inv => {
-      const total = inv.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-      const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0)
-      const balance = total - paid
-      return { inv, total, balance }
+      const { total, paid } = computeInvoiceTotals(inv)
+      const balance = total.minus(paid)
+      return { inv, total, paid, balance }
     })
 
     const txDesc = `${tx.description ?? ''} ${tx.notes ?? ''}`.toLowerCase()
@@ -173,7 +174,7 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
     )
 
     // Exact amount match (±0.01)
-    const exactMatches = invoicesWithBalance.filter(({ balance }) => Math.abs(balance - txAmount) <= 0.01)
+    const exactMatches = invoicesWithBalance.filter(({ balance }) => isClose(balance, txAmount))
 
     // HIGH confidence: invoice number in description, or single exact amount match
     let highConfidenceTarget = invoiceNumberMatch ?? (exactMatches.length === 1 ? exactMatches[0] : null)
@@ -187,7 +188,7 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
         transactionId: tx.id,
         invoiceId: fi.id,
         confidence: 'medium',
-        reasoning: `Payment of ${txAmount.toFixed(2)} matches draft invoice ${fi.invoiceNumber} (balance ${balance.toFixed(2)}) — confirm to apply and activate the invoice.`,
+        reasoning: `Payment of ${fmtMoney(txAmount)} matches draft invoice ${fi.invoiceNumber} (balance ${fmtMoney(balance)}) — confirm to apply and activate the invoice.`,
       })
       highConfidenceTarget = null
       continue
@@ -197,7 +198,7 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
       const { inv, total } = highConfidenceTarget
       const reasoning = invoiceNumberMatch
         ? `Invoice number ${inv.invoiceNumber} found in transaction description. Auto-applied.`
-        : `Transaction amount ${txAmount} exactly matches outstanding balance on ${inv.invoiceNumber}. Auto-applied.`
+        : `Transaction amount ${fmtMoney(txAmount)} exactly matches outstanding balance on ${inv.invoiceNumber}. Auto-applied.`
 
       console.log(`[invoice-matching]   → high confidence match on ${inv.invoiceNumber} (${invoiceNumberMatch ? 'invoice # in description' : 'exact amount'}), auto-applying`)
 
@@ -213,9 +214,12 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
             },
           })
 
-          const currentPaid = inv.payments.reduce((s, p) => s + Number(p.amount), 0)
-          const newTotalPaid = currentPaid + txAmount
-          const newStatus = newTotalPaid >= total - 0.01 ? 'PAID' : 'PARTIAL'
+          const { total: invTotal, paid: currentPaid } = computeInvoiceTotals({
+            lineItems: inv.lineItems,
+            payments: inv.payments,
+          })
+          const newTotalPaid = currentPaid.plus(txAmount)
+          const newStatus = newTotalPaid.gte(invTotal.minus(MATCH_TOLERANCE)) ? 'PAID' : 'PARTIAL'
 
           await tx2.invoice.update({ where: { id: inv.id }, data: { status: newStatus } })
         })
@@ -229,7 +233,7 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
             transactionId: tx.id,
             invoiceId: fi.id,
             confidence: 'medium',
-            reasoning: `Auto-apply failed — manual review needed. Invoice ${fi.invoiceNumber}, balance ${balance.toFixed(2)}.`,
+            reasoning: `Auto-apply failed — manual review needed. Invoice ${fi.invoiceNumber}, balance ${fmtMoney(balance)}.`,
           })
         }
       }
@@ -239,19 +243,19 @@ export async function matchInvoicePayments(userId: string, newTxIds: string[]): 
       console.log(`[invoice-matching]   → no high-confidence match, creating ${missing.length} new MEDIUM suggestion(s) (${alreadySuggestedIds.size} already exist)`)
 
       for (const { inv: fi, balance } of missing) {
-        const diff = txAmount - balance
-        const diffNote = Math.abs(diff) < 0.01
+        const diff = txAmount.minus(balance)
+        const diffNote = isClose(diff, 0)
           ? 'exact balance match'
-          : diff > 0
-            ? `${Math.abs(diff).toFixed(2)} over balance`
-            : `${Math.abs(diff).toFixed(2)} under balance`
+          : diff.gt(0)
+            ? `${fmtMoney(diff.abs())} over balance`
+            : `${fmtMoney(diff.abs())} under balance`
 
         suggestionsToCreate.push({
           userId,
           transactionId: tx.id,
           invoiceId: fi.id,
           confidence: 'medium',
-          reasoning: `Payment of ${txAmount.toFixed(2)} against ${fi.invoiceNumber} (balance ${balance.toFixed(2)}) — ${diffNote}.`,
+          reasoning: `Payment of ${fmtMoney(txAmount)} against ${fi.invoiceNumber} (balance ${fmtMoney(balance)}) — ${diffNote}.`,
         })
       }
     }

@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { toDisplay } from '@/lib/money'
 
 const ItemSchema = z.object({
   description: z.string().min(1),
@@ -57,7 +58,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     }
 
     const marginRules = await prisma.marginRule.findMany({ where: { userId } })
-    const marginByTag = new Map(marginRules.map(r => [r.tag, Number(r.marginPct)]))
+    const marginByTag = new Map(marginRules.map(r => [r.tag, toDisplay(r.marginPct)]))
 
     const estimateId = quote.estimate.id
 
@@ -96,9 +97,9 @@ export async function POST(request: Request, { params }: RouteParams) {
         .filter(s => s.items.length > 0)
         .map(section => {
           const itemsWithCost = section.items.map(item => {
-            const hours = item.hours ? Number(item.hours) : null
-            const costRate = item.costRate ? Number(item.costRate) : null
-            const quantity = Number(item.quantity)
+            const hours = item.hours ? toDisplay(item.hours) : null
+            const costRate = item.costRate ? toDisplay(item.costRate) : null
+            const quantity = toDisplay(item.quantity)
             let costBasis = 0
             if (hours !== null && costRate !== null) {
               costBasis = hours * costRate * quantity

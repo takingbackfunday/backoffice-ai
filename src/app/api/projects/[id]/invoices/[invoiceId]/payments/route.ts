@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { computeInvoiceTotals, gte, isClose, toDisplay, money } from '@/lib/money'
 
 const CreatePaymentSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
@@ -44,16 +45,11 @@ export async function POST(request: Request, { params }: RouteParams) {
     }
 
     // Compute invoice total and already paid (exclude forgiven items and voided payments)
-    const invoiceTotal = invoice.lineItems
-      .filter(item => !item.forgivenAt)
-      .reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0)
-    const alreadyPaid = invoice.payments
-      .filter(p => !p.voidedAt)
-      .reduce((sum, p) => sum + Number(p.amount), 0)
-    const remaining = invoiceTotal - alreadyPaid
+    const { total: invoiceTotal, paid: alreadyPaid } = computeInvoiceTotals(invoice)
+    const remaining = invoiceTotal.minus(alreadyPaid)
 
-    if (parsed.data.amount > remaining + 0.001) {
-      return badRequest(`Payment amount (${parsed.data.amount}) exceeds remaining balance (${remaining.toFixed(2)})`)
+    if (money(parsed.data.amount).gt(remaining.plus(money('0.001')))) {
+      return badRequest(`Payment amount (${parsed.data.amount.toFixed(2)}) exceeds remaining balance (${remaining.toFixed(2)})`)
     }
 
     // If linking to a transaction, verify it's unlinked and belongs to this project
@@ -80,8 +76,8 @@ export async function POST(request: Request, { params }: RouteParams) {
       })
 
       // Auto-update invoice status
-      const newPaid = alreadyPaid + parsed.data.amount
-      const newStatus = newPaid >= invoiceTotal - 0.001 ? 'PAID' : 'PARTIAL'
+      const newPaid = alreadyPaid.plus(parsed.data.amount)
+      const newStatus = newPaid.gte(invoiceTotal.minus(money('0.001'))) ? 'PAID' : 'PARTIAL'
       await tx.invoice.update({
         where: { id: invoiceId },
         data: { status: newStatus },

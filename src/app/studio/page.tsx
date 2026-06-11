@@ -5,6 +5,7 @@ import { parsePreferences } from '@/types/preferences'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { StudioClient } from '@/components/studio/studio-client'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface PageProps {
   searchParams: Promise<{ onboarding?: string }>
@@ -90,9 +91,8 @@ export default async function StudioPage({ searchParams }: PageProps) {
 
       // Compute totals per invoice
       const invoicesWithTotals = invoices.map(inv => {
-        const total = inv.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-        const paid = inv.payments.reduce((s, pay) => s + Number(pay.amount), 0)
-        return { inv, total, paid }
+        const { total, paid } = computeInvoiceTotals(inv)
+        return { inv, total: toDisplay(total), paid: toDisplay(paid) }
       })
 
       const outstanding = invoicesWithTotals
@@ -118,7 +118,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
             id: q.id,
             quoteNumber: q.quoteNumber,
             title: q.title,
-            totalQuoted: q.totalQuoted ? Number(q.totalQuoted) : null,
+            totalQuoted: q.totalQuoted ? toDisplay(q.totalQuoted) : null,
             currency: q.currency,
             hasInvoice: q._count.invoices > 0,
             jobName: q.job?.name ?? null,
@@ -129,7 +129,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
             id: q.id,
             quoteNumber: q.quoteNumber,
             title: q.title,
-            totalQuoted: q.totalQuoted ? Number(q.totalQuoted) : null,
+            totalQuoted: q.totalQuoted ? toDisplay(q.totalQuoted) : null,
             currency: q.currency,
             sentAt: q.sentAt ? q.sentAt.toISOString() : null,
             jobName: q.job?.name ?? null,
@@ -153,9 +153,8 @@ export default async function StudioPage({ searchParams }: PageProps) {
   const allInvoices = projects
     .flatMap(p => p.clientProfile?.invoices ?? [])
     .map(inv => {
-      const total = inv.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-      const paid = inv.payments.reduce((s, pay) => s + Number(pay.amount), 0)
-      return { inv, total, paid }
+      const { total, paid } = computeInvoiceTotals(inv)
+      return { inv, total: toDisplay(total), paid: toDisplay(paid) }
     })
 
   const activeClients = clients.length
@@ -170,7 +169,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
   const revenueThisMonth = allInvoices
     .flatMap(({ inv }) => inv.payments)
     .filter(p => new Date(p.paidDate) >= startOfMonth)
-    .reduce((s, p) => s + Number(p.amount), 0)
+    .reduce((s, p) => s + toDisplay(p.amount), 0)
 
   const overdueCount = allInvoices.filter(({ inv }) =>
     inv.status !== 'PAID' && inv.status !== 'VOID' && new Date(inv.dueDate) < now

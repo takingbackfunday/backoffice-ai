@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { ToolDefinition } from '@/lib/llm/openrouter'
+import { toDisplay, money } from '@/lib/money'
 
 // ── Shared filter helpers ─────────────────────────────────────────────────────
 
@@ -100,10 +101,10 @@ export async function query_transactions(userId: string, args: {
 
   if (!rows.length) return 'No transactions matched.'
 
-  const total = rows.reduce((s, r) => s + Number(r.amount), 0)
+  const total = rows.reduce((s, r) => s + toDisplay(r.amount), 0)
   const lines = rows.map(r => {
     const date = new Date(r.date).toISOString().slice(0, 10)
-    const amt = fmtAmount(Number(r.amount))
+    const amt = fmtAmount(toDisplay(r.amount))
     const cat = r.categoryRef?.name ?? r.category ?? '(uncategorised)'
     const payee = r.payee?.name ?? '(no payee)'
     const proj = r.workspace?.name ? ` [${r.workspace.name}]` : ''
@@ -167,7 +168,7 @@ export async function aggregate_transactions(userId: string, args: {
         const tags = r.tags.length ? r.tags : ['(no tag)']
         for (const t of tags) {
           const b = buckets.get(t) ?? { total: 0, count: 0 }
-          b.total += Number(r.amount)
+          b.total += toDisplay(r.amount)
           b.count++
           buckets.set(t, b)
         }
@@ -176,7 +177,7 @@ export async function aggregate_transactions(userId: string, args: {
       default: key = '(unknown)'
     }
     const b = buckets.get(key) ?? { total: 0, count: 0 }
-    b.total += Number(r.amount)
+    b.total += toDisplay(r.amount)
     b.count++
     buckets.set(key, b)
   }
@@ -185,7 +186,7 @@ export async function aggregate_transactions(userId: string, args: {
   if (args.topN) entries = entries.slice(0, args.topN)
 
   const lines = entries.map(([k, v]) => `  ${k}: ${fmtAmount(v.total)} (${v.count} txns)`)
-  const grandTotal = rows.reduce((s, r) => s + Number(r.amount), 0)
+  const grandTotal = rows.reduce((s, r) => s + toDisplay(r.amount), 0)
   return `Grouped by ${args.groupBy} | ${rows.length} transactions | total: ${fmtAmount(grandTotal)}\n${lines.join('\n')}`
 }
 
@@ -225,7 +226,7 @@ export async function get_time_series(userId: string, args: {
       case 'month': key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; break
       case 'year': key = String(d.getFullYear()); break
     }
-    buckets.set(key, (buckets.get(key) ?? 0) + Number(r.amount))
+    buckets.set(key, (buckets.get(key) ?? 0) + toDisplay(r.amount))
   }
 
   const lines = [...buckets.entries()].map(([k, v]) => `  ${k}: ${fmtAmount(v)}`)
@@ -253,7 +254,7 @@ export async function get_accounts(userId: string): Promise<string> {
         where: { account: { userId, name: a.name } },
         _sum: { amount: true },
       })
-      return Number(agg._sum.amount ?? 0)
+      return toDisplay(agg._sum.amount ?? 0)
     })
   )
 
@@ -316,7 +317,7 @@ export async function get_payees(userId: string, args: {
         _sum: { amount: true },
         _count: true,
       })
-      return { name: p.name, total: Math.abs(Number(agg._sum.amount ?? 0)), count: agg._count }
+      return { name: p.name, total: Math.abs(toDisplay(agg._sum.amount ?? 0)), count: agg._count }
     })
   )
 
@@ -354,8 +355,8 @@ export async function get_projects(userId: string, args: {
         name: p.name,
         type: p.type,
         active: p.isActive,
-        expenses: Math.abs(Number(expAgg._sum.amount ?? 0)),
-        income: Number(incAgg._sum.amount ?? 0),
+        expenses: Math.abs(toDisplay(expAgg._sum.amount ?? 0)),
+        income: toDisplay(incAgg._sum.amount ?? 0),
         txnCount: expAgg._count + incAgg._count,
       }
     })
@@ -412,7 +413,7 @@ export async function get_tags_summary(userId: string, args: {
   for (const r of rows) {
     for (const tag of r.tags) {
       const b = byTag.get(tag) ?? { total: 0, count: 0 }
-      b.total += Math.abs(Number(r.amount))
+      b.total += Math.abs(toDisplay(r.amount))
       b.count++
       byTag.set(tag, b)
     }
@@ -463,14 +464,14 @@ export async function search_transactions(userId: string, args: {
 
   if (!rows.length) return `No transactions found matching "${q}".`
 
-  const total = rows.reduce((s, r) => s + Number(r.amount), 0)
+  const total = rows.reduce((s, r) => s + toDisplay(r.amount), 0)
   const lines = rows.map(r => {
     const date = new Date(r.date).toISOString().slice(0, 10)
     const cat = r.categoryRef?.name ?? r.category ?? '(uncategorised)'
     const payee = r.payee?.name ?? '(no payee)'
     const proj = r.workspace?.name ? ` [${r.workspace.name}]` : ''
     const notes = r.notes ? ` // ${r.notes.slice(0, 50)}` : ''
-    return `${date} | ${fmtAmount(Number(r.amount))} | ${cat} | ${payee} | ${r.account.name} | ${r.description.slice(0, 70)}${proj}${notes}`
+    return `${date} | ${fmtAmount(toDisplay(r.amount))} | ${cat} | ${payee} | ${r.account.name} | ${r.description.slice(0, 70)}${proj}${notes}`
   })
 
   return `${rows.length} results for "${q}" | net: ${fmtAmount(total)}\ndate | amount | category | payee | account | description\n${lines.join('\n')}`
@@ -510,7 +511,7 @@ export async function compare_periods(userId: string, args: {
     })
 
     if (groupBy === 'total') {
-      const total = rows.reduce((s, r) => s + Number(r.amount), 0)
+      const total = rows.reduce((s, r) => s + toDisplay(r.amount), 0)
       return new Map([['total', total]])
     }
 
@@ -520,7 +521,7 @@ export async function compare_periods(userId: string, args: {
         groupBy === 'category' ? (r.categoryRef?.name ?? r.category ?? '(uncategorised)') :
         groupBy === 'payee'    ? (r.payee?.name ?? '(no payee)') :
         groupBy === 'account'  ? (r.account?.name ?? '(unknown)') : 'total'
-      buckets.set(key, (buckets.get(key) ?? 0) + Number(r.amount))
+      buckets.set(key, (buckets.get(key) ?? 0) + toDisplay(r.amount))
     }
     return buckets
   }
@@ -586,7 +587,7 @@ export async function detect_anomalies(userId: string, args: {
       dimension === 'category' ? (r.categoryRef?.name ?? r.category ?? '(uncategorised)') :
       dimension === 'payee'    ? (r.payee?.name ?? '(no payee)') : 'bucket'
     const list = buckets.get(key) ?? []
-    list.push(Math.abs(Number(r.amount)))
+    list.push(Math.abs(toDisplay(r.amount)))
     buckets.set(key, list)
   }
 
@@ -656,7 +657,7 @@ export async function get_recurring_payees(userId: string, args: {
     const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     if (!payeeMonths.has(name)) payeeMonths.set(name, new Set())
     payeeMonths.get(name)!.add(month)
-    payeeTotals.set(name, (payeeTotals.get(name) ?? 0) + Math.abs(Number(r.amount)))
+    payeeTotals.set(name, (payeeTotals.get(name) ?? 0) + Math.abs(toDisplay(r.amount)))
     payeeCounts.set(name, (payeeCounts.get(name) ?? 0) + 1)
   }
 
@@ -688,7 +689,7 @@ export async function compute_runway(userId: string, args: {
     where: { account: { userId } },
     _sum: { amount: true },
   })
-  const balance = Number(balanceAgg._sum.amount ?? 0)
+  const balance = money(balanceAgg._sum.amount ?? 0)
 
   // Average monthly burn over lookback period
   const lookbackFrom = new Date()
@@ -712,7 +713,7 @@ export async function compute_runway(userId: string, args: {
   for (const r of expenseRows) {
     const d = new Date(r.date)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    byMonth.set(key, (byMonth.get(key) ?? 0) + Math.abs(Number(r.amount)))
+    byMonth.set(key, (byMonth.get(key) ?? 0) + Math.abs(toDisplay(r.amount)))
   }
 
   const monthlyBurns = [...byMonth.values()]
@@ -755,8 +756,8 @@ export async function get_tax_estimate(userId: string, args: {
 
   if (!rows.length) return 'No transactions found in this period.'
 
-  const totalIncome = rows.filter(r => Number(r.amount) > 0).reduce((s, r) => s + Number(r.amount), 0)
-  const totalExpenses = rows.filter(r => Number(r.amount) < 0).reduce((s, r) => s + Math.abs(Number(r.amount)), 0)
+  const totalIncome = rows.filter(r => toDisplay(r.amount) > 0).reduce((s, r) => s + toDisplay(r.amount), 0)
+  const totalExpenses = rows.filter(r => toDisplay(r.amount) < 0).reduce((s, r) => s + Math.abs(toDisplay(r.amount)), 0)
   const netIncome = totalIncome - totalExpenses
   const taxEstimate = Math.max(0, netIncome * rate)
 
@@ -773,8 +774,8 @@ export async function get_tax_estimate(userId: string, args: {
         key = `${d.getFullYear()} Q${q}`
       }
       const b = buckets.get(key) ?? { income: 0, expenses: 0 }
-      if (Number(r.amount) > 0) b.income += Number(r.amount)
-      else b.expenses += Math.abs(Number(r.amount))
+      if (toDisplay(r.amount) > 0) b.income += toDisplay(r.amount)
+      else b.expenses += Math.abs(toDisplay(r.amount))
       buckets.set(key, b)
     }
 
@@ -1078,3 +1079,5 @@ export async function dispatchTool(userId: string, name: string, args: unknown):
     default: return `Unknown tool: ${name}`
   }
 }
+
+export { FINANCE_TOOLS, dispatchTool }

@@ -10,6 +10,7 @@ import { SendInvoiceModal } from '@/components/projects/send-invoice-modal'
 import { PaymentSummary } from '@/components/projects/payment-summary'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { usePageContext } from '@/components/chat/page-context-provider'
+import { toDisplay, computeInvoiceTotals } from '@/lib/money'
 
 interface Suggestion {
   id: string
@@ -129,9 +130,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
     return () => { clearTimeout(t); document.removeEventListener('click', handler) }
   }, [paymentMenuOpen])
 
-  const total = invoice.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-  const paid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
-  const balance = total - paid
+  const { total, paid, balance } = computeInvoiceTotals(invoice)
   const isOverdue = invoice.status !== 'PAID' && invoice.status !== 'VOID' && new Date(invoice.dueDate) < new Date()
   const displayStatus = isOverdue && invoice.status === 'SENT' ? 'OVERDUE' : invoice.status
 
@@ -509,13 +508,13 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                 <tr key={item.id}>
                   <td className="px-3 py-1.5">{item.description}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                    {Number(item.quantity) % 1 === 0 ? Number(item.quantity) : Number(item.quantity).toFixed(3)}
+                    {toDisplay(item.quantity) % 1 === 0 ? toDisplay(item.quantity) : toDisplay(item.quantity).toFixed(3)}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                    {fmt(Number(item.unitPrice), invoice.currency)}
+                    {fmt(toDisplay(item.unitPrice), invoice.currency)}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums font-medium">
-                    {fmt(Number(item.quantity) * Number(item.unitPrice), invoice.currency)}
+                    {fmt(toDisplay(item.quantity) * toDisplay(item.unitPrice), invoice.currency)}
                   </td>
                 </tr>
               ))}
@@ -531,7 +530,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                     Payment · {new Date(p.paidDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     {p.paymentMethod && <span className="text-muted-foreground"> · {p.paymentMethod}</span>}
                   </td>
-                  <td className="px-3 py-1 text-right text-xs font-semibold text-green-700 tabular-nums" colSpan={2}>−{fmt(Number(p.amount), invoice.currency)}</td>
+                  <td className="px-3 py-1 text-right text-xs font-semibold text-green-700 tabular-nums" colSpan={2}>−{fmt(toDisplay(p.amount), invoice.currency)}</td>
                 </tr>
               ))}
               <tr className="border-t">
@@ -571,9 +570,9 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
         <div key={s.id} className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-3 py-2 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="font-semibold text-xs text-blue-900 dark:text-blue-200">Possible payment match</p>
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
-              {fmt(s.transaction.amount, invoice.currency)} · {s.transaction.description} · {new Date(s.transaction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                {fmt(toDisplay(s.transaction.amount), invoice.currency)} · {s.transaction.description} · {new Date(s.transaction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </p>
             <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">{s.reasoning}</p>
           </div>
           <div className="flex gap-2 shrink-0">
@@ -780,7 +779,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                       {new Date(p.paidDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td className="px-3 py-1.5 text-right font-medium tabular-nums text-green-700">
-                      {fmt(Number(p.amount), invoice.currency)}
+                      {fmt(toDisplay(p.amount), invoice.currency)}
                     </td>
                     <td className="px-3 py-1.5 text-muted-foreground">{p.paymentMethod ?? '—'}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{p.notes ?? '—'}</td>

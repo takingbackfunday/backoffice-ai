@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { MessageThread } from './message-thread'
 import { usePageContext } from '@/components/chat/page-context-provider'
 import { CheckCircle2, CheckCircle, Clock, Plus, X, Mail, ChevronDown, ChevronRight } from 'lucide-react'
+import { toDisplay, money, lineTotal, computeInvoiceTotals } from '@/lib/money'
 
 interface Tenant {
   id: string; name: string; email: string; phone: string | null
@@ -66,12 +67,16 @@ const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', c
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 function invoiceTotals(inv: Invoice) {
-  const lineItemTotal = inv.lineItems
-    .filter(li => !li.forgivenAt)
-    .reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0)
-  const paymentTotal = inv.payments
-    .filter(p => !p.voidedAt)
-    .reduce((s, p) => s + Number(p.amount), 0)
+  const lineItemTotal = toDisplay(
+    inv.lineItems
+      .filter(li => !li.forgivenAt)
+      .reduce((s, li) => s.plus(lineTotal(li.quantity, li.unitPrice)), money(0))
+  )
+  const paymentTotal = toDisplay(
+    inv.payments
+      .filter(p => !p.voidedAt)
+      .reduce((s, p) => s.plus(money(p.amount)), money(0))
+  )
   return { lineItemTotal, paymentTotal, outstanding: lineItemTotal - paymentTotal }
 }
 
@@ -150,9 +155,9 @@ function InvoiceRow({ inv, projectId, invoiceId, onDone }: {
                   {li.description}
                   {li.forgivenAt && <span className="ml-1 not-italic">(forgiven{li.forgivenReason ? `: ${li.forgivenReason}` : ''})</span>}
                 </span>
-                <span className={cn('tabular-nums font-medium shrink-0', li.forgivenAt && 'line-through text-muted-foreground')}>
-                  {fmt(Number(li.quantity) * Number(li.unitPrice))}
-                </span>
+                  <span className={cn('tabular-nums font-medium shrink-0', li.forgivenAt && 'line-through text-muted-foreground')}>
+                    {fmt(toDisplay(li.quantity) * toDisplay(li.unitPrice))}
+                  </span>
                 <div className="shrink-0 w-16 text-right">
                   {li.forgivenAt ? (
                     <button
@@ -208,9 +213,9 @@ function InvoiceRow({ inv, projectId, invoiceId, onDone }: {
                   {!p.voidedAt && p.sourceDeleted && (
                     <span className="text-[10px] text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">source deleted</span>
                   )}
-                  <span className={cn('tabular-nums font-medium shrink-0', p.voidedAt ? 'text-red-400 line-through' : 'text-green-700')}>
-                    −{fmt(Number(p.amount))}
-                  </span>
+                    <span className={cn('tabular-nums font-medium shrink-0', p.voidedAt ? 'text-red-400 line-through' : 'text-green-700')}>
+                      −{fmt(toDisplay(p.amount))}
+                    </span>
                   <div className="shrink-0">
                     {p.voidedAt ? (
                       <button
@@ -386,10 +391,10 @@ export function UnitDetailClient({ projectId, unit }: Props) {
             <dd>{activeLease.tenant.email}</dd>
             {activeLease.tenant.phone && (<><dt className="text-muted-foreground">Phone</dt><dd>{activeLease.tenant.phone}</dd></>)}
             <dt className="text-muted-foreground">Rent</dt>
-            <dd className="font-medium">{fmt(Number(activeLease.monthlyRent))}/mo</dd>
+            <dd className="font-medium">{fmt(toDisplay(activeLease.monthlyRent))}/mo</dd>
             <dt className="text-muted-foreground">Lease period</dt>
             <dd>{fmtDate(activeLease.startDate)} — {fmtDate(activeLease.endDate)}</dd>
-            {activeLease.securityDeposit && (<><dt className="text-muted-foreground">Security deposit</dt><dd>{fmt(Number(activeLease.securityDeposit))}</dd></>)}
+            {activeLease.securityDeposit && (<>            <dt className="text-muted-foreground">Security deposit</dt><dd>{fmt(toDisplay(activeLease.securityDeposit))}</dd></>)}
             <dt className="text-muted-foreground">Due day</dt>
             <dd>Day {activeLease.paymentDueDay} of month</dd>
           </dl>
@@ -469,7 +474,7 @@ export function UnitDetailClient({ projectId, unit }: Props) {
                     </span>
                   </div>
                 </div>
-                {req.cost !== null && <p className="text-xs text-muted-foreground mt-1">Cost: {fmt(Number(req.cost))}</p>}
+                {req.cost !== null && <p className="text-xs text-muted-foreground mt-1">Cost: {fmt(toDisplay(req.cost))}</p>}
               </div>
             ))}
           </div>

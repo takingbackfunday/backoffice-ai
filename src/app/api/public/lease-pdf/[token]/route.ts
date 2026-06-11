@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { generateLeaseContractPdf } from '@/lib/pdf/lease-contract-pdf'
 import { parsePreferences } from '@/types/preferences'
 import { notFound } from 'next/navigation'
+import { toDisplay } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ token: string }> }
 
@@ -40,11 +41,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
       unitLabel: lease.unit.unitLabel,
       startDate: lease.startDate.toISOString(),
       endDate: lease.endDate.toISOString(),
-      monthlyRent: Number(lease.monthlyRent),
-      securityDeposit: lease.securityDeposit ? Number(lease.securityDeposit) : null,
+      monthlyRent: toDisplay(lease.monthlyRent),
+      securityDeposit: lease.securityDeposit ? toDisplay(lease.securityDeposit) : null,
       currency: lease.currency ?? 'USD',
       paymentDueDay: lease.paymentDueDay ?? 1,
-      lateFeeAmount: lease.lateFeeAmount ? Number(lease.lateFeeAmount) : null,
+      lateFeeAmount: lease.lateFeeAmount ? toDisplay(lease.lateFeeAmount) : null,
       lateFeeGraceDays: lease.lateFeeGraceDays ?? 5,
       contractNotes: lease.contractNotes ?? null,
       generatedAt: new Date().toISOString(),

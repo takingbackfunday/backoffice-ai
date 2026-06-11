@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { TenantDetailClient } from '@/components/projects/tenant-detail-client'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; tenantId: string }> }
 
@@ -62,11 +63,14 @@ export default async function TenantDetailPage({ params }: PageParams) {
               ...JSON.parse(JSON.stringify(tenant)),
               leases: tenant.leases.map(l => ({
                 ...JSON.parse(JSON.stringify(l)),
-                invoices: l.invoices.map(inv => ({
-                  id: inv.id,
-                  lineItemTotal: inv.lineItems.filter(li => !li.forgivenAt).reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0),
-                  paymentTotal: inv.payments.filter(p => !p.voidedAt).reduce((s, p) => s + Number(p.amount), 0),
-                })),
+                invoices: l.invoices.map(inv => {
+                  const { total, paid } = computeInvoiceTotals(inv)
+                  return {
+                    id: inv.id,
+                    lineItemTotal: toDisplay(total),
+                    paymentTotal: toDisplay(paid),
+                  }
+                }),
               })),
             }}
           />

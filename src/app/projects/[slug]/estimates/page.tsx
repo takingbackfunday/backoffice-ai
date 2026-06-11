@@ -8,6 +8,8 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { cn } from '@/lib/utils'
+import Decimal from 'decimal.js'
+import { toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string }> }
 
@@ -17,12 +19,12 @@ const STATUS_STYLES: Record<string, string> = {
   SUPERSEDED: 'bg-amber-100 text-amber-700',
 }
 
-function estimateCost(sections: { items: { hours: unknown; costRate: unknown; quantity: unknown }[] }[]): number {
+function estimateCost(sections: { items: { hours: Decimal.Value | null; costRate: Decimal.Value | null; quantity: Decimal.Value | null }[] }[]): number {
   return sections.reduce((sum, s) =>
     sum + s.items.reduce((si, i) => {
-      const hours = i.hours ? Number(i.hours) : 0
-      const rate = i.costRate ? Number(i.costRate) : 0
-      const qty = i.quantity ? Number(i.quantity) : 1
+      const hours = i.hours ? toDisplay(i.hours) : 0
+      const rate = i.costRate ? toDisplay(i.costRate) : 0
+      const qty = i.quantity ? toDisplay(i.quantity) : 1
       if (hours > 0 && rate > 0) return si + hours * rate * qty
       if (rate > 0) return si + rate * qty
       return si

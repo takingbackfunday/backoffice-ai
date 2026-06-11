@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { LEASE_STATUS_LABELS, LEASE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
 import { getPortalSession } from '@/lib/portal-auth'
+import { toDisplay, money, lineTotal } from '@/lib/money'
 
 export default async function PortalDashboardPage() {
   const session = await getPortalSession()
@@ -74,7 +75,7 @@ export default async function PortalDashboardPage() {
           </div>
           <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
             <dt className="text-muted-foreground">Monthly rent</dt>
-            <dd className="font-medium">{fmt(Number(activeLease.monthlyRent))}</dd>
+            <dd className="font-medium">{fmt(toDisplay(activeLease.monthlyRent))}</dd>
             <dt className="text-muted-foreground">Lease ends</dt>
             <dd>{fmtDate(activeLease.endDate)}</dd>
             <dt className="text-muted-foreground">Due day</dt>
@@ -89,25 +90,26 @@ export default async function PortalDashboardPage() {
 
       {/* Balance summary */}
       {activeLease && activeLease.invoices.length > 0 && (() => {
-        const charged = activeLease.invoices.reduce((s, inv) => s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
-        const paid = activeLease.invoices.reduce((s, inv) => s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
-        const balance = charged - paid
+        const charged = activeLease.invoices.reduce((s, inv) => s.plus(inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2.plus(lineTotal(li.quantity, li.unitPrice)), money(0))), money(0))
+        const paid = activeLease.invoices.reduce((s, inv) => s.plus(inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2.plus(p.amount), money(0))), money(0))
+        const balance = charged.minus(paid)
+        const balanceDisplay = toDisplay(balance)
         return (
           <div>
             <h2 className="text-sm font-semibold mb-3">Balance</h2>
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg border px-4 py-3">
                 <p className="text-xs text-muted-foreground mb-0.5">Total charged</p>
-                <p className="text-lg font-semibold">{fmt(charged)}</p>
+                <p className="text-lg font-semibold">{fmt(toDisplay(charged))}</p>
               </div>
               <div className="rounded-lg border px-4 py-3">
                 <p className="text-xs text-muted-foreground mb-0.5">Total paid</p>
-                <p className="text-lg font-semibold text-green-700">{fmt(paid)}</p>
+                <p className="text-lg font-semibold text-green-700">{fmt(toDisplay(paid))}</p>
               </div>
-              <div className={cn('rounded-lg border px-4 py-3', balance > 0 ? 'border-amber-200 bg-amber-50' : 'border-green-200 bg-green-50')}>
+              <div className={cn('rounded-lg border px-4 py-3', balanceDisplay > 0 ? 'border-amber-200 bg-amber-50' : 'border-green-200 bg-green-50')}>
                 <p className="text-xs text-muted-foreground mb-0.5">Balance</p>
-                <p className={cn('text-lg font-semibold', balance > 0 ? 'text-amber-800' : 'text-green-800')}>
-                  {balance > 0 ? `${fmt(balance)} owed` : balance < 0 ? `${fmt(Math.abs(balance))} credit` : 'Current'}
+                <p className={cn('text-lg font-semibold', balanceDisplay > 0 ? 'text-amber-800' : 'text-green-800')}>
+                  {balanceDisplay > 0 ? `${fmt(balanceDisplay)} owed` : balanceDisplay < 0 ? `${fmt(Math.abs(balanceDisplay))} credit` : 'Current'}
                 </p>
               </div>
             </div>

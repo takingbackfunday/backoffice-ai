@@ -63,7 +63,7 @@ export async function matchReceiptTransactions(userId: string, newTxIds: string[
   for (const tx of transactions) {
     if (linkedTxIds.has(tx.id)) continue
 
-    const txAmount = Math.abs(Number(tx.amount))
+    const txAmount = Math.abs(toDisplay(tx.amount))
     const txDate = new Date(tx.date)
 
     for (const receipt of receipts) {

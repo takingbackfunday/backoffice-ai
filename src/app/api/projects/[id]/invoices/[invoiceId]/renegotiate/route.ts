@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
 import { parsePreferences } from '@/types/preferences'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
 
@@ -27,7 +28,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
       return badRequest(`This invoice has already been replaced by ${invoice.replacedBy.invoiceNumber}`)
     }
 
-    const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
+    const { paid: totalPaid } = computeInvoiceTotals(invoice)
+    const totalPaidDisplay = toDisplay(totalPaid)
 
     const replacement = await prisma.$transaction(async tx => {
       // 1. Void the original
@@ -48,14 +50,14 @@ export async function POST(_request: Request, { params }: RouteParams) {
       const invoiceNumber = `${initials}_${datePart}_${String(count + 1).padStart(2, '0')}`
 
       // 3. Build line items: credit first (if partial paid), then original lines
-      const creditLines = totalPaid > 0
-        ? [{ description: `Less: payment received (ref ${invoice.invoiceNumber})`, quantity: 1, unitPrice: -totalPaid, isTaxLine: false }]
+      const creditLines = totalPaidDisplay > 0
+        ? [{ description: `Less: payment received (ref ${invoice.invoiceNumber})`, quantity: 1, unitPrice: -totalPaidDisplay, isTaxLine: false }]
         : []
 
       const copiedLines = invoice.lineItems.map(i => ({
         description: i.description,
-        quantity: Number(i.quantity),
-        unitPrice: Number(i.unitPrice),
+        quantity: toDisplay(i.quantity),
+        unitPrice: toDisplay(i.unitPrice),
         isTaxLine: i.isTaxLine,
       }))
 

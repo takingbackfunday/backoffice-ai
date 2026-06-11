@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateQuotePdf } from '@/lib/pdf/quote-pdf'
 import { parsePreferences } from '@/types/preferences'
+import { toDisplay } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
@@ -43,9 +44,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
         name: s.name,
         items: s.items.map(i => ({
           description: i.description,
-          quantity: Number(i.quantity),
+          quantity: toDisplay(i.quantity),
           unit: i.unit ?? undefined,
-          unitPrice: Number(i.unitPrice),
+          unitPrice: toDisplay(i.unitPrice),
           isOptional: i.isOptional,
         })),
       })),

@@ -1,11 +1,13 @@
+import Decimal from 'decimal.js'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { toDisplay } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
-function sumItems(items: { unitPrice: unknown; quantity: unknown }[]) {
-  return items.reduce((sum, i) => sum + Number(i.unitPrice) * Number(i.quantity), 0)
+function sumItems(items: { unitPrice: Decimal.Value; quantity: Decimal.Value }[]) {
+  return items.reduce((sum, i) => sum + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0)
 }
 
 export async function GET(_request: Request, { params }: RouteParams) {
@@ -43,12 +45,12 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const totalInvoiced = quote.invoices.reduce(
       (sum, inv) => sum + inv.lineItems
         .filter(li => !li.isTaxLine)
-        .reduce((si, li) => si + Number(li.unitPrice) * Number(li.quantity), 0),
+        .reduce((si, li) => si + toDisplay(li.unitPrice) * toDisplay(li.quantity), 0),
       0
     )
     const totalPaid = quote.invoices
       .flatMap(inv => inv.payments)
-      .reduce((sum, p) => sum + Number(p.amount), 0)
+      .reduce((sum, p) => sum + toDisplay(p.amount), 0)
 
     const uninvoicedBalance = effectiveTotal - totalInvoiced
     const totalOutstanding = totalInvoiced - totalPaid
@@ -68,8 +70,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
       status: inv.status,
       total: inv.lineItems
         .filter(li => !li.isTaxLine)
-        .reduce((sum, li) => sum + Number(li.unitPrice) * Number(li.quantity), 0),
-      paid: inv.payments.reduce((sum, p) => sum + Number(p.amount), 0),
+        .reduce((sum, li) => sum + toDisplay(li.unitPrice) * toDisplay(li.quantity), 0),
+      paid: inv.payments.reduce((sum, p) => sum + toDisplay(p.amount), 0),
       issuedAt: inv.issueDate.toISOString(),
     }))
 

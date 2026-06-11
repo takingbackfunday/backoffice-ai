@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { ToolDefinition } from '@/lib/llm/openrouter'
+import { toDisplay, money, lineTotal } from '@/lib/money'
 
 // ── Tool Definitions ───────────────────────────────────────────────────────────
 
@@ -300,8 +301,8 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         const leased = p.units.filter(u => u.status === 'LEASED').length
         const monthlyRev = p.units
           .filter(u => u.status === 'LEASED' && u.monthlyRent)
-          .reduce((s, u) => s + Number(u.monthlyRent), 0)
-        return `${p.workspace.name} | ${p.address}${p.city ? ', ' + p.city : ''} | ${leased}/${total} occupied | $${monthlyRev.toLocaleString()}/mo revenue`
+          .reduce((s, u) => s.plus(u.monthlyRent), money(0))
+        return `${p.workspace.name} | ${p.address}${p.city ? ', ' + p.city : ''} | ${leased}/${total} occupied | $${toDisplay(monthlyRev).toLocaleString()}/mo revenue`
       })
       return rows.join('\n')
     }
@@ -326,9 +327,9 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         units: prop.units.length,
         occupied: leased,
         vacant: prop.units.length - leased,
-        purchasePrice: prop.purchasePrice ? Number(prop.purchasePrice) : null,
-        currentValue: prop.currentValue ? Number(prop.currentValue) : null,
-        mortgageBalance: prop.mortgageBalance ? Number(prop.mortgageBalance) : null,
+        purchasePrice: prop.purchasePrice ? toDisplay(prop.purchasePrice) : null,
+        currentValue: prop.currentValue ? toDisplay(prop.currentValue) : null,
+        mortgageBalance: prop.mortgageBalance ? toDisplay(prop.mortgageBalance) : null,
       })
     }
 
@@ -353,7 +354,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       if (!units.length) return 'No units found.'
       return units.map(u => {
         const lease = u.leases[0]
-        return `${u.propertyProfile.workspace.name} / ${u.unitLabel} | ${u.status} | $${u.monthlyRent ? Number(u.monthlyRent) : 0}/mo | Tenant: ${lease?.tenant.name ?? 'none'} | Lease ends: ${lease?.endDate ? new Date(lease.endDate).toISOString().slice(0, 10) : 'n/a'}`
+        return `${u.propertyProfile.workspace.name} / ${u.unitLabel} | ${u.status} | $${u.monthlyRent ? toDisplay(u.monthlyRent) : 0}/mo | Tenant: ${lease?.tenant.name ?? 'none'} | Lease ends: ${lease?.endDate ? new Date(lease.endDate).toISOString().slice(0, 10) : 'n/a'}`
       }).join('\n')
     }
 
@@ -369,8 +370,8 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       const total = units.length
       const leased = units.filter(u => u.status === 'LEASED').length
       const vacant = units.filter(u => u.status === 'VACANT').length
-      const revenue = units.filter(u => u.status === 'LEASED' && u.monthlyRent).reduce((s, u) => s + Number(u.monthlyRent), 0)
-      return `Total units: ${total}\nLeased: ${leased} (${Math.round(leased / total * 100)}%)\nVacant: ${vacant}\nMonthly revenue: $${revenue.toLocaleString()}`
+      const revenue = units.filter(u => u.status === 'LEASED' && u.monthlyRent).reduce((s, u) => s.plus(u.monthlyRent), money(0))
+      return `Total units: ${total}\nLeased: ${leased} (${Math.round(leased / total * 100)}%)\nVacant: ${vacant}\nMonthly revenue: $${toDisplay(revenue).toLocaleString()}`
     }
 
     case 'list_leases': {
@@ -397,7 +398,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         orderBy: { endDate: 'asc' },
       })
       if (!leases.length) return 'No leases found.'
-      return leases.map(l => `${l.unit.propertyProfile.workspace.name} / ${l.unit.unitLabel} | Tenant: ${l.tenant.name} | Status: ${l.status} | $${Number(l.monthlyRent)}/mo | Start: ${l.startDate.toISOString().slice(0, 10)} | End: ${l.endDate.toISOString().slice(0, 10)}`).join('\n')
+      return leases.map(l => `${l.unit.propertyProfile.workspace.name} / ${l.unit.unitLabel} | Tenant: ${l.tenant.name} | Status: ${l.status} | $${toDisplay(l.monthlyRent)}/mo | Start: ${l.startDate.toISOString().slice(0, 10)} | End: ${l.endDate.toISOString().slice(0, 10)}`).join('\n')
     }
 
     case 'get_tenant': {
@@ -421,9 +422,9 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       })
       if (!tenant) return `No tenant found matching "${name}".`
       const charged = tenant.invoices.reduce((s, inv) =>
-        s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
+        s.plus(inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2.plus(lineTotal(li.quantity, li.unitPrice)), money(0))), money(0))
       const paid = tenant.invoices.reduce((s, inv) =>
-        s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
+        s.plus(inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2.plus(p.amount), money(0))), money(0))
       const lease = tenant.leases[0]
       return JSON.stringify({
         name: tenant.name,
@@ -432,11 +433,11 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         property: lease?.unit.propertyProfile.workspace.name ?? null,
         unit: lease?.unit.unitLabel ?? null,
         leaseStatus: lease?.status ?? 'none',
-        monthlyRent: lease ? Number(lease.monthlyRent) : null,
+        monthlyRent: lease ? toDisplay(lease.monthlyRent) : null,
         leaseEnds: lease?.endDate.toISOString().slice(0, 10) ?? null,
-        totalCharged: charged,
-        totalPaid: paid,
-        balance: charged - paid,
+        totalCharged: toDisplay(charged),
+        totalPaid: toDisplay(paid),
+        balance: toDisplay(charged.minus(paid)),
       })
     }
 
@@ -468,11 +469,11 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       return units.map(u => {
         const l = u.leases[0]
         const charged = l ? l.invoices.reduce((s, inv) =>
-          s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0) : 0
+          s.plus(inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2.plus(lineTotal(li.quantity, li.unitPrice)), money(0))), money(0)) : money(0)
         const paid = l ? l.invoices.reduce((s, inv) =>
-          s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0) : 0
-        const balance = charged - paid
-        return `${u.propertyProfile.workspace.name} / ${u.unitLabel} | ${u.status} | Tenant: ${l?.tenant.name ?? 'vacant'} | Rent: $${l ? Number(l.monthlyRent) : 0}/mo | Balance: $${balance} | Ends: ${l?.endDate ? l.endDate.toISOString().slice(0, 10) : 'n/a'}`
+          s.plus(inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2.plus(p.amount), money(0))), money(0)) : money(0)
+        const balance = charged.minus(paid)
+        return `${u.propertyProfile.workspace.name} / ${u.unitLabel} | ${u.status} | Tenant: ${l?.tenant.name ?? 'vacant'} | Rent: $${l ? toDisplay(l.monthlyRent) : 0}/mo | Balance: $${toDisplay(balance)} | Ends: ${l?.endDate ? l.endDate.toISOString().slice(0, 10) : 'n/a'}`
       }).join('\n')
     }
 
@@ -485,11 +486,11 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         include: { lineItems: true, payments: true },
       })
       const totalCharged = invoices.reduce((s, inv) =>
-        s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
+        s.plus(inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2.plus(lineTotal(li.quantity, li.unitPrice)), money(0))), money(0))
       const totalPaid = invoices.reduce((s, inv) =>
-        s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
-      const balance = totalCharged - totalPaid
-      return `Total charged: $${totalCharged.toLocaleString()}\nTotal paid: $${totalPaid.toLocaleString()}\nOutstanding balance: $${balance.toLocaleString()}`
+        s.plus(inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2.plus(p.amount), money(0))), money(0))
+      const balance = totalCharged.minus(totalPaid)
+      return `Total charged: $${toDisplay(totalCharged).toLocaleString()}\nTotal paid: $${toDisplay(totalPaid).toLocaleString()}\nOutstanding balance: $${toDisplay(balance).toLocaleString()}`
     }
 
     case 'list_tenant_payments': {
@@ -534,7 +535,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         take: 50,
       })
       if (!payments.length) return 'No payments found.'
-      return payments.map(p => `${p.paidDate.toISOString().slice(0, 10)} | ${p.invoice.tenant?.name ?? 'unknown'} | $${Number(p.amount)} | ${p.paymentMethod ?? 'unknown method'} | Invoice: ${p.invoice.invoiceNumber}`).join('\n')
+      return payments.map(p => `${p.paidDate.toISOString().slice(0, 10)} | ${p.invoice.tenant?.name ?? 'unknown'} | $${toDisplay(p.amount)} | ${p.paymentMethod ?? 'unknown method'} | Invoice: ${p.invoice.invoiceNumber}`).join('\n')
     }
 
     case 'list_overdue_tenants': {
@@ -555,10 +556,10 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       const overdue = leases
         .map(l => {
           const charged = l.invoices.reduce((s, inv) =>
-            s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
+            s.plus(inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2.plus(lineTotal(li.quantity, li.unitPrice)), money(0))), money(0))
           const paid = l.invoices.reduce((s, inv) =>
-            s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
-          return { name: l.tenant.name, email: l.tenant.email, property: l.unit.propertyProfile.workspace.name, unit: l.unit.unitLabel, balance: charged - paid }
+            s.plus(inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2.plus(p.amount), money(0))), money(0))
+          return { name: l.tenant.name, email: l.tenant.email, property: l.unit.propertyProfile.workspace.name, unit: l.unit.unitLabel, balance: toDisplay(charged.minus(paid)) }
         })
         .filter(t => t.balance > 0)
         .sort((a, b) => b.balance - a.balance)
@@ -618,7 +619,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         _sum: { amount: true },
         _count: { id: true },
       })
-      return `Total payments received: $${Number(agg._sum.amount ?? 0).toLocaleString()} across ${agg._count.id} payment(s).`
+      return `Total payments received: $${toDisplay(agg._sum.amount ?? 0).toLocaleString()} across ${agg._count.id} payment(s).`
     }
 
     case 'get_vacancy_cost': {
@@ -632,9 +633,9 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         include: { propertyProfile: { include: { workspace: { select: { name: true } } } } },
       })
       if (!units.length) return 'No vacant units found.'
-      const monthlyLost = units.filter(u => u.monthlyRent).reduce((s, u) => s + Number(u.monthlyRent), 0)
-      const rows = units.map(u => `${u.propertyProfile.workspace.name} / ${u.unitLabel} | $${u.monthlyRent ? Number(u.monthlyRent) : 0}/mo`)
-      return `${rows.join('\n')}\n\nTotal monthly revenue lost to vacancies: $${monthlyLost.toLocaleString()}`
+      const monthlyLost = units.filter(u => u.monthlyRent).reduce((s, u) => s.plus(u.monthlyRent), money(0))
+      const rows = units.map(u => `${u.propertyProfile.workspace.name} / ${u.unitLabel} | $${u.monthlyRent ? toDisplay(u.monthlyRent) : 0}/mo`)
+      return `${rows.join('\n')}\n\nTotal monthly revenue lost to vacancies: $${toDisplay(monthlyLost).toLocaleString()}`
     }
 
     case 'list_unit_messages': {

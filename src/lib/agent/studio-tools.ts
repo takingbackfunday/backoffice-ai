@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { ToolDefinition } from '@/lib/llm/openrouter'
+import { toDisplay, money, lineTotal, gte } from '@/lib/money'
 
 // ── Tool Definitions ────────────────────────────────────────────────────────
 
@@ -144,11 +145,11 @@ export const STUDIO_TOOLS: ToolDefinition[] = [
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function invoiceTotal(lineItems: { quantity: unknown; unitPrice: unknown }[]): number {
-  return lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
+  return toDisplay(lineItems.reduce((s, i) => s.plus(lineTotal(i.quantity, i.unitPrice)), money(0)))
 }
 
 function invoicePaid(payments: { amount: unknown }[]): number {
-  return payments.reduce((s, p) => s + Number(p.amount), 0)
+  return toDisplay(payments.reduce((s, p) => s.plus(p.amount), money(0)))
 }
 
 // ── Dispatcher ───────────────────────────────────────────────────────────────
@@ -420,19 +421,19 @@ export async function dispatchStudioTool(userId: string, name: string, args: unk
         await tx.invoicePayment.create({
           data: { invoiceId, amount, paidDate, paymentMethod },
         })
-        const newPaid = alreadyPaid + amount
-        const newStatus = newPaid >= total - 0.001 ? 'PAID' : 'PARTIAL'
+        const newPaid = money(alreadyPaid).plus(amount)
+        const newStatus = gte(newPaid, money(total)) ? 'PAID' : 'PARTIAL'
         await tx.invoice.update({ where: { id: invoiceId }, data: { status: newStatus } })
       })
 
-      const newTotal = alreadyPaid + amount
+      const newTotal = money(alreadyPaid).plus(amount)
       return JSON.stringify({
         recorded: true,
         invoiceId,
         invoiceNumber: invoice.invoiceNumber,
         amountRecorded: amount,
-        totalPaid: Math.round(newTotal * 100) / 100,
-        newStatus: newTotal >= total - 0.001 ? 'PAID' : 'PARTIAL',
+        totalPaid: toDisplay(newTotal),
+        newStatus: gte(newTotal, money(total)) ? 'PAID' : 'PARTIAL',
       })
     }
 

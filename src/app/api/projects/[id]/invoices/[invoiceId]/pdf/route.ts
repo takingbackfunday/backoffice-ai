@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
 import { parsePreferences } from '@/types/preferences'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
 
@@ -44,7 +45,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const clientPhone = cp?.phone ?? leaseTenant?.phone ?? directTenant?.phone
     const clientAddress = cp?.address ?? null
 
-    const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
+    const { paid: totalPaid } = computeInvoiceTotals(invoice)
 
     const pdfBuffer = await generateInvoicePdf({
       invoiceNumber: invoice.invoiceNumber,
@@ -65,14 +66,14 @@ export async function GET(_request: Request, { params }: RouteParams) {
       fromWebsite: prefsData.fromWebsite,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
-        quantity: Number(i.quantity),
+        quantity: toDisplay(i.quantity),
         qtyUnit: i.qtyUnit ?? undefined,
-        unitPrice: Number(i.unitPrice),
+        unitPrice: toDisplay(i.unitPrice),
         isTaxLine: i.isTaxLine,
       })),
-      totalPaid,
+      totalPaid: toDisplay(totalPaid),
       payments: invoice.payments.map(p => ({
-        amount: Number(p.amount),
+        amount: toDisplay(p.amount),
         paidDate: p.paidDate.toISOString(),
         paymentMethod: p.paymentMethod,
       })),

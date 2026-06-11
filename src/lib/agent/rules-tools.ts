@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { ToolDefinition } from '@/lib/llm/openrouter'
 import { FINANCE_TOOLS, dispatchTool } from '@/lib/agent/finance-tools'
 import { matchesConditions, type ConditionDef } from '@/lib/rules/evaluate-condition'
+import { toDisplay, money } from '@/lib/money'
 
 export type { ConditionDef }
 
@@ -519,7 +520,7 @@ export async function loadRulesContext(userId: string): Promise<{
 
   const txSnapshots: TxSnapshot[] = transactions.map((t) => ({
     id: t.id,
-    amount: Number(t.amount),
+    amount: toDisplay(t.amount),
     description: t.description,
     rawDescription: t.description, // no separate DB column — same as description
     payeeName: t.payee?.name ?? null,
@@ -678,18 +679,18 @@ export async function get_transfer_candidates(
   const usedIds = new Set<string>()
 
   for (const [date, dayTxs] of byDate) {
-    const debits = dayTxs.filter((t) => Number(t.amount) < 0)
-    const credits = dayTxs.filter((t) => Number(t.amount) > 0)
+    const debits = dayTxs.filter((t) => t.amount < 0)
+    const credits = dayTxs.filter((t) => t.amount > 0)
 
     for (const debit of debits) {
       if (usedIds.has(debit.id)) continue
-      const debitAbs = Math.abs(Number(debit.amount))
+      const debitAbs = Math.abs(debit.amount)
 
       for (const credit of credits) {
         if (usedIds.has(credit.id)) continue
         // Skip same-account matches (not a transfer)
         if (debit.account.id === credit.account.id) continue
-        const creditAmt = Number(credit.amount)
+        const creditAmt = credit.amount
         // Check if amounts are within tolerance
         const diff = Math.abs(debitAbs - creditAmt)
         const larger = Math.max(debitAbs, creditAmt)

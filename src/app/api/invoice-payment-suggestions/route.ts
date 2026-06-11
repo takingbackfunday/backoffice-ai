@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { toDisplay, money, gte } from '@/lib/money'
 
 const ReviewSchema = z.object({
   suggestionId: z.string().min(1),
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
 
     await prisma.$transaction(async tx => {
       const inv = suggestion.invoice
-      const txAmount = Number(suggestion.transaction.amount)
+      const txAmount = money(suggestion.transaction.amount)
 
       await tx.invoicePayment.create({
         data: {
@@ -86,10 +87,10 @@ export async function POST(request: Request) {
       })
 
       // Recompute status — DRAFT invoices are implicitly activated when a payment is accepted
-      const total = inv.lineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
-      const alreadyPaid = inv.payments.reduce((s, p) => s + Number(p.amount), 0)
-      const newTotalPaid = alreadyPaid + txAmount
-      const newStatus = newTotalPaid >= total - 0.01 ? 'PAID' : 'PARTIAL'
+      const total = inv.lineItems.reduce((s, i) => s.plus(money(i.quantity).times(i.unitPrice)), money(0))
+      const alreadyPaid = inv.payments.reduce((s, p) => s.plus(p.amount), money(0))
+      const newTotalPaid = alreadyPaid.plus(txAmount)
+      const newStatus = gte(newTotalPaid, total) ? 'PAID' : 'PARTIAL'
 
       await tx.invoice.update({
         where: { id: inv.id },

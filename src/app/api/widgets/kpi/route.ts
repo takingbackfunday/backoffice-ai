@@ -4,6 +4,7 @@ import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns'
 import { convertAmounts } from '@/lib/fx'
 import type { DashboardCurrency } from '@/lib/fx'
+import { toDisplay } from '@/lib/money'
 
 export interface KpiData {
   revenue: number
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
     // Convert amounts to target currency using monthly rates
     const toConvertRows = (rows: { amount: unknown; date: Date; account: { currency: string } }[]) =>
       rows.map((r) => ({
-        amount: Number(r.amount),
+        amount: toDisplay(r.amount as any),
         currency: r.account.currency,
         month: format(r.date, 'yyyy-MM'),
       }))

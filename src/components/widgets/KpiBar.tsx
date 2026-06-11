@@ -68,7 +68,7 @@ export function KpiBar({ currency }: KpiBarProps) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setData(null)
     fetch(`/api/widgets/kpi?currency=${currency}`)
       .then((r) => r.json())

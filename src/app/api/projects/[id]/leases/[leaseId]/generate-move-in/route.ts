@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { toDisplay, money } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; leaseId: string }> }
 
@@ -41,7 +42,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
       return badRequest('Lease must be DRAFT or ACTIVE to generate move-in invoice')
     }
 
-    const monthlyRent = Number(lease.monthlyRent)
+    const monthlyRent = toDisplay(lease.monthlyRent)
     const startDate = lease.startDate
     const startDay = startDate.getDate()
     const daysInMonth = getDaysInMonth(startDate.getFullYear(), startDate.getMonth())
@@ -82,7 +83,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
       lineItems.push({
         description: 'Security deposit',
         quantity: 1,
-        unitPrice: Number(lease.securityDeposit),
+        unitPrice: toDisplay(lease.securityDeposit),
         chargeType: 'DEPOSIT',
       })
     }

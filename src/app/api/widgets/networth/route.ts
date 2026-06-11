@@ -5,6 +5,7 @@ import { resolveDateRange } from '@/lib/widgets/date-utils'
 import { format, startOfMonth } from 'date-fns'
 import { getRate } from '@/lib/fx'
 import type { DashboardCurrency } from '@/lib/fx'
+import { toDisplay } from '@/lib/money'
 
 export interface NetWorthPoint {
   label: string    // 'YYYY-MM'
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
     for (const row of rows) {
       const key = format(new Date(row.date), 'yyyy-MM')
       const rate = await getRate(row.account.currency, currency, key)
-      const converted = Number(row.amount) * rate
+      const converted = toDisplay(row.amount) * rate
       buckets.set(key, (buckets.get(key) ?? 0) + converted)
     }
 

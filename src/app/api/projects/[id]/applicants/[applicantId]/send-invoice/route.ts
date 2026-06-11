@@ -4,6 +4,7 @@ import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-r
 import { sendInvoiceEmail } from '@/lib/email'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
 import { parsePreferences } from '@/types/preferences'
+import { toDisplay, computeInvoiceTotals } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; applicantId: string }> }
 
@@ -38,8 +39,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     const invoicePaymentNote = prefsData.invoicePaymentNote
     const fromName = prefsData.businessName || prefsData.yourName || project.name
 
-    const total = invoice.lineItems.reduce((s, li) => s + Number(li.unitPrice) * Number(li.quantity), 0)
-    const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
+    const { total, paid: totalPaid } = computeInvoiceTotals(invoice)
 
     const pdfBuffer = await generateInvoicePdf({
       invoiceNumber: invoice.invoiceNumber,
@@ -59,13 +59,13 @@ export async function POST(_request: Request, { params }: RouteParams) {
       fromWebsite: prefsData.fromWebsite,
       lineItems: invoice.lineItems.map(li => ({
         description: li.description,
-        quantity: Number(li.quantity),
-        unitPrice: Number(li.unitPrice),
+        quantity: toDisplay(li.quantity),
+        unitPrice: toDisplay(li.unitPrice),
         isTaxLine: li.isTaxLine,
       })),
-      totalPaid,
+      totalPaid: toDisplay(totalPaid),
       payments: invoice.payments.map(p => ({
-        amount: Number(p.amount),
+        amount: toDisplay(p.amount),
         paidDate: p.paidDate.toISOString(),
         paymentMethod: p.paymentMethod,
       })),
@@ -78,7 +78,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
       invoiceNumber: invoice.invoiceNumber,
       invoiceId: invoice.id,
       projectSlug: project.slug,
-      total,
+      total: toDisplay(total),
       currency: invoice.currency,
       dueDate: invoice.dueDate.toISOString(),
       notes: invoice.notes,

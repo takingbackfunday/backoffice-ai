@@ -8,6 +8,7 @@ import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceEditor } from '@/components/projects/invoice-editor'
 import { parsePreferences, DEFAULT_PAYMENT_NOTE } from '@/types/preferences'
 import Link from 'next/link'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
 
@@ -49,7 +50,7 @@ export default async function EditInvoicePage({ params }: PageParams) {
 
   const cp = project.clientProfile
 
-  const totalPaid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0)
+  const { paid: totalPaid } = computeInvoiceTotals(invoice)
 
   return (
     <div className="flex min-h-screen">
@@ -99,12 +100,12 @@ export default async function EditInvoicePage({ params }: PageParams) {
               lineItems: invoice.lineItems.map(i => ({
                 id: i.id,
                 description: i.description,
-                quantity: Number(i.quantity),
+                quantity: toDisplay(i.quantity),
                 qtyUnit: i.qtyUnit ?? null,
-                unitPrice: Number(i.unitPrice),
+                unitPrice: toDisplay(i.unitPrice),
                 isTaxLine: i.isTaxLine,
               })),
-              totalPaid,
+              totalPaid: toDisplay(totalPaid),
             }}
             invoicePaymentNote={invoicePaymentNote}
             paymentMethods={paymentMethods}

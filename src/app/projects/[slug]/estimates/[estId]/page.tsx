@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { EstimateEditor } from '@/components/projects/estimate-editor'
+import { toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; estId: string }> }
 
@@ -45,9 +46,9 @@ export default async function EstimateDetailPage({ params }: PageParams) {
       ...s,
       items: s.items.map(i => ({
         ...i,
-        hours: i.hours ? Number(i.hours) : null,
-        costRate: i.costRate ? Number(i.costRate) : null,
-        quantity: Number(i.quantity),
+        hours: i.hours ? toDisplay(i.hours) : null,
+        costRate: i.costRate ? toDisplay(i.costRate) : null,
+        quantity: toDisplay(i.quantity),
       })),
     })),
   }))

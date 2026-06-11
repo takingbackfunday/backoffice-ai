@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { getPortalSession } from '@/lib/portal-auth'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 export async function GET() {
   try {
@@ -32,15 +33,12 @@ export async function GET() {
     let totalPaid = 0
 
     const mappedInvoices = lease.invoices.map(inv => {
-      const lineItemTotal = inv.lineItems
-        .filter(li => !li.forgivenAt)
-        .reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0)
-      const paymentTotal = inv.payments
-        .filter(p => !p.voidedAt)
-        .reduce((s, p) => s + Number(p.amount), 0)
+      const { total: lineItemTotal, paid: paymentTotal } = computeInvoiceTotals(inv)
+      const lineItemTotalDisplay = toDisplay(lineItemTotal)
+      const paymentTotalDisplay = toDisplay(paymentTotal)
 
-      totalCharged += lineItemTotal
-      totalPaid += paymentTotal
+      totalCharged += lineItemTotalDisplay
+      totalPaid += paymentTotalDisplay
 
       return {
         id: inv.id,
@@ -51,8 +49,8 @@ export async function GET() {
         lineItems: inv.lineItems.map(li => ({
           id: li.id,
           description: li.description,
-          quantity: Number(li.quantity),
-          unitPrice: Number(li.unitPrice),
+          quantity: toDisplay(li.quantity),
+          unitPrice: toDisplay(li.unitPrice),
           chargeType: li.chargeType,
           forgivenAt: li.forgivenAt?.toISOString() ?? null,
         })),
@@ -60,15 +58,15 @@ export async function GET() {
           .filter(p => !p.voidedAt)
           .map(p => ({
             id: p.id,
-            amount: Number(p.amount),
+            amount: toDisplay(p.amount),
             paidDate: p.paidDate.toISOString(),
             paymentMethod: p.paymentMethod,
             notes: p.notes,
             createdAt: p.createdAt.toISOString(),
           })),
-        lineItemTotal,
-        paymentTotal,
-        outstanding: lineItemTotal - paymentTotal,
+        lineItemTotal: lineItemTotalDisplay,
+        paymentTotal: paymentTotalDisplay,
+        outstanding: lineItemTotalDisplay - paymentTotalDisplay,
       }
     })
 
@@ -78,7 +76,7 @@ export async function GET() {
         status: lease.status,
         startDate: lease.startDate.toISOString(),
         endDate: lease.endDate.toISOString(),
-        monthlyRent: Number(lease.monthlyRent),
+        monthlyRent: toDisplay(lease.monthlyRent),
         paymentDueDay: lease.paymentDueDay,
         unitLabel: lease.unit.unitLabel,
       },

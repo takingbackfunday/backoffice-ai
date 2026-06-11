@@ -15,6 +15,8 @@ import {
   INVOICE_STATUS_COLORS,
 } from '@/types'
 import { WorkOrderPanel } from '@/components/projects/work-order-panel'
+import Decimal from 'decimal.js'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; jobId: string }> }
 
@@ -62,12 +64,12 @@ const fmt = (n: number, currency = 'USD') =>
 const fmtDate = (d: Date | string) =>
   new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
-function invoiceTotal(items: { quantity: unknown; unitPrice: unknown }[]) {
-  return items.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
+function invoiceTotal(items: { quantity: Decimal.Value; unitPrice: Decimal.Value }[]) {
+  return items.reduce((s, i) => s + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0)
 }
 
-function invoicePaid(payments: { amount: unknown }[]) {
-  return payments.reduce((s, p) => s + Number(p.amount), 0)
+function invoicePaid(payments: { amount: Decimal.Value }[]) {
+  return payments.reduce((s, p) => s + toDisplay(p.amount), 0)
 }
 
 function SectionHeader({ title, count }: { title: string; count: number }) {
@@ -141,7 +143,7 @@ export default async function JobDetailPage({ params }: PageParams) {
   const totalPaid     = job.invoices.reduce((s, inv) => s + invoicePaid(inv.payments), 0)
   const totalMinutes  = job.timeEntries.reduce((s, e) => s + e.minutes, 0)
   const totalHours    = totalMinutes / 60
-  const totalCosts    = job.workOrders.flatMap(wo => wo.bills).reduce((s, b) => s + Number(b.amount), 0)
+  const totalCosts    = job.workOrders.flatMap(wo => wo.bills).reduce((s, b) => s + toDisplay(b.amount), 0)
   const margin        = totalInvoiced - totalCosts
 
   return (
@@ -183,10 +185,10 @@ export default async function JobDetailPage({ params }: PageParams) {
             <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground mb-6">
               <span>Billing: <span className="text-foreground">{job.billingType ? (BILLING_TYPE_LABELS[job.billingType] ?? job.billingType) : 'Default'}</span></span>
               {job.defaultRate && (
-                <span>Rate: <span className="text-foreground">{fmt(Number(job.defaultRate), currency)}/hr</span></span>
+                <span>Rate: <span className="text-foreground">{fmt(toDisplay(job.defaultRate), currency)}/hr</span></span>
               )}
               {job.budgetAmount && (
-                <span>Budget: <span className="text-foreground">{fmt(Number(job.budgetAmount), currency)}</span></span>
+                <span>Budget: <span className="text-foreground">{fmt(toDisplay(job.budgetAmount), currency)}</span></span>
               )}
               {job.startDate && (
                 <span>Start: <span className="text-foreground">{fmtDate(job.startDate)}</span></span>
@@ -300,7 +302,7 @@ export default async function JobDetailPage({ params }: PageParams) {
                           </span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">
-                          {q.totalQuoted ? fmt(Number(q.totalQuoted), q.currency) : '—'}
+                          {q.totalQuoted ? fmt(toDisplay(q.totalQuoted), q.currency) : '—'}
                         </td>
                         <td className="px-3 py-2 text-right text-muted-foreground">
                           {q.validUntil ? fmtDate(q.validUntil) : '—'}

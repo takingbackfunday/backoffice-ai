@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Plus, FileText, Trash2, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toDisplay, money } from '@/lib/money'
 import { WORK_ORDER_STATUS_LABELS, WORK_ORDER_STATUS_COLORS, BILL_STATUS_LABELS, BILL_STATUS_COLORS, VENDOR_DOCUMENT_TYPE_LABELS } from '@/types'
 import { useUploadThing } from '@/lib/uploadthing-client'
 import { usePageContext } from '@/components/chat/page-context-provider'
@@ -188,7 +189,7 @@ export function VendorDetail({ vendor: initial }: { vendor: Vendor }) {
         </div>
         <div className="rounded-lg border bg-card p-3">
           <p className="text-xs text-muted-foreground mb-0.5">Total billed</p>
-          <p className="text-sm font-semibold">{fmt(vendor.workOrders.flatMap(wo => wo.bills).reduce((s, b) => s + Number(b.amount), 0))}</p>
+          <p className="text-sm font-semibold">{fmt(toDisplay(vendor.workOrders.flatMap(wo => wo.bills).reduce((s, b) => s + money(b.amount).toNumber(), 0)))}</p>
         </div>
         <div className="rounded-lg border bg-card p-3">
           <p className="text-xs text-muted-foreground mb-0.5">Total paid</p>
@@ -325,7 +326,7 @@ export function VendorDetail({ vendor: initial }: { vendor: Vendor }) {
                   </span>
                 </div>
                 {wo.agreedCost && (
-                  <p className="text-xs text-muted-foreground mb-2">Agreed: {fmt(Number(wo.agreedCost))}</p>
+                  <p className="text-xs text-muted-foreground mb-2">Agreed: {fmt(toDisplay(wo.agreedCost))}</p>
                 )}
                 {wo.bills.length > 0 && (
                   <div className="mt-2 space-y-1">
@@ -335,7 +336,7 @@ export function VendorDetail({ vendor: initial }: { vendor: Vendor }) {
                           {bill.billNumber ?? 'Bill'} · {fmtDate(bill.issueDate)}
                         </span>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{fmt(Number(bill.amount))}</span>
+                           <span className="font-medium">{fmt(toDisplay(bill.amount))}</span>
                           <span className={cn('px-1.5 py-0.5 rounded-full', BILL_STATUS_COLORS[bill.status] ?? 'bg-muted')}>
                             {BILL_STATUS_LABELS[bill.status] ?? bill.status}
                           </span>

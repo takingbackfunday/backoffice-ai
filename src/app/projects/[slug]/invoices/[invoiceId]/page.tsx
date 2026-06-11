@@ -8,6 +8,7 @@ import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceDetailClient } from '@/components/projects/invoice-detail-client'
 import Link from 'next/link'
 import { parsePreferences } from '@/types/preferences'
+import { toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
 
@@ -76,7 +77,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       id: s.transaction.id,
       description: s.transaction.description,
       date: s.transaction.date.toISOString(),
-      amount: Number(s.transaction.amount),
+      amount: toDisplay(s.transaction.amount),
     },
   }))
 
@@ -114,13 +115,13 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     lineItems: invoice.lineItems.map(i => ({
       id: i.id,
       description: i.description,
-      quantity: Number(i.quantity),
-      unitPrice: Number(i.unitPrice),
+      quantity: toDisplay(i.quantity),
+      unitPrice: toDisplay(i.unitPrice),
       isTaxLine: i.isTaxLine,
     })),
     payments: invoice.payments.map(p => ({
       id: p.id,
-      amount: Number(p.amount),
+      amount: toDisplay(p.amount),
       paidDate: p.paidDate.toISOString(),
       paymentMethod: p.paymentMethod ?? null,
       notes: p.notes ?? null,

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { PortfolioClient } from '@/components/portfolio/portfolio-client'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface PageProps {
   searchParams: Promise<{ onboarding?: string }>
@@ -75,7 +76,7 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
   const unreadMessages = allUnits.reduce((sum, u) => sum + u._count.messages, 0)
   const monthlyRevenue = allUnits
     .filter(u => u.status === 'LEASED' && u.monthlyRent)
-    .reduce((sum, u) => sum + Number(u.monthlyRent), 0)
+    .reduce((sum, u) => sum + toDisplay(u.monthlyRent!), 0)
 
   // Lease expiring within 90 days
   const now = new Date()
@@ -91,10 +92,14 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
   const overduePayments = allUnits.filter(u => {
     const lease = u.leases[0]
     if (!lease) return false
-    const charged = lease.invoices.reduce((s, inv) =>
-      s + inv.lineItems.filter(li => !li.forgivenAt).reduce((s2, li) => s2 + Number(li.quantity) * Number(li.unitPrice), 0), 0)
-    const paid = lease.invoices.reduce((s, inv) =>
-      s + inv.payments.filter(p => !p.voidedAt).reduce((s2, p) => s2 + Number(p.amount), 0), 0)
+    const charged = lease.invoices.reduce((s, inv) => {
+      const { total } = computeInvoiceTotals(inv)
+      return s + toDisplay(total)
+    }, 0)
+    const paid = lease.invoices.reduce((s, inv) => {
+      const { paid: p } = computeInvoiceTotals(inv)
+      return s + toDisplay(p)
+    }, 0)
     return charged - paid > 0
   }).length
 
@@ -145,16 +150,16 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
       id: u.id,
       unitLabel: u.unitLabel,
       status: u.status,
-      monthlyRent: u.monthlyRent ? Number(u.monthlyRent) : null,
+      monthlyRent: u.monthlyRent ? toDisplay(u.monthlyRent) : null,
       bedrooms: u.bedrooms,
-      bathrooms: u.bathrooms ? Number(u.bathrooms) : null,
+      bathrooms: u.bathrooms ? toDisplay(u.bathrooms) : null,
       squareFootage: u.squareFootage,
       tenant: u.leases[0]?.tenant ?? null,
       leaseId: u.leases[0]?.id ?? null,
       leaseEndDate: u.leases[0]?.endDate?.toISOString() ?? null,
       leaseStartDate: u.leases[0]?.startDate?.toISOString() ?? null,
       leaseStatus: u.leases[0]?.status ?? null,
-      leaseMonthlyRent: u.leases[0]?.monthlyRent ? Number(u.leases[0].monthlyRent) : null,
+      leaseMonthlyRent: u.leases[0]?.monthlyRent ? toDisplay(u.leases[0].monthlyRent) : null,
       paymentDueDay: u.leases[0]?.paymentDueDay ?? null,
       openMaintenance: u._count.maintenanceRequests,
       unreadMessages: u._count.messages,
@@ -167,15 +172,18 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
         createdAt: m.createdAt.toISOString(),
         tenant: m.tenant ? { id: m.tenant.id, name: m.tenant.name } : null,
       })),
-      invoices: (u.leases[0]?.invoices ?? []).map(inv => ({
-        id: inv.id,
-        invoiceNumber: inv.invoiceNumber,
-        status: inv.status,
-        period: inv.period,
-        dueDate: inv.dueDate.toISOString(),
-        lineItemTotal: inv.lineItems.filter(li => !li.forgivenAt).reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0),
-        paymentTotal: inv.payments.filter(p => !p.voidedAt).reduce((s, p) => s + Number(p.amount), 0),
-      })),
+      invoices: (u.leases[0]?.invoices ?? []).map(inv => {
+        const { total, paid } = computeInvoiceTotals(inv)
+        return {
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          status: inv.status,
+          period: inv.period,
+          dueDate: inv.dueDate.toISOString(),
+          lineItemTotal: toDisplay(total),
+          paymentTotal: toDisplay(paid),
+        }
+      }),
       recentMessages: u.messages.map(m => ({
         id: m.id,
         subject: m.subject,

@@ -3,6 +3,7 @@ import type { WidgetConfig } from '@/types/widgets'
 import { resolveDateRange } from './date-utils'
 import { format } from 'date-fns'
 import { convertAmounts } from '@/lib/fx'
+import { toDisplay } from '@/lib/money'
 
 export interface RawDataRow {
   date: Date
@@ -71,7 +72,7 @@ export async function fetchWidgetData(
 
   // Convert all amounts to the target currency in one batch
   const convertInput = rows.map((r) => ({
-    amount: Math.abs(Number(r.amount)),
+    amount: Math.abs(toDisplay(r.amount)),
     currency: r.account?.currency ?? 'USD',
     month: format(r.date, 'yyyy-MM'),
   }))

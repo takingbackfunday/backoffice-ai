@@ -7,6 +7,7 @@ import { ProjectDetailHeader } from '@/components/projects/project-detail-header
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceList } from '@/components/projects/invoice-list'
 import { parsePreferences } from '@/types/preferences'
+import { toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string }> }
 
@@ -61,13 +62,13 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
       lineItems: inv.lineItems.map(i => ({
         id: i.id,
         description: i.description,
-        quantity: Number(i.quantity),
-        unitPrice: Number(i.unitPrice),
+        quantity: toDisplay(i.quantity),
+        unitPrice: toDisplay(i.unitPrice),
         isTaxLine: i.isTaxLine,
       })),
       payments: inv.payments.map(p => ({
         id: p.id,
-        amount: Number(p.amount),
+        amount: toDisplay(p.amount),
         paidDate: p.paidDate.toISOString(),
       })),
     }))
@@ -147,13 +148,13 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
       lineItems: inv.lineItems.map(i => ({
         id: i.id,
         description: i.description,
-        quantity: Number(i.quantity),
-        unitPrice: Number(i.unitPrice),
+        quantity: toDisplay(i.quantity),
+        unitPrice: toDisplay(i.unitPrice),
         isTaxLine: i.isTaxLine,
       })),
       payments: inv.payments.map(p => ({
         id: p.id,
-        amount: Number(p.amount),
+        amount: toDisplay(p.amount),
         paidDate: p.paidDate.toISOString(),
       })),
     }))

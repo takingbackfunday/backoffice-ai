@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { toDisplay, money, lineTotal } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; unitId: string }> }
 
@@ -45,20 +46,20 @@ export async function GET(_request: Request, { params }: RouteParams) {
       }),
     ])
 
-    let totalCharged = 0
-    let totalPaid = 0
+    let totalCharged = money(0)
+    let totalPaid = money(0)
 
     const mappedInvoices = invoices.map(inv => {
       const lineItemTotal = inv.lineItems
         .filter(li => !li.forgivenAt && !li.isTaxLine)
-        .reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0)
+        .reduce((s, li) => s.plus(lineTotal(li.quantity, li.unitPrice)), money(0))
       const paymentTotal = inv.payments
         .filter(p => !p.voidedAt)
-        .reduce((s, p) => s + Number(p.amount), 0)
-      const outstanding = lineItemTotal - paymentTotal
+        .reduce((s, p) => s.plus(p.amount), money(0))
+      const outstanding = lineItemTotal.minus(paymentTotal)
 
-      totalCharged += lineItemTotal
-      totalPaid += paymentTotal
+      totalCharged = totalCharged.plus(lineItemTotal)
+      totalPaid = totalPaid.plus(paymentTotal)
 
       return {
         id: inv.id,
@@ -71,8 +72,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
         lineItems: inv.lineItems.map(li => ({
           id: li.id,
           description: li.description,
-          quantity: Number(li.quantity),
-          unitPrice: Number(li.unitPrice),
+          quantity: toDisplay(li.quantity),
+          unitPrice: toDisplay(li.unitPrice),
           chargeType: li.chargeType,
           isTaxLine: li.isTaxLine,
           forgivenAt: li.forgivenAt?.toISOString() ?? null,
@@ -82,7 +83,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         })),
         payments: inv.payments.map(p => ({
           id: p.id,
-          amount: Number(p.amount),
+          amount: toDisplay(p.amount),
           paidDate: p.paidDate.toISOString(),
           paymentMethod: p.paymentMethod,
           notes: p.notes,
@@ -92,9 +93,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
           sourceDeleted: p.sourceDeleted,
           createdAt: p.createdAt.toISOString(),
         })),
-        lineItemTotal,
-        paymentTotal,
-        outstanding,
+        lineItemTotal: toDisplay(lineItemTotal),
+        paymentTotal: toDisplay(paymentTotal),
+        outstanding: toDisplay(outstanding),
       }
     })
 
@@ -104,9 +105,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
         status: lease.status,
         startDate: lease.startDate.toISOString(),
         endDate: lease.endDate.toISOString(),
-        monthlyRent: Number(lease.monthlyRent),
+        monthlyRent: toDisplay(lease.monthlyRent),
         paymentDueDay: lease.paymentDueDay,
-        lateFeeAmount: lease.lateFeeAmount ? Number(lease.lateFeeAmount) : null,
+        lateFeeAmount: lease.lateFeeAmount ? toDisplay(lease.lateFeeAmount) : null,
         lateFeeGraceDays: lease.lateFeeGraceDays,
         tenant: lease.tenant,
       },
@@ -121,13 +122,13 @@ export async function GET(_request: Request, { params }: RouteParams) {
           id: s.transaction.id,
           description: s.transaction.description,
           date: s.transaction.date.toISOString(),
-          amount: Number(s.transaction.amount),
+          amount: toDisplay(s.transaction.amount),
         },
         createdAt: s.createdAt.toISOString(),
       })),
-      totalCharged,
-      totalPaid,
-      balance: totalCharged - totalPaid,
+      totalCharged: toDisplay(totalCharged),
+      totalPaid: toDisplay(totalPaid),
+      balance: toDisplay(totalCharged.minus(totalPaid)),
     })
   } catch {
     return serverError('Failed to fetch ledger')

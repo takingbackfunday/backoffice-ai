@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { toDisplay } from '@/lib/money'
 
 interface RouteParams { params: Promise<{ id: string; jobId: string }> }
 
@@ -73,7 +74,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
         entityId: q.id,
         entityNumber: `${q.quoteNumber} v${q.version}`,
         description: `Quote ${q.quoteNumber} generated`,
-        metadata: { version: q.version, total: q.totalQuoted ? Number(q.totalQuoted) : null },
+        metadata: { version: q.version, total: q.totalQuoted ? toDisplay(q.totalQuoted) : null },
       })
       if (q.sentAt) {
         events.push({
@@ -132,8 +133,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
           date: payment.createdAt.toISOString(),
           entityId: payment.id,
           entityNumber: inv.invoiceNumber,
-          description: `Payment of ${Number(payment.amount)} ${inv.currency} received for ${inv.invoiceNumber}`,
-          metadata: { amount: Number(payment.amount), invoiceId: inv.id },
+        description: `Payment of ${toDisplay(payment.amount)} ${inv.currency} received for ${inv.invoiceNumber}`,
+        metadata: { amount: toDisplay(payment.amount), invoiceId: inv.id },
         })
       }
     }

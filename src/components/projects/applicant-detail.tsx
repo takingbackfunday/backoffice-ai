@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DOC_TYPES, docTypeLabel } from '@/lib/doc-types'
 import { usePageContext } from '@/components/chat/page-context-provider'
+import { toDisplay, money, lineTotal } from '@/lib/money'
 
 const STATUS_OPTIONS = [
   'INQUIRY', 'APPLICATION_SENT', 'APPLIED', 'SCREENING',
@@ -448,7 +449,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
 
           {/* Application fee invoice */}
           {feeInvoice && (() => {
-            const total = feeInvoice.lineItems.reduce((s, li) => s + Number(li.unitPrice) * Number(li.quantity), 0)
+            const total = toDisplay(feeInvoice.lineItems.reduce((s, li) => s + lineTotal(li.quantity, li.unitPrice), money(0)))
             const isPaid = feeInvoice.status === 'PAID'
             const isSent = feeInvoice.status === 'SENT' || feeInvoice.sentAt
             return (
@@ -467,7 +468,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
                   {feeInvoice.lineItems.map((li, i) => (
                     <div key={i} className="flex justify-between text-xs text-muted-foreground">
                       <span>{li.description}</span>
-                      <span>${Number(li.unitPrice).toLocaleString()}</span>
+                      <span>${toDisplay(li.unitPrice).toLocaleString()}</span>
                     </div>
                   ))}
                   <div className="flex justify-between text-xs font-semibold border-t pt-1 mt-1">
@@ -537,7 +538,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Desired rent</p>
-              <p className="text-sm">{applicant.desiredRent ? `$${Number(applicant.desiredRent).toLocaleString()}/mo` : '—'}</p>
+              <p className="text-sm">{applicant.desiredRent ? `$${toDisplay(applicant.desiredRent).toLocaleString()}/mo` : '—'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Employer</p>
@@ -545,7 +546,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Annual income</p>
-              <p className="text-sm">{applicant.annualIncome ? `$${Number(applicant.annualIncome).toLocaleString()}` : '—'}</p>
+              <p className="text-sm">{applicant.annualIncome ? `$${toDisplay(applicant.annualIncome).toLocaleString()}` : '—'}</p>
             </div>
           </div>
 
@@ -581,7 +582,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
                     />
                   )}
                   <AppRow label="Moved in" value={applicant.applicationData.personal.currentMovedInDate} />
-                  <AppRow label="Current rent" value={applicant.applicationData.personal.currentMonthlyRent ? `$${Number(applicant.applicationData.personal.currentMonthlyRent).toLocaleString()}/mo` : null} />
+                  <AppRow label="Current rent" value={applicant.applicationData.personal.currentMonthlyRent ? `$${toDisplay(applicant.applicationData.personal.currentMonthlyRent).toLocaleString()}/mo` : null} />
                 </AppSection>
               )}
 
@@ -590,7 +591,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
                 <AppSection label="Employment">
                   <AppRow label="Employer" value={applicant.applicationData.employment.currentEmployer} />
                   <AppRow label="Position" value={applicant.applicationData.employment.position} />
-                  <AppRow label="Annual income" value={applicant.applicationData.employment.annualIncome ? `$${Number(applicant.applicationData.employment.annualIncome).toLocaleString()}` : null} />
+                   <AppRow label="Annual income" value={applicant.applicationData.employment.annualIncome ? `$${toDisplay(applicant.applicationData.employment.annualIncome).toLocaleString()}` : null} />
                   <AppRow label="Start date" value={applicant.applicationData.employment.employmentStartDate} />
                   <AppRow label="Manager" value={applicant.applicationData.employment.managerName} />
                   <AppRow label="Manager phone" value={applicant.applicationData.employment.managerPhone} />
@@ -619,7 +620,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
                         <AppRow label="Address" value={rh.previousAddress} />
                         <AppRow label="Landlord" value={rh.previousLandlordName} />
                         <AppRow label="Landlord phone" value={rh.previousLandlordPhone} />
-                        <AppRow label="Rent" value={rh.previousRent ? `$${Number(rh.previousRent).toLocaleString()}/mo` : null} />
+                        <AppRow label="Rent" value={rh.previousRent ? `$${toDisplay(rh.previousRent).toLocaleString()}/mo` : null} />
                         <AppRow label="Duration" value={rh.durationAtAddress} />
                         <AppRow label="Reason for leaving" value={rh.reasonForLeaving} />
                       </>
@@ -630,7 +631,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
                         <AppRow label="Address" value={rh.previousAddress2} />
                         <AppRow label="Landlord" value={rh.previousLandlordName2} />
                         <AppRow label="Landlord phone" value={rh.previousLandlordPhone2} />
-                        <AppRow label="Rent" value={rh.previousRent2 ? `$${Number(rh.previousRent2).toLocaleString()}/mo` : null} />
+                         <AppRow label="Rent" value={rh.previousRent2 ? `$${toDisplay(rh.previousRent2).toLocaleString()}/mo` : null} />
                         <AppRow label="Duration" value={rh.durationAtAddress2} />
                         <AppRow label="Reason for leaving" value={rh.reasonForLeaving2} />
                       </>
@@ -739,7 +740,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
                     {co.lastFourSSN && <AppRow label="SSN (last 4)" value={`···· ${co.lastFourSSN}`} />}
                     <AppRow label="Employer" value={co.currentEmployer} />
                     <AppRow label="Position" value={co.position} />
-                    <AppRow label="Monthly income" value={co.monthlyIncome ? `$${Number(co.monthlyIncome).toLocaleString()}/mo` : null} />
+                     <AppRow label="Monthly income" value={co.monthlyIncome ? `$${toDisplay(co.monthlyIncome).toLocaleString()}/mo` : null} />
                     <AppRow label="Start date" value={co.employmentStartDate} />
                     <AppRow label="Manager" value={co.managerName} />
                     <AppRow label="Manager phone" value={co.managerPhone} />

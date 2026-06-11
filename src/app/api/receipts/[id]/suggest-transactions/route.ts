@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { toDisplay } from '@/lib/money'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -65,7 +66,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     // Score each candidate
     const scored = candidates.map(tx => {
-      const txAmount = Math.abs(Number(tx.amount))
+      const txAmount = Math.abs(toDisplay(tx.amount))
       const amountDiff = Math.abs(txAmount - receiptTotal)
       const txDate = new Date(tx.date)
       const dDiff = receiptDate ? daysDiff(txDate, receiptDate) : null
@@ -113,7 +114,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       .map(({ tx, score, reasoning }) => ({
         id: tx.id,
         date: tx.date,
-        amount: Number(tx.amount),
+        amount: toDisplay(tx.amount),
         description: tx.description,
         accountName: tx.account.name,
         currency: tx.account.currency,

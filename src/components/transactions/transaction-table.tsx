@@ -6,6 +6,7 @@ import type { Workspace } from '@/generated/prisma/client'
 import type { TransactionWithRelations } from '@/types'
 import { RuleEditor, type CategoryGroup, type Payee, type UserRule } from '@/components/rules/rule-editor'
 import { RulesAgent } from '@/components/rules/rules-agent'
+import { toDisplay } from '@/lib/money'
 
 interface Props {
   initialRows?: TransactionWithRelations[]
@@ -1263,7 +1264,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
           payeeName: resolvedPayeeName,
           categoryId: resolvedCatId,
           categoryName: resolvedCatName,
-          amount: Number(row.amount),
+          amount: toDisplay(row.amount),
         }
         const existing = editQueueRef.current.get(id) as unknown as typeof editSnapshot | undefined
         const merged = existing ? { ...existing, ...editSnapshot } : editSnapshot
@@ -1410,23 +1411,23 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
       displayValue = row.categoryRef?.name ?? row.category ?? '—'
     } else if (field === 'payeeId') {
       displayValue = row.payee?.name ?? '—'
-    } else if (field === 'amount') {
-      const n = Number(row.amount)
-      displayValue = (n >= 0 ? '+' : '') + n.toFixed(2)
-    } else if (field === 'date') {
-      displayValue = new Date(row.date).toLocaleDateString()
-    } else {
-      displayValue = (row[field as keyof TransactionWithRelations] as string | null) ?? '—'
-    }
+      } else if (field === 'amount') {
+        const n = toDisplay(row.amount)
+        displayValue = (n >= 0 ? '+' : '') + n.toFixed(2)
+      } else if (field === 'date') {
+        displayValue = new Date(row.date).toLocaleDateString()
+      } else {
+        displayValue = (row[field as keyof TransactionWithRelations] as string | null) ?? '—'
+      }
 
-    const cellClass = [
-      'px-3 py-0.5 cursor-pointer',
-      isSaving ? 'opacity-50' : '',
-      hasError ? 'ring-1 ring-inset ring-red-400 rounded' : '',
-      field === 'amount' ? 'text-right font-mono' : '',
-      field === 'amount' && Number(row.amount) >= 0 ? 'text-green-600' : '',
-      field === 'amount' && Number(row.amount) < 0 ? 'text-red-600' : '',
-    ].filter(Boolean).join(' ')
+      const cellClass = [
+        'px-3 py-0.5 cursor-pointer',
+        isSaving ? 'opacity-50' : '',
+        hasError ? 'ring-1 ring-inset ring-red-400 rounded' : '',
+        field === 'amount' ? 'text-right font-mono' : '',
+        field === 'amount' && toDisplay(row.amount) >= 0 ? 'text-green-600' : '',
+        field === 'amount' && toDisplay(row.amount) < 0 ? 'text-red-600' : '',
+      ].filter(Boolean).join(' ')
 
     if (isEditing) {
       if (field === 'projectId') {
@@ -1451,7 +1452,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
               groups={categoryGroups}
               description={row.description}
               payeeName={row.payee?.name ?? null}
-              amount={Number(row.amount)}
+              amount={toDisplay(row.amount)}
               autoFocus={isInitialField}
               onCommit={(v) => commitEdit(row.id, 'categoryId', v)}
               onCancel={() => exitRowEdit(row.id)}
@@ -1494,7 +1495,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
 
       const rawVal =
         field === 'amount'
-          ? String(Number(row.amount))
+          ? String(toDisplay(row.amount))
           : (row[field as keyof TransactionWithRelations] as string | null) ?? ''
 
       return (

@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { openrouterChat } from '@/lib/llm/openrouter'
 import { unauthorized } from '@/lib/api-response'
+import { toDisplay } from '@/lib/money'
 
 interface SseEvent {
   type: 'status' | 'report' | 'done' | 'error'
@@ -52,16 +53,16 @@ export async function GET() {
         const tagged = transactions.filter((t) => t.workspaceId).length
         const untagged = total - tagged
 
-        const income = transactions.filter((t) => Number(t.amount) > 0)
-        const expenses = transactions.filter((t) => Number(t.amount) < 0)
-        const totalIncome = income.reduce((s, t) => s + Number(t.amount), 0)
-        const totalExpenses = expenses.reduce((s, t) => s + Number(t.amount), 0)
+        const income = transactions.filter((t) => toDisplay(t.amount) > 0)
+        const expenses = transactions.filter((t) => toDisplay(t.amount) < 0)
+        const totalIncome = income.reduce((s, t) => s + toDisplay(t.amount), 0)
+        const totalExpenses = expenses.reduce((s, t) => s + toDisplay(t.amount), 0)
 
         // Top 5 spend categories
         const byCat = new Map<string, number>()
         for (const tx of expenses) {
           const key = tx.categoryRef?.name ?? '(uncategorised)'
-          byCat.set(key, (byCat.get(key) ?? 0) + Math.abs(Number(tx.amount)))
+          byCat.set(key, (byCat.get(key) ?? 0) + Math.abs(toDisplay(tx.amount)))
         }
         const topCategories = [...byCat.entries()]
           .sort((a, b) => b[1] - a[1])
@@ -72,7 +73,7 @@ export async function GET() {
         for (const tx of expenses) {
           const key = tx.payee?.name ?? '(no payee)'
           if (key === '(no payee)') continue
-          byPayee.set(key, (byPayee.get(key) ?? 0) + Math.abs(Number(tx.amount)))
+          byPayee.set(key, (byPayee.get(key) ?? 0) + Math.abs(toDisplay(tx.amount)))
         }
         const topPayees = [...byPayee.entries()]
           .sort((a, b) => b[1] - a[1])
@@ -82,7 +83,7 @@ export async function GET() {
         const byProject = new Map<string, number>()
         for (const tx of transactions) {
           if (!tx.workspace) continue
-          byProject.set(tx.workspace.name, (byProject.get(tx.workspace.name) ?? 0) + Math.abs(Number(tx.amount)))
+          byProject.set(tx.workspace.name, (byProject.get(tx.workspace.name) ?? 0) + Math.abs(toDisplay(tx.amount)))
         }
         const projectBreakdown = [...byProject.entries()]
           .sort((a, b) => b[1] - a[1])

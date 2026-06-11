@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { cn } from '@/lib/utils'
 import { getPortalSession } from '@/lib/portal-auth'
 import { CHARGE_TYPE_LABELS, CHARGE_TYPE_COLORS, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
+import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 const fmtDate = (d: string | Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -39,13 +40,8 @@ export default async function PortalPaymentsPage() {
   }
 
   const invoiceSummaries = lease.invoices.map(inv => {
-    const lineItemTotal = inv.lineItems
-      .filter(li => !li.forgivenAt)
-      .reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0)
-    const paymentTotal = inv.payments
-      .filter(p => !p.voidedAt)
-      .reduce((s, p) => s + Number(p.amount), 0)
-    return { ...inv, lineItemTotal, paymentTotal, outstanding: lineItemTotal - paymentTotal }
+    const { total: lineItemTotal, paid: paymentTotal } = computeInvoiceTotals(inv)
+    return { ...inv, lineItemTotal: toDisplay(lineItemTotal), paymentTotal: toDisplay(paymentTotal), outstanding: toDisplay(lineItemTotal) - toDisplay(paymentTotal) }
   })
 
   const totalCharged = invoiceSummaries.reduce((s, inv) => s + inv.lineItemTotal, 0)
@@ -123,7 +119,7 @@ export default async function PortalPaymentsPage() {
                           {li.forgivenAt ? <span className="line-through text-muted-foreground">{li.description} (forgiven)</span> : li.description}
                         </td>
                         <td className={cn('px-4 py-2 text-right font-medium tabular-nums', li.forgivenAt && 'line-through text-muted-foreground')}>
-                          {fmt(Number(li.quantity) * Number(li.unitPrice))}
+                          {fmt(toDisplay(li.quantity) * toDisplay(li.unitPrice))}
                         </td>
                       </tr>
                     ))}
@@ -135,7 +131,7 @@ export default async function PortalPaymentsPage() {
                     {inv.payments.filter(p => !p.voidedAt).map(p => (
                       <div key={p.id} className="flex justify-between text-xs text-green-800">
                         <span>{fmtDate(p.paidDate)} {p.paymentMethod ? `— ${p.paymentMethod}` : ''}</span>
-                        <span className="font-medium">−{fmt(Number(p.amount))}</span>
+                        <span className="font-medium">−{fmt(toDisplay(p.amount))}</span>
                       </div>
                     ))}
                   </div>

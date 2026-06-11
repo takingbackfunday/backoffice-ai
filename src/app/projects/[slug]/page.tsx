@@ -11,6 +11,7 @@ import { ClientQuickActions } from '@/components/projects/client-quick-actions'
 import { PropertySetupForm } from '@/components/projects/property-setup-form'
 import { JOB_STATUS_LABELS } from '@/types'
 import Link from 'next/link'
+import { toDisplay, computeInvoiceTotals } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string }> }
 
@@ -103,7 +104,7 @@ export default async function ProjectDetailPage({ params }: PageParams) {
                   phone: project.clientProfile.phone,
                   address: project.clientProfile.address,
                   billingType: project.clientProfile.billingType,
-                  defaultRate: project.clientProfile.defaultRate ? Number(project.clientProfile.defaultRate) : null,
+                  defaultRate: project.clientProfile.defaultRate ? toDisplay(project.clientProfile.defaultRate) : null,
                   currency: project.clientProfile.currency,
                   paymentTermDays: project.clientProfile.paymentTermDays,
                 }}
@@ -114,7 +115,7 @@ export default async function ProjectDetailPage({ params }: PageParams) {
                 projectId={project.id}
                 projectSlug={slug}
                 jobs={serialized.clientProfile.jobs.map((j: { id: string; name: string }) => ({ id: j.id, name: j.name }))}
-                defaultRate={project.clientProfile.defaultRate ? Number(project.clientProfile.defaultRate) : null}
+                defaultRate={project.clientProfile.defaultRate ? toDisplay(project.clientProfile.defaultRate) : null}
                 currency={project.clientProfile.currency ?? 'USD'}
               />
 
@@ -161,14 +162,14 @@ export default async function ProjectDetailPage({ params }: PageParams) {
                 id: u.id,
                 unitLabel: u.unitLabel,
                 status: u.status,
-                monthlyRent: u.monthlyRent ? Number(u.monthlyRent) : null,
+                monthlyRent: u.monthlyRent ? toDisplay(u.monthlyRent) : null,
                 bedrooms: u.bedrooms,
                 tenant: u.leases[0]?.tenant ?? null,
                 leaseId: u.leases[0]?.id ?? null,
                 leaseEndDate: u.leases[0]?.endDate?.toISOString() ?? null,
                 leaseStartDate: u.leases[0]?.startDate?.toISOString() ?? null,
                 leaseStatus: u.leases[0]?.status ?? null,
-                leaseMonthlyRent: u.leases[0]?.monthlyRent ? Number(u.leases[0].monthlyRent) : null,
+                leaseMonthlyRent: u.leases[0]?.monthlyRent ? toDisplay(u.leases[0].monthlyRent) : null,
                 paymentDueDay: u.leases[0]?.paymentDueDay ?? null,
                 openMaintenance: u._count.maintenanceRequests,
                 unreadMessages: u._count.messages,
@@ -181,15 +182,18 @@ export default async function ProjectDetailPage({ params }: PageParams) {
                   createdAt: m.createdAt.toISOString(),
                   tenant: m.tenant ? { id: m.tenant.id, name: m.tenant.name } : null,
                 })),
-                invoices: (u.leases[0]?.invoices ?? []).map(inv => ({
-                  id: inv.id,
-                  invoiceNumber: inv.invoiceNumber,
-                  status: inv.status,
-                  period: inv.period,
-                  dueDate: inv.dueDate.toISOString(),
-                  lineItemTotal: inv.lineItems.filter(li => !li.forgivenAt).reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice), 0),
-                  paymentTotal: inv.payments.filter(p => !p.voidedAt).reduce((s, p) => s + Number(p.amount), 0),
-                })),
+                invoices: (u.leases[0]?.invoices ?? []).map(inv => {
+                  const { total, paid } = computeInvoiceTotals(inv)
+                  return {
+                    id: inv.id,
+                    invoiceNumber: inv.invoiceNumber,
+                    status: inv.status,
+                    period: inv.period,
+                    dueDate: inv.dueDate.toISOString(),
+                    lineItemTotal: toDisplay(total),
+                    paymentTotal: toDisplay(paid),
+                  }
+                }),
                 recentMessages: u.messages.map(m => ({
                   id: m.id,
                   subject: m.subject,

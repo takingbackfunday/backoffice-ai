@@ -8,6 +8,7 @@ import { INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
 import { SendInvoiceModal } from '@/components/projects/send-invoice-modal'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { toDisplay } from '@/lib/money'
 
 interface LineItem {
   id: string
@@ -50,11 +51,11 @@ const fmt = (n: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 
 function invoiceTotal(items: LineItem[]) {
-  return items.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0)
+  return items.reduce((s, i) => s + toDisplay(i.quantity) * toDisplay(i.unitPrice), 0)
 }
 
 function invoicePaid(payments: InvoicePayment[]) {
-  return payments.reduce((s, p) => s + Number(p.amount), 0)
+  return payments.reduce((s, p) => s + toDisplay(p.amount), 0)
 }
 
 function daysUntil(dateStr: string): number {
@@ -176,9 +177,9 @@ function InvoicePreviewModal({
                 <span className={cn('text-sm', (item as LineItem & {isTaxLine?: boolean}).isTaxLine ? 'text-muted-foreground italic' : '')}>
                   {item.description}
                 </span>
-                <span className="text-right text-sm tabular-nums text-muted-foreground">{Number(item.quantity)}</span>
-                <span className="text-right text-sm tabular-nums text-muted-foreground">{fmt(Number(item.unitPrice), inv.currency)}</span>
-                <span className="text-right text-sm tabular-nums font-medium">{fmt(Number(item.quantity) * Number(item.unitPrice), inv.currency)}</span>
+                <span className="text-right text-sm tabular-nums text-muted-foreground">{toDisplay(item.quantity)}</span>
+                <span className="text-right text-sm tabular-nums text-muted-foreground">{fmt(toDisplay(item.unitPrice), inv.currency)}</span>
+                <span className="text-right text-sm tabular-nums font-medium">{fmt(toDisplay(item.quantity) * toDisplay(item.unitPrice), inv.currency)}</span>
               </div>
             ))}
             <div className="border-t px-3 py-2 flex justify-between">
