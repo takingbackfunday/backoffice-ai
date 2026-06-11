@@ -2,10 +2,17 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { openrouterChat } from '@/lib/llm/openrouter'
 import { ok, unauthorized, serverError, badRequest } from '@/lib/api-response'
+import { checkDailyBudget, recordAgentUsage } from '@/lib/agent/usage'
 
 export async function POST(request: Request) {
   const { userId } = await auth()
   if (!userId) return unauthorized()
+
+  // Budget gate
+  const budget = await checkDailyBudget(userId)
+  if (!budget.ok) {
+    return badRequest(`You've hit your daily AI limit (${budget.used.toLocaleString()} / ${budget.cap.toLocaleString()} tokens used in the last 24h). Try again tomorrow.`)
+  }
 
   let query: string
   try {
@@ -100,6 +107,7 @@ Respond with ONLY a JSON object, no markdown, no explanation outside the JSON:
 
     console.log('[search-transactions] query:', query)
 
+    const t0 = Date.now()
     const raw = await openrouterChat(
       [
         { role: 'system', content: systemPrompt },
@@ -107,6 +115,19 @@ Respond with ONLY a JSON object, no markdown, no explanation outside the JSON:
       ],
       'google/gemini-2.0-flash-lite-001'
     )
+
+    // Record usage (fire-and-forget)
+    const inputEst = Math.ceil((systemPrompt.length + query.length) / 4)
+    const outputEst = Math.ceil(raw.length / 4)
+    recordAgentUsage({
+      userId,
+      endpoint: 'search',
+      model: 'google/gemini-2.0-flash-lite-001',
+      inputTokens: inputEst,
+      outputTokens: outputEst,
+      toolRounds: 0,
+      durationMs: Date.now() - t0,
+    })
 
     // Strip markdown code fences if the model wrapped the JSON
     const cleaned = raw.trim().replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim()

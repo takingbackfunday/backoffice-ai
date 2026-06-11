@@ -35,10 +35,16 @@ export interface ToolCall {
   }
 }
 
+export interface Usage {
+  inputTokens: number
+  outputTokens: number
+}
+
 export interface ChatResponse {
   content: string | null
   tool_calls: ToolCall[] | null
   finish_reason: 'stop' | 'tool_calls' | 'length' | string
+  usage?: Usage
 }
 
 // ── Token-streaming completion (for final answer pass) ────────────────────────
@@ -205,6 +211,7 @@ export async function openrouterWithTools(
           tool_choice: 'auto',
           max_tokens: 8192,
           stream: true,
+          stream_options: { include_usage: true },
         }),
         signal: controller.signal,
       })
@@ -234,6 +241,7 @@ export async function openrouterWithTools(
     // Accumulate streamed SSE chunks into a final ChatResponse
     let content = ''
     let finish_reason = 'stop'
+    let usage: Usage | undefined
     // tool_calls indexed by index
     const toolCallMap: Record<number, { id: string; type: string; function: { name: string; arguments: string } }> = {}
 
@@ -259,25 +267,34 @@ export async function openrouterWithTools(
           try { chunk = JSON.parse(data) } catch { continue }
 
           const choice = (chunk.choices as { delta?: Record<string, unknown>; finish_reason?: string }[] | undefined)?.[0]
-          if (!choice) continue
+          if (choice) {
+            if (choice.finish_reason) finish_reason = choice.finish_reason
 
-          if (choice.finish_reason) finish_reason = choice.finish_reason
+            const delta = choice.delta ?? {}
 
-          const delta = choice.delta ?? {}
+            if (typeof delta.content === 'string') content += delta.content
 
-          if (typeof delta.content === 'string') content += delta.content
-
-          const deltaToolCalls = delta.tool_calls as { index: number; id?: string; type?: string; function?: { name?: string; arguments?: string } }[] | undefined
-          if (deltaToolCalls) {
-            for (const tc of deltaToolCalls) {
-              const i = tc.index
-              if (!toolCallMap[i]) {
-                toolCallMap[i] = { id: tc.id ?? '', type: tc.type ?? 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
-              } else {
-                if (tc.id) toolCallMap[i].id = tc.id
-                if (tc.function?.name) toolCallMap[i].function.name += tc.function.name
+            const deltaToolCalls = delta.tool_calls as { index: number; id?: string; type?: string; function?: { name?: string; arguments?: string } }[] | undefined
+            if (deltaToolCalls) {
+              for (const tc of deltaToolCalls) {
+                const i = tc.index
+                if (!toolCallMap[i]) {
+                  toolCallMap[i] = { id: tc.id ?? '', type: tc.type ?? 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
+                } else {
+                  if (tc.id) toolCallMap[i].id = tc.id
+                  if (tc.function?.name) toolCallMap[i].function.name += tc.function.name
+                }
+                if (tc.function?.arguments) toolCallMap[i].function.arguments += tc.function.arguments
               }
-              if (tc.function?.arguments) toolCallMap[i].function.arguments += tc.function.arguments
+            }
+          }
+
+          // Usage comes in a separate chunk (no choices) when stream_options.include_usage is set
+          const chunkUsage = chunk.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
+          if (chunkUsage) {
+            usage = {
+              inputTokens: chunkUsage.prompt_tokens ?? 0,
+              outputTokens: chunkUsage.completion_tokens ?? 0,
             }
           }
         }
@@ -309,6 +326,7 @@ export async function openrouterWithTools(
       content: content || null,
       tool_calls,
       finish_reason,
+      usage,
     }
   }
 

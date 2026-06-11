@@ -1,4 +1,4 @@
-import { openrouterWithTools, openrouterStream, type ChatMessage, type ToolDefinition } from '@/lib/llm/openrouter'
+import { openrouterWithTools, openrouterStream, type ChatMessage, type ToolDefinition, type Usage } from '@/lib/llm/openrouter'
 
 export async function runToolLoop(opts: {
   messages: ChatMessage[]
@@ -8,11 +8,18 @@ export async function runToolLoop(opts: {
   maxRounds: number
   onStatus: (message: string) => void
   onToken?: (text: string) => void
-}): Promise<{ answer: string; toolsUsed: string[] }> {
+}): Promise<{ answer: string; toolsUsed: string[]; usage: Usage }> {
   const toolsUsed: string[] = []
+  let totalInput = 0
+  let totalOutput = 0
 
   for (let round = 0; round < opts.maxRounds; round++) {
     const response = await openrouterWithTools(opts.messages, opts.tools, opts.model)
+
+    if (response.usage) {
+      totalInput += response.usage.inputTokens
+      totalOutput += response.usage.outputTokens
+    }
 
     // Append assistant turn (with tool_calls if present).
     // When tool_calls are present, omit content entirely if it's null/empty —
@@ -29,9 +36,9 @@ export async function runToolLoop(opts: {
         // Re-stream: pop the assistant message we just added and stream the final answer fresh
         opts.messages.pop()
         const answer = await openrouterStream(opts.messages, opts.model, opts.onToken)
-        return { answer: answer.trim(), toolsUsed }
+        return { answer: answer.trim(), toolsUsed, usage: { inputTokens: totalInput, outputTokens: totalOutput } }
       }
-      return { answer: (response.content ?? '').trim(), toolsUsed }
+      return { answer: (response.content ?? '').trim(), toolsUsed, usage: { inputTokens: totalInput, outputTokens: totalOutput } }
     }
 
     // Execute every tool call in this round
@@ -68,8 +75,12 @@ export async function runToolLoop(opts: {
   })
   if (opts.onToken) {
     const answer = await openrouterStream(opts.messages, opts.model, opts.onToken)
-    return { answer: answer.trim(), toolsUsed }
+    return { answer: answer.trim(), toolsUsed, usage: { inputTokens: totalInput, outputTokens: totalOutput } }
   }
   const final = await openrouterWithTools(opts.messages, [], opts.model)
-  return { answer: (final.content ?? 'Unable to answer.').trim(), toolsUsed }
+  if (final.usage) {
+    totalInput += final.usage.inputTokens
+    totalOutput += final.usage.outputTokens
+  }
+  return { answer: (final.content ?? 'Unable to answer.').trim(), toolsUsed, usage: { inputTokens: totalInput, outputTokens: totalOutput } }
 }

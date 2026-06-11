@@ -1,8 +1,9 @@
 import { prisma } from '@/lib/prisma'
 import { runToolLoop } from './tool-loop'
 import { formatHistory } from './format-history'
-import { findCapability, capabilityIndexSummary } from './site-capabilities-loader'
 import { getOmniTools, dispatchOmniTool } from './omni-tools'
+import { recordAgentUsage, checkDailyBudget } from './usage'
+import { buildOmniSystemPrompt } from './prompts/omni'
 import type { ChatMessage } from '@/lib/llm/openrouter'
 import type { ConversationTurn } from './types'
 import type { SerializablePageContext, EditorAction } from './page-context'
@@ -27,7 +28,19 @@ export interface OmniResult {
   toolsUsed: string[]
 }
 
+// ── Snapshot cache (60s TTL per userId) ──────────────────────────────────────
+
+const snapshotCache = new Map<string, { data: string; expiresAt: number }>()
+const SNAPSHOT_TTL_MS = 60_000
+
+export function invalidateSnapshotCache(userId: string) {
+  snapshotCache.delete(userId)
+}
+
 async function buildSnapshot(userId: string): Promise<string> {
+  const cached = snapshotCache.get(userId)
+  if (cached && Date.now() < cached.expiresAt) return cached.data
+
   const [txCount, accounts, activeRules, nonDeductibleGroups, dateRange, workspaces] = await Promise.all([
     prisma.transaction.count({ where: { account: { userId } } }),
     prisma.account.findMany({ where: { userId }, select: { name: true, currency: true } }),
@@ -49,7 +62,7 @@ async function buildSnapshot(userId: string): Promise<string> {
   const hasProperty = workspaceTypes.includes('PROPERTY')
   const hasClient = workspaceTypes.includes('CLIENT')
 
-  return `Financial database snapshot:
+  const data = `Financial database snapshot:
 - Workspace types active: ${workspaceTypes.join(', ') || 'none'}${!hasProperty ? '\n- NOTE: This user has NO property workspaces. Never mention tenants, rent, maintenance requests, or property-related features.' : ''}${!hasClient ? '\n- NOTE: This user has NO freelance/client workspaces. Never mention invoices, clients, or studio features.' : ''}
 - Accounts: ${accounts.length ? accounts.map(a => `${a.name} (${a.currency})`).join(', ') : 'none'}
 - Transactions: ${txCount} total
@@ -58,64 +71,23 @@ async function buildSnapshot(userId: string): Promise<string> {
 
 NON-DEDUCTIBLE CATEGORIES (exclude from revenue/expense/spending analysis unless user specifically asks):
 ${nonDeductibleCategoryNames.length ? nonDeductibleCategoryNames.map(n => `  - ${n}`).join('\n') : '  (none configured)'}`
+
+  snapshotCache.set(userId, { data, expiresAt: Date.now() + SNAPSHOT_TTL_MS })
+  return data
 }
 
-function buildSystemPrompt(opts: {
-  snapshot: string
-  pageContext?: SerializablePageContext
-  history: string
-}): string {
-  const { snapshot, pageContext, history } = opts
-  const today = new Date().toISOString().slice(0, 10)
-
-  const capability = pageContext ? findCapability(pageContext.pathname) : null
-  const capIndex = capabilityIndexSummary()
-
-  let contextSection = ''
-  if (pageContext && capability) {
-    contextSection = `CURRENT CONTEXT:
-The user is on: ${capability.title} (${pageContext.pathname})
-Page purpose: ${capability.purpose}`
-    if (pageContext.entityType && pageContext.entityName) {
-      contextSection += `\nThey are currently viewing/editing ${pageContext.entityType} "${pageContext.entityName}".`
-    }
-    if (capability.editorContext) {
-      contextSection += `\nYou can use apply_${capability.editorContext}_edits to modify the form they're working on. Actions will appear in their editor with a throb highlight and a confirm/undo bar.`
-    }
-  } else if (pageContext) {
-    contextSection = `CURRENT CONTEXT:
-The user is on: ${pageContext.pathname}`
-    if (pageContext.entityType && pageContext.entityName) {
-      contextSection += `\nThey are currently viewing/editing ${pageContext.entityType} "${pageContext.entityName}".`
-    }
-  }
-
-  return `You are Backoffice — an AI assistant embedded in a property/finance/freelance back-office app.
-
-Today's date is ${today}.
-
-USER'S DATA SHAPE:
-${snapshot}
-
-${contextSection ? contextSection + '\n\n' : ''}WHAT THIS APP CAN DO (compact index):
-${capIndex}
-
-For deeper detail on any page, call lookup_site_capability.
-
-CONVERSATION SO FAR:
-${history}
-
-CRITICAL RULES:
-1. NEVER state a dollar amount you have not directly read from a tool result. No estimates, no sums in your head.
-2. For any total/sum, call aggregate_transactions — do NOT compute it yourself from a list of rows.
-3. Non-deductible categories are excluded from revenue/expense queries unless the user explicitly asks about them.
-4. If the user asks where to do something or find a feature, call lookup_site_capability first, then call link_user_to to give them a clickable destination. Always explain in one short sentence what they will do there. When linking to a specific invoice, use the projectSlug from the tool result (not the clientId/projectId). Invoice URLs follow the pattern /projects/{projectSlug}/invoices/{invoiceId}.
-5. If on an editor page and the user asks for a change to the entity they're editing, prefer apply_*_edits over instructing them to type. Confirm destructive changes (delete a line item, change currency) before applying.
-6. Plain text only. No markdown formatting — no #, no **, no bullet syntax, no backticks.`
-}
+// ── Main entry point ─────────────────────────────────────────────────────────
 
 export async function runOmniAgent(ctx: OmniContext): Promise<OmniResult> {
   const { userId, question, conversationHistory, pageContext, onStatus, onToken, onAction, onLink } = ctx
+
+  // Budget gate — check before spending tokens
+  const budget = await checkDailyBudget(userId)
+  if (!budget.ok) {
+    const msg = `You've hit your daily AI limit (${budget.used.toLocaleString()} / ${budget.cap.toLocaleString()} tokens used in the last 24h). Try again tomorrow.`
+    onStatus(msg)
+    return { answer: msg, toolsUsed: [] }
+  }
 
   onStatus('Loading your data overview…')
   const snapshot = await buildSnapshot(userId)
@@ -123,13 +95,14 @@ export async function runOmniAgent(ctx: OmniContext): Promise<OmniResult> {
   const history = formatHistory(conversationHistory)
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: buildSystemPrompt({ snapshot, pageContext, history }) },
+    { role: 'system', content: buildOmniSystemPrompt({ snapshot, pageContext, history }) },
     { role: 'user', content: question },
   ]
 
   const tools = getOmniTools(pageContext)
 
-  const { answer, toolsUsed } = await runToolLoop({
+  const t0 = Date.now()
+  const { answer, toolsUsed, usage } = await runToolLoop({
     messages,
     tools,
     dispatchTool: (name, args) => dispatchOmniTool({ userId, name, args, pageContext, onAction, onLink }),
@@ -137,6 +110,17 @@ export async function runOmniAgent(ctx: OmniContext): Promise<OmniResult> {
     maxRounds: MAX_ROUNDS,
     onStatus,
     onToken,
+  })
+
+  // Record usage (fire-and-forget)
+  recordAgentUsage({
+    userId,
+    endpoint: 'omni',
+    model: AGENT_MODEL,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    toolRounds: toolsUsed.length,
+    durationMs: Date.now() - t0,
   })
 
   return { answer, toolsUsed }

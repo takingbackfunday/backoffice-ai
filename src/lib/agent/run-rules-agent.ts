@@ -8,6 +8,7 @@ import {
   type RulesContext,
 } from '@/lib/agent/rules-tools'
 import { dispatchTool } from '@/lib/agent/finance-tools'
+import { recordAgentUsage } from './usage'
 
 // ── System prompt (single source of truth) ────────────────────────────────────
 
@@ -223,6 +224,8 @@ Instructions:
   let totalRejections = 0
   const MAX_TOTAL_REJECTIONS = 12
 
+  let totalInput = 0
+  let totalOutput = 0
   const t0 = Date.now()
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -236,6 +239,10 @@ Instructions:
     send({ type: 'status', message: round === 0 ? 'Sonnet planning…' : `Haiku emitting (round ${round + 1})…` })
 
     const response = await openrouterWithTools(messages, RULES_TOOLS, model)
+    if (response.usage) {
+      totalInput += response.usage.inputTokens
+      totalOutput += response.usage.outputTokens
+    }
 
     const assistantMsg: Record<string, unknown> = { role: 'assistant' }
     if (response.content) assistantMsg.content = response.content
@@ -358,6 +365,17 @@ Instructions:
   }
 
   console.log(`[rules-agent:${runId}] done`, JSON.stringify({ emitCount, messages: messages.length, totalMs: Date.now() - t0 }))
+
+  // Record usage (fire-and-forget)
+  recordAgentUsage({
+    userId,
+    endpoint: 'rules',
+    model: `${STRATEGY_MODEL}+${EXECUTION_MODEL}`,
+    inputTokens: totalInput,
+    outputTokens: totalOutput,
+    toolRounds: emitCount,
+    durationMs: Date.now() - t0,
+  })
 
   return { emitCount, uncategorised: uncatCount, noPayee: noPayeeCount }
 }

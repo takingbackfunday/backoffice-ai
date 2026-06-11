@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { parsePreferences } from '@/types/preferences'
 import { runRulesAgent } from '@/lib/agent/run-rules-agent'
+import { checkDailyBudget } from '@/lib/agent/usage'
 import type { RulesSseEvent } from '@/lib/agent/rules-tools'
 
 function encode(event: RulesSseEvent): Uint8Array {
@@ -12,6 +13,15 @@ export async function GET() {
   const { userId } = await auth()
   if (!userId) {
     return new Response('Unauthorized', { status: 401 })
+  }
+
+  // Budget gate
+  const budget = await checkDailyBudget(userId)
+  if (!budget.ok) {
+    return new Response(
+      `data: ${JSON.stringify({ type: 'error', error: `You've hit your daily AI limit (${budget.used.toLocaleString()} / ${budget.cap.toLocaleString()} tokens used in the last 24h). Try again tomorrow.` })}\n\n`,
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+    )
   }
 
   const COOLDOWN_MS = 30_000

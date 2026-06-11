@@ -1227,3 +1227,19 @@ model FxRate {
   @@unique([month, base, quote])
   @@index([month])
 }
+
+// ── Agent Usage Tracking ────────────────────────────────────────────────────
+
+model AgentUsage {
+  id           String   @id @default(cuid())
+  userId       String
+  endpoint     String   // 'omni' | 'rules' | 'analyze' | 'search'
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  toolRounds   Int
+  durationMs   Int
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

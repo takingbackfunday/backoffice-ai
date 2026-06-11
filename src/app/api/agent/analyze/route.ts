@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { openrouterChat } from '@/lib/llm/openrouter'
 import { unauthorized } from '@/lib/api-response'
 import { toDisplay } from '@/lib/money'
+import { checkDailyBudget, recordAgentUsage } from '@/lib/agent/usage'
 
 interface SseEvent {
   type: 'status' | 'report' | 'done' | 'error'
@@ -18,6 +19,22 @@ function encode(event: SseEvent): Uint8Array {
 export async function GET() {
   const { userId } = await auth()
   if (!userId) return unauthorized()
+
+  // Budget gate
+  const budget = await checkDailyBudget(userId)
+  if (!budget.ok) {
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder()
+        const msg = `You've hit your daily AI limit (${budget.used.toLocaleString()} / ${budget.cap.toLocaleString()} tokens used in the last 24h). Try again tomorrow.`
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: msg })}\n\n`))
+        controller.close()
+      },
+    })
+    return new Response(stream, {
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
+    })
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -127,6 +144,7 @@ Write 3–5 tight bullet observations + a 1-line action recommendation. No fluff
           controller.enqueue(new TextEncoder().encode(': ping\n\n'))
         }, 5000)
 
+        const t0 = Date.now()
         let report: string
         try {
           report = await openrouterChat(
@@ -139,6 +157,19 @@ Write 3–5 tight bullet observations + a 1-line action recommendation. No fluff
         } finally {
           clearInterval(keepAlive)
         }
+
+        // Record usage (fire-and-forget)
+        const inputEst = Math.ceil((systemPrompt.length + userPrompt.length) / 4)
+        const outputEst = Math.ceil(report.length / 4)
+        recordAgentUsage({
+          userId,
+          endpoint: 'analyze',
+          model: 'anthropic/claude-sonnet-4.6',
+          inputTokens: inputEst,
+          outputTokens: outputEst,
+          toolRounds: 0,
+          durationMs: Date.now() - t0,
+        })
 
         send({ type: 'report', report: report.trim() })
         send({ type: 'done' })
