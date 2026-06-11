@@ -110,7 +110,7 @@ export function VendorDetail({ vendor: initial }: { vendor: Vendor }) {
   const totalPaid = vendor.workOrders
     .flatMap(wo => wo.bills)
     .filter(b => b.status === 'PAID')
-    .reduce((s, b) => s + Number(b.amount), 0)
+    .reduce((s, b) => s + money(b.amount), money(0)).toNumber()
 
   return (
     <div className="max-w-3xl space-y-8">
