@@ -449,7 +449,7 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
 
           {/* Application fee invoice */}
           {feeInvoice && (() => {
-            const total = toDisplay(feeInvoice.lineItems.reduce((s, li) => s + lineTotal(li.quantity, li.unitPrice), money(0)))
+            const total = toDisplay(feeInvoice.lineItems.reduce((s, li) => s.plus(lineTotal(li.quantity, li.unitPrice)), money(0)))
             const isPaid = feeInvoice.status === 'PAID'
             const isSent = feeInvoice.status === 'SENT' || feeInvoice.sentAt
             return (
