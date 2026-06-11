@@ -5,6 +5,7 @@ import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns'
 import { convertAmounts } from '@/lib/fx'
 import type { DashboardCurrency } from '@/lib/fx'
 import { toDisplay } from '@/lib/money'
+import type Decimal from 'decimal.js'
 
 export interface KpiData {
   revenue: number
@@ -69,7 +70,7 @@ export async function GET(request: Request) {
     // Convert amounts to target currency using monthly rates
     const toConvertRows = (rows: { amount: unknown; date: Date; account: { currency: string } }[]) =>
       rows.map((r) => ({
-        amount: toDisplay(r.amount as any),
+        amount: toDisplay(r.amount as Decimal.Value),
         currency: r.account.currency,
         month: format(r.date, 'yyyy-MM'),
       }))
