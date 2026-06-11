@@ -656,9 +656,13 @@ export async function get_transfer_candidates(
 
   if (!txs.length) return 'No uncategorised transactions to analyse for transfers.'
 
+  // Convert Decimal amounts to plain numbers at the boundary — the matching
+  // logic below uses raw JS comparisons and Math.* which don't work on Decimal.
+  const txsWithAmounts = txs.map((tx) => ({ ...tx, amount: toDisplay(tx.amount) }))
+
   // Group by date string (YYYY-MM-DD)
-  const byDate = new Map<string, typeof txs>()
-  for (const tx of txs) {
+  const byDate = new Map<string, typeof txsWithAmounts>()
+  for (const tx of txsWithAmounts) {
     const dateKey = tx.date.toISOString().slice(0, 10)
     if (!byDate.has(dateKey)) byDate.set(dateKey, [])
     byDate.get(dateKey)!.push(tx)

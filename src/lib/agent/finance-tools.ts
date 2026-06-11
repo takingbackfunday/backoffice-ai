@@ -1080,5 +1080,3 @@ export async function dispatchTool(userId: string, name: string, args: unknown):
     default: return `Unknown tool: ${name}`
   }
 }
-
-export { FINANCE_TOOLS, dispatchTool }

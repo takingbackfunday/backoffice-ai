@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import type { ToolDefinition } from '@/lib/llm/openrouter'
 import { toDisplay, money, lineTotal, gte } from '@/lib/money'
+import type Decimal from 'decimal.js'
 
 // ── Tool Definitions ────────────────────────────────────────────────────────
 
@@ -144,11 +145,11 @@ export const STUDIO_TOOLS: ToolDefinition[] = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function invoiceTotal(lineItems: { quantity: unknown; unitPrice: unknown }[]): number {
+function invoiceTotal(lineItems: { quantity: Decimal.Value; unitPrice: Decimal.Value }[]): number {
   return toDisplay(lineItems.reduce((s, i) => s.plus(lineTotal(i.quantity, i.unitPrice)), money(0)))
 }
 
-function invoicePaid(payments: { amount: unknown }[]): number {
+function invoicePaid(payments: { amount: Decimal.Value }[]): number {
   return toDisplay(payments.reduce((s, p) => s.plus(p.amount), money(0)))
 }
 

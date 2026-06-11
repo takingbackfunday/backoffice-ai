@@ -301,7 +301,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         const leased = p.units.filter(u => u.status === 'LEASED').length
         const monthlyRev = p.units
           .filter(u => u.status === 'LEASED' && u.monthlyRent)
-          .reduce((s, u) => s.plus(u.monthlyRent), money(0))
+          .reduce((s, u) => s.plus(u.monthlyRent ?? 0), money(0))
         return `${p.workspace.name} | ${p.address}${p.city ? ', ' + p.city : ''} | ${leased}/${total} occupied | $${toDisplay(monthlyRev).toLocaleString()}/mo revenue`
       })
       return rows.join('\n')
@@ -370,7 +370,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
       const total = units.length
       const leased = units.filter(u => u.status === 'LEASED').length
       const vacant = units.filter(u => u.status === 'VACANT').length
-      const revenue = units.filter(u => u.status === 'LEASED' && u.monthlyRent).reduce((s, u) => s.plus(u.monthlyRent), money(0))
+      const revenue = units.filter(u => u.status === 'LEASED' && u.monthlyRent).reduce((s, u) => s.plus(u.monthlyRent ?? 0), money(0))
       return `Total units: ${total}\nLeased: ${leased} (${Math.round(leased / total * 100)}%)\nVacant: ${vacant}\nMonthly revenue: $${toDisplay(revenue).toLocaleString()}`
     }
 
@@ -633,7 +633,7 @@ export async function dispatchPropertyTool(userId: string, toolName: string, arg
         include: { propertyProfile: { include: { workspace: { select: { name: true } } } } },
       })
       if (!units.length) return 'No vacant units found.'
-      const monthlyLost = units.filter(u => u.monthlyRent).reduce((s, u) => s.plus(u.monthlyRent), money(0))
+      const monthlyLost = units.filter(u => u.monthlyRent).reduce((s, u) => s.plus(u.monthlyRent ?? 0), money(0))
       const rows = units.map(u => `${u.propertyProfile.workspace.name} / ${u.unitLabel} | $${u.monthlyRent ? toDisplay(u.monthlyRent) : 0}/mo`)
       return `${rows.join('\n')}\n\nTotal monthly revenue lost to vacancies: $${toDisplay(monthlyLost).toLocaleString()}`
     }
