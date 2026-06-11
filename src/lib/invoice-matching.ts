@@ -80,7 +80,7 @@ export function matchTransactionToInvoices(opts: {
   const exactMatches = invoicesWithBalance.filter(({ balance }) => isClose(balance, txAmountDec))
 
   // HIGH confidence: invoice number in description, or single exact amount match
-  let highConfidenceTarget = invoiceNumberMatch ?? (exactMatches.length === 1 ? exactMatches[0] : null)
+  const highConfidenceTarget = invoiceNumberMatch ?? (exactMatches.length === 1 ? exactMatches[0] : null)
 
   // Downgrade to MEDIUM if the matched invoice is still DRAFT — user must confirm
   if (highConfidenceTarget && highConfidenceTarget.inv.status === 'DRAFT') {
