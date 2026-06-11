@@ -75,8 +75,8 @@ interface Props {
   replacedBy?: InvoiceRef | null
 }
 
-const fmt = (n: number, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
+const fmt = (n: number | string, currency = 'USD') =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(n))
 
 export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, paymentMethods, invoicePaymentNote = '', suggestions: initialSuggestions = [], replacesInvoice, replacedBy }: Props) {
   const router = useRouter()
@@ -512,17 +512,17 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
                     {fmt(toDisplay(item.unitPrice), invoice.currency)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">
-                    {fmt(toDisplay(item.quantity) * toDisplay(item.unitPrice), invoice.currency)}
-                  </td>
-                </tr>
-              ))}
+                   </td>
+                   <td className="px-3 py-1.5 text-right tabular-nums font-medium">
+                     {fmt(toDisplay(item.quantity) * toDisplay(item.unitPrice), invoice.currency)}
+                   </td>
+                 </tr>
+               ))}
             </tbody>
             <tfoot className="border-t bg-muted/20">
               <tr>
                 <td colSpan={3} className="px-3 py-1.5 text-right text-xs font-semibold text-muted-foreground">Subtotal</td>
-                <td className="px-3 py-1.5 text-right font-semibold tabular-nums">{fmt(total, invoice.currency)}</td>
+                <td className="px-3 py-1.5 text-right font-semibold tabular-nums">{fmt(toDisplay(total), invoice.currency)}</td>
               </tr>
               {invoice.payments.map(p => (
                 <tr key={p.id}>
@@ -536,7 +536,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
               <tr className="border-t">
                 <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold">Balance due</td>
                 <td className={cn('px-3 py-2 text-right text-xs font-bold tabular-nums', balance <= 0 ? 'text-green-700' : '')}>
-                  {fmt(balance, invoice.currency)}
+                  {fmt(toDisplay(balance), invoice.currency)}
                 </td>
               </tr>
             </tfoot>
@@ -835,7 +835,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           <p className="text-sm text-muted-foreground">
             This will void <span className="font-medium text-foreground">{invoice.invoiceNumber}</span> and open a new draft with the same line items.
             {paid > 0 && (
-              <> A credit of <span className="font-medium text-foreground">{fmt(paid, invoice.currency)}</span> will be applied to the new invoice for payments already received.</>
+              <> A credit of <span className="font-medium text-foreground">{fmt(toDisplay(paid), invoice.currency)}</span> will be applied to the new invoice for payments already received.</>
             )}
           </p>
           <p className="text-xs text-muted-foreground">
