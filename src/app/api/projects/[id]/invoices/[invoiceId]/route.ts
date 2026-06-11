@@ -1,7 +1,10 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, badRequest } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireInvoice } from '@/lib/authz'
+
+const ParamsSchema = z.object({ id: z.string(), invoiceId: z.string() })
 
 const LineItemSchema = z.object({
   description: z.string().min(1),
@@ -19,75 +22,43 @@ const PatchInvoiceSchema = z.object({
   lineItems: z.array(LineItemSchema).min(1).optional(),
 })
 
-interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
-
-async function getInvoiceForUser(invoiceId: string, projectId: string, userId: string) {
-  return prisma.invoice.findFirst({
-    where: {
-      id: invoiceId,
-      OR: [
-        { clientProfile: { workspace: { id: projectId, userId } } },
-        { lease: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } },
-        { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id: projectId, userId } } } } } } },
-        { applicant: { propertyProfile: { workspace: { id: projectId, userId } } } },
-      ],
-    },
-    include: {
-      job: { select: { id: true, name: true } },
-      lineItems: true,
-      payments: true,
-    },
-  })
+const invoiceInclude = {
+  job: { select: { id: true, name: true } },
+  lineItems: true,
+  payments: true,
 }
 
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id, invoiceId } = await params
+export const GET = authedRoute<{ id: string; invoiceId: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    const invoice = await requireInvoice(userId, params.invoiceId, params.id)
+    const full = await prisma.invoice.findUnique({ where: { id: invoice.id }, include: invoiceInclude })
+    return ok(full)
+  },
+})
 
-    const invoice = await getInvoiceForUser(invoiceId, id, userId)
-    if (!invoice) return notFound('Invoice not found')
-
-    return ok(invoice)
-  } catch {
-    return serverError('Failed to fetch invoice')
-  }
-}
-
-export async function PATCH(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id, invoiceId } = await params
-
-    const invoice = await getInvoiceForUser(invoiceId, id, userId)
-    if (!invoice) return notFound('Invoice not found')
+export const PATCH = authedRoute<{ id: string; invoiceId: string }, z.infer<typeof PatchInvoiceSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: PatchInvoiceSchema,
+  handler: async ({ userId, params, body }) => {
+    const invoice = await requireInvoice(userId, params.invoiceId, params.id)
     if (invoice.status === 'VOID') return badRequest('Cannot edit a voided invoice')
 
-    const body = await request.json()
-
-    // For PAID invoices only allow updating jobId
     if (invoice.status === 'PAID') {
       const updated = await prisma.invoice.update({
-        where: { id: invoiceId },
+        where: { id: params.invoiceId },
         data: { jobId: body.jobId !== undefined ? body.jobId : undefined },
-        include: { job: { select: { id: true, name: true } }, lineItems: true, payments: true },
+        include: invoiceInclude,
       })
       return ok(updated)
     }
 
-    const parsed = PatchInvoiceSchema.safeParse(body)
-    if (!parsed.success) {
-      return badRequest(parsed.error.errors.map(e => e.message).join(', '))
-    }
-
     const updated = await prisma.$transaction(async tx => {
-      if (parsed.data.lineItems) {
-        await tx.invoiceLineItem.deleteMany({ where: { invoiceId } })
+      if (body.lineItems) {
+        await tx.invoiceLineItem.deleteMany({ where: { invoiceId: params.invoiceId } })
         await tx.invoiceLineItem.createMany({
-          data: parsed.data.lineItems.map(item => ({
-            invoiceId,
+          data: body.lineItems.map(item => ({
+            invoiceId: params.invoiceId,
             description: item.description,
             quantity: item.quantity,
             qtyUnit: item.qtyUnit ?? null,
@@ -98,50 +69,35 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
 
       return tx.invoice.update({
-        where: { id: invoiceId },
+        where: { id: params.invoiceId },
         data: {
-          status: parsed.data.status,
-          jobId: parsed.data.jobId !== undefined ? parsed.data.jobId : undefined,
-          dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
-          notes: parsed.data.notes,
+          status: body.status,
+          jobId: body.jobId !== undefined ? body.jobId : undefined,
+          dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+          notes: body.notes,
         },
-        include: {
-          job: { select: { id: true, name: true } },
-          lineItems: true,
-          payments: true,
-        },
+        include: invoiceInclude,
       })
     })
 
     return ok(updated)
-  } catch {
-    return serverError('Failed to update invoice')
-  }
-}
+  },
+})
 
-export async function DELETE(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id, invoiceId } = await params
-
-    const invoice = await getInvoiceForUser(invoiceId, id, userId)
-    if (!invoice) return notFound('Invoice not found')
+export const DELETE = authedRoute<{ id: string; invoiceId: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    const invoice = await requireInvoice(userId, params.invoiceId, params.id)
 
     if (invoice.status === 'DRAFT') {
-      // Hard delete — draft has never been sent, no audit trail needed
-      await prisma.invoice.delete({ where: { id: invoiceId } })
+      await prisma.invoice.delete({ where: { id: params.invoiceId } })
       return ok({ deleted: true })
     }
 
-    // Soft void for all other statuses — preserve audit trail
     const voided = await prisma.invoice.update({
-      where: { id: invoiceId },
+      where: { id: params.invoiceId },
       data: { status: 'VOID' },
     })
-
     return ok(voided)
-  } catch {
-    return serverError('Failed to delete invoice')
-  }
-}
+  },
+})

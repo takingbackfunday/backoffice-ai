@@ -376,7 +376,8 @@ Auto-sync/open-banking providers have been removed. Users import transactions by
 | Concern | Location |
 |---|---|
 | Route protection | `src/middleware.ts` (Clerk) |
-| Extract userId in routes | `auth()` from `@clerk/nextjs/server` |
+| Extract userId in routes | `auth()` from `@clerk/nextjs/server` — or use `authedRoute` from `src/lib/api-handler.ts` |
+| Ownership lookups | `src/lib/authz.ts` — `requireWorkspace`, `requireInvoice`, `requireQuote`, `requireVendor` |
 | Portal auth (tenant) | `src/lib/portal-auth.ts` |
 
 ### API response shape
@@ -459,6 +460,9 @@ All routes use helpers from `src/lib/api-response.ts`:
 | Utility | File |
 |---|---|
 | API response helpers | `src/lib/api-response.ts` |
+| API route wrapper | `src/lib/api-handler.ts` → `authedRoute()` |
+| Ownership lookups | `src/lib/authz.ts` → `requireWorkspace`, `requireInvoice`, `requireQuote`, `requireVendor`, etc. |
+| NotFoundError | `src/lib/not-found-error.ts` |
 | Slug generation | `src/lib/slug.ts` |
 | Listing slug | `src/lib/listing-slug.ts` |
 | Terminology (CLIENT vs PROPERTY labels) | `src/lib/terminology.ts` |

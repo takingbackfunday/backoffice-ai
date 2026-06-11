@@ -1,7 +1,15 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, created, badRequest } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireWorkspace, requireTenant } from '@/lib/authz'
+import type { Prisma } from '@/generated/prisma/client'
+
+const ParamsSchema = z.object({ id: z.string() })
+
+type PropertyWorkspace = Prisma.WorkspaceGetPayload<{
+  include: { propertyProfile: { include: { units: { select: { id: true } } } } }
+}>
 
 const CreateLeaseSchema = z.object({
   unitId: z.string().min(1, 'Unit is required'),
@@ -18,22 +26,15 @@ const CreateLeaseSchema = z.object({
   contractNotes: z.string().optional(),
 })
 
-interface RouteParams { params: Promise<{ id: string }> }
-
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId, type: 'PROPERTY' },
-      include: { propertyProfile: { include: { units: { select: { id: true } } } } },
-    })
-    if (!project || !project.propertyProfile) return notFound('Property project not found')
+export const GET = authedRoute<{ id: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    const project = await requireWorkspace(userId, params.id, {
+      propertyProfile: { include: { units: { select: { id: true } } } },
+    }) as PropertyWorkspace
+    if (!project.propertyProfile) return badRequest('Property project not found')
 
     const unitIds = project.propertyProfile.units.map(u => u.id)
-
     const leases = await prisma.lease.findMany({
       where: { unitId: { in: unitIds } },
       include: {
@@ -43,66 +44,49 @@ export async function GET(_request: Request, { params }: RouteParams) {
       },
       orderBy: { startDate: 'desc' },
     })
-
     return ok(leases, { count: leases.length })
-  } catch {
-    return serverError('Failed to fetch leases')
-  }
-}
+  },
+})
 
-export async function POST(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId, type: 'PROPERTY' },
-      include: { propertyProfile: { include: { units: { select: { id: true } } } } },
-    })
-    if (!project || !project.propertyProfile) return notFound('Property project not found')
-
-    const body = await request.json()
-    const parsed = CreateLeaseSchema.safeParse(body)
-    if (!parsed.success) {
-      return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
-    }
+export const POST = authedRoute<{ id: string }, z.infer<typeof CreateLeaseSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: CreateLeaseSchema,
+  handler: async ({ userId, params, body }) => {
+    const project = await requireWorkspace(userId, params.id, {
+      propertyProfile: { include: { units: { select: { id: true } } } },
+    }) as PropertyWorkspace
+    if (!project.propertyProfile) return badRequest('Property project not found')
 
     const unitIds = project.propertyProfile.units.map(u => u.id)
-    if (!unitIds.includes(parsed.data.unitId)) {
+    if (!unitIds.includes(body.unitId)) {
       return badRequest('Unit does not belong to this property')
     }
 
-    const tenant = await prisma.tenant.findFirst({
-      where: { id: parsed.data.tenantId, userId },
-    })
-    if (!tenant) return badRequest('Tenant not found')
+    await requireTenant(userId, body.tenantId)
 
     const lease = await prisma.lease.create({
       data: {
-        unitId: parsed.data.unitId,
-        tenantId: parsed.data.tenantId,
-        status: parsed.data.status ?? 'ACTIVE',
-        startDate: new Date(parsed.data.startDate),
-        endDate: new Date(parsed.data.endDate),
-        monthlyRent: parsed.data.monthlyRent,
-        securityDeposit: parsed.data.securityDeposit,
-        paymentDueDay: parsed.data.paymentDueDay ?? 1,
-        lateFeeAmount: parsed.data.lateFeeAmount,
-        lateFeeGraceDays: parsed.data.lateFeeGraceDays ?? 5,
-        currency: parsed.data.currency ?? 'USD',
-        contractNotes: parsed.data.contractNotes,
+        unitId: body.unitId,
+        tenantId: body.tenantId,
+        status: body.status ?? 'ACTIVE',
+        startDate: new Date(body.startDate),
+        endDate: new Date(body.endDate),
+        monthlyRent: body.monthlyRent,
+        securityDeposit: body.securityDeposit,
+        paymentDueDay: body.paymentDueDay ?? 1,
+        lateFeeAmount: body.lateFeeAmount,
+        lateFeeGraceDays: body.lateFeeGraceDays ?? 5,
+        currency: body.currency ?? 'USD',
+        contractNotes: body.contractNotes,
       },
       include: { unit: true, tenant: true },
     })
 
     await prisma.unit.update({
-      where: { id: parsed.data.unitId },
+      where: { id: body.unitId },
       data: { status: 'LEASED' },
     })
 
     return created(lease)
-  } catch {
-    return serverError('Failed to create lease')
-  }
-}
+  },
+})

@@ -1,8 +1,10 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
-import { computeInvoiceTotals, gte, isClose, toDisplay, money } from '@/lib/money'
+import { ok, badRequest } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { computeInvoiceTotals, money } from '@/lib/money'
+
+const ParamsSchema = z.object({ id: z.string(), invoiceId: z.string() })
 
 const CreatePaymentSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
@@ -12,78 +14,61 @@ const CreatePaymentSchema = z.object({
   transactionId: z.string().optional().nullable(),
 })
 
-interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
-
-export async function POST(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id, invoiceId } = await params
-
+export const POST = authedRoute<{ id: string; invoiceId: string }, z.infer<typeof CreatePaymentSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: CreatePaymentSchema,
+  handler: async ({ userId, params, body }) => {
     const invoice = await prisma.invoice.findFirst({
       where: {
-        id: invoiceId,
+        id: params.invoiceId,
         OR: [
-          { clientProfile: { workspace: { id, userId } } },
-          { lease: { unit: { propertyProfile: { workspace: { id, userId } } } } },
-          { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id, userId } } } } } } },
-          { applicant: { propertyProfile: { workspace: { id, userId } } } },
+          { clientProfile: { workspace: { id: params.id, userId } } },
+          { lease: { unit: { propertyProfile: { workspace: { id: params.id, userId } } } } },
+          { tenant: { userId, leases: { some: { unit: { propertyProfile: { workspace: { id: params.id, userId } } } } } } },
+          { applicant: { propertyProfile: { workspace: { id: params.id, userId } } } },
         ],
       },
-      include: {
-        lineItems: true,
-        payments: true,
-      },
+      include: { lineItems: true, payments: true },
     })
-    if (!invoice) return notFound('Invoice not found')
+    if (!invoice) return badRequest('Invoice not found')
     if (invoice.status === 'VOID') return badRequest('Cannot record payment on a voided invoice')
 
-    const body = await request.json()
-    const parsed = CreatePaymentSchema.safeParse(body)
-    if (!parsed.success) {
-      return badRequest(parsed.error.errors.map(e => e.message).join(', '))
-    }
-
-    // Compute invoice total and already paid (exclude forgiven items and voided payments)
     const { total: invoiceTotal, paid: alreadyPaid } = computeInvoiceTotals(invoice)
     const remaining = invoiceTotal.minus(alreadyPaid)
 
-    if (money(parsed.data.amount).gt(remaining.plus(money('0.001')))) {
-      return badRequest(`Payment amount (${parsed.data.amount.toFixed(2)}) exceeds remaining balance (${remaining.toFixed(2)})`)
+    if (money(body.amount).gt(remaining.plus(money('0.001')))) {
+      return badRequest(`Payment amount (${body.amount.toFixed(2)}) exceeds remaining balance (${remaining.toFixed(2)})`)
     }
 
-    // If linking to a transaction, verify it's unlinked and belongs to this project
-    const txId = parsed.data.transactionId ?? null
+    const txId = body.transactionId ?? null
     if (txId) {
       const linkedTx = await prisma.transaction.findFirst({
-        where: { id: txId, workspace: { id } },
+        where: { id: txId, workspace: { id: params.id } },
         include: { invoicePayment: true },
       })
-      if (!linkedTx) return notFound('Transaction not found on this project')
+      if (!linkedTx) return badRequest('Transaction not found on this project')
       if (linkedTx.invoicePayment) return badRequest('Transaction is already linked to another payment')
     }
 
     const payment = await prisma.$transaction(async tx => {
       const p = await tx.invoicePayment.create({
         data: {
-          invoiceId,
-          amount: parsed.data.amount,
-          paidDate: new Date(parsed.data.paidDate),
-          paymentMethod: parsed.data.paymentMethod,
-          notes: parsed.data.notes,
+          invoiceId: params.invoiceId,
+          amount: body.amount,
+          paidDate: new Date(body.paidDate),
+          paymentMethod: body.paymentMethod,
+          notes: body.notes,
           ...(txId ? { transactionId: txId } : {}),
         },
       })
 
-      // Auto-update invoice status
-      const newPaid = alreadyPaid.plus(parsed.data.amount)
+      const newPaid = alreadyPaid.plus(body.amount)
       const newStatus = newPaid.gte(invoiceTotal.minus(money('0.001'))) ? 'PAID' : 'PARTIAL'
       await tx.invoice.update({
-        where: { id: invoiceId },
+        where: { id: params.invoiceId },
         data: { status: newStatus },
       })
 
-      // Dismiss any pending suggestion for this transaction
       if (txId) {
         await tx.invoicePaymentSuggestion.updateMany({
           where: { transactionId: txId, status: 'PENDING' },
@@ -95,7 +80,5 @@ export async function POST(request: Request, { params }: RouteParams) {
     })
 
     return ok(payment)
-  } catch {
-    return serverError('Failed to record payment')
-  }
-}
+  },
+})

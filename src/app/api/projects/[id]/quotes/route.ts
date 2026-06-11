@@ -1,23 +1,28 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, created, badRequest } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireWorkspace } from '@/lib/authz'
 import { parsePreferences } from '@/types/preferences'
-import { toDisplay, money } from '@/lib/money'
+import type { Prisma } from '@/generated/prisma/client'
 
-interface RouteParams { params: Promise<{ id: string }> }
+const ParamsSchema = z.object({ id: z.string() })
 
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
+type ClientWorkspace = Prisma.WorkspaceGetPayload<{
+  include: { clientProfile: true }
+}>
 
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId },
-      include: { clientProfile: true },
-    })
-    if (!project || !project.clientProfile) return notFound('Client project not found')
+const GenerateQuoteSchema = z.object({
+  estimateId: z.string().min(1).optional(),
+  jobId: z.string().min(1, 'Job ID is required'),
+  title: z.string().optional(),
+})
+
+export const GET = authedRoute<{ id: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    const project = await requireWorkspace(userId, params.id, { clientProfile: true }) as ClientWorkspace
+    if (!project.clientProfile) return badRequest('Client project not found')
 
     const quotes = await prisma.quote.findMany({
       where: { clientProfileId: project.clientProfile.id },
@@ -28,45 +33,24 @@ export async function GET(_request: Request, { params }: RouteParams) {
       },
       orderBy: { createdAt: 'desc' },
     })
-
     return ok(JSON.parse(JSON.stringify(quotes)), { count: quotes.length })
-  } catch (e) {
-    console.error('[quotes GET]', e)
-    return serverError()
-  }
-}
-
-const GenerateQuoteSchema = z.object({
-  estimateId: z.string().min(1).optional(),
-  jobId: z.string().min(1, 'Job ID is required'),
-  title: z.string().optional(),
+  },
 })
 
-export async function POST(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
+export const POST = authedRoute<{ id: string }, z.infer<typeof GenerateQuoteSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: GenerateQuoteSchema,
+  handler: async ({ userId, params, body }) => {
+    const project = await requireWorkspace(userId, params.id, { clientProfile: true }) as ClientWorkspace
+    if (!project.clientProfile) return badRequest('Client project not found')
 
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId },
-      include: { clientProfile: true },
-    })
-    if (!project || !project.clientProfile) return notFound('Client project not found')
+    const { estimateId, jobId, title } = body
 
-    const body = await request.json()
-    const parsed = GenerateQuoteSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.errors[0].message)
-
-    const { estimateId, jobId, title } = parsed.data
-
-    // Verify job belongs to this project
     const job = await prisma.job.findFirst({
-      where: { id: jobId, clientProfile: { workspace: { id, userId } } },
+      where: { id: jobId, clientProfile: { workspace: { id: params.id, userId } } },
     })
-    if (!job) return notFound('Job not found')
+    if (!job) return badRequest('Job not found')
 
-    // Load or auto-create estimate
     const estimateInclude = {
       sections: {
         include: { items: true },
@@ -77,18 +61,17 @@ export async function POST(request: Request, { params }: RouteParams) {
     let estimate
     if (estimateId) {
       estimate = await prisma.estimate.findFirst({
-        where: { id: estimateId, workspaceId: id },
+        where: { id: estimateId, workspaceId: params.id },
         include: estimateInclude,
       })
-      if (!estimate) return notFound('Estimate not found')
+      if (!estimate) return badRequest('Estimate not found')
       if (estimate.status === 'DRAFT') {
         return badRequest('Finalize the estimate before generating a quote')
       }
     } else {
-      // Auto-create a shell DRAFT estimate — user will fill it in on the generate page
       estimate = await prisma.estimate.create({
         data: {
-          workspaceId: id,
+          workspaceId: params.id,
           title: title ?? 'Untitled Quote',
           currency: project.clientProfile.currency ?? 'USD',
           status: 'DRAFT',
@@ -98,20 +81,14 @@ export async function POST(request: Request, { params }: RouteParams) {
       })
     }
 
-    // Load user's margin rules
     const marginRules = await prisma.marginRule.findMany({ where: { userId } })
     const marginByTag = new Map(marginRules.map(r => [r.tag, Number(r.marginPct)]))
 
-    // Load user preferences for defaults
     const userPref = await prisma.userPreference.findUnique({ where: { userId } })
     const prefData = parsePreferences(userPref?.data)
     const defaultValidityDays = prefData.quoteValidityDays ?? 30
     const defaultTerms = prefData.quoteTerms ?? null
 
-    // Check for previous version overrides (from previousVersionId if regenerating)
-    // For now, we generate fresh (overrides applied later via PATCH)
-
-    // Generate quote number
     const quoteCount = await prisma.quote.count({
       where: { clientProfile: { workspace: { userId } } },
     })
@@ -120,15 +97,13 @@ export async function POST(request: Request, { params }: RouteParams) {
     const validUntil = new Date()
     validUntil.setDate(validUntil.getDate() + defaultValidityDays)
 
-    // Build sections and line items (collapse to section level by default)
     const quoteSections = estimate.sections
       .filter(s => s.items.length > 0)
       .map(section => {
-        // Compute cost basis per item
         const itemsWithCost = section.items.map(item => {
           const hours = item.hours ? Number(item.hours) : null
-          const costRate = item.costRate ? toDisplay(item.costRate) : null
-          const quantity = toDisplay(item.quantity)
+          const costRate = item.costRate ? Number(item.costRate) : null
+          const quantity = Number(item.quantity)
 
           let costBasis = 0
           if (hours !== null && costRate !== null) {
@@ -137,7 +112,6 @@ export async function POST(request: Request, { params }: RouteParams) {
             costBasis = costRate * quantity
           }
 
-          // Determine margin: highest priority tag match or 0
           let margin = 0
           for (const tag of item.tags) {
             const tagMargin = marginByTag.get(tag)
@@ -149,7 +123,6 @@ export async function POST(request: Request, { params }: RouteParams) {
           return { item, costBasis, margin }
         })
 
-        // Section-level aggregation (collapsed view)
         const totalCostBasis = itemsWithCost.reduce((sum, i) => sum + i.costBasis, 0)
         const blendedMargin = itemsWithCost.length > 0
           ? itemsWithCost.reduce((sum, i) => sum + i.margin, 0) / itemsWithCost.length
@@ -163,7 +136,7 @@ export async function POST(request: Request, { params }: RouteParams) {
             description: section.name,
             quantity: 1,
             unitPrice: Math.round(unitPrice * 100) / 100,
-            isOptional: false, // collapsed row is never optional; expand to manage per-item optionality
+            isOptional: false,
             hasEstimateLink: true,
             sortOrder: 0,
             costBasis: totalCostBasis,
@@ -218,8 +191,5 @@ export async function POST(request: Request, { params }: RouteParams) {
     })
 
     return created(JSON.parse(JSON.stringify(quote)))
-  } catch (e) {
-    console.error('[quotes POST]', e)
-    return serverError()
-  }
-}
+  },
+})

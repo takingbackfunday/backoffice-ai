@@ -1,29 +1,11 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { Prisma } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
-import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, badRequest } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireQuote } from '@/lib/authz'
 
-interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
-
-async function getQuoteForUser(quoteId: string, projectId: string, userId: string) {
-  return prisma.quote.findFirst({
-    where: {
-      id: quoteId,
-      clientProfile: { workspace: { id: projectId, userId } },
-    },
-    include: {
-      sections: { include: { items: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
-      estimate: { select: { id: true, title: true, version: true } },
-      job: { select: { id: true, name: true } },
-      clientProfile: { select: { id: true, contactName: true, email: true, company: true } },
-      previousVersion: { select: { id: true, quoteNumber: true, version: true } },
-      nextVersion: { select: { id: true, quoteNumber: true, version: true } },
-      amendments: { select: { id: true, quoteNumber: true, status: true, totalQuoted: true, signedAt: true } },
-      _count: { select: { invoices: true } },
-    },
-  })
-}
+const ParamsSchema = z.object({ id: z.string(), quoteId: z.string() })
 
 const QuoteLineItemUpdateSchema = z.object({
   id: z.string().optional(),
@@ -59,45 +41,36 @@ const UpdateQuoteSchema = z.object({
   sections: z.array(QuoteSectionUpdateSchema).optional(),
 })
 
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id, quoteId } = await params
-
-    const quote = await getQuoteForUser(quoteId, id, userId)
-    if (!quote) return notFound('Quote not found')
-
-    return ok(JSON.parse(JSON.stringify(quote)))
-  } catch (e) {
-    console.error('[quote GET]', e)
-    return serverError()
-  }
+const quoteInclude = {
+  sections: { include: { items: { orderBy: { sortOrder: 'asc' as const } } }, orderBy: { sortOrder: 'asc' as const } },
+  estimate: { select: { id: true, title: true, version: true } },
+  job: { select: { id: true, name: true } },
+  clientProfile: { select: { id: true, contactName: true, email: true, company: true } },
+  previousVersion: { select: { id: true, quoteNumber: true, version: true } },
+  nextVersion: { select: { id: true, quoteNumber: true, version: true } },
+  amendments: { select: { id: true, quoteNumber: true, status: true, totalQuoted: true, signedAt: true } },
+  _count: { select: { invoices: true } },
 }
 
-export async function PATCH(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id, quoteId } = await params
+export const GET = authedRoute<{ id: string; quoteId: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    const quote = await requireQuote(userId, params.quoteId, params.id)
+    const full = await prisma.quote.findUnique({ where: { id: quote.id }, include: quoteInclude })
+    return ok(JSON.parse(JSON.stringify(full)))
+  },
+})
 
-    const quote = await prisma.quote.findFirst({
-      where: {
-        id: quoteId,
-        clientProfile: { workspace: { id, userId } },
-      },
-    })
-    if (!quote) return notFound('Quote not found')
-
+export const PATCH = authedRoute<{ id: string; quoteId: string }, z.infer<typeof UpdateQuoteSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: UpdateQuoteSchema,
+  handler: async ({ userId, params, body }) => {
+    const quote = await requireQuote(userId, params.quoteId, params.id)
     if (quote.status === 'ACCEPTED') {
       return badRequest('Accepted quotes cannot be edited. Create an amendment instead.')
     }
 
-    const body = await request.json()
-    const parsed = UpdateQuoteSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.errors[0].message)
-
-    const { sections, validUntil, paymentSchedule, overrides, ...rest } = parsed.data
+    const { sections, validUntil, paymentSchedule, overrides, ...rest } = body
     const paymentScheduleValue = paymentSchedule === null
       ? Prisma.JsonNull
       : paymentSchedule !== undefined
@@ -111,15 +84,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     const updated = await prisma.$transaction(async (tx) => {
       if (sections !== undefined) {
-        await tx.quoteSection.deleteMany({ where: { quoteId } })
-        // Recompute totals
+        await tx.quoteSection.deleteMany({ where: { quoteId: params.quoteId } })
         const totalCost = sections.reduce((sum, s) =>
           sum + s.items.reduce((si, i) => si + (i.costBasis ?? 0), 0), 0)
         const totalQuoted = sections.reduce((sum, s) =>
           sum + s.items.reduce((si, i) => si + i.unitPrice * i.quantity, 0), 0)
 
         await tx.quote.update({
-          where: { id: quoteId },
+          where: { id: params.quoteId },
           data: {
             ...rest,
             paymentSchedule: paymentScheduleValue,
@@ -151,7 +123,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         })
       } else {
         await tx.quote.update({
-          where: { id: quoteId },
+          where: { id: params.quoteId },
           data: {
             ...rest,
             paymentSchedule: paymentScheduleValue,
@@ -162,44 +134,23 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
 
       return tx.quote.findUnique({
-        where: { id: quoteId },
-        include: {
-          sections: { include: { items: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
-          estimate: { select: { id: true, title: true, version: true } },
-          job: { select: { id: true, name: true } },
-          clientProfile: { select: { id: true, contactName: true, email: true, company: true } },
-        },
+        where: { id: params.quoteId },
+        include: quoteInclude,
       })
     })
 
     return ok(JSON.parse(JSON.stringify(updated)))
-  } catch (e) {
-    console.error('[quote PATCH]', e)
-    return serverError()
-  }
-}
+  },
+})
 
-export async function DELETE(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id, quoteId } = await params
-
-    const quote = await prisma.quote.findFirst({
-      where: {
-        id: quoteId,
-        clientProfile: { workspace: { id, userId } },
-      },
-    })
-    if (!quote) return notFound('Quote not found')
+export const DELETE = authedRoute<{ id: string; quoteId: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    const quote = await requireQuote(userId, params.quoteId, params.id)
     if (quote.status !== 'DRAFT') {
       return badRequest('Only draft quotes can be deleted')
     }
-
-    await prisma.quote.delete({ where: { id: quoteId } })
-    return ok({ id: quoteId })
-  } catch (e) {
-    console.error('[quote DELETE]', e)
-    return serverError()
-  }
-}
+    await prisma.quote.delete({ where: { id: params.quoteId } })
+    return ok({ id: params.quoteId })
+  },
+})

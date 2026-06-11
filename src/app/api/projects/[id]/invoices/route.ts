@@ -1,8 +1,19 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, created, badRequest } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireWorkspace } from '@/lib/authz'
 import { parsePreferences } from '@/types/preferences'
+import type { Prisma } from '@/generated/prisma/client'
+
+const ParamsSchema = z.object({ id: z.string() })
+
+type WorkspaceWithProfiles = Prisma.WorkspaceGetPayload<{
+  include: {
+    clientProfile: true
+    propertyProfile: { include: { units: { select: { id: true } } } }
+  }
+}>
 
 const LineItemSchema = z.object({
   description: z.string().min(1, 'Description is required'),
@@ -15,58 +26,52 @@ const LineItemSchema = z.object({
 })
 
 const CreateInvoiceSchema = z.object({
-  // CLIENT fields
   jobId: z.string().optional(),
-  // PROPERTY fields
   leaseId: z.string().optional(),
   tenantId: z.string().optional(),
   period: z.string().regex(/^\d{4}-\d{2}$/).optional(),
   appendToCurrentDraft: z.boolean().default(false),
-  // shared
   dueDate: z.string().min(1, 'Due date is required'),
   currency: z.string().default('USD'),
   notes: z.string().optional(),
   lineItems: z.array(LineItemSchema).min(1, 'At least one line item is required'),
-  // quote fulfillment link (optional)
   quoteId: z.string().optional(),
 })
 
-interface RouteParams { params: Promise<{ id: string }> }
+const invoiceInclude = {
+  job: { select: { id: true, name: true } },
+  lineItems: true,
+  payments: true,
+}
 
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
+const propertyInvoiceInclude = {
+  lease: { select: { id: true, unit: { select: { unitLabel: true } } } },
+  tenant: { select: { id: true, name: true, email: true } },
+  lineItems: true,
+  payments: true,
+}
 
-    // Look up project regardless of type — then branch
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId },
-      include: {
-        clientProfile: true,
-        propertyProfile: { include: { units: { select: { id: true } } } },
-      },
-    })
-    if (!project) return notFound('Project not found')
+export const GET = authedRoute<{ id: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    const project = await requireWorkspace(userId, params.id, {
+      clientProfile: true,
+      propertyProfile: { include: { units: { select: { id: true } } } },
+    }) as WorkspaceWithProfiles
 
     if (project.type === 'CLIENT') {
-      if (!project.clientProfile) return notFound('Client project not found')
+      if (!project.clientProfile) return badRequest('Client project not found')
       const invoices = await prisma.invoice.findMany({
         where: { clientProfileId: project.clientProfile.id },
-        include: {
-          job: { select: { id: true, name: true } },
-          lineItems: true,
-          payments: true,
-        },
+        include: invoiceInclude,
         orderBy: { createdAt: 'desc' },
       })
       return ok(invoices, { count: invoices.length })
     }
 
     if (project.type === 'PROPERTY') {
-      if (!project.propertyProfile) return notFound('Property project not found')
+      if (!project.propertyProfile) return badRequest('Property project not found')
       const unitIds = project.propertyProfile.units.map(u => u.id)
-      // Invoices linked to leases on this property's units, or directly to tenants via this project
       const invoices = await prisma.invoice.findMany({
         where: {
           OR: [
@@ -74,50 +79,31 @@ export async function GET(_request: Request, { params }: RouteParams) {
             { tenant: { userId, leases: { some: { unitId: { in: unitIds } } } } },
           ],
         },
-        include: {
-          lease: { select: { id: true, unit: { select: { unitLabel: true } } } },
-          tenant: { select: { id: true, name: true, email: true } },
-          lineItems: true,
-          payments: true,
-        },
+        include: propertyInvoiceInclude,
         orderBy: { createdAt: 'desc' },
       })
       return ok(invoices, { count: invoices.length })
     }
 
-    return notFound('Project type not supported')
-  } catch {
-    return serverError('Failed to fetch invoices')
-  }
-}
+    return badRequest('Project type not supported')
+  },
+})
 
-export async function POST(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId },
-      include: {
-        clientProfile: true,
-        propertyProfile: { include: { units: { select: { id: true } } } },
-      },
-    })
-    if (!project) return notFound('Project not found')
-
-    const body = await request.json()
-    const parsed = CreateInvoiceSchema.safeParse(body)
-    if (!parsed.success) {
-      return badRequest(parsed.error.errors.map(e => e.message).join(', '))
-    }
+export const POST = authedRoute<{ id: string }, z.infer<typeof CreateInvoiceSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: CreateInvoiceSchema,
+  handler: async ({ userId, params, body }) => {
+    const project = await requireWorkspace(userId, params.id, {
+      clientProfile: true,
+      propertyProfile: { include: { units: { select: { id: true } } } },
+    }) as WorkspaceWithProfiles
 
     if (project.type === 'CLIENT') {
-      if (!project.clientProfile) return notFound('Client project not found')
+      if (!project.clientProfile) return badRequest('Client project not found')
 
-      if (parsed.data.jobId) {
+      if (body.jobId) {
         const job = await prisma.job.findFirst({
-          where: { id: parsed.data.jobId, clientProfileId: project.clientProfile.id },
+          where: { id: body.jobId, clientProfileId: project.clientProfile.id },
         })
         if (!job) return badRequest('Job not found for this client')
       }
@@ -138,14 +124,14 @@ export async function POST(request: Request, { params }: RouteParams) {
       const invoice = await prisma.invoice.create({
         data: {
           clientProfileId: project.clientProfile.id,
-          jobId: parsed.data.jobId ?? null,
-          quoteId: parsed.data.quoteId ?? null,
+          jobId: body.jobId ?? null,
+          quoteId: body.quoteId ?? null,
           invoiceNumber,
-          dueDate: new Date(parsed.data.dueDate),
-          currency: parsed.data.currency,
-          notes: parsed.data.notes,
+          dueDate: new Date(body.dueDate),
+          currency: body.currency,
+          notes: body.notes,
           lineItems: {
-            create: parsed.data.lineItems.map(item => ({
+            create: body.lineItems.map(item => ({
               description: item.description,
               quantity: item.quantity,
               qtyUnit: item.qtyUnit ?? null,
@@ -155,57 +141,45 @@ export async function POST(request: Request, { params }: RouteParams) {
             })),
           },
         },
-        include: {
-          job: { select: { id: true, name: true } },
-          lineItems: true,
-          payments: true,
-        },
+        include: invoiceInclude,
       })
       return created(invoice)
     }
 
     if (project.type === 'PROPERTY') {
-      if (!project.propertyProfile) return notFound('Property project not found')
-
-      // Validate leaseId or tenantId
+      if (!project.propertyProfile) return badRequest('Property project not found')
       const unitIds = project.propertyProfile.units.map(u => u.id)
 
-      if (parsed.data.leaseId) {
+      if (body.leaseId) {
         const lease = await prisma.lease.findFirst({
-          where: { id: parsed.data.leaseId, unitId: { in: unitIds } },
+          where: { id: body.leaseId, unitId: { in: unitIds } },
         })
         if (!lease) return badRequest('Lease not found on this property')
       }
 
-      if (parsed.data.tenantId) {
+      if (body.tenantId) {
         const tenant = await prisma.tenant.findFirst({
-          where: { id: parsed.data.tenantId, userId },
+          where: { id: body.tenantId, userId },
         })
         if (!tenant) return badRequest('Tenant not found')
       }
 
-      if (!parsed.data.leaseId && !parsed.data.tenantId) {
+      if (!body.leaseId && !body.tenantId) {
         return badRequest('Either leaseId or tenantId is required for property invoices')
       }
 
-      // If appendToCurrentDraft: find an existing DRAFT for this (leaseId, period) and append
-      if (parsed.data.appendToCurrentDraft && parsed.data.leaseId && parsed.data.period) {
+      if (body.appendToCurrentDraft && body.leaseId && body.period) {
         const existingDraft = await prisma.invoice.findFirst({
           where: {
-            leaseId: parsed.data.leaseId,
-            period: parsed.data.period,
+            leaseId: body.leaseId,
+            period: body.period,
             status: 'DRAFT',
           },
-          include: {
-            lease: { select: { id: true, unit: { select: { unitLabel: true } } } },
-            tenant: { select: { id: true, name: true, email: true } },
-            lineItems: true,
-            payments: true,
-          },
+          include: propertyInvoiceInclude,
         })
         if (existingDraft) {
           await prisma.invoiceLineItem.createMany({
-            data: parsed.data.lineItems.map(li => ({
+            data: body.lineItems.map(li => ({
               invoiceId: existingDraft.id,
               description: li.description,
               quantity: li.quantity,
@@ -217,19 +191,12 @@ export async function POST(request: Request, { params }: RouteParams) {
           })
           const updated = await prisma.invoice.findUnique({
             where: { id: existingDraft.id },
-            include: {
-              lease: { select: { id: true, unit: { select: { unitLabel: true } } } },
-              tenant: { select: { id: true, name: true, email: true } },
-              lineItems: true,
-              payments: true,
-            },
+            include: propertyInvoiceInclude,
           })
           return ok(updated!)
         }
-        // No draft exists — fall through to create a new invoice
       }
 
-      // RENT- prefix for property invoices
       const propertyInvoiceCount = await prisma.invoice.count({
         where: { lease: { unitId: { in: unitIds } } },
       })
@@ -237,15 +204,15 @@ export async function POST(request: Request, { params }: RouteParams) {
 
       const invoice = await prisma.invoice.create({
         data: {
-          leaseId: parsed.data.leaseId ?? null,
-          tenantId: parsed.data.tenantId ?? null,
+          leaseId: body.leaseId ?? null,
+          tenantId: body.tenantId ?? null,
           invoiceNumber,
-          period: parsed.data.period ?? null,
-          dueDate: new Date(parsed.data.dueDate),
-          currency: parsed.data.currency,
-          notes: parsed.data.notes,
+          period: body.period ?? null,
+          dueDate: new Date(body.dueDate),
+          currency: body.currency,
+          notes: body.notes,
           lineItems: {
-            create: parsed.data.lineItems.map(item => ({
+            create: body.lineItems.map(item => ({
               description: item.description,
               quantity: item.quantity,
               qtyUnit: item.qtyUnit ?? null,
@@ -256,19 +223,11 @@ export async function POST(request: Request, { params }: RouteParams) {
             })),
           },
         },
-        include: {
-          lease: { select: { id: true, unit: { select: { unitLabel: true } } } },
-          tenant: { select: { id: true, name: true, email: true } },
-          lineItems: true,
-          payments: true,
-        },
+        include: propertyInvoiceInclude,
       })
-
       return created(invoice)
     }
 
     return badRequest('Project type not supported')
-  } catch {
-    return serverError('Failed to create invoice')
-  }
-}
+  },
+})

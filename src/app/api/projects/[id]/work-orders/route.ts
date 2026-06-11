@@ -1,7 +1,10 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, created } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireWorkspace } from '@/lib/authz'
+
+const ParamsSchema = z.object({ id: z.string() })
 
 const CreateWorkOrderSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -13,17 +16,12 @@ const CreateWorkOrderSchema = z.object({
   scheduledDate: z.string().optional(),
 })
 
-interface RouteParams { params: Promise<{ id: string }> }
-
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-    const workspace = await prisma.workspace.findFirst({ where: { id, userId } })
-    if (!workspace) return notFound('Workspace not found')
+export const GET = authedRoute<{ id: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    await requireWorkspace(userId, params.id)
     const workOrders = await prisma.workOrder.findMany({
-      where: { workspaceId: id },
+      where: { workspaceId: params.id },
       include: {
         vendor: { select: { id: true, name: true, specialty: true } },
         job: { select: { id: true, name: true } },
@@ -33,33 +31,26 @@ export async function GET(_request: Request, { params }: RouteParams) {
       orderBy: { createdAt: 'desc' },
     })
     return ok(workOrders, { count: workOrders.length })
-  } catch {
-    return serverError('Failed to fetch work orders')
-  }
-}
+  },
+})
 
-export async function POST(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-    const workspace = await prisma.workspace.findFirst({ where: { id, userId } })
-    if (!workspace) return notFound('Workspace not found')
-    const body = await request.json()
-    const parsed = CreateWorkOrderSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.errors.map(e => e.message).join(', '))
+export const POST = authedRoute<{ id: string }, z.infer<typeof CreateWorkOrderSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: CreateWorkOrderSchema,
+  handler: async ({ userId, params, body }) => {
+    await requireWorkspace(userId, params.id)
     const workOrder = await prisma.workOrder.create({
       data: {
         userId,
-        workspaceId: id,
-        title: parsed.data.title,
-        description: parsed.data.description ?? null,
-        vendorId: parsed.data.vendorId ?? null,
-        jobId: parsed.data.jobId ?? null,
-        maintenanceRequestId: parsed.data.maintenanceRequestId ?? null,
-        agreedCost: parsed.data.agreedCost ?? null,
-        scheduledDate: parsed.data.scheduledDate ? new Date(parsed.data.scheduledDate) : null,
-        status: parsed.data.vendorId ? 'ASSIGNED' : 'OPEN',
+        workspaceId: params.id,
+        title: body.title,
+        description: body.description ?? null,
+        vendorId: body.vendorId ?? null,
+        jobId: body.jobId ?? null,
+        maintenanceRequestId: body.maintenanceRequestId ?? null,
+        agreedCost: body.agreedCost ?? null,
+        scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : null,
+        status: body.vendorId ? 'ASSIGNED' : 'OPEN',
       },
       include: {
         vendor: { select: { id: true, name: true, specialty: true } },
@@ -69,7 +60,5 @@ export async function POST(request: Request, { params }: RouteParams) {
       },
     })
     return created(workOrder)
-  } catch {
-    return serverError('Failed to create work order')
-  }
-}
+  },
+})

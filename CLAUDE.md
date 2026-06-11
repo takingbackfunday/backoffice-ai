@@ -214,3 +214,32 @@ Every AI/agent write path (`applyEditorAction` or any future editor dispatch) **
 4. Render a Confirm / Undo banner when `hasPendingChanges` is true (copy the JSX from any of the three existing editors — invoice, estimate, quote).
 
 Canonical implementations: `invoice-editor.tsx` (inline), `estimate-editor.tsx` and `quote-generator.tsx` (use the hook).
+
+### API route pattern — `authedRoute` wrapper
+
+New routes should use `authedRoute` from `src/lib/api-handler.ts` instead of inline auth/validation boilerplate. It handles:
+- Clerk auth extraction
+- Next.js async params awaiting
+- Zod body parsing + validation
+- Try/catch → error responses
+- `NotFoundError` → 404
+
+```ts
+import { z } from 'zod'
+import { authedRoute } from '@/lib/api-handler'
+import { requireWorkspace } from '@/lib/authz'
+
+const ParamsSchema = z.object({ id: z.string() })
+const BodySchema = z.object({ name: z.string().min(1) })
+
+export const POST = authedRoute<{ id: string }, z.infer<typeof BodySchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: BodySchema,
+  handler: async ({ userId, params, body }) => {
+    await requireWorkspace(userId, params.id)
+    // ... business logic
+  },
+})
+```
+
+Ownership lookups live in `src/lib/authz.ts` — always scope by `userId`. Routes with complex includes (e.g. invoices) should cast the result with `Prisma.WorkspaceGetPayload<{ include: ... }>`. Migration checklist: `docs/api-migration.md`.

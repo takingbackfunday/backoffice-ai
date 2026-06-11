@@ -1,7 +1,10 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireVendor } from '@/lib/authz'
+
+const ParamsSchema = z.object({ vendorId: z.string() })
 
 const UpdateVendorSchema = z.object({
   name: z.string().min(1).optional(),
@@ -12,15 +15,12 @@ const UpdateVendorSchema = z.object({
   notes: z.string().optional(),
 })
 
-interface RouteParams { params: Promise<{ vendorId: string }> }
-
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { vendorId } = await params
-    const vendor = await prisma.vendor.findFirst({
-      where: { id: vendorId, userId },
+export const GET = authedRoute<{ vendorId: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    await requireVendor(userId, params.vendorId)
+    const vendor = await prisma.vendor.findUnique({
+      where: { id: params.vendorId },
       include: {
         documents: { orderBy: { createdAt: 'desc' } },
         workOrders: {
@@ -37,50 +37,35 @@ export async function GET(_request: Request, { params }: RouteParams) {
         },
       },
     })
-    if (!vendor) return notFound('Vendor not found')
     return ok(vendor)
-  } catch {
-    return serverError('Failed to fetch vendor')
-  }
-}
+  },
+})
 
-export async function PATCH(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { vendorId } = await params
-    const vendor = await prisma.vendor.findFirst({ where: { id: vendorId, userId } })
-    if (!vendor) return notFound('Vendor not found')
-    const body = await request.json()
-    const parsed = UpdateVendorSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.errors.map(e => e.message).join(', '))
+export const PATCH = authedRoute<{ vendorId: string }, z.infer<typeof UpdateVendorSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: UpdateVendorSchema,
+  handler: async ({ userId, params, body }) => {
+    await requireVendor(userId, params.vendorId)
     const updated = await prisma.vendor.update({
-      where: { id: vendorId },
+      where: { id: params.vendorId },
       data: {
-        ...(parsed.data.name !== undefined && { name: parsed.data.name }),
-        ...(parsed.data.email !== undefined && { email: parsed.data.email || null }),
-        ...(parsed.data.phone !== undefined && { phone: parsed.data.phone || null }),
-        ...(parsed.data.taxId !== undefined && { taxId: parsed.data.taxId || null }),
-        ...(parsed.data.specialty !== undefined && { specialty: parsed.data.specialty || null }),
-        ...(parsed.data.notes !== undefined && { notes: parsed.data.notes || null }),
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.email !== undefined && { email: body.email || null }),
+        ...(body.phone !== undefined && { phone: body.phone || null }),
+        ...(body.taxId !== undefined && { taxId: body.taxId || null }),
+        ...(body.specialty !== undefined && { specialty: body.specialty || null }),
+        ...(body.notes !== undefined && { notes: body.notes || null }),
       },
     })
     return ok(updated)
-  } catch {
-    return serverError('Failed to update vendor')
-  }
-}
+  },
+})
 
-export async function DELETE(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { vendorId } = await params
-    const vendor = await prisma.vendor.findFirst({ where: { id: vendorId, userId } })
-    if (!vendor) return notFound('Vendor not found')
-    await prisma.vendor.delete({ where: { id: vendorId } })
+export const DELETE = authedRoute<{ vendorId: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    await requireVendor(userId, params.vendorId)
+    await prisma.vendor.delete({ where: { id: params.vendorId } })
     return ok({ deleted: true })
-  } catch {
-    return serverError('Failed to delete vendor')
-  }
-}
+  },
+})

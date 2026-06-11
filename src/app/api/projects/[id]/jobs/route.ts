@@ -1,7 +1,15 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, created, badRequest } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireWorkspace } from '@/lib/authz'
+import type { Prisma } from '@/generated/prisma/client'
+
+const ParamsSchema = z.object({ id: z.string() })
+
+type ClientWorkspace = Prisma.WorkspaceGetPayload<{
+  include: { clientProfile: true }
+}>
 
 const CreateJobSchema = z.object({
   name: z.string().min(1, 'Job name is required'),
@@ -12,63 +20,38 @@ const CreateJobSchema = z.object({
   endDate: z.string().optional(),
 })
 
-interface RouteParams { params: Promise<{ id: string }> }
-
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId, type: 'CLIENT' },
-      include: { clientProfile: true },
-    })
-    if (!project || !project.clientProfile) return notFound('Client project not found')
+export const GET = authedRoute<{ id: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    const project = await requireWorkspace(userId, params.id, { clientProfile: true }) as ClientWorkspace
+    if (!project.clientProfile) return badRequest('Client project not found')
 
     const jobs = await prisma.job.findMany({
       where: { clientProfileId: project.clientProfile.id },
       orderBy: { createdAt: 'desc' },
     })
-
     return ok(jobs, { count: jobs.length })
-  } catch {
-    return serverError('Failed to fetch jobs')
-  }
-}
+  },
+})
 
-export async function POST(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId, type: 'CLIENT' },
-      include: { clientProfile: true },
-    })
-    if (!project || !project.clientProfile) return notFound('Client project not found')
-
-    const body = await request.json()
-    const parsed = CreateJobSchema.safeParse(body)
-    if (!parsed.success) {
-      return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
-    }
+export const POST = authedRoute<{ id: string }, z.infer<typeof CreateJobSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: CreateJobSchema,
+  handler: async ({ userId, params, body }) => {
+    const project = await requireWorkspace(userId, params.id, { clientProfile: true }) as ClientWorkspace
+    if (!project.clientProfile) return badRequest('Client project not found')
 
     const job = await prisma.job.create({
       data: {
         clientProfileId: project.clientProfile.id,
-        name: parsed.data.name,
-        description: parsed.data.description,
-        status: parsed.data.status ?? 'ACTIVE',
-        budgetAmount: parsed.data.budgetAmount,
-        startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : undefined,
-        endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
+        name: body.name,
+        description: body.description,
+        status: body.status ?? 'ACTIVE',
+        budgetAmount: body.budgetAmount,
+        startDate: body.startDate ? new Date(body.startDate) : undefined,
+        endDate: body.endDate ? new Date(body.endDate) : undefined,
       },
     })
-
     return created(job)
-  } catch {
-    return serverError('Failed to create job')
-  }
-}
+  },
+})

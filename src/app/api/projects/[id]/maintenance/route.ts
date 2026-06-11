@@ -1,7 +1,15 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, created, badRequest } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireWorkspace } from '@/lib/authz'
+import type { Prisma } from '@/generated/prisma/client'
+
+const ParamsSchema = z.object({ id: z.string() })
+
+type PropertyWorkspace = Prisma.WorkspaceGetPayload<{
+  include: { propertyProfile: { include: { units: { select: { id: true } } } } }
+}>
 
 const CreateMaintenanceSchema = z.object({
   unitId: z.string().min(1, 'Unit is required'),
@@ -11,70 +19,48 @@ const CreateMaintenanceSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'EMERGENCY']).optional(),
 })
 
-interface RouteParams { params: Promise<{ id: string }> }
-
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId, type: 'PROPERTY' },
-      include: { propertyProfile: { include: { units: { select: { id: true } } } } },
-    })
-    if (!project || !project.propertyProfile) return notFound('Property project not found')
+export const GET = authedRoute<{ id: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    const project = await requireWorkspace(userId, params.id, {
+      propertyProfile: { include: { units: { select: { id: true } } } },
+    }) as PropertyWorkspace
+    if (!project.propertyProfile) return badRequest('Property project not found')
 
     const unitIds = project.propertyProfile.units.map(u => u.id)
-
     const requests = await prisma.maintenanceRequest.findMany({
       where: { unitId: { in: unitIds } },
       include: { unit: true, tenant: true },
       orderBy: { createdAt: 'desc' },
     })
-
     return ok(requests, { count: requests.length })
-  } catch {
-    return serverError('Failed to fetch maintenance requests')
-  }
-}
+  },
+})
 
-export async function POST(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-
-    const project = await prisma.workspace.findFirst({
-      where: { id, userId, type: 'PROPERTY' },
-      include: { propertyProfile: { include: { units: { select: { id: true } } } } },
-    })
-    if (!project || !project.propertyProfile) return notFound('Property project not found')
-
-    const body = await request.json()
-    const parsed = CreateMaintenanceSchema.safeParse(body)
-    if (!parsed.success) {
-      return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
-    }
+export const POST = authedRoute<{ id: string }, z.infer<typeof CreateMaintenanceSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: CreateMaintenanceSchema,
+  handler: async ({ userId, params, body }) => {
+    const project = await requireWorkspace(userId, params.id, {
+      propertyProfile: { include: { units: { select: { id: true } } } },
+    }) as PropertyWorkspace
+    if (!project.propertyProfile) return badRequest('Property project not found')
 
     const unitIds = project.propertyProfile.units.map(u => u.id)
-    if (!unitIds.includes(parsed.data.unitId)) {
+    if (!unitIds.includes(body.unitId)) {
       return badRequest('Unit does not belong to this property')
     }
 
     const req = await prisma.maintenanceRequest.create({
       data: {
-        unitId: parsed.data.unitId,
-        tenantId: parsed.data.tenantId,
-        title: parsed.data.title,
-        description: parsed.data.description,
-        priority: parsed.data.priority ?? 'MEDIUM',
+        unitId: body.unitId,
+        tenantId: body.tenantId,
+        title: body.title,
+        description: body.description,
+        priority: body.priority ?? 'MEDIUM',
       },
       include: { unit: true, tenant: true },
     })
-
     return created(req)
-  } catch {
-    return serverError('Failed to create maintenance request')
-  }
-}
+  },
+})

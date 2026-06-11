@@ -1,7 +1,10 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, created } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
+import { requireWorkspace } from '@/lib/authz'
+
+const ParamsSchema = z.object({ id: z.string() })
 
 const EstimateItemSchema = z.object({
   description: z.string().min(1),
@@ -29,55 +32,31 @@ const CreateEstimateSchema = z.object({
   sections: z.array(EstimateSectionSchema).default([]),
 })
 
-interface RouteParams { params: Promise<{ id: string }> }
-
-async function getProject(id: string, userId: string) {
-  return prisma.workspace.findFirst({ where: { id, userId } })
-}
-
-export async function GET(_request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-
-    const project = await getProject(id, userId)
-    if (!project) return notFound('Project not found')
-
+export const GET = authedRoute<{ id: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
+    await requireWorkspace(userId, params.id)
     const estimates = await prisma.estimate.findMany({
-      where: { workspaceId: id },
+      where: { workspaceId: params.id },
       include: {
         sections: { include: { items: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
         _count: { select: { quotes: true } },
       },
       orderBy: { createdAt: 'desc' },
     })
-
     return ok(JSON.parse(JSON.stringify(estimates)), { count: estimates.length })
-  } catch (e) {
-    console.error('[estimates GET]', e)
-    return serverError()
-  }
-}
+  },
+})
 
-export async function POST(request: Request, { params }: RouteParams) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const { id } = await params
-
-    const project = await getProject(id, userId)
-    if (!project) return notFound('Project not found')
-
-    const body = await request.json()
-    const parsed = CreateEstimateSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.errors[0].message)
-
-    const { title, currency, notes, sections } = parsed.data
-
+export const POST = authedRoute<{ id: string }, z.infer<typeof CreateEstimateSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: CreateEstimateSchema,
+  handler: async ({ userId, params, body }) => {
+    await requireWorkspace(userId, params.id)
+    const { title, currency, notes, sections } = body
     const estimate = await prisma.estimate.create({
       data: {
-        workspaceId: id,
+        workspaceId: params.id,
         title,
         currency,
         notes,
@@ -106,10 +85,6 @@ export async function POST(request: Request, { params }: RouteParams) {
         sections: { include: { items: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
       },
     })
-
     return created(JSON.parse(JSON.stringify(estimate)))
-  } catch (e) {
-    console.error('[estimates POST]', e)
-    return serverError()
-  }
-}
+  },
+})

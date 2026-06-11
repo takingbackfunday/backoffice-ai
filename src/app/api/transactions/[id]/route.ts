@@ -1,8 +1,10 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, badRequest } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
 import { matchInvoicePayments } from '@/lib/invoice-matching'
+
+const ParamsSchema = z.object({ id: z.string() })
 
 const UpdateTransactionSchema = z.object({
   description: z.string().min(1).optional(),
@@ -16,43 +18,31 @@ const UpdateTransactionSchema = z.object({
   tags: z.array(z.string()).optional(),
 })
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-
-    const { id } = await params
+export const PATCH = authedRoute<{ id: string }, z.infer<typeof UpdateTransactionSchema>>({
+  paramsSchema: ParamsSchema,
+  bodySchema: UpdateTransactionSchema,
+  handler: async ({ userId, params, body }) => {
     const existing = await prisma.transaction.findFirst({
-      where: { id, account: { userId } },
+      where: { id: params.id, account: { userId } },
     })
-    if (!existing) return notFound('Transaction not found')
+    if (!existing) return badRequest('Transaction not found')
 
-    const body = await request.json()
-    const parsed = UpdateTransactionSchema.safeParse(body)
-    if (!parsed.success) {
-      return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
-    }
-
-    // Verify foreign IDs belong to this user
-    if (parsed.data.categoryId) {
-      const cat = await prisma.category.findFirst({ where: { id: parsed.data.categoryId, userId } })
+    if (body.categoryId) {
+      const cat = await prisma.category.findFirst({ where: { id: body.categoryId, userId } })
       if (!cat) return badRequest('Category not found or does not belong to you')
     }
-    if (parsed.data.payeeId) {
-      const payee = await prisma.payee.findFirst({ where: { id: parsed.data.payeeId, userId } })
+    if (body.payeeId) {
+      const payee = await prisma.payee.findFirst({ where: { id: body.payeeId, userId } })
       if (!payee) return badRequest('Payee not found or does not belong to you')
     }
-    if (parsed.data.workspaceId) {
-      const project = await prisma.workspace.findFirst({ where: { id: parsed.data.workspaceId, userId } })
+    if (body.workspaceId) {
+      const project = await prisma.workspace.findFirst({ where: { id: body.workspaceId, userId } })
       if (!project) return badRequest('Project not found or does not belong to you')
     }
 
     const updated = await prisma.transaction.update({
-      where: { id },
-      data: parsed.data,
+      where: { id: params.id },
+      data: body,
       include: {
         account: true,
         workspace: true,
@@ -61,43 +51,30 @@ export async function PATCH(
       },
     })
 
-    // If a project was just assigned, run matching fire-and-forget
-    if (parsed.data.workspaceId && parsed.data.workspaceId !== existing.workspaceId) {
-      matchInvoicePayments(userId, [id]).catch(() => {})
+    if (body.workspaceId && body.workspaceId !== existing.workspaceId) {
+      matchInvoicePayments(userId, [params.id]).catch(() => {})
     }
 
     return ok(updated)
-  } catch {
-    return serverError('Failed to update transaction')
-  }
-}
+  },
+})
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-
-    const { id } = await params
+export const DELETE = authedRoute<{ id: string }>({
+  paramsSchema: ParamsSchema,
+  handler: async ({ userId, params }) => {
     const existing = await prisma.transaction.findFirst({
-      where: { id, account: { userId } },
+      where: { id: params.id, account: { userId } },
     })
-    if (!existing) return notFound('Transaction not found')
+    if (!existing) return badRequest('Transaction not found')
 
     await prisma.$transaction([
-      // Flag any attributed invoice payment — keep the record but mark source as deleted
       prisma.invoicePayment.updateMany({
-        where: { transactionId: id },
+        where: { transactionId: params.id },
         data: { transactionId: null, sourceDeleted: true },
       }),
-      // Delete any payment suggestions referencing this transaction
-      prisma.invoicePaymentSuggestion.deleteMany({ where: { transactionId: id } }),
-      prisma.transaction.delete({ where: { id } }),
+      prisma.invoicePaymentSuggestion.deleteMany({ where: { transactionId: params.id } }),
+      prisma.transaction.delete({ where: { id: params.id } }),
     ])
     return ok({ deleted: true })
-  } catch {
-    return serverError('Failed to delete transaction')
-  }
-}
+  },
+})

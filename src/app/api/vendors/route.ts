@@ -1,7 +1,7 @@
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { ok, created } from '@/lib/api-response'
+import { authedRoute } from '@/lib/api-handler'
 
 const CreateVendorSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -12,10 +12,8 @@ const CreateVendorSchema = z.object({
   notes: z.string().optional(),
 })
 
-export async function GET() {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
+export const GET = authedRoute({
+  handler: async ({ userId }) => {
     const vendors = await prisma.vendor.findMany({
       where: { userId },
       include: {
@@ -25,31 +23,23 @@ export async function GET() {
       orderBy: { name: 'asc' },
     })
     return ok(vendors, { count: vendors.length })
-  } catch {
-    return serverError('Failed to fetch vendors')
-  }
-}
+  },
+})
 
-export async function POST(request: Request) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return unauthorized()
-    const body = await request.json()
-    const parsed = CreateVendorSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.errors.map(e => e.message).join(', '))
+export const POST = authedRoute<void, z.infer<typeof CreateVendorSchema>>({
+  bodySchema: CreateVendorSchema,
+  handler: async ({ userId, body }) => {
     const vendor = await prisma.vendor.create({
       data: {
         userId,
-        name: parsed.data.name,
-        email: parsed.data.email || null,
-        phone: parsed.data.phone || null,
-        taxId: parsed.data.taxId || null,
-        specialty: parsed.data.specialty || null,
-        notes: parsed.data.notes || null,
+        name: body.name,
+        email: body.email || null,
+        phone: body.phone || null,
+        taxId: body.taxId || null,
+        specialty: body.specialty || null,
+        notes: body.notes || null,
       },
     })
     return created(vendor)
-  } catch {
-    return serverError('Failed to create vendor')
-  }
-}
+  },
+})
