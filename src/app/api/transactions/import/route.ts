@@ -2,9 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
-import { matchInvoicePayments } from '@/lib/invoice-matching'
-import { matchReceiptTransactions } from '@/lib/receipt-matching'
-import { runRulesAgentInBackground } from '@/lib/agent/run-rules-agent'
+import { enqueueJob } from '@/lib/background-jobs'
 
 const nullableString = z.union([z.string(), z.null()]).transform((v) => v ?? '')
 const optionalNullableString = z.union([z.string(), z.null()]).transform((v) => (v && v.trim()) ? v.trim() : null).optional()
@@ -94,22 +92,25 @@ export async function POST(request: Request) {
 
     const batch = importBatch
 
-    // Await matching before returning — ensures errors are caught and logged
+    // Fetch imported transaction IDs for background jobs
     const importedTxs = await prisma.transaction.findMany({
       where: { importBatchId: batch.id },
       select: { id: true },
     })
     const importedIds = importedTxs.map(t => t.id)
+
+    // Enqueue background jobs for durability — survives machine suspension.
+    // Invoice/receipt matching are enqueued with immediate drain for fast feedback.
+    // Rules agent runs in the background (fire-and-forget).
     await Promise.allSettled([
-      matchInvoicePayments(userId, importedIds),
-      matchReceiptTransactions(userId, importedIds),
+      enqueueJob('invoice-matching', userId, { userId, importedIds }),
+      enqueueJob('receipt-matching', userId, { userId, importedIds }),
     ])
 
-    // Fire-and-forget: run the rules agent in the background after every CSV import.
-    // The agent persists RuleSuggestion rows to DB — the user sees them in the rules UI.
-    // We do not await this; the import response is returned immediately.
-    runRulesAgentInBackground(userId).catch((err) => {
-      console.error('[import] background rules agent failed:', err instanceof Error ? err.message : err)
+    // Rules agent: enqueue for durability, but also kick immediate background execution.
+    // The drain is best-effort — if the machine suspends, the cron sweep picks it up.
+    enqueueJob('rules-agent', userId, { userId }).catch((err) => {
+      console.error('[import] failed to enqueue rules agent:', err instanceof Error ? err.message : err)
     })
 
     return ok({

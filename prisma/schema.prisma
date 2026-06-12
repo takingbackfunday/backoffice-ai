@@ -1243,3 +1243,22 @@ model AgentUsage {
 
   @@index([userId, createdAt])
 }
+
+// ── Background Jobs ─────────────────────────────────────────────────────────
+
+model BackgroundJob {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String    // 'rules-agent' | 'invoice-matching' | 'receipt-matching'
+  payload     Json      // e.g. { importedIds: [...] } or { userId }
+  status      String    @default("PENDING") // PENDING | RUNNING | DONE | FAILED
+  attempts    Int       @default(0)
+  lastError   String?
+  result      Json?     // optional result payload
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+}

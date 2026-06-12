@@ -328,6 +328,19 @@ Auto-sync/open-banking providers have been removed. Users import transactions by
 | Manual sync storage | `BankPlaybook`, `EncryptedCredential`, `SyncJob` |
 | CSV upload alternative | `/upload` → `POST /api/transactions/import` |
 
+### Background jobs (DB-backed queue)
+
+Post-import work (rules agent, invoice matching, receipt matching) is enqueued as `BackgroundJob` rows and drained both in-process (best-effort) and via a cron endpoint. Survives Fly.io machine suspension.
+
+| Task | File |
+|---|---|
+| Job enqueue + drain + runner | `src/lib/background-jobs.ts` → `enqueueJob()`, `drainPendingJobs()`, `getRecentJobs()` |
+| Import route (enqueues jobs) | `POST /api/transactions/import` → `src/app/api/transactions/import/route.ts` |
+| Drain endpoint (cron) | `POST /api/internal/drain-jobs` → `src/app/api/internal/drain-jobs/route.ts` |
+| Status polling | `GET /api/jobs/recent` → `src/app/api/jobs/recent/route.ts` |
+| GitHub Actions cron | `.github/workflows/drain-jobs.yml` — every 10 minutes |
+| Import UI (job status) | `src/components/upload/upload-page-client.tsx` — polls jobs on completion dialog |
+
 ### Property management
 
 | Task | File |
@@ -625,6 +638,7 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 | `WorkOrder` | Polymorphic: either `jobId` (CLIENT path) or `maintenanceRequestId` (PROPERTY path); `workspaceId` denormalised for easy queries; `vendorId` nullable until assigned |
 | `Bill` | Child of WorkOrder; `vendorId` required (denormalised from work order for direct vendor payment queries); `transactionId` `@unique` — same constraint pattern as `InvoicePayment` |
 | `AgentUsage` | Per-user AI token budget tracking; `endpoint` ('omni'|'rules'|'analyze'|'search'), `inputTokens`/`outputTokens`, daily cap via `AGENT_DAILY_TOKEN_CAP` env var (default 500,000) |
+| `BackgroundJob` | DB-backed job queue for post-import work; `type` ('rules-agent'|'invoice-matching'|'receipt-matching'), `status` (PENDING/RUNNING/DONE/FAILED), `attempts` with 3-retry cap, `payload` JSON, `result` JSON, `lastError` |
 
 ---
 

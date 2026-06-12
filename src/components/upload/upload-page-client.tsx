@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
@@ -10,6 +10,29 @@ import { useUploadStore } from '@/stores/upload-store'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+
+interface BackgroundJob {
+  id: string
+  type: string
+  status: string
+  attempts: number
+  lastError: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
+const JOB_TYPE_LABELS: Record<string, string> = {
+  'invoice-matching': 'Invoice matching',
+  'receipt-matching': 'Receipt matching',
+  'rules-agent': 'Categorization',
+}
+
+function formatJobStatus(job: BackgroundJob): string {
+  if (job.status === 'DONE') return 'Complete'
+  if (job.status === 'FAILED') return 'Failed'
+  if (job.status === 'RUNNING') return 'Running...'
+  return 'Queued'
+}
 
 interface Account {
   id: string
@@ -32,6 +55,8 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
   const { step, reset } = useUploadStore()
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
   const [loadingAccounts, setLoadingAccounts] = useState(!initialAccounts)
+  const [recentJobs, setRecentJobs] = useState<BackgroundJob[]>([])
+  const pollRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     if (initialAccounts) return
@@ -40,6 +65,45 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
       .then((json) => setAccounts(json.data ?? []))
       .finally(() => setLoadingAccounts(false))
   }, [initialAccounts])
+
+  // Fetch jobs when import completes and poll until all are done
+  useEffect(() => {
+    if (step !== 'done') return
+
+    let cancelled = false
+
+    const loadJobs = async () => {
+      try {
+        const res = await fetch('/api/jobs/recent?limit=5')
+        const json = await res.json()
+        if (!cancelled) setRecentJobs(json.data ?? [])
+      } catch {
+        // Silently ignore — job status is non-critical
+      }
+    }
+
+    loadJobs()
+
+    // Poll every 2s until all jobs are terminal (DONE or FAILED)
+    pollRef.current = setInterval(() => {
+      loadJobs()
+    }, 2000)
+
+    return () => {
+      cancelled = true
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [step])
+
+  // Stop polling when all jobs are terminal
+  useEffect(() => {
+    if (step !== 'done') return
+    const allTerminal = recentJobs.length > 0 && recentJobs.every(j => j.status === 'DONE' || j.status === 'FAILED')
+    if (allTerminal && pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }, [recentJobs, step])
 
   async function handleSkipOnboarding() {
     await fetch('/api/preferences', {
@@ -112,6 +176,30 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
             <DialogTitle>Import complete!</DialogTitle>
             <DialogDescription>Your transactions have been imported successfully.</DialogDescription>
           </DialogHeader>
+
+          {/* Background job status */}
+          {recentJobs.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Background tasks</p>
+              {recentJobs.map((job) => (
+                <div key={job.id} className="flex items-center justify-between text-sm">
+                  <span>{JOB_TYPE_LABELS[job.type] ?? job.type}</span>
+                  <span className={`text-xs ${
+                    job.status === 'DONE' ? 'text-green-600' :
+                    job.status === 'FAILED' ? 'text-red-600' :
+                    'text-muted-foreground'
+                  }`}>
+                    {formatJobStatus(job)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {recentJobs.length === 0 && (
+            <div className="mt-4 text-xs text-muted-foreground">Loading task status...</div>
+          )}
+
           <DialogFooter>
             <Button onClick={handleImportDone}>OK</Button>
           </DialogFooter>
