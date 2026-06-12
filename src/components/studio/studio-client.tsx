@@ -67,8 +67,33 @@ interface InvoiceDefaults {
   notes?: string
 }
 
+interface FlatQuote {
+  id: string
+  quoteNumber: string
+  title: string
+  totalQuoted: number | null
+  currency: string
+  status: string
+  sentAt: string | null
+  hasInvoice: boolean
+  jobName: string | null
+  clientProfileId: string
+  clientName: string
+  clientSlug: string
+}
+
+interface ClientDetail {
+  invoices: Invoice[]
+  acceptedQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; hasInvoice: boolean; jobName: string | null }[]
+  sentQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; sentAt: string | null; jobName: string | null }[]
+  jobs: { id: string; name: string }[]
+  receiptCount: number
+}
+
 interface Props {
   clients: Client[]
+  flatInvoices: FlatInvoice[]
+  flatQuotes: FlatQuote[]
   kpis: Kpis
   paymentMethods: PaymentMethods
   pendingSuggestions?: number
@@ -194,10 +219,10 @@ interface PipelineStage {
   textColor: string
 }
 
-function PipelineStrip({ clients, flat }: { clients: Client[]; flat: (Invoice & { clientId: string })[] }) {
+function PipelineStrip({ clients, flat, flatQuotes }: { clients: Client[]; flat: (Invoice & { clientId: string })[]; flatQuotes: FlatQuote[] }) {
   const stages = useMemo((): PipelineStage[] => {
-    const acceptedQuotesTotal = clients.reduce((s, c) => s + c.acceptedQuotes.reduce((qs, q) => qs + (q.totalQuoted ?? 0), 0), 0)
-    const acceptedQuotesCount = clients.reduce((s, c) => s + c.acceptedQuotes.length, 0)
+    const acceptedQuotesTotal = flatQuotes.filter(q => q.status === 'ACCEPTED').reduce((s, q) => s + (q.totalQuoted ?? 0), 0)
+    const acceptedQuotesCount = flatQuotes.filter(q => q.status === 'ACCEPTED').length
 
     const invoiced = flat.filter(i => {
       const s = getDisplayStatus(i)
@@ -236,7 +261,7 @@ function PipelineStrip({ clients, flat }: { clients: Client[]; flat: (Invoice & 
         textColor: '#065f46',
       },
     ]
-  }, [clients, flat])
+  }, [flat, flatQuotes])
 
   const hasAnyData = stages.some(s => s.count > 0)
   if (!hasAnyData) return null
@@ -568,11 +593,11 @@ function AiCreator({ clients, projectSlug, onCreated }: { clients: Client[]; pro
 /*  Main                                                                */
 /* ------------------------------------------------------------------ */
 
-type FlatInvoice = Invoice & { clientId: string; clientName: string; clientSlug: string; clientCompany: string | null }
+type FlatInvoice = Invoice & { clientId: string; clientProfileId: string; clientName: string; clientSlug: string; clientCompany: string | null }
 
-export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults, isOnboarding = false, hasOverheadWorkspace = true, hasTransactions = true }: Props) {
+export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults, isOnboarding = false, hasOverheadWorkspace = true, hasTransactions = true }: Props) {
   const router = useRouter()
-  const [kpis, setKpis] = useState(initialKpis)
+  const [kpis] = useState(initialKpis)
   const [expandedClient, setExpandedClient] = useState<string | null>(null)
   const [clientSearch, setClientSearch] = useState('')
   const [clientFilter, setClientFilter] = useState<'outstanding' | 'overdue' | 'unsent' | 'collected' | 'awaiting-quotes' | 'uninvoiced-quotes' | null>(null)
@@ -593,6 +618,9 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
   const [pendingMarkSentQuote, setPendingMarkSentQuote] = useState<PendingMarkSentQuoteItem[]>([])
   const [activityOpen, setActivityOpen] = useState(false)
   const [markSentQuoteTarget, setMarkSentQuoteTarget] = useState<PendingMarkSentQuoteItem | null>(null)
+  // Lazy-loaded card details
+  const [cardDetails, setCardDetails] = useState<Record<string, ClientDetail>>({})
+  const [cardLoading, setCardLoading] = useState<Record<string, boolean>>({})
 
   // Load pending mark-as-sent notifications from localStorage on mount
   useEffect(() => {
@@ -617,18 +645,25 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
     } catch {}
   }, [])
 
-  const flat: FlatInvoice[] = useMemo(() =>
-    clients.flatMap(c =>
-      c.invoices.map(inv => ({
-        ...inv,
-        clientId: c.id,
-        clientName: c.name,
-        clientSlug: c.slug,
-        clientCompany: c.company,
-      }))
-    ),
-    [clients]
-  )
+  // Use flatInvoices prop directly instead of deriving from clients
+  const flat: FlatInvoice[] = flatInvoices
+
+  // Fetch card detail on expand
+  const fetchCardDetail = useCallback(async (clientProfileId: string) => {
+    if (cardDetails[clientProfileId] || cardLoading[clientProfileId]) return
+    setCardLoading(prev => ({ ...prev, [clientProfileId]: true }))
+    try {
+      const res = await fetch(`/api/studio/clients/${clientProfileId}`)
+      const json = await res.json()
+      if (json.data) {
+        setCardDetails(prev => ({ ...prev, [clientProfileId]: json.data }))
+      }
+    } catch {
+      // silently fail — card shows empty state
+    } finally {
+      setCardLoading(prev => ({ ...prev, [clientProfileId]: false }))
+    }
+  }, [cardDetails, cardLoading])
 
   const notices = useMemo(() => {
     const items: { dot: string; label: string; detail: string; onClick: () => void }[] = []
@@ -670,7 +705,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
     })
 
     // Quote: awaiting client acceptance (sent, no response)
-    const awaitingAcceptance = clients.flatMap(c => c.sentQuotes.map(q => ({ ...q, clientSlug: c.slug, clientName: c.name })))
+    const awaitingAcceptance = flatQuotes.filter(q => q.status === 'SENT')
     // eslint-disable-next-line react-hooks/refs
     if (awaitingAcceptance.length > 0) items.push({
       dot: '#a78bfa',
@@ -682,7 +717,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         const next: typeof clientFilter = clientFilter === 'awaiting-quotes' ? null : 'awaiting-quotes'
         setClientFilter(next)
         if (next) {
-          const first = clients.find(c => c.sentQuotes.length > 0)
+          const first = clients.find(c => flatQuotes.some(q => q.clientProfileId === c.clientProfileId && q.status === 'SENT'))
           if (first) setExpandedClient(first.id)
         } else setExpandedClient(null)
         setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -690,7 +725,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
     })
 
     // Quote: accepted but not yet invoiced
-    const uninvoiced = clients.flatMap(c => c.acceptedQuotes.filter(q => !q.hasInvoice).map(q => ({ ...q, clientSlug: c.slug, clientName: c.name })))
+    const uninvoiced = flatQuotes.filter(q => q.status === 'ACCEPTED' && !q.hasInvoice)
     // eslint-disable-next-line react-hooks/refs
     if (uninvoiced.length > 0) items.push({
       dot: '#10b981',
@@ -702,7 +737,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
         const next: typeof clientFilter = clientFilter === 'uninvoiced-quotes' ? null : 'uninvoiced-quotes'
         setClientFilter(next)
         if (next) {
-          const first = clients.find(c => c.acceptedQuotes.some(q => !q.hasInvoice))
+          const first = clients.find(c => flatQuotes.some(q => q.clientProfileId === c.clientProfileId && q.status === 'ACCEPTED' && !q.hasInvoice))
           if (first) setExpandedClient(first.id)
         } else setExpandedClient(null)
         setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -729,7 +764,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
     }
 
     return items
-  }, [flat, clients, clientFilter, router, pendingMarkSent, pendingMarkSentQuote])
+  }, [flat, clients, clientFilter, router, pendingMarkSent, pendingMarkSentQuote, flatQuotes])
 
   if (clients.length === 0) {
     return (
@@ -780,18 +815,18 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
 
       {/* Unified KPI + pipeline row */}
       {(() => {
-        const acceptedQuotesTotal = clients.reduce((s, c) => s + c.acceptedQuotes.reduce((qs, q) => qs + (q.totalQuoted ?? 0), 0), 0)
-        const acceptedQuotesCount = clients.reduce((s, c) => s + c.acceptedQuotes.length, 0)
+        const acceptedQuotesTotal = flatQuotes.filter(q => q.status === 'ACCEPTED').reduce((s, q) => s + (q.totalQuoted ?? 0), 0)
+        const acceptedQuotesCount = flatQuotes.filter(q => q.status === 'ACCEPTED').length
         const outstandingInvs = flat.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' })
         const overdueInvs = flat.filter(i => getDisplayStatus(i) === 'OVERDUE')
         const now = new Date()
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
-        const startOfYear = new Date(now.getFullYear(), 0, 1)
         const collectedPast30 = flat.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= thirtyDaysAgo)
-        const collectedYtd = flat.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= startOfYear)
-        const outstandingTotal = outstandingInvs.reduce((s, i) => s + (i.total - i.paid), 0)
-        const overdueTotal = overdueInvs.reduce((s, i) => s + (i.total - i.paid), 0)
         const collectedPast30Total = collectedPast30.reduce((s, i) => s + i.paid, 0)
+        const collectedYtd = flat.filter(i => {
+          const s = getDisplayStatus(i)
+          return s === 'PAID' && new Date(i.issueDate) >= new Date(now.getFullYear(), 0, 1)
+        })
         const collectedYtdTotal = collectedYtd.reduce((s, i) => s + i.paid, 0)
 
         function handleKpiClick(filter: 'outstanding' | 'overdue' | 'collected', matchFn: (c: typeof clients[0]) => boolean) {
@@ -811,19 +846,19 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
             <KpiCard label="Quotes accepted" value={acceptedQuotesCount > 0 ? fmt(acceptedQuotesTotal) : '—'} sub={acceptedQuotesCount > 0 ? `${acceptedQuotesCount} quote${acceptedQuotesCount !== 1 ? 's' : ''}` : 'none active'} color="neutral" />
             <KpiCard
               label="Invoices Outstanding"
-              value={outstandingTotal > 0 ? fmt(outstandingTotal) : '—'}
+              value={kpis.totalOutstanding > 0 ? fmt(kpis.totalOutstanding) : '—'}
               sub={outstandingInvs.length > 0 ? `${outstandingInvs.length} invoice${outstandingInvs.length !== 1 ? 's' : ''}` : ''}
-              color={outstandingTotal > 0 ? 'amber' : 'neutral'}
+              color={kpis.totalOutstanding > 0 ? 'amber' : 'neutral'}
               active={clientFilter === 'outstanding'}
-              onClick={outstandingTotal > 0 ? () => handleKpiClick('outstanding', c => flat.some(i => i.clientId === c.id && (getDisplayStatus(i) === 'SENT' || getDisplayStatus(i) === 'PARTIAL'))) : undefined}
+              onClick={kpis.totalOutstanding > 0 ? () => handleKpiClick('outstanding', c => flat.some(i => i.clientId === c.id && (getDisplayStatus(i) === 'SENT' || getDisplayStatus(i) === 'PARTIAL'))) : undefined}
             />
             <KpiCard
               label="Invoices Overdue"
-              value={overdueTotal > 0 ? fmt(overdueTotal) : '—'}
+              value={kpis.overdueCount > 0 ? fmt(overdueInvs.reduce((s, i) => s + (i.total - i.paid), 0)) : '—'}
               sub={overdueInvs.length > 0 ? `${overdueInvs.length} invoice${overdueInvs.length !== 1 ? 's' : ''}` : ''}
-              color={overdueInvs.length > 0 ? 'red' : 'neutral'}
+              color={kpis.overdueCount > 0 ? 'red' : 'neutral'}
               active={clientFilter === 'overdue'}
-              onClick={overdueInvs.length > 0 ? () => handleKpiClick('overdue', c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE')) : undefined}
+              onClick={kpis.overdueCount > 0 ? () => handleKpiClick('overdue', c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE')) : undefined}
             />
             <KpiCard
               label="Invoices Collected Past 30 Days"
@@ -1058,9 +1093,22 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                   const startOfYear = new Date(now.getFullYear(), 0, 1)
                   const clientCollectedPast30 = clientInvoices.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= thirtyDaysAgo).reduce((s, i) => s + i.paid, 0)
                   const clientCollectedYtd = clientInvoices.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= startOfYear).reduce((s, i) => s + i.paid, 0)
+
+                  // Fetch detail on expand
+                  const handleExpand = () => {
+                    if (!isExpanded) {
+                      setExpandedClient(client.id)
+                      // Find clientProfileId from the client data
+                      const cs = clients.find(c => c.id === client.id)
+                      if (cs?.clientProfileId) fetchCardDetail(cs.clientProfileId)
+                    } else {
+                      setExpandedClient(null)
+                    }
+                  }
+
                   return (
                     <div
-                      onClick={() => setExpandedClient(isExpanded ? null : client.id)}
+                      onClick={handleExpand}
                       style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr auto' : '1fr auto auto auto auto auto auto', alignItems: 'center', gap: 12, padding: '4px 14px', cursor: 'pointer', transition: 'background 0.15s' }}
                       onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
                       onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
@@ -1129,7 +1177,16 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                 {/* Expanded content */}
                 {isExpanded && (
                   <div style={{ borderTop: '1px solid #f0eeeb', background: '#fafaf8', padding: '16px 18px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr' : '1fr 260px', gap: 20 }}>
+                    {cardLoading[client.clientProfileId] ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#888' }}>
+                        <div style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #ddd', borderTopColor: '#888', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+                        <span style={{ fontSize: 12 }}>Loading details…</span>
+                      </div>
+                    ) : (() => {
+                      const detail = cardDetails[client.clientProfileId]
+                      if (!detail) return <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No details available</p>
+                      return (
+                      <div style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr' : '1fr 260px', gap: 20 }}>
 
                       {/* Left: invoices + quotes */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1137,14 +1194,14 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                         {/* Invoices */}
                         {(() => {
                           const visibleInvoices = clientFilter === 'overdue'
-                            ? clientInvoices.filter(i => getDisplayStatus(i) === 'OVERDUE')
+                            ? detail.invoices.filter(i => getDisplayStatus(i) === 'OVERDUE')
                             : clientFilter === 'unsent'
-                            ? clientInvoices.filter(i => i.status === 'DRAFT')
+                            ? detail.invoices.filter(i => i.status === 'DRAFT')
                             : clientFilter === 'outstanding'
-                            ? clientInvoices.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' })
+                            ? detail.invoices.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' })
                             : clientFilter === 'collected'
-                            ? clientInvoices.filter(i => getDisplayStatus(i) === 'PAID')
-                            : clientInvoices
+                            ? detail.invoices.filter(i => getDisplayStatus(i) === 'PAID')
+                            : detail.invoices
                           return visibleInvoices.length > 0 ? (
                           <div>
                             {!clientFilter && <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Invoices</p>}
@@ -1156,7 +1213,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                                 return (
                                   <div
                                     key={inv.id}
-                                    onClick={() => router.push(`/projects/${inv.clientSlug}/invoices/${inv.id}`)}
+                                    onClick={() => router.push(`/projects/${client.slug}/invoices/${inv.id}`)}
                                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: '#fff', border: '1px solid #e8e6df', cursor: 'pointer', transition: 'border-color 0.15s' }}
                                     onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#c7c4e8'}
                                     onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#e8e6df'}
@@ -1183,7 +1240,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                         {/* Sent quotes (awaiting acceptance) */}
                         {(() => {
                           if (clientFilter && clientFilter !== 'awaiting-quotes') return null
-                          const visibleSentQuotes = clientFilter === 'awaiting-quotes' ? client.sentQuotes : []
+                          const visibleSentQuotes = clientFilter === 'awaiting-quotes' ? detail.sentQuotes : []
                           return visibleSentQuotes.length > 0 ? (
                             <div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1214,9 +1271,9 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                         {(() => {
                           if (clientFilter && clientFilter !== 'uninvoiced-quotes' && clientFilter !== 'awaiting-quotes') return null
                           const visibleAcceptedQuotes = clientFilter === 'uninvoiced-quotes'
-                            ? client.acceptedQuotes.filter(q => !q.hasInvoice)
+                            ? detail.acceptedQuotes.filter(q => !q.hasInvoice)
                             : clientFilter ? []
-                            : client.acceptedQuotes
+                            : detail.acceptedQuotes
                           return visibleAcceptedQuotes.length > 0 ? (
                           <div>
                             {!clientFilter && <p style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Accepted quotes</p>}
@@ -1244,7 +1301,7 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                           ) : null
                         })()}
 
-                        {clientInvoices.length === 0 && client.acceptedQuotes.length === 0 && !clientFilter && (
+                        {detail.invoices.length === 0 && detail.acceptedQuotes.length === 0 && !clientFilter && (
                           <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No invoices or quotes yet</p>
                         )}
 
@@ -1277,6 +1334,8 @@ export function StudioClient({ clients, kpis: initialKpis, paymentMethods, pendi
                         </div>
                       )}
                     </div>
+                      )
+                    })()}
                   </div>
                 )}
               </div>

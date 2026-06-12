@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -48,6 +48,15 @@ interface Unit {
   leaseStatus: string | null; leaseMonthlyRent: number | null;
   paymentDueDay: number | null;
   openMaintenance: number; unreadMessages: number;
+  // Pre-computed payment status from SQL
+  hasOverdueRent: boolean; balance: number; paymentStatusScore: number;
+  // Detail data (fetched on expand)
+  maintenanceRequests: MaintenanceRequest[]
+  invoices: InvoiceSummary[]
+  recentMessages: RecentMessage[]
+}
+
+interface UnitDetail {
   maintenanceRequests: MaintenanceRequest[]
   invoices: InvoiceSummary[]
   recentMessages: RecentMessage[]
@@ -110,44 +119,20 @@ function getLeaseUrgency(endDate: string | null): 'critical' | 'warning' | 'soon
 }
 
 function hasOverdueRent(unit: Unit): boolean {
-  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
-  const charged = activeInvoices.reduce((sum, inv) => sum + inv.lineItemTotal, 0)
-  const paid = activeInvoices.reduce((sum, inv) => sum + inv.paymentTotal, 0)
-  return charged - paid > 0
+  return unit.hasOverdueRent
 }
 
 function getBalance(unit: Unit): number {
-  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
-  const charged = activeInvoices.reduce((sum, inv) => sum + inv.lineItemTotal, 0)
-  const paid = activeInvoices.reduce((sum, inv) => sum + inv.paymentTotal, 0)
-  return charged - paid
+  return unit.balance
 }
 
 function paymentStatusScore(unit: Unit): number {
-  if (!unit.tenant) return 0
-  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
-  const charged = activeInvoices.reduce((sum, inv) => sum + inv.lineItemTotal, 0)
-  const paid = activeInvoices.reduce((sum, inv) => sum + inv.paymentTotal, 0)
-  if (charged === 0) return 0
-  const balance = charged - paid
-  if (balance <= 0) return 1
-  if (paid > 0 && paid < charged) return 2
-  const oldestUnpaid = activeInvoices
-    .filter(inv => inv.lineItemTotal - inv.paymentTotal > 0)
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0]
-  if (!oldestUnpaid) return 2
-  const daysSinceDue = Math.floor((Date.now() - new Date(oldestUnpaid.dueDate).getTime()) / (1000 * 60 * 60 * 24))
-  if (daysSinceDue >= 60) return 5
-  if (daysSinceDue >= 30) return 4
-  if (daysSinceDue > 0) return 3
-  return 1
+  return unit.paymentStatusScore
 }
 
 function PaymentStatusBadge({ unit }: { unit: Unit }) {
   if (!unit.tenant) return <span className="text-muted-foreground/30 text-xs">—</span>
-  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
-  const charged = activeInvoices.reduce((sum, inv) => sum + inv.lineItemTotal, 0)
-  if (charged === 0) return <span className="text-muted-foreground/30 text-xs">—</span>
+  if (unit.balance === 0) return <span className="text-xs font-medium text-green-600">Paid</span>
   const score = paymentStatusScore(unit)
   const configs: Record<number, { label: string; bg: string; text: string }> = {
     1: { label: 'Current',  bg: '#d1fae5', text: '#065f46' },
@@ -292,6 +277,25 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
   const [messageModal, setMessageModal] = useState<{ propertyId: string; unitId: string; tenantId: string; tenantName: string; unitLabel: string } | null>(null)
   const [creatingOverhead, setCreatingOverhead] = useState(false)
   const cardsRef = useRef<HTMLDivElement>(null)
+  // Lazy-loaded unit details
+  const [unitDetails, setUnitDetails] = useState<Record<string, UnitDetail>>({})
+  const [unitLoading, setUnitLoading] = useState<Record<string, boolean>>({})
+
+  const fetchUnitDetail = useCallback(async (unitId: string) => {
+    if (unitDetails[unitId] || unitLoading[unitId]) return
+    setUnitLoading(prev => ({ ...prev, [unitId]: true }))
+    try {
+      const res = await fetch(`/api/portfolio/units/${unitId}`)
+      const json = await res.json()
+      if (json.data) {
+        setUnitDetails(prev => ({ ...prev, [unitId]: json.data }))
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUnitLoading(prev => ({ ...prev, [unitId]: false }))
+    }
+  }, [unitDetails, unitLoading])
 
   const occupancyPct = kpis.totalUnits > 0 ? Math.round((kpis.leasedUnits / kpis.totalUnits) * 100) : 0
 
@@ -779,8 +783,15 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
                               return (
                                 <div key={unit.id}>
                                   {/* Unit row */}
-                                  <div
-                                    onClick={() => setExpandedUnit(isUnitExpanded ? null : unit.id)}
+                                   <div
+                                     onClick={() => {
+                                       if (!isUnitExpanded) {
+                                         setExpandedUnit(unit.id)
+                                         fetchUnitDetail(unit.id)
+                                       } else {
+                                         setExpandedUnit(null)
+                                       }
+                                     }}
                                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: isUnitExpanded ? '10px 10px 0 0' : 10, background: '#fff', border: `1px solid ${isUnitExpanded ? '#a7f3d0' : '#e8e6df'}`, cursor: 'pointer', transition: 'border-color 0.15s' }}
                                     onMouseEnter={e => { if (!isUnitExpanded) (e.currentTarget as HTMLDivElement).style.borderColor = '#a7f3d0' }}
                                     onMouseLeave={e => { if (!isUnitExpanded) (e.currentTarget as HTMLDivElement).style.borderColor = '#e8e6df' }}
@@ -833,20 +844,28 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
                                     )}
                                   </div>
 
-                                  {/* Expanded unit detail panel */}
-                                  {isUnitExpanded && (
-                                    <div style={{ borderRadius: '0 0 10px 10px', border: '1px solid #a7f3d0', borderTop: 'none' }}>
-                                      <ExpandedPanel
-                                        unit={unit}
-                                        property={property}
-                                        onCreateMaintenance={() => setMaintenanceModal({ propertyId: property.id, unitId: unit.id, unitLabel: unit.unitLabel })}
-                                        onSendMessage={() => {
-                                          if (unit.tenant) setMessageModal({ propertyId: property.id, unitId: unit.id, tenantId: unit.tenant.id, tenantName: unit.tenant.name, unitLabel: unit.unitLabel })
-                                        }}
-                                        onMaintenanceStatusChange={(reqId, s) => updateMaintenanceStatus(property.id, reqId, s)}
-                                      />
-                                    </div>
-                                  )}
+                                   {/* Expanded unit detail panel */}
+                                   {isUnitExpanded && (
+                                     <div style={{ borderRadius: '0 0 10px 10px', border: '1px solid #a7f3d0', borderTop: 'none' }}>
+                                       {unitLoading[unit.id] ? (
+                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#888', justifyContent: 'center' }}>
+                                           <div style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #ddd', borderTopColor: '#888', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+                                           <span style={{ fontSize: 12 }}>Loading details…</span>
+                                         </div>
+                                       ) : (
+                                       <ExpandedPanel
+                                         unit={unit}
+                                         property={property}
+                                         detail={unitDetails[unit.id] ?? null}
+                                         onCreateMaintenance={() => setMaintenanceModal({ propertyId: property.id, unitId: unit.id, unitLabel: unit.unitLabel })}
+                                         onSendMessage={() => {
+                                           if (unit.tenant) setMessageModal({ propertyId: property.id, unitId: unit.id, tenantId: unit.tenant.id, tenantName: unit.tenant.name, unitLabel: unit.unitLabel })
+                                         }}
+                                         onMaintenanceStatusChange={(reqId, s) => updateMaintenanceStatus(property.id, reqId, s)}
+                                       />
+                                       )}
+                                     </div>
+                                   )}
                                 </div>
                               )
                             })}
@@ -932,17 +951,20 @@ export function PortfolioClient({ properties, kpis, isOnboarding = false, hasOve
 /*  Expanded detail panel                                                */
 /* ==================================================================== */
 
-function ExpandedPanel({ unit, property, onCreateMaintenance, onSendMessage, onMaintenanceStatusChange }: {
-  unit: Unit; property: Property
+function ExpandedPanel({ unit, property, detail, onCreateMaintenance, onSendMessage, onMaintenanceStatusChange }: {
+  unit: Unit; property: Property; detail: UnitDetail | null
   onCreateMaintenance: () => void; onSendMessage: () => void
   onMaintenanceStatusChange: (reqId: string, status: string) => void
 }) {
   const urgency = getLeaseUrgency(unit.leaseEndDate)
   const days = unit.leaseEndDate ? daysUntil(unit.leaseEndDate) : null
-  const activeInvoices = unit.invoices.filter(inv => inv.status !== 'VOID')
+  const invoices = detail?.invoices ?? unit.invoices
+  const activeInvoices = invoices.filter(inv => inv.status !== 'VOID')
   const charged = activeInvoices.reduce((s, inv) => s + inv.lineItemTotal, 0)
   const paid = activeInvoices.reduce((s, inv) => s + inv.paymentTotal, 0)
   const balance = charged - paid
+  const maintenanceRequests = detail?.maintenanceRequests ?? unit.maintenanceRequests
+  const recentMessages = detail?.recentMessages ?? unit.recentMessages
 
   const URGENCY_STYLES: Record<string, string> = {
     critical: 'bg-red-50 border-red-200 text-red-700',
@@ -1052,9 +1074,9 @@ function ExpandedPanel({ unit, property, onCreateMaintenance, onSendMessage, onM
                 <Plus className="h-3 w-3" /> New
               </button>
             </div>
-            {unit.maintenanceRequests.length > 0 ? (
+            {maintenanceRequests.length > 0 ? (
               <div className="space-y-1.5">
-                {unit.maintenanceRequests.slice(0, 3).map(req => (
+                {maintenanceRequests.slice(0, 3).map(req => (
                   <div key={req.id} className="flex items-start justify-between gap-2 text-xs">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium truncate">{req.title}</p>
@@ -1100,9 +1122,9 @@ function ExpandedPanel({ unit, property, onCreateMaintenance, onSendMessage, onM
                 </button>
               )}
             </div>
-            {unit.recentMessages.length > 0 ? (() => {
+            {recentMessages.length > 0 ? (() => {
               const threadMap = new Map<string, RecentMessage[]>()
-              for (const msg of unit.recentMessages) {
+              for (const msg of recentMessages) {
                 const key = (msg.subject ?? '').trim() || '(no subject)'
                 if (!threadMap.has(key)) threadMap.set(key, [])
                 threadMap.get(key)!.push(msg)

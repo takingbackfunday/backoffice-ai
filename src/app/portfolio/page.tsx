@@ -4,7 +4,38 @@ import { prisma } from '@/lib/prisma'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { PortfolioClient } from '@/components/portfolio/portfolio-client'
-import { computeInvoiceTotals, toDisplay } from '@/lib/money'
+import { fetchPortfolioKpis, fetchUnitSummaries } from '@/lib/studio-kpis'
+
+// Types matching the client component
+interface MaintenanceRequest {
+  id: string; title: string; description: string; priority: string;
+  status: string; createdAt: string;
+  tenant: { id: string; name: string } | null
+}
+interface InvoiceSummary {
+  id: string; invoiceNumber: string; status: string; period: string | null;
+  dueDate: string; lineItemTotal: number; paymentTotal: number;
+}
+interface RecentMessage {
+  id: string; subject: string | null; body: string;
+  createdAt: string; isRead: boolean; senderRole: string;
+  tenant: { id: string; name: string } | null
+}
+interface Unit {
+  id: string; unitLabel: string; status: string;
+  monthlyRent: number | null; bedrooms: number | null;
+  bathrooms: number | null; squareFootage: number | null;
+  tenant: { id: string; name: string; email: string; phone: string | null } | null
+  leaseId: string | null;
+  leaseEndDate: string | null; leaseStartDate: string | null;
+  leaseStatus: string | null; leaseMonthlyRent: number | null;
+  paymentDueDay: number | null;
+  openMaintenance: number; unreadMessages: number;
+  hasOverdueRent: boolean; balance: number; paymentStatusScore: number;
+  maintenanceRequests: MaintenanceRequest[]
+  invoices: InvoiceSummary[]
+  recentMessages: RecentMessage[]
+}
 
 interface PageProps {
   searchParams: Promise<{ onboarding?: string }>
@@ -16,185 +47,101 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const properties = await prisma.workspace.findMany({
-    where: { userId, type: 'PROPERTY', isActive: true },
-    include: {
-      propertyProfile: {
-        include: {
-          units: {
-            include: {
-              leases: {
-                where: { status: { in: ['ACTIVE', 'EXPIRING_SOON', 'MONTH_TO_MONTH'] } },
-                include: {
-                  tenant: { select: { id: true, name: true, email: true, phone: true } },
-                  invoices: {
-                    where: { status: { not: 'VOID' } },
-                    include: { lineItems: true, payments: true },
-                    orderBy: { dueDate: 'desc' },
-                    take: 12,
-                  },
-                },
-                orderBy: { startDate: 'desc' },
-                take: 1,
-              },
-              maintenanceRequests: {
-                where: { status: { in: ['OPEN', 'SCHEDULED', 'IN_PROGRESS'] } },
-                include: { tenant: { select: { id: true, name: true } } },
-                orderBy: { createdAt: 'desc' },
-              },
-              messages: {
-                where: { isRead: false, senderRole: 'tenant' },
-                orderBy: { createdAt: 'desc' },
-                take: 5,
-                include: { tenant: { select: { id: true, name: true } } },
-              },
-              _count: {
-                select: {
-                  maintenanceRequests: {
-                    where: { status: { in: ['OPEN', 'SCHEDULED', 'IN_PROGRESS'] } },
-                  },
-                  messages: {
-                    where: { isRead: false, senderRole: 'tenant' },
-                  },
-                },
-              },
-            },
-            orderBy: { unitLabel: 'asc' },
-          },
-        },
-      },
-    },
-    orderBy: { name: 'asc' },
-  })
-
-  // Portfolio-level KPIs
-  const allUnits = properties.flatMap(p => p.propertyProfile?.units ?? [])
-  const totalUnits = allUnits.length
-  const leasedUnits = allUnits.filter(u => u.status === 'LEASED').length
-  const vacantUnits = allUnits.filter(u => u.status === 'VACANT').length
-  const openMaintenance = allUnits.reduce((sum, u) => sum + u._count.maintenanceRequests, 0)
-  const unreadMessages = allUnits.reduce((sum, u) => sum + u._count.messages, 0)
-  const monthlyRevenue = allUnits
-    .filter(u => u.status === 'LEASED' && u.monthlyRent)
-    .reduce((sum, u) => sum + toDisplay(u.monthlyRent!), 0)
-
-  // Lease expiring within 90 days
   const now = new Date()
-  const in90Days = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
-  const expiringLeases = allUnits.filter(u => {
-    const lease = u.leases[0]
-    if (!lease?.endDate) return false
-    const end = new Date(lease.endDate)
-    return end >= now && end <= in90Days
-  }).length
-
-  // Rent collection: count units where balance > 0 (more owed than paid)
-  const overduePayments = allUnits.filter(u => {
-    const lease = u.leases[0]
-    if (!lease) return false
-    const charged = lease.invoices.reduce((s, inv) => {
-      const { total } = computeInvoiceTotals(inv)
-      return s + toDisplay(total)
-    }, 0)
-    const paid = lease.invoices.reduce((s, inv) => {
-      const { paid: p } = computeInvoiceTotals(inv)
-      return s + toDisplay(p)
-    }, 0)
-    return charged - paid > 0
-  }).length
-
-  const overheadWorkspace = await prisma.workspace.findFirst({
-    where: { userId, isDefault: true },
-    select: { id: true },
-  })
-
-  const propertyProfileIds = properties.flatMap(p => p.propertyProfile ? [p.propertyProfile.id] : [])
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-  const [activeApplicants, recentPaymentsCount] = await Promise.all([
-    propertyProfileIds.length > 0
-      ? prisma.applicant.count({
-          where: {
-            propertyProfileId: { in: propertyProfileIds },
-            status: { notIn: ['REJECTED', 'WITHDRAWN', 'LEASE_SIGNED'] },
-          },
-        })
-      : Promise.resolve(0),
-    propertyProfileIds.length > 0
-      ? prisma.invoicePayment.count({
-          where: {
-            paidDate: { gte: sevenDaysAgo },
-            invoice: {
-              lease: { unit: { propertyProfileId: { in: propertyProfileIds } } },
-            },
-          },
-        })
-      : Promise.resolve(0),
+  // Parallel fetch: KPIs, unit summaries via SQL, plus auxiliary data
+  const [kpis, unitSummaries, overheadWorkspace, activeApplicants, recentPaymentsCount] = await Promise.all([
+    fetchPortfolioKpis(userId),
+    fetchUnitSummaries(userId),
+    prisma.workspace.findFirst({ where: { userId, isDefault: true }, select: { id: true } }),
+    prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*) AS count
+      FROM "Applicant" a
+      JOIN "PropertyProfile" pp ON pp."id" = a."propertyProfileId"
+      JOIN "Workspace" w ON w."id" = pp."workspaceId"
+      WHERE w."userId" = ${userId}
+        AND a."status" NOT IN ('REJECTED', 'WITHDRAWN', 'LEASE_SIGNED')
+    `,
+    prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*) AS count
+      FROM "InvoicePayment" p
+      JOIN "Invoice" inv ON inv."id" = p."invoiceId"
+      JOIN "Lease" l ON l."id" = inv."leaseId"
+      JOIN "Unit" u ON u."id" = l."unitId"
+      JOIN "PropertyProfile" pp ON pp."id" = u."propertyProfileId"
+      JOIN "Workspace" w ON w."id" = pp."workspaceId"
+      WHERE w."userId" = ${userId}
+        AND p."paidDate" >= ${sevenDaysAgo}
+    `,
   ])
 
-  const kpis = {
-    totalUnits, leasedUnits, vacantUnits, openMaintenance,
-    monthlyRevenue, expiringLeases, unreadMessages, overduePayments, activeApplicants,
-    recentPaymentsCount,
+  // Group unit summaries by property for the client component
+  const propertyMap = new Map<string, {
+    id: string
+    name: string
+    slug: string
+    address: string | null
+    city: string | null
+    state: string | null
+    propertyType: string | null
+    units: Unit[]
+  }>()
+
+  for (const unit of unitSummaries) {
+    if (!propertyMap.has(unit.propertyId)) {
+      propertyMap.set(unit.propertyId, {
+        id: unit.propertyId,
+        name: unit.propertyName,
+        slug: unit.propertySlug,
+        address: unit.propertyAddress,
+        city: unit.propertyCity,
+        state: unit.propertyState,
+        propertyType: unit.propertyType,
+        units: [],
+      })
+    }
+    // Add empty arrays for detail data (fetched on expand)
+    propertyMap.get(unit.propertyId)!.units.push({
+      id: unit.id,
+      unitLabel: unit.unitLabel,
+      status: unit.status,
+      monthlyRent: unit.monthlyRent,
+      bedrooms: unit.bedrooms,
+      bathrooms: unit.bathrooms,
+      squareFootage: unit.squareFootage,
+      tenant: unit.tenantId ? { id: unit.tenantId, name: unit.tenantName ?? '', email: unit.tenantEmail ?? '', phone: unit.tenantPhone } : null,
+      leaseId: unit.leaseId,
+      leaseEndDate: unit.leaseEndDate,
+      leaseStartDate: unit.leaseStartDate,
+      leaseStatus: unit.leaseStatus,
+      leaseMonthlyRent: unit.leaseMonthlyRent,
+      paymentDueDay: unit.paymentDueDay,
+      openMaintenance: unit.openMaintenance,
+      unreadMessages: unit.unreadMessages,
+      hasOverdueRent: unit.hasOverdueRent,
+      balance: unit.balance,
+      paymentStatusScore: unit.paymentStatusScore,
+      maintenanceRequests: [],
+      invoices: [],
+      recentMessages: [],
+    })
   }
 
-  const serialized = properties.map(p => ({
-    id: p.id,
-    name: p.name,
-    slug: p.slug,
-    address: p.propertyProfile?.address ?? null,
-    city: p.propertyProfile?.city ?? null,
-    state: p.propertyProfile?.state ?? null,
-    propertyType: p.propertyProfile?.propertyType ?? null,
-    units: (p.propertyProfile?.units ?? []).map(u => ({
-      id: u.id,
-      unitLabel: u.unitLabel,
-      status: u.status,
-      monthlyRent: u.monthlyRent ? toDisplay(u.monthlyRent) : null,
-      bedrooms: u.bedrooms,
-      bathrooms: u.bathrooms ? toDisplay(u.bathrooms) : null,
-      squareFootage: u.squareFootage,
-      tenant: u.leases[0]?.tenant ?? null,
-      leaseId: u.leases[0]?.id ?? null,
-      leaseEndDate: u.leases[0]?.endDate?.toISOString() ?? null,
-      leaseStartDate: u.leases[0]?.startDate?.toISOString() ?? null,
-      leaseStatus: u.leases[0]?.status ?? null,
-      leaseMonthlyRent: u.leases[0]?.monthlyRent ? toDisplay(u.leases[0].monthlyRent) : null,
-      paymentDueDay: u.leases[0]?.paymentDueDay ?? null,
-      openMaintenance: u._count.maintenanceRequests,
-      unreadMessages: u._count.messages,
-      maintenanceRequests: u.maintenanceRequests.map(m => ({
-        id: m.id,
-        title: m.title,
-        description: m.description,
-        priority: m.priority,
-        status: m.status,
-        createdAt: m.createdAt.toISOString(),
-        tenant: m.tenant ? { id: m.tenant.id, name: m.tenant.name } : null,
-      })),
-      invoices: (u.leases[0]?.invoices ?? []).map(inv => {
-        const { total, paid } = computeInvoiceTotals(inv)
-        return {
-          id: inv.id,
-          invoiceNumber: inv.invoiceNumber,
-          status: inv.status,
-          period: inv.period,
-          dueDate: inv.dueDate.toISOString(),
-          lineItemTotal: toDisplay(total),
-          paymentTotal: toDisplay(paid),
-        }
-      }),
-      recentMessages: u.messages.map(m => ({
-        id: m.id,
-        subject: m.subject,
-        body: m.body,
-        createdAt: m.createdAt.toISOString(),
-        isRead: m.isRead,
-        senderRole: m.senderRole,
-        tenant: m.tenant ? { id: m.tenant.id, name: m.tenant.name } : null,
-      })),
-    })),
-  }))
+  const properties = Array.from(propertyMap.values())
+
+  const kpiData = {
+    totalUnits: kpis.totalUnits,
+    leasedUnits: kpis.leasedUnits,
+    vacantUnits: kpis.vacantUnits,
+    openMaintenance: kpis.openMaintenance,
+    monthlyRevenue: kpis.monthlyRevenue,
+    expiringLeases: kpis.expiringLeases,
+    unreadMessages: kpis.unreadMessages,
+    overduePayments: kpis.overduePayments,
+    activeApplicants: Number(activeApplicants[0]?.count ?? 0),
+    recentPaymentsCount: Number(recentPaymentsCount[0]?.count ?? 0),
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -202,7 +149,7 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
       <div className="flex flex-1 flex-col">
         <Header title="Properties" />
         <main className="flex-1 p-6" role="main">
-          <PortfolioClient properties={serialized} kpis={kpis} isOnboarding={isOnboarding} hasOverheadWorkspace={!!overheadWorkspace} />
+          <PortfolioClient properties={properties} kpis={kpiData} isOnboarding={isOnboarding} hasOverheadWorkspace={!!overheadWorkspace} />
         </main>
       </div>
     </div>

@@ -224,6 +224,8 @@ Single agent at `POST /api/agent/omni` replaces the old multi-agent stack. No do
 | Studio tools | `src/lib/agent/studio-tools.ts` → `STUDIO_TOOLS`, `dispatchStudioTool()` |
 | Reusable tool loop | `src/lib/agent/tool-loop.ts` → `runToolLoop()` |
 | Conversation history format | `src/lib/agent/format-history.ts` → `formatHistory()` |
+| System prompt builder | `src/lib/agent/prompts/omni.ts` → `buildOmniSystemPrompt()` |
+| Usage tracking | `src/lib/agent/usage.ts` → `recordAgentUsage()`, `checkDailyBudget()` |
 | Agent + SSE types | `src/lib/agent/types.ts` → `ConversationTurn`, `SseEvent` |
 | Editor action + page context types | `src/lib/agent/page-context.ts` → `EditorAction`, `SerializablePageContext` |
 | Chat UI | `src/components/dashboard/agent-qa.tsx` |
@@ -231,6 +233,18 @@ Single agent at `POST /api/agent/omni` replaces the old multi-agent stack. No do
 | Client state (session + turns) | `src/stores/chat-store.ts` → `addTurn(role, content)`, `openWithMessage()` |
 | Dashboard analyze (separate flow) | `POST /api/agent/analyze` → `src/app/api/agent/analyze/route.ts` |
 | NL transaction search | `POST /api/agent/search-transactions` |
+
+**Snapshot cache** — avoids rebuilding the user's financial snapshot on every request
+
+- `omni-agent.ts` caches snapshots per `userId` with a 60-second TTL
+- `invalidateSnapshotCache(userId)` — call after data mutations (import, categorise, etc.) to force a fresh snapshot on the next agent request
+
+**Budget gate** — per-user daily token cap
+
+- `checkDailyBudget(userId)` queries `AgentUsage` for the last 24h; returns `{ ok, used, cap }`
+- `recordAgentUsage()` fires after every agent run — never blocks the response on failure
+- Cap controlled by `AGENT_DAILY_TOKEN_CAP` env var (default 500,000 tokens)
+- When exceeded, the omni route returns a friendly 429-style error instead of calling the LLM
 
 **Site capability map** — keeps the agent aware of every page in the app
 
@@ -265,8 +279,9 @@ Single agent at `POST /api/agent/omni` replaces the old multi-agent stack. No do
 | Function | Location | Use |
 |---|---|---|
 | `openrouterChat()` | `src/lib/llm/openrouter.ts` | Simple text completion, default `mistralai/devstral-small` |
-| `openrouterWithTools()` | `src/lib/llm/openrouter.ts` | Tool-calling loop, streams to avoid timeout, retries 2× (2s/4s backoff), 90s abort |
+| `openrouterWithTools()` | `src/lib/llm/openrouter.ts` | Tool-calling loop, streams to avoid timeout, retries 2× (2s/4s backoff), 90s abort; returns `usage: { inputTokens, outputTokens }` via `stream_options: { include_usage: true }` |
 | `openrouterStream()` | `src/lib/llm/openrouter.ts` | Streaming without tools, calls `onToken(chunk)`, returns full text |
+| `Usage` type | `src/lib/llm/openrouter.ts` | `{ inputTokens: number, outputTokens: number }` — used by tool loop for cost tracking |
 
 ### SSE event pattern (all streaming routes)
 
@@ -573,6 +588,7 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 | `VendorDocument` | W9, INSURANCE_CERT, CONTRACT, OTHER; `expiresAt` for insurance cert expiry badge |
 | `WorkOrder` | Polymorphic: either `jobId` (CLIENT path) or `maintenanceRequestId` (PROPERTY path); `workspaceId` denormalised for easy queries; `vendorId` nullable until assigned |
 | `Bill` | Child of WorkOrder; `vendorId` required (denormalised from work order for direct vendor payment queries); `transactionId` `@unique` — same constraint pattern as `InvoicePayment` |
+| `AgentUsage` | Per-user AI token budget tracking; `endpoint` ('omni'|'rules'|'analyze'|'search'), `inputTokens`/`outputTokens`, daily cap via `AGENT_DAILY_TOKEN_CAP` env var (default 500,000) |
 
 ---
 
