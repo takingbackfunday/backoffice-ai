@@ -1,1050 +1,89 @@
 'use client'
 
-import { useReducer, useState, useRef, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { usePageContext } from '@/components/chat/page-context-provider'
-import type { EditorAction } from '@/lib/agent/page-context'
-import Link from 'next/link'
-import { Plus, Trash2, X, Sparkles, Eye, CheckCircle, Undo2 } from 'lucide-react'
+import { Sparkles, Eye } from 'lucide-react'
 import { useChatStore } from '@/stores/chat-store'
-import { cn } from '@/lib/utils'
-import { JobSelect } from './job-select'
-import { PaymentSummary } from '@/components/projects/payment-summary'
-import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { LineItemsTable } from './line-items-table'
+import { InvoiceFormFields } from './invoice-form-fields'
+import { AiConfirmBanner } from './ai-confirm-banner'
+import { useInvoiceForm } from './hooks/use-invoice-form'
+import type { InvoiceEditorProps } from './hooks/use-invoice-form'
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                               */
-/* ------------------------------------------------------------------ */
-
-export interface LineItemInput {
-  id: string // client-only key
-  description: string
-  quantity: string
-  qtyUnit: string  // e.g. "hrs", "days", ""
-  unitPrice: string
-  isTaxLine: boolean
-}
-
-
-interface InvoiceState {
-  lineItems: LineItemInput[]
-  taxEnabled: boolean
-  taxLabel: string
-  taxMode: 'percent' | 'flat'
-  taxRate: string    // percent or flat amount as string
-  jobId: string
-  dueDate: string
-  issueDate: string
-  currency: string
-  notes: string
-  aiSuggestedNotes: boolean
-}
-
-// Which fields the AI just changed — drives the throb highlight + confirm banner
-interface PendingAiChanges {
-  lineItems: boolean        // whole line items block changed
-  notes: boolean
-  dueDate: boolean
-  issueDate: boolean
-  currency: boolean
-  tax: boolean
-  jobId: boolean
-}
-
-type InvoiceAction =
-  | { type: 'SET_LINE_ITEMS'; items: LineItemInput[] }
-  | { type: 'UPDATE_LINE_ITEM'; id: string; key: keyof LineItemInput; value: string | boolean }
-  | { type: 'ADD_LINE_ITEM' }
-  | { type: 'REMOVE_LINE_ITEM'; id: string }
-  | { type: 'SET_TAX_ENABLED'; enabled: boolean }
-  | { type: 'SET_TAX_LABEL'; label: string }
-  | { type: 'SET_TAX_MODE'; mode: 'percent' | 'flat' }
-  | { type: 'SET_TAX_RATE'; rate: string }
-  | { type: 'SET_TAX_FROM_AI'; label: string; amount: number }
-  | { type: 'SET_JOB'; jobId: string }
-  | { type: 'SET_DUE_DATE'; value: string }
-  | { type: 'SET_ISSUE_DATE'; value: string }
-  | { type: 'SET_CURRENCY'; value: string }
-  | { type: 'SET_NOTES'; value: string; aiSuggested?: boolean }
-
-interface Props {
-  mode: 'create' | 'edit'
-  projectId: string
-  projectSlug: string
-  clientName: string
-  clientEmail: string | null
-  paymentTermDays: number
-  billingType: string
-  company: string | null
-  jobs: { id: string; name: string }[]
-  // pre-fill defaults from last invoice (create mode only)
-  lastInvoiceDefaults?: {
-    taxEnabled: boolean
-    taxLabel: string
-    taxMode: 'percent' | 'flat'
-    taxRate: string
-    currency: string
-  }
-  invoiceNotesDefault?: string
-  // create mode only — for "Copy from past invoice"
-  recentInvoices?: { id: string; invoiceNumber: string; dueDate: string; total: number; currency: string }[]
-  // edit mode only
-  existingInvoice?: {
-    id: string
-    invoiceNumber: string
-    status: string
-    jobId: string | null
-    dueDate: string
-    issueDate: string
-    currency: string
-    notes: string | null
-    lineItems: { id: string; description: string; quantity: number; qtyUnit?: string | null; unitPrice: number; isTaxLine: boolean }[]
-    totalPaid: number
-  }
-  // quote fulfillment link (optional — set when creating invoice from a quote)
-  quoteId?: string | null
-  quoteNumber?: string | null
-  // default payment instructions from settings
-  invoicePaymentNote?: string
-  paymentMethods?: PaymentMethods
-}
-
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                             */
-/* ------------------------------------------------------------------ */
-
-function uid() {
-  return Math.random().toString(36).slice(2)
-}
-
-function defaultDueDate(paymentTermDays: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + paymentTermDays)
-  return d.toISOString().split('T')[0]
-}
-
-const fmtFull = (n: number, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
-
-function calcSubtotal(items: LineItemInput[]): number {
-  return items
-    .filter(i => !i.isTaxLine && i.description.trim())
-    .reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0)
-}
-
-function calcTaxAmount(state: InvoiceState, subtotal: number): number {
-  if (!state.taxEnabled) return 0
-  const rate = parseFloat(state.taxRate) || 0
-  if (state.taxMode === 'percent') return (subtotal * rate) / 100
-  return rate
-}
-
-const CURRENCIES = ['USD', 'GBP', 'EUR', 'CAD', 'AUD', 'NZD', 'CHF', 'JPY', 'SGD', 'HKD']
-
-/* ------------------------------------------------------------------ */
-/*  Reducer                                                             */
-/* ------------------------------------------------------------------ */
-
-function reducer(state: InvoiceState, action: InvoiceAction): InvoiceState {
-  switch (action.type) {
-    case 'SET_LINE_ITEMS':
-      return { ...state, lineItems: action.items }
-    case 'UPDATE_LINE_ITEM':
-      return {
-        ...state,
-        lineItems: state.lineItems.map(i =>
-          i.id === action.id ? { ...i, [action.key]: action.value } : i
-        ),
-      }
-    case 'ADD_LINE_ITEM':
-      return { ...state, lineItems: [...state.lineItems, { id: uid(), description: '', quantity: '1', qtyUnit: 'x', unitPrice: '', isTaxLine: false }] }
-    case 'REMOVE_LINE_ITEM':
-      return { ...state, lineItems: state.lineItems.filter(i => i.id !== action.id) }
-    case 'SET_TAX_ENABLED':
-      return { ...state, taxEnabled: action.enabled }
-    case 'SET_TAX_LABEL':
-      return { ...state, taxLabel: action.label }
-    case 'SET_TAX_MODE':
-      return { ...state, taxMode: action.mode }
-    case 'SET_TAX_RATE':
-      return { ...state, taxRate: action.rate }
-    case 'SET_TAX_FROM_AI':
-      return { ...state, taxEnabled: true, taxLabel: action.label, taxMode: 'flat', taxRate: String(action.amount) }
-    case 'SET_JOB':
-      return { ...state, jobId: action.jobId }
-    case 'SET_DUE_DATE':
-      return { ...state, dueDate: action.value }
-    case 'SET_ISSUE_DATE':
-      return { ...state, issueDate: action.value }
-    case 'SET_CURRENCY':
-      return { ...state, currency: action.value }
-    case 'SET_NOTES':
-      return { ...state, notes: action.value, aiSuggestedNotes: action.aiSuggested ?? false }
-    default:
-      return state
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/*  Main component                                                      */
-/* ------------------------------------------------------------------ */
-
-export function InvoiceEditor({
-  mode,
-  projectId,
-  projectSlug,
-  clientName,
-  clientEmail,
-  paymentTermDays,
-  billingType,
-  company,
-  jobs: initialJobs,
-  lastInvoiceDefaults,
-  existingInvoice,
-  recentInvoices: initialRecentInvoices,
-  quoteId,
-  quoteNumber,
-  invoicePaymentNote = '',
-  invoiceNotesDefault = '',
-  paymentMethods,
-}: Props) {
+export function InvoiceEditor(props: InvoiceEditorProps) {
+  const { mode, projectId, projectSlug } = props
   const router = useRouter()
-  const jobs = initialJobs
 
-  // Build initial state
-  const initial: InvoiceState = existingInvoice
-    ? {
-        lineItems: existingInvoice.lineItems
-          .filter(i => !i.isTaxLine)
-          .map(i => ({ id: uid(), description: i.description, quantity: String(i.quantity), qtyUnit: i.qtyUnit ?? '', unitPrice: String(i.unitPrice), isTaxLine: false })),
-        taxEnabled: existingInvoice.lineItems.some(i => i.isTaxLine),
-        taxLabel: existingInvoice.lineItems.find(i => i.isTaxLine)?.description ?? 'Tax',
-        taxMode: 'flat',
-        taxRate: String(existingInvoice.lineItems.find(i => i.isTaxLine)?.unitPrice ?? 0),
-        jobId: existingInvoice.jobId ?? '',
-        dueDate: existingInvoice.dueDate.split('T')[0],
-        issueDate: existingInvoice.issueDate.split('T')[0],
-        currency: existingInvoice.currency,
-        notes: existingInvoice.notes ?? '',
-        aiSuggestedNotes: false,
-      }
-    : {
-        lineItems: [{ id: uid(), description: '', quantity: '1', qtyUnit: 'x', unitPrice: '', isTaxLine: false }],
-        taxEnabled: lastInvoiceDefaults?.taxEnabled ?? false,
-        taxLabel: lastInvoiceDefaults?.taxLabel ?? 'Tax',
-        taxMode: lastInvoiceDefaults?.taxMode ?? 'percent',
-        taxRate: lastInvoiceDefaults?.taxRate ?? '',
-        jobId: '',
-        dueDate: defaultDueDate(paymentTermDays),
-        issueDate: new Date().toISOString().split('T')[0],
-        currency: lastInvoiceDefaults?.currency ?? 'USD',
-        notes: invoiceNotesDefault,
-        aiSuggestedNotes: false,
-      }
+  const form = useInvoiceForm(props)
 
-  const [state, dispatch] = useReducer(reducer, initial)
-
-  // HITL — track which elements the AI just changed so we can throb + confirm
-  const noChanges: PendingAiChanges = { lineItems: false, notes: false, dueDate: false, issueDate: false, currency: false, tax: false, jobId: false }
-  const [pendingAiChanges, setPendingAiChanges] = useState<PendingAiChanges>(noChanges)
-  const [preAiSnapshot, setPreAiSnapshot] = useState<InvoiceState | null>(null)
-  const hasPendingChanges = Object.values(pendingAiChanges).some(Boolean)
-
-  const stateRef = useRef(state)
-  useEffect(() => { stateRef.current = state }, [state])
-
-  const applyEditorAction = useCallback((action: EditorAction) => {
-    // Take a pre-snapshot on the first AI action so Undo can restore it
-    setPreAiSnapshot(prev => prev ?? { ...stateRef.current, lineItems: stateRef.current.lineItems.map(i => ({ ...i })) })
-    setPendingAiChanges(prev => {
-      const next = { ...prev }
-      if (action.type === 'set_line_items') next.lineItems = true
-      if (action.type === 'set_tax') next.tax = true
-      if (action.type === 'set_due_date') next.dueDate = true
-      if (action.type === 'set_notes') next.notes = true
-      if (action.type === 'set_currency') next.currency = true
-      return next
-    })
-    switch (action.type) {
-      case 'set_line_items':
-        dispatch({ type: 'SET_LINE_ITEMS', items: action.lineItems })
-        break
-      case 'set_tax':
-        dispatch({ type: 'SET_TAX_FROM_AI', label: action.label, amount: action.amount })
-        break
-      case 'set_due_date':
-        dispatch({ type: 'SET_DUE_DATE', value: action.value })
-        break
-      case 'set_notes':
-        dispatch({ type: 'SET_NOTES', value: action.value, aiSuggested: true })
-        break
-      case 'set_currency':
-        dispatch({ type: 'SET_CURRENCY', value: action.value })
-        break
-    }
-  }, [dispatch])
-
-  usePageContext({
-    entityType: 'invoice',
-    entityId: existingInvoice?.id,
-    entityName: existingInvoice?.invoiceNumber,
-    snapshot: {
-      lineItems: state.lineItems,
-      taxEnabled: state.taxEnabled,
-      taxLabel: state.taxLabel,
-      taxRate: state.taxRate,
-      dueDate: state.dueDate,
-      issueDate: state.issueDate,
-      currency: state.currency,
-      notes: state.notes,
-      jobId: state.jobId,
-    },
-    dispatch: applyEditorAction,
-  })
-
-  const [finalizing, setFinalizing] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [showCopyPicker, setShowCopyPicker] = useState(false)
   const [unitPopoverId, setUnitPopoverId] = useState<string | null>(null)
   const [unitPopoverPos, setUnitPopoverPos] = useState<{ top: number; right: number } | null>(null)
   const [unitSuggestions, setUnitSuggestions] = useState<Record<string, string>>({})
-  const [recentInvoices, setRecentInvoices] = useState(initialRecentInvoices ?? null as null | typeof initialRecentInvoices)
-  const [loadingRecent, setLoadingRecent] = useState(false)
-  const [paymentInstructions, setPaymentInstructions] = useState(invoicePaymentNote)
-
-  async function openCopyPicker() {
-    setShowCopyPicker(true)
-    if (recentInvoices !== null) return
-    setLoadingRecent(true)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/invoices`)
-      const json = await res.json()
-      // Show only sent/paid invoices, newest first, max 10
-      const all = (json.data ?? []) as { id: string; invoiceNumber: string; status: string; dueDate: string; lineItems: unknown[]; currency: string }[]
-      const relevant = all
-        .filter(i => ['SENT', 'PARTIAL', 'PAID', 'OVERDUE'].includes(i.status))
-        .slice(0, 10)
-        .map(i => ({
-          id: i.id,
-          invoiceNumber: i.invoiceNumber,
-          dueDate: i.dueDate,
-          total: (i.lineItems as { quantity: number; unitPrice: number; isTaxLine: boolean }[]).reduce((s, l) => s + (l.isTaxLine ? 0 : l.quantity * l.unitPrice), 0),
-          currency: i.currency,
-        }))
-      setRecentInvoices(relevant)
-    } catch {
-      setRecentInvoices([])
-    } finally {
-      setLoadingRecent(false)
-    }
-  }
-
-  async function copyFromInvoice(invoiceId: string) {
-    setShowCopyPicker(false)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/invoices/${invoiceId}`)
-      const json = await res.json()
-      if (!res.ok || json.error) return
-      const inv = json.data
-      dispatch({
-        type: 'SET_LINE_ITEMS',
-        items: (inv.lineItems as { description: string; quantity: number; qtyUnit?: string | null; unitPrice: number; isTaxLine: boolean }[])
-          .filter((i) => !i.isTaxLine)
-          .map((i) => ({ id: uid(), description: i.description, quantity: String(i.quantity), qtyUnit: i.qtyUnit ?? '', unitPrice: String(i.unitPrice), isTaxLine: false })),
-      })
-      if (inv.notes) dispatch({ type: 'SET_NOTES', value: inv.notes })
-      if (inv.currency) dispatch({ type: 'SET_CURRENCY', value: inv.currency })
-      const taxLine = (inv.lineItems as { isTaxLine: boolean; description: string; unitPrice: number }[]).find(i => i.isTaxLine)
-      if (taxLine) dispatch({ type: 'SET_TAX_FROM_AI', label: taxLine.description, amount: taxLine.unitPrice })
-    } catch { /* silent */ }
-  }
-
-  // Listen for shortcut triggers from NewInvoiceShortcuts
-  useEffect(() => {
-    // AI prompt trigger — open the omni chat widget with the pre-seeded message
-    function onAiTrigger() {
-      const pending = sessionStorage.getItem('invoice-ai-prompt')
-      if (!pending) return
-      sessionStorage.removeItem('invoice-ai-prompt')
-      useChatStore.getState().openWithMessage(pending)
-    }
-    // Copy picker trigger
-    function onCopyPickerTrigger() {
-      if (!sessionStorage.getItem('invoice-open-copy-picker')) return
-      sessionStorage.removeItem('invoice-open-copy-picker')
-      openCopyPicker()
-    }
-    // Also check sessionStorage on mount (in case event fired before listener attached)
-    onAiTrigger()
-    onCopyPickerTrigger()
-
-    window.addEventListener('invoice-ai-trigger', onAiTrigger)
-    window.addEventListener('invoice-copy-picker-trigger', onCopyPickerTrigger)
-    return () => {
-      window.removeEventListener('invoice-ai-trigger', onAiTrigger)
-      window.removeEventListener('invoice-copy-picker-trigger', onCopyPickerTrigger)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Derived totals
-  const subtotal = calcSubtotal(state.lineItems)
-  const taxAmount = calcTaxAmount(state, subtotal)
-  const total = subtotal + taxAmount
-
-  // Edit guard — total vs paid
-  const paymentsExist = (existingInvoice?.totalPaid ?? 0) > 0
-  const totalBelowPaid = paymentsExist && total < (existingInvoice?.totalPaid ?? 0)
-  const isSent = existingInvoice && ['SENT', 'PARTIAL'].includes(existingInvoice.status)
-
-  function buildCurrentInvoiceSnapshot() {
-    return {
-      lineItems: state.lineItems
-        .filter(i => i.description.trim())
-        .map(i => ({ description: i.description, quantity: parseFloat(i.quantity) || 1, unitPrice: parseFloat(i.unitPrice) || 0 })),
-      tax: state.taxEnabled ? { label: state.taxLabel, amount: taxAmount } : null,
-      dueDate: state.dueDate,
-      issueDate: state.issueDate,
-      currency: state.currency,
-      notes: state.notes,
-      subtotal,
-      total,
-    }
-  }
-
-  function confirmAiChanges() {
-    setPendingAiChanges(noChanges)
-    setPreAiSnapshot(null)
-  }
-
-  function undoAiChanges() {
-    if (!preAiSnapshot) return
-    dispatch({ type: 'SET_LINE_ITEMS', items: preAiSnapshot.lineItems })
-    if (preAiSnapshot.notes !== state.notes) dispatch({ type: 'SET_NOTES', value: preAiSnapshot.notes })
-    if (preAiSnapshot.dueDate !== state.dueDate) dispatch({ type: 'SET_DUE_DATE', value: preAiSnapshot.dueDate })
-    if (preAiSnapshot.issueDate !== state.issueDate) dispatch({ type: 'SET_ISSUE_DATE', value: preAiSnapshot.issueDate })
-    if (preAiSnapshot.currency !== state.currency) dispatch({ type: 'SET_CURRENCY', value: preAiSnapshot.currency })
-    if (preAiSnapshot.jobId !== state.jobId) dispatch({ type: 'SET_JOB', jobId: preAiSnapshot.jobId })
-    if (preAiSnapshot.taxEnabled !== state.taxEnabled || preAiSnapshot.taxRate !== state.taxRate) {
-      dispatch({ type: 'SET_TAX_ENABLED', enabled: preAiSnapshot.taxEnabled })
-      dispatch({ type: 'SET_TAX_LABEL', label: preAiSnapshot.taxLabel })
-      dispatch({ type: 'SET_TAX_MODE', mode: preAiSnapshot.taxMode })
-      dispatch({ type: 'SET_TAX_RATE', rate: preAiSnapshot.taxRate })
-    }
-    setPendingAiChanges(noChanges)
-    setPreAiSnapshot(null)
-  }
-
-  /* ---------------------------------------------------------------- */
-  /*  AI Finalize                                                       */
-  /* ---------------------------------------------------------------- */
-
-  async function handleFinalize() {
-    setFinalizing(true)
-    setSaveError(null)
-    try {
-      const snapshot = buildCurrentInvoiceSnapshot()
-      console.log('[ai-finalize] sending snapshot — lineItems:', snapshot.lineItems.length, '| total:', snapshot.total)
-
-      const res = await fetch(`/api/projects/${projectId}/invoices/ai-finalize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          currentInvoice: snapshot,
-          clientName,
-          company,
-          paymentTermDays,
-          billingType,
-        }),
-      })
-      const json = await res.json()
-      console.log('[ai-finalize] response status:', res.status, '| json.error:', json.error, '| data keys:', json.data ? Object.keys(json.data) : null)
-
-      if (!res.ok || json.error) {
-        setSaveError(json.error ?? `AI Finalize failed (${res.status})`)
-        return
-      }
-
-      const { suggestedNotes, questions } = json.data as { suggestedNotes: string | null; questions: string[] }
-
-      if (suggestedNotes) {
-        dispatch({ type: 'SET_NOTES', value: suggestedNotes, aiSuggested: true })
-      }
-
-      // Open the omni chat so the user can follow up on the finalize result
-      const followUp = questions.length > 0
-        ? questions.join(' ')
-        : suggestedNotes
-          ? 'I\'ve applied suggested notes to the invoice — let me know if you\'d like any changes.'
-          : 'Your invoice looks good. Let me know if you\'d like any changes.'
-      useChatStore.getState().openWithMessage(followUp)
-    } catch (err) {
-      console.error('[ai-finalize] client error:', err)
-      setSaveError('AI Finalize failed — check console for details')
-    } finally {
-      setFinalizing(false)
-    }
-  }
-
-  /* ---------------------------------------------------------------- */
-  /*  Save                                                              */
-  /* ---------------------------------------------------------------- */
-
-  function buildLineItemsPayload() {
-    const regular = state.lineItems
-      .filter(i => i.description.trim())
-      .map(i => ({
-        description: i.description.trim(),
-        quantity: parseFloat(i.quantity) || 1,
-        qtyUnit: i.qtyUnit.trim() || undefined,
-        unitPrice: parseFloat(i.unitPrice) || 0,
-        isTaxLine: false,
-      }))
-
-    if (state.taxEnabled && taxAmount > 0) {
-      regular.push({
-        description: state.taxLabel || 'Tax',
-        quantity: 1,
-        qtyUnit: undefined,
-        unitPrice: taxAmount,
-        isTaxLine: true,
-      })
-    }
-
-    return regular
-  }
+  const [paymentInstructions, setPaymentInstructions] = useState(props.invoicePaymentNote ?? '')
 
   async function handleSave(sendAfter: boolean) {
-    if (!state.dueDate) { setSaveError('Due date is required'); return }
-    const lineItemsPayload = buildLineItemsPayload()
-    if (lineItemsPayload.filter(i => !i.isTaxLine).length === 0) {
-      setSaveError('At least one line item is required')
-      return
-    }
-    if (totalBelowPaid) {
-      setSaveError(`Total cannot be less than amount already paid (${fmtFull(existingInvoice!.totalPaid, state.currency)})`)
-      return
-    }
-
-    setSaving(true)
-    setSaveError(null)
-
-    try {
-      let invoiceId: string
-
-      if (mode === 'create') {
-        const res = await fetch(`/api/projects/${projectId}/invoices`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jobId: state.jobId || undefined,
-            dueDate: state.dueDate,
-            currency: state.currency,
-            notes: state.notes || undefined,
-            lineItems: lineItemsPayload,
-            quoteId: quoteId || undefined,
-          }),
-        })
-        const json = await res.json()
-        if (!res.ok || json.error) { setSaveError(json.error ?? 'Failed to create invoice'); return }
-        invoiceId = json.data.id
-
-        // Auto-save current settings as defaults for next invoice (fire-and-forget)
-        fetch('/api/preferences', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ invoiceDefaults: {
-            taxEnabled: state.taxEnabled,
-            taxLabel: state.taxLabel,
-            taxMode: state.taxMode,
-            taxRate: state.taxRate,
-            currency: state.currency,
-          }}),
-        }).catch(() => {})
-
-      } else {
-        const res = await fetch(`/api/projects/${projectId}/invoices/${existingInvoice!.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jobId: state.jobId || undefined,
-            dueDate: state.dueDate,
-            currency: state.currency,
-            notes: state.notes || undefined,
-            lineItems: lineItemsPayload,
-          }),
-        })
-        const json = await res.json()
-        if (!res.ok || json.error) { setSaveError(json.error ?? 'Failed to update invoice'); return }
-        invoiceId = existingInvoice!.id
-      }
-
+    const invoiceId = await form.handleSave(sendAfter, mode, props.existingInvoice?.id)
+    if (invoiceId) {
       router.push(`/projects/${projectSlug}/invoices/${invoiceId}${sendAfter ? '?send=1' : ''}`)
-    } finally {
-      setSaving(false)
     }
   }
-
-  /* ---------------------------------------------------------------- */
-  /*  Render                                                            */
-  /* ---------------------------------------------------------------- */
-
-  const isVoidOrPaid = existingInvoice && ['PAID', 'VOID'].includes(existingInvoice.status)
 
   return (
     <div className="flex gap-0 min-h-0">
-
-      {/* ── Form ─────────────────────────────────────────────────── */}
       <div className="flex-1 min-w-0">
         <div className="pr-6">
+          <InvoiceFormFields
+            state={form.state}
+            dispatch={form.dispatch}
+            pendingAiChanges={form.pendingAiChanges}
+            setPendingAiChanges={form.setPendingAiChanges}
+            subtotal={form.subtotal}
+            taxAmount={form.taxAmount}
+            total={form.total}
+            totalBelowPaid={form.totalBelowPaid}
+            isSent={!!form.isSent}
+            mode={mode}
+            projectId={projectId}
+            jobs={props.jobs}
+            showCopyPicker={form.showCopyPicker}
+            setShowCopyPicker={form.setShowCopyPicker}
+            recentInvoices={props.recentInvoices}
+            loadingRecent={form.loadingRecent}
+            openCopyPicker={form.openCopyPicker}
+            copyFromInvoice={form.copyFromInvoice}
+            existingInvoice={props.existingInvoice}
+            quoteNumber={props.quoteNumber}
+            paymentInstructions={paymentInstructions}
+            setPaymentInstructions={setPaymentInstructions}
+            paymentMethods={props.paymentMethods}
+          />
 
-          {/* Quote link badge */}
-          {quoteNumber && (
-            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-800 flex items-center gap-2">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Invoice for Quote <strong>{quoteNumber}</strong>
-            </div>
+          <LineItemsTable
+            lineItems={form.state.lineItems}
+            dispatch={form.dispatch}
+            currency={form.state.currency}
+            mode={mode}
+            projectId={projectId}
+            unitPopoverId={unitPopoverId}
+            setUnitPopoverId={setUnitPopoverId}
+            unitPopoverPos={unitPopoverPos}
+            setUnitPopoverPos={setUnitPopoverPos}
+            unitSuggestions={unitSuggestions}
+            setUnitSuggestions={setUnitSuggestions}
+            lineItemsAiChanged={form.pendingAiChanges.lineItems}
+            setPendingAiChanges={form.setPendingAiChanges}
+          />
+
+          {form.hasPendingChanges && (
+            <AiConfirmBanner onConfirm={form.confirmAiChanges} onUndo={form.undoAiChanges} />
           )}
 
-          {/* Edit warnings */}
-          {isSent && (
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              This invoice has already been sent. Editing will <strong>not</strong> automatically notify your client.
-            </div>
-          )}
-          {totalBelowPaid && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-              Total cannot be less than the amount already paid ({fmtFull(existingInvoice!.totalPaid, state.currency)}).
-            </div>
-          )}
-
-          {/* Job selector */}
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Job</label>
-              <span className="text-xs text-muted-foreground italic">(Optional — for your records only)</span>
-              {mode === 'create' && showCopyPicker && (
-                <div className="ml-auto relative">
-                  <div className="absolute top-0 right-0 z-20 w-72 rounded-xl border bg-background shadow-xl p-2">
-                    <div className="flex items-center justify-between px-2 py-1 mb-1">
-                      <span className="text-xs font-semibold">Select invoice</span>
-                      <button type="button" onClick={() => setShowCopyPicker(false)} className="text-muted-foreground hover:text-foreground">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    {loadingRecent && <p className="text-xs text-muted-foreground px-2 py-2">Loading…</p>}
-                    {!loadingRecent && recentInvoices && recentInvoices.length === 0 && (
-                      <p className="text-xs text-muted-foreground px-2 py-2">No past invoices found.</p>
-                    )}
-                    {!loadingRecent && recentInvoices && recentInvoices.map(inv => (
-                      <button
-                        key={inv.id}
-                        type="button"
-                        onClick={() => copyFromInvoice(inv.id)}
-                        className="w-full flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
-                      >
-                        <span className="font-medium">{inv.invoiceNumber}</span>
-                        <span className="text-muted-foreground">{new Intl.NumberFormat('en-US', { style: 'currency', currency: inv.currency }).format(inv.total)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            <JobSelect
-              value={state.jobId}
-              onChange={jobId => dispatch({ type: 'SET_JOB', jobId })}
-              jobs={jobs}
-              projectId={projectId}
-              placeholder="No specific job"
-              className="max-w-sm"
-            />
-          </div>
-
-          {/* Unit popover — rendered fixed to avoid overflow-hidden clipping */}
-          {unitPopoverId && unitPopoverPos && (() => {
-            const activeItem = state.lineItems.find(i => i.id === unitPopoverId)
-            if (!activeItem) return null
-            const suggestedUnit = unitSuggestions[unitPopoverId] ?? null
-            return (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setUnitPopoverId(null)} aria-hidden="true" />
-                <div
-                  className="fixed z-50 rounded-xl border bg-background shadow-xl p-1 w-44 max-h-80 overflow-y-auto"
-                  style={{ top: unitPopoverPos.top, right: unitPopoverPos.right }}
-                >
-                  <div className="pb-1.5 border-b mb-1">
-                    <input
-                      type="text"
-                      value={activeItem.qtyUnit}
-                      onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: e.target.value })}
-                      placeholder="custom unit…"
-                      className="w-full rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
-                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setUnitPopoverId(null) }}
-                      autoFocus
-                    />
-                  </div>
-                  {suggestedUnit && (
-                    <div className="pb-1 border-b mb-1">
-                      <p className="text-[9px] font-semibold text-amber-500 uppercase tracking-wide px-2 pt-1 pb-0.5">Suggested</p>
-                      <button
-                        type="button"
-                        onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: suggestedUnit }); setUnitSuggestions(prev => { const next = { ...prev }; delete next[unitPopoverId]; return next }); setUnitPopoverId(null) }}
-                        className={`w-full text-left px-2 py-1 text-xs rounded-md transition-colors bg-amber-50 text-amber-700 hover:bg-amber-100 ${activeItem.qtyUnit === suggestedUnit ? 'font-semibold' : ''}`}
-                      >
-                        {suggestedUnit}
-                      </button>
-                    </div>
-                  )}
-                  {([
-                    ['Time', ['hours', 'days', 'weeks', 'months']],
-                    ['Area', ['sq ft', 'sq m']],
-                    ['Assets', ['assets']],
-                    ['Activities', ['visits', 'inspections', 'sessions', 'revisions', 'cleanings']],
-                    ['Units', ['x', 'units', 'pieces']],
-                    ['Licenses', ['licenses', 'seats', 'prints']],
-                    ['Flat fee', ['flat fee']],
-                  ] as [string, string[]][]).map(([group, opts]) => (
-                    <div key={group}>
-                      <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wide px-2 pt-1.5 pb-0.5">{group}</p>
-                      {opts.map(u => (
-                        <button
-                          key={u}
-                          type="button"
-                          onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: u }); setUnitSuggestions(prev => { const next = { ...prev }; delete next[unitPopoverId]; return next }); setUnitPopoverId(null) }}
-                          className={`w-full text-left px-2 py-1 text-xs rounded-md hover:bg-muted/50 transition-colors ${activeItem.qtyUnit === u ? 'font-semibold text-primary bg-primary/5' : ''} ${suggestedUnit === u && activeItem.qtyUnit !== u ? 'text-amber-600' : ''}`}
-                        >
-                          {u}
-                          {suggestedUnit === u && activeItem.qtyUnit !== u && <span className="ml-1 text-[9px] text-amber-400">●</span>}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                  {activeItem.qtyUnit && (
-                    <button
-                      type="button"
-                      onClick={() => { dispatch({ type: 'UPDATE_LINE_ITEM', id: unitPopoverId, key: 'qtyUnit', value: '' }); setUnitPopoverId(null) }}
-                      className="w-full text-left px-2 py-1 text-xs text-muted-foreground hover:text-destructive rounded-md hover:bg-muted/30 mt-0.5 border-t"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </>
-            )
-          })()}
-
-          {/* Line items */}
-          <div className="mb-5">
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Line items</label>
-            <div className={cn('rounded-xl border overflow-hidden transition-shadow', pendingAiChanges.lineItems && 'ai-changed')}>
-              <div className="grid grid-cols-[minmax(120px,1fr)_140px_110px_100px_32px] bg-muted/50 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                <span>Description</span>
-                <span className="text-right">Qty / Unit</span>
-                <span className="text-right">Rate</span>
-                <span className="text-right">Total</span>
-                <span />
-              </div>
-              {state.lineItems.map((item, idx) => {
-                const lineTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)
-                return (
-                  <div key={item.id} className="grid grid-cols-[minmax(120px,1fr)_140px_110px_100px_32px] border-t px-3 py-1.5 items-start hover:bg-muted/10 group">
-                    <textarea
-                      value={item.description}
-                      rows={1}
-                      onChange={e => {
-                        dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'description', value: e.target.value })
-                        setPendingAiChanges(p => ({ ...p, lineItems: false }))
-                        e.target.style.height = 'auto'
-                        e.target.style.height = e.target.scrollHeight + 'px'
-                      }}
-                      onBlur={e => {
-                        const desc = e.target.value.trim()
-                        if (!desc) return
-                        fetch(`/api/projects/${projectId}/invoices/suggest-unit`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ description: desc }),
-                        }).then(r => r.json()).then(j => {
-                          if (j.data?.unit && j.data?.confidence === 'high') {
-                            setUnitSuggestions(prev => ({ ...prev, [item.id]: j.data.unit }))
-                          } else {
-                            setUnitSuggestions(prev => { const next = { ...prev }; delete next[item.id]; return next })
-                          }
-                        }).catch(() => {})
-                      }}
-                      className="text-xs focus:outline-none bg-transparent placeholder:text-muted-foreground/50 min-w-0 w-full resize-none overflow-hidden leading-snug py-0.5"
-                      placeholder="Description of work or service"
-                      autoFocus={idx === 0 && mode === 'create' && item.description === ''}
-                    />
-                    <div className="flex items-center gap-1 justify-end">
-                      <input
-                        type="number"
-                        value={item.quantity}
-                        onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'quantity', value: e.target.value })}
-                        className="text-xs text-right focus:outline-none bg-transparent tabular-nums w-12"
-                        min="0"
-                        step="0.001"
-                      />
-                      <button
-                        type="button"
-                        onClick={e => {
-                          if (unitPopoverId === item.id) { setUnitPopoverId(null); return }
-                          const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
-                          setUnitPopoverPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
-                          setUnitPopoverId(item.id)
-                        }}
-                        className={`relative text-[10px] rounded px-1 py-0.5 border transition-colors ${item.qtyUnit ? 'border-primary/40 text-primary bg-primary/5' : 'border-dashed border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/60'}`}
-                        title={unitSuggestions[item.id] ? `Suggested: ${unitSuggestions[item.id]}` : undefined}
-                      >
-                        {item.qtyUnit || 'unit'}
-                        {unitSuggestions[item.id] && (
-                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400 border border-background" />
-                        )}
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-end">
-                      <input
-                        type="number"
-                        value={item.unitPrice}
-                        onChange={e => dispatch({ type: 'UPDATE_LINE_ITEM', id: item.id, key: 'unitPrice', value: e.target.value })}
-                        className="text-xs text-right focus:outline-none bg-transparent tabular-nums w-full"
-                        placeholder="0.00"
-                        min="0"
-                        step="0.01"
-                      />
-                    </div>
-                    <span className="text-xs text-right tabular-nums text-muted-foreground pr-1">
-                      {lineTotal > 0 ? fmtFull(lineTotal, state.currency) : '—'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => state.lineItems.length > 1 && dispatch({ type: 'REMOVE_LINE_ITEM', id: item.id })}
-                      className="flex items-center justify-center text-muted-foreground/40 hover:text-destructive transition-colors disabled:opacity-20"
-                      disabled={state.lineItems.length === 1}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )
-              })}
-              {/* Add line — bottom-left of table */}
-              <div className="border-t px-3 py-1.5">
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'ADD_LINE_ITEM' })}
-                  className="flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  <Plus className="h-3 w-3" /> Add line
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Tax */}
-          <div className="mb-5">
-            <div className="flex items-center gap-3 flex-wrap">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={state.taxEnabled}
-                  onChange={e => dispatch({ type: 'SET_TAX_ENABLED', enabled: e.target.checked })}
-                  className="rounded border"
-                />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add tax</span>
-              </label>
-              {state.taxEnabled && (
-                <div className="flex items-center gap-2 flex-1 flex-wrap">
-                  <input
-                    type="text"
-                    value={state.taxLabel}
-                    onChange={e => dispatch({ type: 'SET_TAX_LABEL', label: e.target.value })}
-                    className="rounded-lg border px-2 py-1.5 text-xs w-32 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder="GST, VAT, Sales Tax…"
-                  />
-                  <select
-                    value={state.taxMode}
-                    onChange={e => dispatch({ type: 'SET_TAX_MODE', mode: e.target.value as 'percent' | 'flat' })}
-                    className="rounded-lg border px-2 py-1.5 text-xs focus:outline-none"
-                  >
-                    <option value="percent">%</option>
-                    <option value="flat">Flat</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={state.taxRate}
-                    onChange={e => dispatch({ type: 'SET_TAX_RATE', rate: e.target.value })}
-                    className="rounded-lg border px-2 py-1.5 text-xs w-24 tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder={state.taxMode === 'percent' ? '15' : '0.00'}
-                    min="0"
-                    step={state.taxMode === 'percent' ? '0.1' : '0.01'}
-                  />
-                  {taxAmount > 0 && (
-                    <span className="text-xs text-muted-foreground">= {fmtFull(taxAmount, state.currency)}</span>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Totals */}
-          <div className="mb-6 rounded-xl border bg-muted/20 p-4">
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="tabular-nums font-medium">{fmtFull(subtotal, state.currency)}</span>
-              </div>
-              {state.taxEnabled && taxAmount > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">{state.taxLabel || 'Tax'}{state.taxMode === 'percent' && state.taxRate ? ` (${state.taxRate}%)` : ''}</span>
-                  <span className="tabular-nums">{fmtFull(taxAmount, state.currency)}</span>
-                </div>
-              )}
-              <div className="flex justify-between pt-1.5 border-t">
-                <span className="text-xs font-bold">Total</span>
-                <span className="text-sm font-bold tabular-nums">{fmtFull(total, state.currency)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Dates + currency */}
-          <div className="grid grid-cols-3 gap-4 mb-5">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
-                Due date <span className="text-destructive">*</span>
-              </label>
-              <input
-                type="date"
-                value={state.dueDate}
-                onChange={e => { dispatch({ type: 'SET_DUE_DATE', value: e.target.value }); setPendingAiChanges(p => ({ ...p, dueDate: false })) }}
-                className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-shadow', pendingAiChanges.dueDate && 'ai-changed')}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Issue date</label>
-              <input
-                type="date"
-                value={state.issueDate}
-                onChange={e => { dispatch({ type: 'SET_ISSUE_DATE', value: e.target.value }); setPendingAiChanges(p => ({ ...p, issueDate: false })) }}
-                className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-shadow', pendingAiChanges.issueDate && 'ai-changed')}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Currency</label>
-              <select
-                value={state.currency}
-                onChange={e => { dispatch({ type: 'SET_CURRENCY', value: e.target.value }); setPendingAiChanges(p => ({ ...p, currency: false })) }}
-                className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-shadow', pendingAiChanges.currency && 'ai-changed')}
-              >
-                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes / payment terms</label>
-              <Link
-                href="/settings#invoice-notes-default"
-                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Change default text →
-              </Link>
-              {state.aiSuggestedNotes && (
-                <span className="text-[10px] text-primary flex items-center gap-1 ml-auto">
-                  <Sparkles className="h-3 w-3" /> AI suggested
-                </span>
-              )}
-            </div>
-            <textarea
-              value={state.notes}
-              onChange={e => { dispatch({ type: 'SET_NOTES', value: e.target.value }); setPendingAiChanges(p => ({ ...p, notes: false })) }}
-              onBlur={e => {
-                fetch('/api/preferences', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ invoiceNotesDefault: e.target.value }),
-                }).catch(() => {})
-              }}
-              rows={3}
-              className={cn('w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none transition-shadow', pendingAiChanges.notes && 'ai-changed')}
-              placeholder="Leave blank to hide from invoices"
-            />
-          </div>
-
-          {/* Payment instructions */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Payment instructions</label>
-              <Link
-                href="/settings#payment-instructions"
-                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Change default text →
-              </Link>
-            </div>
-            <textarea
-              value={paymentInstructions}
-              onChange={e => setPaymentInstructions(e.target.value)}
-              onBlur={e => {
-                fetch('/api/preferences', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ invoicePaymentNote: e.target.value }),
-                }).catch(() => {})
-              }}
-              rows={2}
-              className="w-full rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none transition-shadow"
-              placeholder="Leave blank to hide from invoices"
-            />
-            {paymentMethods && (
-              <div className="mt-2">
-                <PaymentSummary pm={paymentMethods} />
-              </div>
-            )}
-          </div>
-
-          {/* HITL — AI change confirmation banner */}
-          {hasPendingChanges && (
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/8 px-3 py-2.5">
-              <div className="flex items-center gap-2 text-xs text-primary font-medium">
-                <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                AI made changes — review the highlighted fields above
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={undoAiChanges}
-                  className="flex items-center gap-1 rounded-md border border-primary/30 px-2.5 py-1 text-xs text-primary hover:bg-primary/10 transition-colors"
-                >
-                  <Undo2 className="h-3 w-3" />
-                  Undo
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmAiChanges}
-                  className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-                >
-                  <CheckCircle className="h-3 w-3" />
-                  Confirm
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Save errors */}
-          {saveError && (
+          {form.saveError && (
             <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {saveError}
+              {form.saveError}
             </div>
           )}
 
-          {/* Action buttons */}
           <div className="flex items-center gap-3 flex-wrap">
             <button
               type="button"
@@ -1056,12 +95,12 @@ export function InvoiceEditor({
 
             <button
               type="button"
-              onClick={handleFinalize}
-              disabled={finalizing}
+              onClick={form.handleFinalize}
+              disabled={form.finalizing}
               className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-40 transition-colors"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              {finalizing ? 'Reviewing…' : 'Review with AI'}
+              {form.finalizing ? 'Reviewing…' : 'Review with AI'}
             </button>
 
             <button
@@ -1078,22 +117,22 @@ export function InvoiceEditor({
             <button
               type="button"
               onClick={() => handleSave(false)}
-              disabled={saving}
+              disabled={form.saving}
               className="rounded-lg border px-4 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50 transition-colors"
             >
-              {saving ? 'Saving…' : mode === 'create' ? 'Save as draft' : 'Save changes'}
+              {form.saving ? 'Saving…' : mode === 'create' ? 'Save as draft' : 'Save changes'}
             </button>
 
-            {(!existingInvoice || existingInvoice.status === 'DRAFT') && (
+            {(!props.existingInvoice || props.existingInvoice.status === 'DRAFT') && (
               <button
                 type="button"
                 onClick={() => handleSave(true)}
-                disabled={saving}
+                disabled={form.saving}
                 title={undefined}
                 className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 <Eye className="h-3.5 w-3.5" />
-                {saving ? 'Saving…' : 'Create & review'}
+                {form.saving ? 'Saving…' : 'Create & review'}
               </button>
             )}
           </div>
@@ -1102,4 +141,3 @@ export function InvoiceEditor({
     </div>
   )
 }
-
