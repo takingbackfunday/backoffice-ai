@@ -244,3 +244,14 @@ export const POST = authedRoute<{ id: string }, z.infer<typeof BodySchema>>({
 ```
 
 Ownership lookups live in `src/lib/authz.ts` — always scope by `userId`. Routes with complex includes (e.g. invoices) should cast the result with `Prisma.WorkspaceGetPayload<{ include: ... }>`. Migration checklist: `docs/api-migration.md`.
+
+### Studio & Portfolio — SQL KPIs + lazy-load detail
+
+Studio (`/studio`) and Portfolio (`/portfolio`) use SQL-based KPI aggregation and lazy-load card detail on expand. The pattern:
+
+1. **Server page** (`src/app/studio/page.tsx`, `src/app/portfolio/page.tsx`) calls `fetchStudioKpis`/`fetchPortfolioKpis` + `fetchClientCardSummaries`/`fetchUnitSummaries` via `$queryRaw` in `src/lib/studio-kpis.ts`. No per-invoice line-item fetch at initial load.
+2. **Card summaries** contain pre-computed aggregates (outstanding, overdue, collected, payment status scores). Collapsed cards render from these.
+3. **Expanded detail** (invoices, quotes, jobs, maintenance, messages) is fetched on demand via `GET /api/studio/clients/[clientProfileId]` and `GET /api/portfolio/units/[unitId]`.
+4. **Client components** (`studio-client.tsx`, `portfolio-client.tsx`) hold `cardDetails`/`unitDetails` state and fetch on expand. Lightweight invoices (`flatInvoices`) and quotes (`flatQuotes`) are still passed as props for notices, pipeline strip, and recent activity — but these are pre-computed in SQL without line items.
+
+Key constraint: `deriveInvoiceStatus` logic is replicated in SQL (the `CASE` expression in the CTEs). If the status derivation rules change, update both `src/lib/invoice-status.ts` (JS) and the SQL CTEs in `src/lib/studio-kpis.ts`.

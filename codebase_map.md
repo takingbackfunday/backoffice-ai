@@ -319,6 +319,9 @@ Auto-sync/open-banking providers have been removed. Users import transactions by
 | Task | File |
 |---|---|
 | Portfolio dashboard | `src/components/portfolio/portfolio-client.tsx` |
+| Portfolio page (server, SQL KPIs + summaries) | `src/app/portfolio/page.tsx` |
+| SQL KPI aggregation + unit summaries | `src/lib/studio-kpis.ts` → `fetchPortfolioKpis`, `fetchUnitSummaries` |
+| Lazy-load unit detail API | `GET /api/portfolio/units/[unitId]` |
 | Unit board | `src/components/projects/unit-board.tsx` |
 | Unit detail (lease/ledger/maintenance/messages tabs) | `src/components/projects/unit-detail-client.tsx` |
 | Lease form | `src/components/projects/lease-form.tsx` |
@@ -370,7 +373,9 @@ Auto-sync/open-banking providers have been removed. Users import transactions by
 
 | Task | File |
 |---|---|
-| Page (server, data fetch) | `src/app/studio/page.tsx` |
+| Page (server, SQL KPIs + summaries) | `src/app/studio/page.tsx` |
+| SQL KPI aggregation + lazy-load detail | `src/lib/studio-kpis.ts` |
+| Lazy-load card detail API | `GET /api/studio/clients/[clientProfileId]` |
 | Client component | `src/components/studio/studio-client.tsx` |
 | Draft invoice creation modal | `src/components/studio/studio-invoice-modal.tsx` |
 | Action modals | `src/components/studio/studio-action-modals.tsx` |
@@ -381,6 +386,8 @@ Auto-sync/open-banking providers have been removed. Users import transactions by
 **Filtered card appearance:** when `clientFilter` is active, card headers collapse to client name + chevron only (stat columns hidden). The expanded body shows only the items relevant to the active filter: `overdue` → overdue invoices; `unsent` → draft invoices; `outstanding` → sent/partial invoices only (overdue excluded); `collected` → paid invoices; `awaiting-quotes` → sent quotes; `uninvoiced-quotes` → accepted quotes without an invoice. Section labels ("Invoices", "Accepted quotes") are also hidden in filter mode.
 
 **Outstanding vs Overdue — mutually exclusive amounts:** `outstanding` covers SENT + PARTIAL invoices only; `overdue` covers OVERDUE invoices only. An overdue invoice's amount never appears in the Outstanding KPI, client card Outstanding column, or outstanding filter — only in Overdue. Both KPI totals and per-client card figures are derived from invoice statuses client-side, not from the server-computed `client.outstanding` field (which includes overdue).
+
+**Lazy-load pattern:** initial page load fetches lightweight summaries only (card headers + derived status in SQL). Expanded card detail (invoices with line items, quotes, jobs) is fetched on demand via `GET /api/studio/clients/[clientProfileId]`. Lightweight invoices (`flatInvoices`) and quotes (`flatQuotes`) are passed as props for notices, pipeline strip, and recent activity — pre-computed in SQL without line items.
 
 ---
 
