@@ -146,8 +146,13 @@ Tax is a regular `InvoiceLineItem` with `isTaxLine: true`. Always include `isTax
 ### Document upload token is single-use
 `ApplicantDocument.uploadToken` is nulled after upload. A second attempt returns `400 Invalid token`.
 
-### Workspace model — `@@map("Project")`, use `"Project"` in raw SQL
-The Prisma `Workspace` model maps to the `"Project"` table via `@@map("Project")`. ALL raw SQL (`$queryRaw`) must use `"Project"`, NOT `"Workspace"`. This affects `src/lib/studio-kpis.ts` (6 joins across all KPIs, card summaries, lightweight invoices/quotes, portfolio KPIs, and unit summaries). Forgetting this causes `42P01: relation "Workspace" does not exist`.
+### Raw SQL — validate against the schema, don't trust Prisma field names
+Raw SQL (`$queryRaw`/`$executeRaw`) bypasses both Prisma's type-checking and its `@map`/`@@map` name remapping, so identifier bugs reach production untouched by `tsc`, ESLint, and `pnpm build`. Three recurring traps:
+1. **Table rename:** the `Workspace` model maps to `"Project"` (`@@map("Project")`). Use `"Project"`, never `"Workspace"`, in raw SQL — else `42P01: relation "Workspace" does not exist`.
+2. **Column rename:** `ClientProfile`/`PropertyProfile` expose Prisma field `workspaceId` but the real column is `projectId` (`@map("projectId")`). Use `cp."projectId"`/`pp."projectId"` — else `42703: column cp.workspaceId does not exist`.
+3. **Unquoted camelCase:** Postgres folds unquoted identifiers to lowercase, so `dueDate` becomes `duedate` (→ `42703`). Always double-quote camelCase columns: `i."dueDate"`. Also note `dueDate`/`issueDate` are `timestamp`, not `date`: `CURRENT_DATE - ts` yields an *interval*, so cast (`ts::date`) before integer comparisons.
+
+**Guard:** `pnpm validate:sql` (needs a real `DIRECT_URL`) extracts every raw query in `src/` and `EXPLAIN`s it against the live schema, failing on undefined column/table/operator. CI runs it against a throwaway Postgres seeded via `prisma db push` (see `.github/workflows/ci.yml` + `scripts/validate-sql.mjs`). Run it locally before deploying any raw-SQL change instead of discovering the next broken query one deploy at a time.
 
 ### Transaction — `projectId` vs `workspaceId` field name split
 The DB column is `projectId` but Prisma maps it to `workspaceId` via `@map("projectId")`. Consequence:

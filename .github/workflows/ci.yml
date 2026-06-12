@@ -9,6 +9,22 @@ on:
 jobs:
   lint-test-build:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: backoffice_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +50,18 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      # Applies the Prisma schema to a throwaway Postgres and EXPLAINs every raw
+      # `$queryRaw`/`$executeRaw` in src/ against it. Catches column/table/type
+      # mismatches that bypass tsc + the build (e.g. `@map`-renamed columns,
+      # unquoted camelCase identifiers). See scripts/validate-sql.mjs.
+      - name: Validate raw SQL against schema
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/backoffice_ci
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/backoffice_ci
+        run: |
+          pnpm prisma db push --skip-generate --accept-data-loss
+          pnpm validate:sql
 
       - name: Build
         env:

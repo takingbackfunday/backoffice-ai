@@ -59,7 +59,7 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
       SELECT COUNT(*) AS count
       FROM "Applicant" a
       JOIN "PropertyProfile" pp ON pp."id" = a."propertyProfileId"
-      JOIN "Workspace" w ON w."id" = pp."workspaceId"
+      JOIN "Project" w ON w."id" = pp."projectId"
       WHERE w."userId" = ${userId}
         AND a."status" NOT IN ('REJECTED', 'WITHDRAWN', 'LEASE_SIGNED')
     `,
@@ -70,7 +70,7 @@ export default async function PortfolioPage({ searchParams }: PageProps) {
       JOIN "Lease" l ON l."id" = inv."leaseId"
       JOIN "Unit" u ON u."id" = l."unitId"
       JOIN "PropertyProfile" pp ON pp."id" = u."propertyProfileId"
-      JOIN "Workspace" w ON w."id" = pp."workspaceId"
+      JOIN "Project" w ON w."id" = pp."projectId"
       WHERE w."userId" = ${userId}
         AND p."paidDate" >= ${sevenDaysAgo}
     `,

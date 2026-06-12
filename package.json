@@ -12,7 +12,8 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "validate:sql": "node scripts/validate-sql.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -55,11 +56,13 @@
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "pg": "^8.21.0",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",

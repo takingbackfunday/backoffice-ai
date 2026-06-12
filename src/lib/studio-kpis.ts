@@ -89,7 +89,7 @@ export async function fetchStudioKpis(userId: string): Promise<StudioKpis> {
           WHEN total <= 0 THEN 'VOID'
           WHEN paid >= total THEN 'PAID'
           WHEN paid > 0 THEN 'PARTIAL'
-          WHEN dueDate < ${nowStr}::date THEN 'OVERDUE'
+          WHEN "dueDate" < ${nowStr}::date THEN 'OVERDUE'
           ELSE 'SENT'
         END AS derived_status,
         CASE
@@ -97,7 +97,7 @@ export async function fetchStudioKpis(userId: string): Promise<StudioKpis> {
           WHEN total <= 0 THEN 0
           WHEN paid >= total THEN 0
           WHEN paid > 0 THEN total - paid
-          WHEN dueDate < ${nowStr}::date THEN total - paid
+          WHEN "dueDate" < ${nowStr}::date THEN total - paid
           ELSE total - paid
         END AS outstanding_amount
       FROM invoice_agg
@@ -179,6 +179,7 @@ export async function fetchClientCardSummaries(userId: string): Promise<ClientCa
     ),
     invoice_data AS (
       SELECT
+        i."id",
         i."clientProfileId",
         i."status" AS stored_status,
         i."dueDate",
@@ -199,7 +200,7 @@ export async function fetchClientCardSummaries(userId: string): Promise<ClientCa
           WHEN total <= 0 THEN 'VOID'
           WHEN paid >= total THEN 'PAID'
           WHEN paid > 0 THEN 'PARTIAL'
-          WHEN dueDate < ${nowStr}::date THEN 'OVERDUE'
+          WHEN "dueDate" < ${nowStr}::date THEN 'OVERDUE'
           ELSE 'SENT'
         END AS derived_status
       FROM invoice_data
@@ -210,21 +211,21 @@ export async function fetchClientCardSummaries(userId: string): Promise<ClientCa
       cd.ws_name AS workspace_name,
       cd.ws_slug AS workspace_slug,
       cd.company,
-      cd.contact_name,
+      cd."contactName" AS contact_name,
       cd.email,
       cd.currency,
-      cd.payment_term_days,
-      cd.billing_type,
+      cd."paymentTermDays" AS payment_term_days,
+      cd."billingType" AS billing_type,
       COALESCE(SUM(CASE WHEN di.derived_status IN ('SENT', 'PARTIAL') THEN di.total - di.paid ELSE 0 END), 0) AS outstanding,
       COALESCE(SUM(CASE WHEN di.derived_status = 'OVERDUE' THEN di.total - di.paid ELSE 0 END), 0) AS overdue,
-      COALESCE(SUM(CASE WHEN di.derived_status = 'PAID' AND di.issueDate >= ${thirtyDaysAgoStr}::date THEN di.paid ELSE 0 END), 0) AS collected_past_30,
-      COALESCE(SUM(CASE WHEN di.derived_status = 'PAID' AND di.issueDate >= ${yearStartStr}::date THEN di.paid ELSE 0 END), 0) AS collected_ytd,
+      COALESCE(SUM(CASE WHEN di.derived_status = 'PAID' AND di."issueDate" >= ${thirtyDaysAgoStr}::date THEN di.paid ELSE 0 END), 0) AS collected_past_30,
+      COALESCE(SUM(CASE WHEN di.derived_status = 'PAID' AND di."issueDate" >= ${yearStartStr}::date THEN di.paid ELSE 0 END), 0) AS collected_ytd,
       COUNT(DISTINCT di."id") AS invoice_count,
       (SELECT COUNT(*) FROM "Quote" q WHERE q."clientProfileId" = cd.cp_id AND q."status" = 'ACCEPTED') AS accepted_quote_count,
       (SELECT COUNT(*) FROM "Quote" q WHERE q."clientProfileId" = cd.cp_id AND q."status" = 'SENT') AS sent_quote_count
     FROM client_data cd
     LEFT JOIN derived_invoices di ON di."clientProfileId" = cd.cp_id
-    GROUP BY cd.cp_id, cd.ws_id, cd.ws_name, cd.ws_slug, cd.company, cd.contact_name, cd.email, cd.currency, cd.payment_term_days, cd.billing_type
+    GROUP BY cd.cp_id, cd.ws_id, cd.ws_name, cd.ws_slug, cd.company, cd."contactName", cd.email, cd.currency, cd."paymentTermDays", cd."billingType"
     ORDER BY cd.ws_name ASC
   `
 
@@ -694,7 +695,7 @@ export async function fetchPortfolioKpis(userId: string): Promise<PortfolioKpis>
             WHEN li.total <= 0 THEN 'VOID'
             WHEN li.paid >= li.total THEN 'PAID'
             WHEN li.paid > 0 THEN 'PARTIAL'
-            WHEN li.dueDate < ${nowStr}::date THEN 'OVERDUE'
+            WHEN li."dueDate" < ${nowStr}::date THEN 'OVERDUE'
             ELSE 'SENT'
           END AS derived_status,
           CASE
@@ -863,7 +864,7 @@ export async function fetchUnitSummaries(userId: string): Promise<UnitSummary[]>
           WHEN total <= 0 THEN 'VOID'
           WHEN paid >= total THEN 'PAID'
           WHEN paid > 0 THEN 'PARTIAL'
-          WHEN dueDate < CURRENT_DATE THEN 'OVERDUE'
+          WHEN "dueDate" < CURRENT_DATE THEN 'OVERDUE'
           ELSE 'SENT'
         END AS derived_status,
         total - paid AS balance
@@ -875,7 +876,7 @@ export async function fetchUnitSummaries(userId: string): Promise<UnitSummary[]>
         SUM(CASE WHEN di.derived_status NOT IN ('VOID') THEN di.total ELSE 0 END) AS charged,
         SUM(CASE WHEN di.derived_status NOT IN ('VOID') THEN di.paid ELSE 0 END) AS paid,
         SUM(CASE WHEN di.derived_status = 'OVERDUE' THEN di.total - di.paid ELSE 0 END) AS overdue_balance,
-        MAX(CASE WHEN di.derived_status = 'OVERDUE' THEN di.dueDate END) AS oldest_overdue
+        MAX(CASE WHEN di.derived_status = 'OVERDUE' THEN di."dueDate" END) AS oldest_overdue
       FROM derived_invoices di
       GROUP BY di."leaseId"
     )
@@ -908,9 +909,9 @@ export async function fetchUnitSummaries(userId: string): Promise<UnitSummary[]>
         WHEN ps.charged = 0 THEN 0
         WHEN ps.charged - ps.paid <= 0 THEN 1
         WHEN ps.paid > 0 AND ps.paid < ps.charged THEN 2
-        WHEN ps.oldest_overdue IS NOT NULL AND CURRENT_DATE - ps.oldest_overdue >= 60 THEN 5
-        WHEN ps.oldest_overdue IS NOT NULL AND CURRENT_DATE - ps.oldest_overdue >= 30 THEN 4
-        WHEN ps.oldest_overdue IS NOT NULL AND CURRENT_DATE - ps.oldest_overdue > 0 THEN 3
+        WHEN ps.oldest_overdue IS NOT NULL AND CURRENT_DATE - ps.oldest_overdue::date >= 60 THEN 5
+        WHEN ps.oldest_overdue IS NOT NULL AND CURRENT_DATE - ps.oldest_overdue::date >= 30 THEN 4
+        WHEN ps.oldest_overdue IS NOT NULL AND CURRENT_DATE - ps.oldest_overdue::date > 0 THEN 3
         ELSE 2
       END AS payment_status_score,
       ud.property_name,
