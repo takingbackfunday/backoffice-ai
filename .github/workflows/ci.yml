@@ -60,7 +60,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/backoffice_ci
           DIRECT_URL: postgresql://postgres:postgres@localhost:5432/backoffice_ci
         run: |
-          pnpm prisma db push --skip-generate --accept-data-loss
+          pnpm prisma db push --accept-data-loss
           pnpm validate:sql
 
       - name: Build
