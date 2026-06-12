@@ -146,6 +146,9 @@ Tax is a regular `InvoiceLineItem` with `isTaxLine: true`. Always include `isTax
 ### Document upload token is single-use
 `ApplicantDocument.uploadToken` is nulled after upload. A second attempt returns `400 Invalid token`.
 
+### Workspace model — `@@map("Project")`, use `"Project"` in raw SQL
+The Prisma `Workspace` model maps to the `"Project"` table via `@@map("Project")`. ALL raw SQL (`$queryRaw`) must use `"Project"`, NOT `"Workspace"`. This affects `src/lib/studio-kpis.ts` (6 joins across all KPIs, card summaries, lightweight invoices/quotes, portfolio KPIs, and unit summaries). Forgetting this causes `42P01: relation "Workspace" does not exist`.
+
 ### Transaction — `projectId` vs `workspaceId` field name split
 The DB column is `projectId` but Prisma maps it to `workspaceId` via `@map("projectId")`. Consequence:
 - The `GET /api/transactions` query param is `projectId` (client-facing) — do not rename to `workspaceId` on the client.
