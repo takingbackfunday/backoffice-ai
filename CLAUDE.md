@@ -155,6 +155,9 @@ The DB column is `projectId` but Prisma maps it to `workspaceId` via `@map("proj
 ### React Hooks — top-level only
 `useState`/`useReducer` must be at the top level of component functions. The linter enforces `react-hooks/rules-of-hooks`.
 
+### Invoice status derivation — keep JS and SQL in sync
+`deriveInvoiceStatus` logic lives in two places: `src/lib/invoice-status.ts` (JS) and the SQL CTEs in `src/lib/studio-kpis.ts` (`CASE` expressions). If you change the status rules (e.g. add a new status, change priority order), update **both** — the Studio/Portfolio KPIs will silently disagree with the rest of the app otherwise.
+
 ### Invoice editor — description column uses `minmax`, not `1fr`
 The line-items grid is `grid-cols-[minmax(120px,1fr)_140px_110px_100px_32px]`. The description column must use `minmax(120px,1fr)` — plain `1fr` collapses to zero in constrained grid contexts.
 
