@@ -5,8 +5,6 @@ import type { TransactionWithRelations } from '@/types'
 import type { Payee } from '@/components/rules/rule-editor'
 import type { Workspace } from '@/generated/prisma/client'
 import { toDisplay } from '@/lib/money'
-import { useOutsideClick } from '@/hooks/use-outside-click'
-
 type EditableField = 'description' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount' | 'date'
 
 export interface MakeRuleSnapType {
@@ -90,17 +88,7 @@ export function useInlineEdit(opts: {
     promoteIfLeft(id)
   }
 
-  // Outside-click: exit row edit when user clicks outside the editing row
-  useOutsideClick(
-    { current: null } as React.RefObject<HTMLElement | null>,
-    () => { if (editingRowId) exitRowEdit(editingRowId) },
-    {
-      enabled: !!editingRowId,
-      ignoreSelector: '[data-portal-dropdown]',
-    },
-  )
-
-  // Also handle row-level clicks via capture
+  // Handle outside-click via capture (row-scoped data-row-id comparison)
   useEffect(() => {
     if (!editingRowId) return
     const rowId = editingRowId

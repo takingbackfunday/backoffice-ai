@@ -49,7 +49,6 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
             setShowCopyPicker={form.setShowCopyPicker}
             recentInvoices={props.recentInvoices}
             loadingRecent={form.loadingRecent}
-            openCopyPicker={form.openCopyPicker}
             copyFromInvoice={form.copyFromInvoice}
             existingInvoice={props.existingInvoice}
             quoteNumber={props.quoteNumber}

@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { X, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -30,7 +29,6 @@ interface InvoiceFormFieldsProps {
   setShowCopyPicker: (v: boolean) => void
   recentInvoices: InvoiceEditorProps['recentInvoices']
   loadingRecent: boolean
-  openCopyPicker: () => void
   copyFromInvoice: (id: string) => void
   existingInvoice?: ExistingInvoice
   quoteNumber?: string
@@ -56,7 +54,6 @@ export function InvoiceFormFields({
   setShowCopyPicker,
   recentInvoices,
   loadingRecent,
-  openCopyPicker,
   copyFromInvoice,
   existingInvoice,
   quoteNumber,

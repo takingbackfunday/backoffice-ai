@@ -63,7 +63,13 @@ Every page listed above has a sibling `page.capabilities.ts` file in the same di
 
 | Task | File |
 |---|---|
-| Table UI + bulk delete | `src/components/transactions/transaction-table.tsx` |
+| Table orchestrator | `src/components/transactions/transaction-table.tsx` |
+| Data fetching / pagination / filters / sort | `src/components/transactions/hooks/use-transaction-data.ts` |
+| Inline edit + make-rule snap | `src/components/transactions/hooks/use-inline-edit.ts` |
+| Bulk select / delete | `src/components/transactions/hooks/use-bulk-select.ts` |
+| NL (AI) search | `src/components/transactions/hooks/use-nl-search.ts` |
+| Cell components | `src/components/transactions/cells/{text,payee,category,funnel-icon}.tsx` |
+| Row components | `src/components/transactions/rows/{transaction-row,new-row}.tsx` |
 | Fetch list | `GET /api/transactions` → `src/app/api/transactions/route.ts` |
 | Edit single | `PATCH /api/transactions/[id]` → `src/app/api/transactions/[id]/route.ts` |
 | CSV upload step 1 (parse) | `src/components/upload/csv-dropzone.tsx` |
@@ -118,7 +124,11 @@ Both CLIENT (freelance) and PROPERTY workspaces share the same schema. `WorkOrde
 | Work order update + delete | `PATCH/DELETE /api/projects/[id]/work-orders/[woId]` |
 | Bill create (with optional PDF upload) | `POST /api/projects/[id]/work-orders/[woId]/bills` |
 | Bill update (status, link transaction) + delete | `PATCH/DELETE /api/projects/[id]/work-orders/[woId]/bills/[billId]` |
-| Interactive CRUD panel (create WO, add bills, link txns, assign vendor) | `src/components/projects/work-order-panel.tsx` — used by job detail and maintenance detail |
+| Interactive CRUD panel (orchestrator) | `src/components/projects/work-order-panel.tsx` — used by job detail and maintenance detail |
+| Work order CRUD state + API calls | `src/components/projects/hooks/use-work-orders.ts` |
+| Expandable work order row (bills, vendor picker, txn linker) | `src/components/projects/work-order-row.tsx` |
+| New work order form | `src/components/projects/work-order-new-form.tsx` |
+| Inline vendor creation mini-form | `src/components/projects/vendor-create-inline.tsx` |
 | Work orders list across all jobs (CLIENT tab) | `src/components/projects/work-order-list.tsx` — read-only table, links each row to the job detail page |
 | Global "New work order" modal (3-step: project → context → details) | `src/components/work-orders/new-work-order-modal.tsx` — inline creation for project (step 1) and job (step 2 CLIENT) |
 | Global "Intake subcontractor bill" modal (3-step: project → WO → bill) | `src/components/work-orders/intake-bill-modal.tsx` — inline creation for project (step 1) and work order with nested vendor (step 2) |
@@ -154,7 +164,11 @@ Newly created entities are appended to the component's local state list — no p
 
 | Task | File |
 |---|---|
-| Create / edit invoice | `src/components/projects/invoice-editor.tsx` |
+| Create / edit invoice (orchestrator) | `src/components/projects/invoice-editor.tsx` |
+| Invoice form state + HITL + page context | `src/components/projects/hooks/use-invoice-form.ts` |
+| Line items grid | `src/components/projects/line-items-table.tsx` |
+| Meta fields (dates/currency/notes) | `src/components/projects/invoice-form-fields.tsx` |
+| AI confirm/undo banner | `src/components/projects/ai-confirm-banner.tsx` |
 | Invoice detail view | `src/components/projects/invoice-detail-client.tsx` |
 | Invoice list | `src/components/projects/invoice-list.tsx` |
 | CRUD | `GET/POST /api/projects/[id]/invoices` → `route.ts` |
@@ -376,7 +390,12 @@ Auto-sync/open-banking providers have been removed. Users import transactions by
 | Page (server, SQL KPIs + summaries) | `src/app/studio/page.tsx` |
 | SQL KPI aggregation + lazy-load detail | `src/lib/studio-kpis.ts` |
 | Lazy-load card detail API | `GET /api/studio/clients/[clientProfileId]` |
-| Client component | `src/components/studio/studio-client.tsx` |
+| Client component (orchestrator) | `src/components/studio/studio-client.tsx` |
+| Top section (KPIs, take-action, notices, recent activity) | `src/components/studio/studio-top-section.tsx` |
+| Client card (collapsed/expanded) | `src/components/studio/client-card.tsx` |
+| Client cards section (search, filter, list) | `src/components/studio/client-cards-section.tsx` |
+| Shared types + helpers (fmt, getDisplayStatus, deriveRecentActivity) | `src/components/studio/studio-shared.ts` |
+| Status badges + KPI cards | `src/components/studio/studio-badges.tsx` |
 | Draft invoice creation modal | `src/components/studio/studio-invoice-modal.tsx` |
 | Action modals | `src/components/studio/studio-action-modals.tsx` |
 | Mark sent modal | `src/components/studio/mark-sent-modal.tsx` |
@@ -388,6 +407,16 @@ Auto-sync/open-banking providers have been removed. Users import transactions by
 **Outstanding vs Overdue — mutually exclusive amounts:** `outstanding` covers SENT + PARTIAL invoices only; `overdue` covers OVERDUE invoices only. An overdue invoice's amount never appears in the Outstanding KPI, client card Outstanding column, or outstanding filter — only in Overdue. Both KPI totals and per-client card figures are derived from invoice statuses client-side, not from the server-computed `client.outstanding` field (which includes overdue).
 
 **Lazy-load pattern:** initial page load fetches lightweight summaries only (card headers + derived status in SQL). Expanded card detail (invoices with line items, quotes, jobs) is fetched on demand via `GET /api/studio/clients/[clientProfileId]`. Lightweight invoices (`flatInvoices`) and quotes (`flatQuotes`) are passed as props for notices, pipeline strip, and recent activity — pre-computed in SQL without line items.
+
+---
+
+## Shared UI primitives
+
+| Component | File | Notes |
+|---|---|---|
+| PortalDropdown (createPortal + position:fixed) | `src/components/ui/portal-dropdown.tsx` | For dropdowns inside overflow containers; exports `useAnchorRect`; stamps `data-portal-dropdown` |
+| Outside-click hook | `src/hooks/use-outside-click.ts` | Use with `ignoreSelector: '[data-portal-dropdown]'` |
+| Pending AI changes hook (HITL) | `src/hooks/use-pending-ai-changes.ts` | For AI write confirm/undo pattern |
 
 ---
 

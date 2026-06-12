@@ -161,7 +161,7 @@ export function deriveRecentActivity(clients: Client[], flat: (Invoice & { clien
 
   // Sort by date desc, take top 6
   items.sort((a, b) => b._date.getTime() - a._date.getTime())
-  return items.slice(0, 6).map(({ _date: _d, ...rest }) => rest)
+  return items.slice(0, 6).map(({ _date: _, ...rest }) => rest)
 }
 
 function formatRelativeDate(date: Date): string {

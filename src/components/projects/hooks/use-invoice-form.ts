@@ -179,7 +179,6 @@ function reducer(state: InvoiceState, action: InvoiceAction): InvoiceState {
 export function useInvoiceForm(props: InvoiceEditorProps) {
   const {
     projectId,
-    projectSlug,
     paymentTermDays,
     existingInvoice,
     lastInvoiceDefaults,
@@ -188,7 +187,6 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
     clientName,
     company,
     billingType,
-    invoicePaymentNote = '',
   } = props
 
   const initial: InvoiceState = existingInvoice

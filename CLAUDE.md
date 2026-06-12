@@ -187,10 +187,8 @@ Maintenance request creation is intentionally absent from the modals — the API
 ### Job detail — margin is server-computed
 The Costs and Margin summary cards on the job detail page (`/projects/[slug]/jobs/[jobId]`) are calculated at server render time. `WorkOrderPanel` mutates its own local state after creating work orders/bills, but the summary cards don't update until the page is hard-reloaded. If you add live margin tracking, move the calculation into a client-side derived value from the panel's state.
 
-### Transaction table — dropdowns must use portals
-The table wrapper has `overflow-auto`, which clips absolutely-positioned dropdowns. Any new dropdown/popover inside `transaction-table.tsx` must render via `ReactDOM.createPortal` into `document.body`, positioned with `position: fixed` coords from `getBoundingClientRect`. Use the existing `useAnchorRect` hook in that file.
-
-Portal elements have no `[data-row-id]` ancestor, so the row outside-click handler would exit row-edit when the user clicks a dropdown item. Add `data-portal-dropdown` to any new portal root element — the handler skips exit for clicks inside `[data-portal-dropdown]`.
+### Transaction table — dropdowns must use PortalDropdown
+The table wrapper has `overflow-auto`, which clips absolutely-positioned dropdowns. Any dropdown/popover inside a scroll container must use `src/components/ui/portal-dropdown.tsx` (renders via `createPortal` into `document.body`, positions with `position: fixed` from `getBoundingClientRect`, auto-stamps `data-portal-dropdown`). Pair with `src/hooks/use-outside-click.ts` and `ignoreSelector: '[data-portal-dropdown]'`. Do not hand-roll `useAnchorRect` or `mousedown` capture listeners.
 
 ### Pivot — aggregation dropdown is in PivotFieldBar, not PivotToolbar
 The "Sum of Amount / Count / Average…" select lives in `src/components/pivot/pivot-field-bar.tsx` (between Report Filters and Sort). `PivotToolbar` owns view mode, subtotals, grand totals, no-decimals, presets, and export only. Don't add aggregation back to the toolbar.
@@ -217,7 +215,7 @@ Every AI/agent write path (`applyEditorAction` or any future editor dispatch) **
 3. Apply the `ai-changed` CSS class (defined in `globals.css` — throb animation) to the affected UI regions when `pendingFields.has(fieldName)`.
 4. Render a Confirm / Undo banner when `hasPendingChanges` is true (copy the JSX from any of the three existing editors — invoice, estimate, quote).
 
-Canonical implementations: `invoice-editor.tsx` (inline), `estimate-editor.tsx` and `quote-generator.tsx` (use the hook).
+Canonical implementations: `use-invoice-form.ts` (inline), `estimate-editor.tsx` and `quote-generator.tsx` (use the hook).
 
 ### API route pattern — `authedRoute` wrapper
 
@@ -247,3 +245,6 @@ export const POST = authedRoute<{ id: string }, z.infer<typeof BodySchema>>({
 ```
 
 Ownership lookups live in `src/lib/authz.ts` — always scope by `userId`. Routes with complex includes (e.g. invoices) should cast the result with `Prisma.WorkspaceGetPayload<{ include: ... }>`. Migration checklist: `docs/api-migration.md`.
+
+### Component size cap — 400 lines + shared PortalDropdown
+No component file may exceed 400 lines. Extract non-visual logic into `use*` hooks (sibling `hooks/` folder) and leaf JSX into their own files. Any dropdown/popover rendered inside a scroll container (`overflow-auto`) must use `src/components/ui/portal-dropdown.tsx` (renders via `createPortal` into `document.body`, positions with `position: fixed`, and stamps `data-portal-dropdown`) plus `src/hooks/use-outside-click.ts` with `ignoreSelector: '[data-portal-dropdown]'`. Do not hand-roll `useAnchorRect` or `mousedown` capture listeners.
