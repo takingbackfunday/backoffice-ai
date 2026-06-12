@@ -10,7 +10,10 @@ export const capability: PageCapability = {
     'Navigate to a tenant detail page',
     'Send a message to a tenant',
   ],
-  deepLinks: {},
+  deepLinks: {
+    'applicant-pipeline': 'Applicant pipeline stepper (status + next action)',
+    'applicant-docs': 'Applicant documents section',
+  },
   reads: ['Tenant', 'Lease', 'Unit'],
   writes: ['Tenant'],
   relatedRoutes: [

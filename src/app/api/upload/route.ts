@@ -6,6 +6,7 @@ import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-r
 import type { CsvMapping } from '@/lib/csv-processor'
 import { categorizeRows } from '@/lib/rules/categorize-batch'
 import { loadUserRules } from '@/lib/rules/user-rules'
+import { logger } from '@/lib/log'
 
 const UploadBodySchema = z.object({
   accountId: z.string().min(1),
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
       errors: result.errors,
     })
   } catch (err) {
-    console.error('[/api/upload]', err)
+    logger.error('upload', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to process CSV file')
   }
 }

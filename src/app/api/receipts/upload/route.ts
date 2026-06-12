@@ -9,6 +9,7 @@ import { extractReceiptData } from '@/lib/ocr/extract-receipt'
 import { compressReceiptImage } from '@/lib/ocr/compress-image'
 import { classifyReceiptPipelineError, receiptFailureResponseMessage, type ReceiptPipelineStage } from '@/lib/ocr/receipt-failure'
 import { UTApi } from 'uploadthing/server'
+import { logger } from '@/lib/log'
 
 const utapi = new UTApi()
 
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
       const uploadResult = await utapi.uploadFiles(file)
 
       if (uploadResult.error) {
-        console.error('[receipt:upload-thumb]', uploadResult.error)
+        logger.error('receipt-upload', 'thumbnail error', { detail: String(uploadResult.error) })
       } else {
         thumbnailUrl = uploadResult.data.ufsUrl
       }
@@ -172,11 +173,7 @@ export async function POST(request: Request) {
       return ok(updated)
     } catch (pipelineErr) {
       const failure = classifyReceiptPipelineError(stage, pipelineErr)
-      console.error('[receipt:pipeline-error]', {
-        receiptId: receipt.id,
-        ...failure,
-        cause: pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr),
-      })
+      logger.error('receipt-upload', 'pipeline error', { receiptId: receipt.id, ...failure, cause: pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr) })
 
       // Save whatever we got — partial data is better than nothing
       await prisma.receipt.update({
@@ -194,7 +191,7 @@ export async function POST(request: Request) {
       return serverError(receiptFailureResponseMessage(failure))
     }
   } catch (err) {
-    console.error('[/api/receipts/upload]', err)
+    logger.error('receipt-upload', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError()
   }
 }

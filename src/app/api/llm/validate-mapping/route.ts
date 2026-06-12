@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { openrouterChat } from '@/lib/llm/openrouter'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 const BodySchema = z.object({
   headers: z.array(z.string()),
@@ -75,7 +76,7 @@ Rules:
 
     return ok(result)
   } catch (err) {
-    console.error('[/api/llm/validate-mapping]', err)
+    logger.error('llm-validate-mapping', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError()
   }
 }

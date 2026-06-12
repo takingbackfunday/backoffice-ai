@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 const UpdateCategorySchema = z.object({
   name: z.string().min(1).optional(),
@@ -40,7 +41,7 @@ export async function PATCH(
 
     return ok(category)
   } catch (err) {
-    console.error('[/api/categories/[id] PATCH]', err)
+    logger.error('categories-id', 'PATCH error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to update category')
   }
 }
@@ -67,7 +68,7 @@ export async function DELETE(
     await prisma.category.delete({ where: { id } })
     return ok({ deleted: true })
   } catch (err) {
-    console.error('[/api/categories/[id] DELETE]', err)
+    logger.error('categories-id', 'DELETE error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to delete category')
   }
 }

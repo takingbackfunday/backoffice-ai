@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 export async function GET(request: Request) {
   try {
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
 
     return ok(receipts)
   } catch (err) {
-    console.error('[/api/receipts GET]', err)
+    logger.error('receipts', 'GET error', { message: err instanceof Error ? err.message : String(err) })
     return serverError()
   }
 }

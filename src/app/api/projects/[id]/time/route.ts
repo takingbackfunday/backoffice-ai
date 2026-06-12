@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string }> }
 
@@ -22,7 +23,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     return ok(JSON.parse(JSON.stringify(entries)), { count: entries.length })
   } catch (e) {
-    console.error('[time GET]', e)
+    logger.error('time', 'GET error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }
@@ -74,7 +75,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     return created(JSON.parse(JSON.stringify(entry)))
   } catch (e) {
-    console.error('[time POST]', e)
+    logger.error('time', 'POST error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

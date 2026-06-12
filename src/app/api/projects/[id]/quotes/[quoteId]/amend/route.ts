@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
@@ -96,7 +97,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     return created(JSON.parse(JSON.stringify(amendment)))
   } catch (e) {
-    console.error('[quote amend]', e)
+    logger.error('quote-amend', 'POST error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

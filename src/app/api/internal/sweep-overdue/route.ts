@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 export async function POST(request: Request) {
   const secret = request.headers.get('x-cron-secret')
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
 
     return ok({ updated: result.count, message: `Updated ${result.count} invoice(s) to OVERDUE` })
   } catch (err) {
-    console.error('sweep-overdue error:', err)
+    logger.error('sweep-overdue', 'error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to sweep overdue invoices')
   }
 }

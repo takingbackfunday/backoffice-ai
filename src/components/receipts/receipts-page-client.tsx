@@ -106,6 +106,7 @@ export function ReceiptsPageClient({
 }) {
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(initialShowUpload ?? false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [retrying, setRetrying] = useState<string | null>(null)
@@ -130,12 +131,18 @@ export function ReceiptsPageClient({
   const activeWorkspace = workspaceFilter ? workspaces.find(w => w.id === workspaceFilter) : null
 
   const loadReceipts = useCallback(async () => {
+    setLoadError(null)
     const url = workspaceFilter
       ? `/api/receipts?workspaceId=${workspaceFilter}`
       : '/api/receipts'
-    const res = await fetch(url)
-    const json = await res.json()
-    if (res.ok) setReceipts(json.data ?? [])
+    try {
+      const res = await fetch(url)
+      const json = await res.json()
+      if (res.ok) setReceipts(json.data ?? [])
+      else setLoadError(json.error ?? 'Failed to load receipts')
+    } catch {
+      setLoadError('Network error — please check your connection')
+    }
     setLoading(false)
   }, [workspaceFilter])
 
@@ -308,6 +315,15 @@ export function ReceiptsPageClient({
 
   if (loading) {
     return <div className="p-6 text-sm text-muted-foreground">Loading receipts...</div>
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-6 flex flex-col items-center gap-3 text-center">
+        <p className="text-sm text-destructive font-medium">{loadError}</p>
+        <Button variant="outline" onClick={loadReceipts}>Retry</Button>
+      </div>
+    )
   }
 
   return (

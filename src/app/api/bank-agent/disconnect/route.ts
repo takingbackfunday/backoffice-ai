@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, badRequest, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 const DisconnectBodySchema = z.object({
   accountId: z.string().min(1),
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     return ok({ disconnected: true })
 
   } catch (err) {
-    console.error('[bank-agent/disconnect]', err)
+    logger.error('bank-agent-disconnect', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to disconnect bank account')
   }
 }

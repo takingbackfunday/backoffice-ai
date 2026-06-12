@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
 import { parsePreferences } from '@/types/preferences'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
 
@@ -86,7 +87,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
     return ok(replacement)
   } catch (err) {
-    console.error('[renegotiate-invoice]', err)
+    logger.error('invoice-renegotiate', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to renegotiate invoice')
   }
 }

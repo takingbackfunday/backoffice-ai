@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 const EstimateItemSchema = z.object({
   description: z.string().min(1),
@@ -51,7 +52,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     return ok(JSON.parse(JSON.stringify(estimate)))
   } catch (e) {
-    console.error('[estimate GET]', e)
+    logger.error('estimate', 'GET error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }
@@ -118,7 +119,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     return ok(JSON.parse(JSON.stringify(updated)))
   } catch (e) {
-    console.error('[estimate PATCH]', e)
+    logger.error('estimate', 'PATCH error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }
@@ -140,7 +141,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     await prisma.estimate.delete({ where: { id: estId } })
     return ok({ id: estId })
   } catch (e) {
-    console.error('[estimate DELETE]', e)
+    logger.error('estimate', 'DELETE error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

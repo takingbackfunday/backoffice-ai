@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { parsePreferences } from '@/types/preferences'
+import { logger } from '@/lib/log'
 
 export async function GET() {
   try {
@@ -11,7 +12,7 @@ export async function GET() {
     const row = await prisma.userPreference.findUnique({ where: { userId } })
     return ok(parsePreferences(row?.data))
   } catch (err) {
-    console.error('[GET /api/preferences]', err)
+    logger.error('preferences', 'GET error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to load preferences')
   }
 }
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
 
     return ok(merged)
   } catch (err) {
-    console.error('[POST /api/preferences]', err)
+    logger.error('preferences', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to save preferences')
   }
 }

@@ -1,5 +1,6 @@
 import { ok, badRequest, serverError } from '@/lib/api-response'
 import { drainPendingJobs } from '@/lib/background-jobs'
+import { logger } from '@/lib/log'
 
 const MAX_BATCH = 5
 
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
       message: `Drained ${totalProcessed} job(s), ${totalFailed} failed`,
     })
   } catch (err) {
-    console.error('drain-jobs error:', err)
+    logger.error('drain-jobs', 'error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to drain background jobs')
   }
 }

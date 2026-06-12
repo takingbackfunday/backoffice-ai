@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { enqueueJob } from '@/lib/background-jobs'
+import { logger } from '@/lib/log'
 
 const nullableString = z.union([z.string(), z.null()]).transform((v) => v ?? '')
 const optionalNullableString = z.union([z.string(), z.null()]).transform((v) => (v && v.trim()) ? v.trim() : null).optional()
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
     // Rules agent: enqueue for durability, but also kick immediate background execution.
     // The drain is best-effort — if the machine suspends, the cron sweep picks it up.
     enqueueJob('rules-agent', userId, { userId }).catch((err) => {
-      console.error('[import] failed to enqueue rules agent:', err instanceof Error ? err.message : err)
+      logger.error('import', 'failed to enqueue rules agent', { message: err instanceof Error ? err.message : String(err) })
     })
 
     return ok({

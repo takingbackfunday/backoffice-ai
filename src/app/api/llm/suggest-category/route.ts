@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { openrouterChat } from '@/lib/llm/openrouter'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 const BodySchema = z.object({
   description: z.string(),
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
 
     return ok({ suggestions })
   } catch (err) {
-    console.error('[/api/llm/suggest-category]', err)
+    logger.error('llm-suggest-category', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError()
   }
 }

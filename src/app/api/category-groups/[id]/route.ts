@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 const UpdateGroupSchema = z.object({
   name: z.string().min(1).optional(),
@@ -32,7 +33,7 @@ export async function PATCH(
 
     return ok(group)
   } catch (err) {
-    console.error('[/api/category-groups/[id] PATCH]', err)
+    logger.error('category-groups-id', 'PATCH error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to update category group')
   }
 }
@@ -61,7 +62,7 @@ export async function DELETE(
     await prisma.categoryGroup.delete({ where: { id } })
     return ok({ deleted: true })
   } catch (err) {
-    console.error('[/api/category-groups/[id] DELETE]', err)
+    logger.error('category-groups-id', 'DELETE error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to delete category group')
   }
 }

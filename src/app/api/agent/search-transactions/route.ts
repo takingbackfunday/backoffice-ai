@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { openrouterChat } from '@/lib/llm/openrouter'
 import { ok, unauthorized, serverError, badRequest } from '@/lib/api-response'
 import { checkDailyBudget, recordAgentUsage } from '@/lib/agent/usage'
+import { logger } from '@/lib/log'
 
 export async function POST(request: Request) {
   const { userId } = await auth()
@@ -105,7 +106,7 @@ Respond with ONLY a JSON object, no markdown, no explanation outside the JSON:
   "explanation": "One-sentence summary of what the filters show"
 }`
 
-    console.log('[search-transactions] query:', query)
+    logger.info('search-transactions', 'query', { query })
 
     const t0 = Date.now()
     const raw = await openrouterChat(
@@ -136,17 +137,17 @@ Respond with ONLY a JSON object, no markdown, no explanation outside the JSON:
     try {
       parsed = JSON.parse(cleaned)
     } catch {
-      console.error('[search-transactions] JSON parse failed, raw:', raw.slice(0, 500))
+      logger.error('search-transactions', 'JSON parse failed', { rawPreview: raw.slice(0, 500) })
       return badRequest('Failed to parse AI response')
     }
 
     // Log the active filters (non-empty values only)
     const activeFilters = Object.fromEntries(Object.entries(parsed.filters).filter(([, v]) => v !== ''))
-    console.log('[search-transactions] result:', { activeFilters, explanation: parsed.explanation })
+    logger.info('search-transactions', 'result', { activeFilters, explanation: parsed.explanation })
 
     return ok({ filters: parsed.filters, explanation: parsed.explanation ?? '' })
   } catch (err) {
-    console.error('[search-transactions] error:', err instanceof Error ? err.message : err)
+    logger.error('search-transactions', 'error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('AI search failed')
   }
 }

@@ -12,7 +12,11 @@ export const capability: PageCapability = {
     'Convert an accepted quote to an invoice',
     'See previous and next versions of this quote',
   ],
-  deepLinks: {},
+  deepLinks: {
+    'pipeline-breadcrumb': 'Pipeline breadcrumb showing estimate → quote → invoices chain',
+    'fulfillment': 'Fulfillment bar for accepted quotes (invoicing progress)',
+    'amendments': 'Amendments list for this quote',
+  },
   reads: ['Quote', 'QuoteSection', 'QuoteItem', 'Estimate', 'Job', 'ClientProfile'],
   writes: ['Quote'],
   relatedRoutes: [

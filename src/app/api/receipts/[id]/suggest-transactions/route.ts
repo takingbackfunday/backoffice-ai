@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -124,7 +125,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     return ok(top)
   } catch (err) {
-    console.error('[suggest-transactions]', err)
+    logger.error('receipt-suggest-transactions', 'GET error', { message: err instanceof Error ? err.message : String(err) })
     return serverError()
   }
 }

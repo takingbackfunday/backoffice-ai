@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, badRequest, notFound } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 export async function GET(request: Request) {
   const { userId } = await auth()
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
     })
 
   } catch (err) {
-    console.error('[bank-agent/status]', err)
+    logger.error('bank-agent-status', 'GET error', { message: err instanceof Error ? err.message : String(err) })
     return badRequest('Failed to fetch bank agent status')
   }
 }

@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; entryId: string }> }
 
@@ -45,7 +46,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     return ok(JSON.parse(JSON.stringify(updated)))
   } catch (e) {
-    console.error('[time PATCH]', e)
+    logger.error('time-entry', 'PATCH error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }
@@ -62,7 +63,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     await prisma.timeEntry.delete({ where: { id: entryId } })
     return ok({ id: entryId })
   } catch (e) {
-    console.error('[time DELETE]', e)
+    logger.error('time-entry', 'DELETE error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

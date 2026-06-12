@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { seedDefaultCategories } from '@/lib/seed-categories'
+import { logger } from '@/lib/log'
 
 export async function GET() {
   try {
@@ -37,7 +38,7 @@ export async function GET() {
 
     return ok(groups)
   } catch (err) {
-    console.error('[/api/category-groups GET]', err)
+    logger.error('category-groups', 'GET error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to fetch category groups')
   }
 }
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
 
     return created(group)
   } catch (err) {
-    console.error('[/api/category-groups POST]', err)
+    logger.error('category-groups', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to create category group')
   }
 }

@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 const UpsertMarginRuleSchema = z.object({
   tag: z.string().min(1, 'Tag is required').toLowerCase(),
@@ -20,7 +21,7 @@ export async function GET() {
 
     return ok(rules.map(r => ({ ...r, marginPct: Number(r.marginPct) })))
   } catch (e) {
-    console.error('[margin-rules GET]', e)
+    logger.error('margin-rules', 'GET error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
 
     return created({ ...rule, marginPct: Number(rule.marginPct) })
   } catch (e) {
-    console.error('[margin-rules POST]', e)
+    logger.error('margin-rules', 'POST error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

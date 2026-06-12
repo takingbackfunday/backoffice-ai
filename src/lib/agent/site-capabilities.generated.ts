@@ -226,7 +226,10 @@ const _data: any[] = [
       "Link the estimate to a job",
       "Use this estimate as the basis for a quote"
     ],
-    "deepLinks": {},
+    "deepLinks": {
+      "pipeline-breadcrumb": "Pipeline breadcrumb showing estimate → quotes",
+      "versions": "Estimate version chain panel"
+    },
     "reads": [
       "Estimate",
       "EstimateSection",
@@ -365,7 +368,11 @@ const _data: any[] = [
       "Void an invoice",
       "Navigate to the edit page to make changes"
     ],
-    "deepLinks": {},
+    "deepLinks": {
+      "pipeline-breadcrumb": "Pipeline breadcrumb showing estimate → quote → invoice chain",
+      "history": "Renegotiation history panel (collapsed)",
+      "payments": "Payments section with record payment form"
+    },
     "reads": [
       "Invoice",
       "InvoiceLineItem",
@@ -731,7 +738,11 @@ const _data: any[] = [
       "Convert an accepted quote to an invoice",
       "See previous and next versions of this quote"
     ],
-    "deepLinks": {},
+    "deepLinks": {
+      "pipeline-breadcrumb": "Pipeline breadcrumb showing estimate → quote → invoices chain",
+      "fulfillment": "Fulfillment bar for accepted quotes (invoicing progress)",
+      "amendments": "Amendments list for this quote"
+    },
     "reads": [
       "Quote",
       "QuoteSection",
@@ -841,7 +852,10 @@ const _data: any[] = [
       "Navigate to a tenant detail page",
       "Send a message to a tenant"
     ],
-    "deepLinks": {},
+    "deepLinks": {
+      "applicant-pipeline": "Applicant pipeline stepper (status + next action)",
+      "applicant-docs": "Applicant documents section"
+    },
     "reads": [
       "Tenant",
       "Lease",

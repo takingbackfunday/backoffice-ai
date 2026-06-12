@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 const UpsertPropertyProfileSchema = z.object({
   address: z.string().min(1, 'Property address is required'),
@@ -57,7 +58,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     return ok(profile)
   } catch (err) {
-    console.error('[POST /api/projects/[id]/property-profile]', err)
+    logger.error('property-profile', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to save property details')
   }
 }

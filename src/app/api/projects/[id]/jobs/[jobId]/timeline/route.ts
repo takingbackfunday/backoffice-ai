@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; jobId: string }> }
 
@@ -143,7 +144,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     return ok(events)
   } catch (e) {
-    console.error('[timeline GET]', e)
+    logger.error('timeline', 'GET error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

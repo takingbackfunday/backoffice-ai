@@ -30,6 +30,39 @@ const STATUS_COLORS: Record<string, string> = {
   WITHDRAWN: 'bg-gray-100 text-gray-500',
 }
 
+const PIPELINE_STEPS = [
+  'INQUIRY',
+  'APPLICATION_SENT',
+  'APPLIED',
+  'SCREENING',
+  'APPROVED',
+  'LEASE_OFFERED',
+  'LEASE_SIGNED',
+] as const
+
+const PIPELINE_LABELS: Record<string, string> = {
+  INQUIRY: 'Inquiry',
+  APPLICATION_SENT: 'App Sent',
+  APPLIED: 'Applied',
+  SCREENING: 'Screening',
+  APPROVED: 'Approved',
+  LEASE_OFFERED: 'Lease Offered',
+  LEASE_SIGNED: 'Signed',
+}
+
+function nextAction(status: string): { label: string; action: string } | null {
+  switch (status) {
+    case 'INQUIRY': return { label: 'Send application', action: 'send-application' }
+    case 'APPLICATION_SENT': return { label: 'Wait for application', action: 'wait' }
+    case 'APPLIED': return { label: 'Start screening', action: 'screening' }
+    case 'SCREENING': return { label: 'Approve or reject', action: 'decision' }
+    case 'APPROVED': return { label: 'Offer lease', action: 'offer-lease' }
+    case 'LEASE_OFFERED': return { label: 'Wait for signing', action: 'wait' }
+    case 'LEASE_SIGNED': return { label: 'Convert to tenant', action: 'convert' }
+    default: return null
+  }
+}
+
 import type { ApplicationData } from '@/types/application-data'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AppData = ApplicationData | Record<string, any>
@@ -357,6 +390,47 @@ export function ApplicantDetail({ projectId, applicant: initial, units, listings
           {error && (
             <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>
           )}
+
+          {/* Pipeline stepper */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              {PIPELINE_STEPS.map((step, i) => {
+                const isActive = applicant.status === step
+                const isPast = PIPELINE_STEPS.indexOf(applicant.status as typeof PIPELINE_STEPS[number]) > i
+                const isTerminal = applicant.status === 'REJECTED' || applicant.status === 'WITHDRAWN'
+                return (
+                  <React.Fragment key={step}>
+                    <div
+                      className={cn(
+                        'flex-1 text-center text-[10px] font-medium py-1 rounded-sm',
+                        isActive && !isTerminal ? 'bg-primary text-primary-foreground' : isPast ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {PIPELINE_LABELS[step]}
+                    </div>
+                    {i < PIPELINE_STEPS.length - 1 && (
+                      <div className={cn('w-2 h-px', isPast ? 'bg-emerald-300' : 'bg-muted-foreground/20')} />
+                    )}
+                  </React.Fragment>
+                )
+              })}
+            </div>
+            {applicant.status === 'REJECTED' && (
+              <div className="text-xs text-red-600 font-medium">Application rejected</div>
+            )}
+            {applicant.status === 'WITHDRAWN' && (
+              <div className="text-xs text-gray-500 font-medium">Applicant withdrawn</div>
+            )}
+            {(() => {
+              const nxt = nextAction(applicant.status)
+              if (!nxt || nxt.action === 'wait') return null
+              return (
+                <div className="text-xs text-muted-foreground">
+                  Next step: <span className="font-medium text-foreground">{nxt.label}</span>
+                </div>
+              )
+            })()}
+          </div>
 
           {/* Screening input buttons */}
           {!['REJECTED', 'WITHDRAWN'].includes(applicant.status) && (

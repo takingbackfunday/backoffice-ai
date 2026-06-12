@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
@@ -95,7 +96,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     return created(JSON.parse(JSON.stringify(invoice)))
   } catch (e) {
-    console.error('[quote create-invoice]', e)
+    logger.error('quote-create-invoice', 'POST error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

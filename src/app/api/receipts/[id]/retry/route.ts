@@ -5,6 +5,7 @@ import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-r
 import { mistralOcr } from '@/lib/ocr/mistral'
 import { extractReceiptData } from '@/lib/ocr/extract-receipt'
 import { classifyReceiptPipelineError, receiptFailureResponseMessage, type ReceiptPipelineStage } from '@/lib/ocr/receipt-failure'
+import { logger } from '@/lib/log'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -26,19 +27,31 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
     await prisma.receipt.update({ where: { id }, data: { status: 'PROCESSING' } })
     let stage: ReceiptPipelineStage = 'ocr'
+    let ocrMarkdown = receipt.ocrMarkdown ?? ''
+    let extractedData: Record<string, unknown> = {}
 
     try {
-      const ocr = await mistralOcr(receipt.thumbnailUrl)
+      // Stage 1: OCR (skip if already stored)
+      if (!ocrMarkdown) {
+        const ocr = await mistralOcr(receipt.thumbnailUrl)
+        ocrMarkdown = ocr.markdown
+      }
+
+      // Stage 2: Extraction (skip if already stored and valid)
       stage = 'extract'
-      const extracted = await extractReceiptData(ocr.markdown)
+      if (receipt.extractedData && Object.keys(receipt.extractedData as object).length > 0) {
+        extractedData = receipt.extractedData as Record<string, unknown>
+      } else {
+        const extracted = await extractReceiptData(ocrMarkdown)
+        extractedData = extracted as unknown as Record<string, unknown>
+      }
 
       const updated = await prisma.receipt.update({
         where: { id },
         data: {
           status: 'NEEDS_REVIEW',
-          ocrMarkdown: ocr.markdown,
-          // JSON round-trip widens ExtractedReceiptData to Prisma's InputJsonValue
-          extractedData: JSON.parse(JSON.stringify(extracted)),
+          ocrMarkdown: ocrMarkdown || null,
+          extractedData: JSON.parse(JSON.stringify(extractedData)) as Prisma.InputJsonValue,
         },
       })
 
@@ -49,18 +62,17 @@ export async function POST(_request: Request, { params }: RouteParams) {
         where: { id },
         data: {
           status: 'FAILED',
-          extractedData: JSON.parse(JSON.stringify({ failure })) as Prisma.InputJsonValue,
+          ocrMarkdown: ocrMarkdown || receipt.ocrMarkdown || null,
+          extractedData: Object.keys(extractedData).length > 0
+            ? (JSON.parse(JSON.stringify(extractedData)) as Prisma.InputJsonValue)
+            : (JSON.parse(JSON.stringify({ failure })) as Prisma.InputJsonValue),
         },
       })
-      console.error('[receipt:retry-error]', {
-        receiptId: id,
-        ...failure,
-        cause: err instanceof Error ? err.message : String(err),
-      })
+      logger.error('receipt-retry', 'error', { receiptId: id, ...failure, cause: err instanceof Error ? err.message : String(err) })
       return serverError(receiptFailureResponseMessage(failure))
     }
   } catch (err) {
-    console.error('[/api/receipts/[id]/retry]', err)
+    logger.error('receipt-retry', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError()
   }
 }

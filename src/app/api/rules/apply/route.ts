@@ -5,6 +5,7 @@ import { loadUserRules } from '@/lib/rules/user-rules'
 import { evaluateRules } from '@/lib/rules/engine'
 import type { TransactionFact } from '@/lib/rules/categorization'
 import { toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 export async function POST() {
   try {
@@ -67,7 +68,7 @@ export async function POST() {
 
     return ok({ updated: patches.length, total: transactions.length })
   } catch (err) {
-    console.error('[/api/rules/apply]', err)
+    logger.error('rules-apply', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to apply rules')
   }
 }

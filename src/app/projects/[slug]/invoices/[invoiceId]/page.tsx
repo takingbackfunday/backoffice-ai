@@ -6,11 +6,81 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { InvoiceDetailClient } from '@/components/projects/invoice-detail-client'
+import { PipelineBreadcrumb } from '@/components/projects/pipeline-breadcrumb'
 import Link from 'next/link'
 import { parsePreferences } from '@/types/preferences'
-import { toDisplay } from '@/lib/money'
-
+import { toDisplay, computeInvoiceTotals } from '@/lib/money'
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
+
+async function loadRenegotiationChain(invoiceId: string) {
+  type ChainItem = {
+    id: string
+    invoiceNumber: string
+    status: string
+    issueDate: Date
+    total: number
+    paid: number
+    currency: string
+    isCurrent: boolean
+  }
+
+  const all: ChainItem[] = []
+
+  // Walk backwards (replacesInvoice)
+  let currentId: string | null = invoiceId
+  const visited = new Set<string>()
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inv: any = await prisma.invoice.findUnique({
+      where: { id: currentId },
+      include: { lineItems: true, payments: true, replacesInvoice: { select: { id: true } }, replacedBy: { select: { id: true } } },
+    })
+    if (!inv) break
+    const { total, paid } = computeInvoiceTotals(inv)
+    all.unshift({
+      id: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      status: inv.status,
+      issueDate: inv.issueDate,
+      total: toDisplay(total),
+      paid: toDisplay(paid),
+      currency: inv.currency,
+      isCurrent: inv.id === invoiceId,
+    })
+    currentId = inv.replacesInvoice?.id ?? null
+  }
+
+  // Walk forwards (replacedBy) from the original invoice
+  const originalId = all[0]?.id ?? invoiceId
+  let forwardId: string | null = originalId
+  const forwardVisited = new Set<string>(visited)
+  while (forwardId && !forwardVisited.has(forwardId)) {
+    forwardVisited.add(forwardId)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inv: any = await prisma.invoice.findUnique({
+      where: { id: forwardId },
+      include: { lineItems: true, payments: true, replacesInvoice: { select: { id: true } }, replacedBy: { select: { id: true } } },
+    })
+    if (!inv) break
+    if (!visited.has(inv.id)) {
+      const { total, paid } = computeInvoiceTotals(inv)
+      all.push({
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        status: inv.status,
+        issueDate: inv.issueDate,
+        total: toDisplay(total),
+        paid: toDisplay(paid),
+        currency: inv.currency,
+        isCurrent: inv.id === invoiceId,
+      })
+    }
+    forwardId = inv.replacedBy?.id ?? null
+  }
+
+  return all
+}
 
 export default async function InvoiceDetailPage({ params }: PageParams) {
   const { userId } = await auth()
@@ -52,18 +122,19 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       lease: { select: { id: true, unit: { select: { unitLabel: true } }, tenant: { select: { name: true, email: true } } } },
       replacesInvoice: { select: { id: true, invoiceNumber: true } },
       replacedBy: { select: { id: true, invoiceNumber: true } },
-      quote: { select: { id: true, quoteNumber: true } },
+      quote: { select: { id: true, quoteNumber: true, estimateId: true } },
     },
   })
   if (!invoice) notFound()
 
-  const [prefs, rawSuggestions] = await Promise.all([
+  const [prefs, rawSuggestions, historyChain] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId } }),
     prisma.invoicePaymentSuggestion.findMany({
       where: { invoiceId: invoice.id, status: 'PENDING' },
       include: { transaction: { select: { id: true, description: true, date: true, amount: true } } },
       orderBy: { createdAt: 'desc' },
     }),
+    loadRenegotiationChain(invoice.id),
   ])
   const parsedPrefs = parsePreferences(prefs?.data)
   const paymentMethods = parsedPrefs.paymentMethods ?? {}
@@ -132,6 +203,45 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     quote: invoice.quote ?? null,
   }
 
+  // Build pipeline breadcrumb nodes
+  const pipelineNodes: import('@/components/projects/pipeline-breadcrumb').PipelineNode[] = []
+  if (invoice.quote) {
+    const estimate = await prisma.estimate.findUnique({
+      where: { id: invoice.quote.estimateId },
+      select: { id: true, title: true, version: true, status: true },
+    })
+    if (estimate) {
+      const estLabel = estimate.version > 1 ? `Estimate ${estimate.title} (v${estimate.version})` : `Estimate ${estimate.title}`
+      pipelineNodes.push({
+        type: 'estimate',
+        id: estimate.id,
+        label: estLabel,
+        status: estimate.status,
+        href: `/projects/${slug}/estimates/${estimate.id}`,
+      })
+    }
+    pipelineNodes.push({
+      type: 'quote',
+      id: invoice.quote.id,
+      label: `Quote ${invoice.quote.quoteNumber}`,
+      href: `/projects/${slug}/quotes/${invoice.quote.id}`,
+    })
+  }
+  const { total, paid } = computeInvoiceTotals(invoice)
+  pipelineNodes.push({
+    type: 'invoice',
+    id: invoice.id,
+    label: `Invoice ${invoice.invoiceNumber}`,
+    status: invoice.status,
+    href: `/projects/${slug}/invoices/${invoice.id}`,
+    meta: `${new Intl.NumberFormat('en-US', { style: 'currency', currency: invoice.currency }).format(toDisplay(paid))} / ${new Intl.NumberFormat('en-US', { style: 'currency', currency: invoice.currency }).format(toDisplay(total))}`,
+  })
+
+  const serializedHistory = historyChain.map(item => ({
+    ...item,
+    issueDate: item.issueDate.toISOString(),
+  }))
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -147,7 +257,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
           />
           <ProjectSubNav slug={slug} type={project.type} />
           <div style={{ width: '65%' }}>
-            <div className="mb-4">
+            <div className="mb-4 space-y-2">
               <Link
                 href={`/projects/${slug}/invoices`}
                 className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
@@ -157,6 +267,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
                 </svg>
                 All invoices
               </Link>
+              <PipelineBreadcrumb nodes={pipelineNodes} projectSlug={slug} currentId={invoice.id} />
             </div>
             <InvoiceDetailClient
               projectId={project.id}
@@ -167,6 +278,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
               suggestions={suggestions}
               replacesInvoice={serialized.replacesInvoice}
               replacedBy={serialized.replacedBy}
+              historyChain={serializedHistory}
             />
           </div>
         </main>

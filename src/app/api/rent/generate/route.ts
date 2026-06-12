@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { format } from 'date-fns'
 import { recalcInvoiceStatus } from '@/lib/invoice-status'
 import { toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
 
         generated++
       } catch (err) {
-        console.error('[rent/generate] failed for lease', lease.id, err)
+        logger.error('rent-generate', 'failed for lease', { leaseId: lease.id, message: err instanceof Error ? err.message : String(err) })
         failed++
       }
     }
@@ -163,7 +164,7 @@ export async function POST(request: Request) {
 
     return Response.json({ generated, skipped, failed })
   } catch (err) {
-    console.error('[rent/generate] error:', err)
+    logger.error('rent-generate', 'error', { message: err instanceof Error ? err.message : String(err) })
     return new Response('Internal error', { status: 500 })
   }
 }

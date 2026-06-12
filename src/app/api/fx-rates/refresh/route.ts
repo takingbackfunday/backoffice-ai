@@ -15,6 +15,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 interface FrankfurterLatest {
   base: string
@@ -70,7 +71,7 @@ export async function POST() {
 
     return ok({ month, USD, GBP, isOfficial })
   } catch (err) {
-    console.error('[POST /api/fx-rates/refresh]', err)
+    logger.error('fx-rates-refresh', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to refresh FX rates')
   }
 }

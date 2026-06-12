@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 const ItemSchema = z.object({
   description: z.string().min(1),
@@ -185,7 +186,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     return ok(JSON.parse(JSON.stringify(updatedQuote)))
   } catch (e) {
-    console.error('[quotes regenerate POST]', e)
+    logger.error('quote-regenerate', 'POST error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

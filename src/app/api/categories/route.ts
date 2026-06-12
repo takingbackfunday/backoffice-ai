@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { created, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 const CreateCategorySchema = z.object({
   name: z.string().min(1),
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
 
     return created(category)
   } catch (err) {
-    console.error('[/api/categories POST]', err)
+    logger.error('categories', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to create category')
   }
 }

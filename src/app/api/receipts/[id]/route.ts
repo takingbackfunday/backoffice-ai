@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { Prisma } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -69,7 +70,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     return ok(updated)
   } catch (err) {
-    console.error('[/api/receipts/[id] PATCH]', err)
+    logger.error('receipts-id', 'PATCH error', { message: err instanceof Error ? err.message : String(err) })
     return serverError()
   }
 }
@@ -89,7 +90,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
     return ok({ deleted: true })
   } catch (err) {
-    console.error('[/api/receipts/[id] DELETE]', err)
+    logger.error('receipts-id', 'DELETE error', { message: err instanceof Error ? err.message : String(err) })
     return serverError()
   }
 }

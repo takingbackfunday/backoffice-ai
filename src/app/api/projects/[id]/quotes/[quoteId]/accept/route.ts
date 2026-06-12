@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
@@ -25,7 +26,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
     return ok(JSON.parse(JSON.stringify(updated)))
   } catch (e) {
-    console.error('[quote accept]', e)
+    logger.error('quote-accept', 'POST error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

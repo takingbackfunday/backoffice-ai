@@ -4,6 +4,7 @@ import { fetchWidgetData } from '@/lib/widgets/data-fetcher'
 import { transformData } from '@/lib/widgets/data-transformer'
 import { createDefaultWidgetConfig } from '@/lib/widgets/defaults'
 import type { WidgetConfig } from '@/types/widgets'
+import { logger } from '@/lib/log'
 
 export async function POST(req: Request) {
   const { userId } = await auth()
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     const { data, seriesKeys } = transformData(rows, config)
     return NextResponse.json({ data, seriesKeys })
   } catch (err) {
-    console.error('[widgets/data]', err)
+    logger.error('widgets-data', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: 'Failed to fetch chart data' }, { status: 500 })
   }
 }

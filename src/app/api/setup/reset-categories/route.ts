@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { parsePreferences } from '@/types/preferences'
+import { logger } from '@/lib/log'
 
 export async function POST() {
   try {
@@ -39,7 +40,7 @@ export async function POST() {
 
     return ok({ reset: true })
   } catch (err) {
-    console.error('[POST /api/setup/reset-categories]', err)
+    logger.error('setup-reset-categories', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to reset categories')
   }
 }

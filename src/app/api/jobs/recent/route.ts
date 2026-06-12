@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { getRecentJobs } from '@/lib/background-jobs'
+import { logger } from '@/lib/log'
 
 const QuerySchema = z.object({
   limit: z.coerce.number().min(1).max(50).default(10),
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
     const jobs = await getRecentJobs(userId, limit)
     return ok(jobs)
   } catch (err) {
-    console.error('jobs/recent error:', err)
+    logger.error('jobs-recent', 'error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to fetch recent jobs')
   }
 }

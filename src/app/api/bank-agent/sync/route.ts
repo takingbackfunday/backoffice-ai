@@ -7,6 +7,7 @@ import { processCSV } from '@/lib/csv-processor'
 import { categorizeRows } from '@/lib/rules/categorize-batch'
 import { loadUserRules } from '@/lib/rules/user-rules'
 import type { SyncJobEvent, PlaybookStep } from '@/types/bank-agent'
+import { logger } from '@/lib/log'
 
 const SyncBodySchema = z.object({
   accountId: z.string().min(1),
@@ -319,7 +320,7 @@ export async function POST(request: Request) {
 
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err)
-        console.error('[bank-agent/sync]', err)
+        logger.error('bank-agent-sync', 'error', { message: errorMsg })
         send({ type: 'error', error: errorMsg })
       } finally {
         clearInterval(keepAlive)

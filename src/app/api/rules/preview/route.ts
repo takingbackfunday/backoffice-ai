@@ -5,6 +5,7 @@ import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { loadUserRules, buildCondition } from '@/lib/rules/user-rules'
 import type { TransactionFact } from '@/lib/rules/categorization'
 import { toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 const ConditionDefSchema = z.object({
   field: z.enum(['description', 'payeeName', 'rawDescription', 'amount', 'currency', 'accountName', 'notes', 'date', 'month', 'dayOfWeek']),
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
       { matchCount }
     )
   } catch (err) {
-    console.error('[/api/rules/preview]', err)
+    logger.error('rules-preview', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to preview rule')
   }
 }

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { parsePreferences } from '@/types/preferences'
 import { runRulesAgent } from '@/lib/agent/run-rules-agent'
 import { checkDailyBudget } from '@/lib/agent/usage'
+import { logger } from '@/lib/log'
 import type { RulesSseEvent } from '@/lib/agent/rules-tools'
 
 function encode(event: RulesSseEvent): Uint8Array {
@@ -59,7 +60,7 @@ export async function GET() {
       const hardTimeout = setTimeout(() => {
         timedOut = true
         abortController.abort()
-        console.log(`[rules-agent:${runId}] hard timeout reached`)
+        logger.warn('rules-agent', 'hard timeout', { runId })
         const msg = emitCount > 0
           ? `Analysis timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)}s — ${emitCount} suggestion${emitCount === 1 ? '' : 's'} found so far. Try running again for more.`
           : `Analysis timed out after ${Math.round(HARD_TIMEOUT_MS / 1000)}s — the AI model took too long to respond. Please try again.`
@@ -77,7 +78,7 @@ export async function GET() {
           await new Promise(r => setTimeout(r, 200))
         }
       } catch (err) {
-        console.error(`[rules-agent:${runId}] error:`, err instanceof Error ? err.stack : err)
+        logger.error('rules-agent', 'error', { runId, message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined })
         if (!timedOut) send({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
       } finally {
         clearTimeout(hardTimeout)

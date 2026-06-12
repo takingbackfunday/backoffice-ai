@@ -4,6 +4,7 @@ import { unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateQuotePdf } from '@/lib/pdf/quote-pdf'
 import { parsePreferences } from '@/types/preferences'
 import { toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
@@ -61,7 +62,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       },
     })
   } catch (e) {
-    console.error('[quote pdf]', e)
+    logger.error('quote-pdf', 'GET error', { message: e instanceof Error ? e.message : String(e) })
     return serverError('Failed to generate PDF')
   }
 }

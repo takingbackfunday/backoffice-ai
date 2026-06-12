@@ -4,6 +4,7 @@ import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { seedDefaultCategories, type BusinessType } from '@/lib/seed-categories'
 import { parsePreferences } from '@/types/preferences'
 import { generateSlug } from '@/lib/slug'
+import { logger } from '@/lib/log'
 
 const VALID_TYPES: BusinessType[] = ['freelance', 'property', 'personal']
 
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
 
     return ok({ businessType, overheadWorkspace, redirectTo })
   } catch (err) {
-    console.error('[POST /api/setup/business-type]', err)
+    logger.error('setup-business-type', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to save business type')
   }
 }

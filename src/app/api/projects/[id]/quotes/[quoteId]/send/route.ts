@@ -4,6 +4,7 @@ import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-r
 import { generateQuotePdf } from '@/lib/pdf/quote-pdf'
 import { parsePreferences } from '@/types/preferences'
 import { toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
@@ -115,7 +116,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       emailSent: !!resendApiKey,
     })
   } catch (e) {
-    console.error('[quote send]', e)
+    logger.error('quote-send', 'POST error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

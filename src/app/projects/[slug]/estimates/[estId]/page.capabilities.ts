@@ -11,7 +11,10 @@ export const capability: PageCapability = {
     'Link the estimate to a job',
     'Use this estimate as the basis for a quote',
   ],
-  deepLinks: {},
+  deepLinks: {
+    'pipeline-breadcrumb': 'Pipeline breadcrumb showing estimate → quotes',
+    'versions': 'Estimate version chain panel',
+  },
   reads: ['Estimate', 'EstimateSection', 'EstimateItem', 'Job'],
   writes: ['Estimate', 'EstimateSection', 'EstimateItem'],
   editorContext: 'estimate',

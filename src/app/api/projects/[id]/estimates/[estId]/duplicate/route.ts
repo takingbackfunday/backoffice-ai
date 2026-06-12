@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { created, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; estId: string }> }
 
@@ -51,7 +52,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
     return created(JSON.parse(JSON.stringify(copy)))
   } catch (e) {
-    console.error('[estimate duplicate]', e)
+    logger.error('estimate-duplicate', 'POST error', { message: e instanceof Error ? e.message : String(e) })
     return serverError()
   }
 }

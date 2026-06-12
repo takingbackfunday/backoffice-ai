@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 
 export async function GET() {
   try {
@@ -19,7 +20,7 @@ export async function GET() {
 
     return ok(payees)
   } catch (err) {
-    console.error('[/api/payees GET]', err)
+    logger.error('payees', 'GET error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to fetch payees')
   }
 }
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
 
     return created(payee)
   } catch (err) {
-    console.error('[/api/payees POST]', err)
+    logger.error('payees', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to create payee')
   }
 }

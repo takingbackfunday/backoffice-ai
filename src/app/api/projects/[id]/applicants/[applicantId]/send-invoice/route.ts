@@ -5,6 +5,7 @@ import { sendInvoiceEmail } from '@/lib/email'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
 import { parsePreferences } from '@/types/preferences'
 import { toDisplay, computeInvoiceTotals } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; applicantId: string }> }
 
@@ -95,7 +96,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
     return ok(updated)
   } catch (err) {
-    console.error('[applicant-send-invoice]', err)
+    logger.error('applicant-send-invoice', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to send invoice')
   }
 }

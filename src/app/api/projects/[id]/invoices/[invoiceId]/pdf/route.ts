@@ -4,6 +4,7 @@ import { unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
 import { parsePreferences } from '@/types/preferences'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
+import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; invoiceId: string }> }
 
@@ -91,7 +92,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       },
     })
   } catch (err) {
-    console.error('[invoice-pdf]', err)
+    logger.error('invoice-pdf', 'GET error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to generate PDF')
   }
 }

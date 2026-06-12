@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { runOmniAgent } from '@/lib/agent/omni-agent'
+import { logger } from '@/lib/log'
 import type { SseEvent, ConversationTurn } from '@/lib/agent/types'
 import type { SerializablePageContext } from '@/lib/agent/page-context'
 
@@ -52,12 +53,12 @@ export async function POST(request: Request) {
           onLink: (link) => send({ type: 'link', route: link.route, anchor: link.anchor, label: link.label, reason: link.reason }),
         })
 
-        console.log('[omni-route] done', JSON.stringify({
+        logger.info('omni-route', 'done', {
           totalMs: Date.now() - t0,
           toolsUsed,
           answerLen: answer.length,
           turnCount: conversationHistory.length,
-        }))
+        })
 
         send({ type: 'answer', answer })
         send({ type: 'done' })

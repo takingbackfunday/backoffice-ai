@@ -13,7 +13,11 @@ export const capability: PageCapability = {
     'Void an invoice',
     'Navigate to the edit page to make changes',
   ],
-  deepLinks: {},
+  deepLinks: {
+    'pipeline-breadcrumb': 'Pipeline breadcrumb showing estimate → quote → invoice chain',
+    'history': 'Renegotiation history panel (collapsed)',
+    'payments': 'Payments section with record payment form',
+  },
   reads: ['Invoice', 'InvoiceLineItem', 'Payment', 'UserPreference'],
   writes: ['Invoice'],
   relatedRoutes: [

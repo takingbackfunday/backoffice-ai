@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { logger } from '@/lib/log'
 import { openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
 import {
   RULES_TOOLS,
@@ -55,11 +56,11 @@ export async function POST(request: Request) {
     }
 
     const { edits } = parsed.data
-    console.log(`[suggest-from-edits] userId=${userId} edits=${edits.length}`, edits.map(e => `"${e.description}" → ${e.categoryName ?? '(none)'}`))
+    logger.info('suggest-from-edits', 'start', { userId, editsCount: edits.length, editDescriptions: edits.map(e => `"${e.description}" → ${e.categoryName ?? '(none)'}`) })
 
     // Pre-load context (transactions, category/payee maps, existing rules)
     const preloaded = await loadRulesContext(userId)
-    console.log(`[suggest-from-edits] context loaded: ${preloaded.transactions.length} txns, ${preloaded.categoryMap.size} categories, ${preloaded.payeeMap.size} payees`)
+    logger.info('suggest-from-edits', 'context loaded', { txCount: preloaded.transactions.length, categoryCount: preloaded.categoryMap.size, payeeCount: preloaded.payeeMap.size })
 
     type CollectedSuggestion = {
       conditions: { all?: object[]; any?: object[] }
@@ -136,11 +137,11 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
     const MAX_ROUNDS = 8
 
     for (let round = 0; round < MAX_ROUNDS && !finished; round++) {
-      console.log(`[suggest-from-edits] round ${round + 1}/${MAX_ROUNDS}`)
+      logger.info('suggest-from-edits', 'round', { round: round + 1, maxRounds: MAX_ROUNDS })
       const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4.6')
 
       const toolNames = response.tool_calls?.map((tc) => tc.function.name) ?? []
-      console.log(`[suggest-from-edits] round ${round + 1} tools:`, toolNames.length ? toolNames : '(none — finished)')
+      logger.info('suggest-from-edits', 'round tools', { round: round + 1, tools: toolNames.length ? toolNames : [] })
 
       // Omit content when null/empty alongside tool_calls
       const assistantMsg: Record<string, unknown> = { role: 'assistant' }
@@ -167,7 +168,7 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
         const BLOCKED = ['query_transactions', 'search_transactions',
           'get_uncategorised_transactions', 'get_no_payee_transactions']
         if (BLOCKED.includes(toolName)) {
-          console.log(`[suggest-from-edits] blocked tool: ${toolName}`)
+          logger.info('suggest-from-edits', 'blocked tool', { toolName })
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
@@ -183,7 +184,7 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
           result = `Error: ${e instanceof Error ? e.message : String(e)}`
         }
 
-        console.log(`[suggest-from-edits] tool ${toolName} → ${result.slice(0, 120)}`)
+        logger.info('suggest-from-edits', 'tool result', { toolName, preview: result.slice(0, 120) })
 
         messages.push({ role: 'tool', tool_call_id: tc.id, content: result })
 
@@ -191,7 +192,7 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
           if (result.startsWith('Rejected') || result === 'Emitted: 0 new transaction(s) matched.') {
             consecutiveRejections++
             if (consecutiveRejections >= MAX_CONSECUTIVE_REJECTIONS) {
-              console.log(`[suggest-from-edits] too many consecutive rejections, stopping`)
+              logger.info('suggest-from-edits', 'stopping — too many rejections')
               finished = true
               break
             }
@@ -207,7 +208,7 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
       }
     }
 
-    console.log(`[suggest-from-edits] collected ${collectedSuggestions.length} suggestions`)
+    logger.info('suggest-from-edits', 'collected suggestions', { count: collectedSuggestions.length })
 
     if (collectedSuggestions.length === 0) {
       return ok({ count: 0, suggestions: [] })
@@ -237,10 +238,10 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
       )
     )
 
-    console.log(`[suggest-from-edits] saved ${saved.length} suggestions to DB`)
+    logger.info('suggest-from-edits', 'saved to DB', { count: saved.length })
     return ok({ count: saved.length, suggestions: saved })
   } catch (err) {
-    console.error('[suggest-from-edits] ERROR:', err)
+    logger.error('suggest-from-edits', 'error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to generate suggestions')
   }
 }

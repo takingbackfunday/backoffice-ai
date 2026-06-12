@@ -6,9 +6,14 @@ import { Header } from '@/components/layout/header'
 import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
 import { ProjectSubNav } from '@/components/projects/project-sub-nav'
 import { QuoteDetailClient } from '@/components/projects/quote-detail-client'
+import { PipelineBreadcrumb } from '@/components/projects/pipeline-breadcrumb'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; quoteId: string }> }
+
+function fmt(n: number, currency: string) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
+}
 
 export default async function QuoteDetailPage({ params }: PageParams) {
   const { userId } = await auth()
@@ -103,6 +108,38 @@ export default async function QuoteDetailPage({ params }: PageParams) {
     })),
   }
 
+  // Build pipeline breadcrumb nodes
+  const pipelineNodes: import('@/components/projects/pipeline-breadcrumb').PipelineNode[] = []
+  if (quote.estimate) {
+    const est = quote.estimate
+    const estLabel = est.version > 1 ? `Estimate ${est.title} (v${est.version})` : `Estimate ${est.title}`
+    pipelineNodes.push({
+      type: 'estimate',
+      id: est.id,
+      label: estLabel,
+      status: 'FINAL',
+      href: `/projects/${slug}/estimates/${est.id}`,
+    })
+  }
+  pipelineNodes.push({
+    type: 'quote',
+    id: quote.id,
+    label: `Quote ${quote.quoteNumber}`,
+    status: quote.status,
+    href: `/projects/${slug}/quotes/${quote.id}`,
+  })
+  if (fulfillment) {
+    const invCount = fulfillment.invoices.length
+    const meta = `${invCount} invoice${invCount !== 1 ? 's' : ''} (${fmt(fulfillment.totalPaid, quote.currency)} / ${fmt(fulfillment.totalInvoiced, quote.currency)} invoiced)`
+    pipelineNodes.push({
+      type: 'invoices',
+      id: 'invoices',
+      label: 'Invoices',
+      href: `/projects/${slug}/invoices`,
+      meta,
+    })
+  }
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -117,7 +154,10 @@ export default async function QuoteDetailPage({ params }: PageParams) {
             description={project.description}
           />
           <ProjectSubNav slug={slug} type={project.type} />
-          <div className="max-w-4xl">
+          <div className="max-w-4xl space-y-4">
+            <div className="mb-1">
+              <PipelineBreadcrumb nodes={pipelineNodes} projectSlug={slug} currentId={quote.id} />
+            </div>
             <QuoteDetailClient
               projectId={project.id}
               projectSlug={slug}

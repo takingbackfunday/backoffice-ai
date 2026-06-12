@@ -6,6 +6,7 @@ import { encrypt } from '@/lib/bank-agent/crypto'
 import { processCSV } from '@/lib/csv-processor'
 import { categorizeRows } from '@/lib/rules/categorize-batch'
 import { loadUserRules } from '@/lib/rules/user-rules'
+import { logger } from '@/lib/log'
 import type { SyncJobEvent } from '@/types/bank-agent'
 
 const ConnectBodySchema = z.object({
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
         try {
           controller.enqueue(encode(event))
         } catch (e) {
-          console.error('[bank-agent/connect] send() failed — stream may be closed:', e)
+          logger.error('bank-agent/connect', 'send() failed — stream may be closed', { message: e instanceof Error ? e.message : String(e) })
         }
       }
 
@@ -61,23 +62,23 @@ export async function POST(request: Request) {
 
       // Send immediately so the client knows the stream is alive
       send({ type: 'status', message: 'Received request, authenticating…' })
-      console.log('[bank-agent/connect] stream started', { accountId, userId })
+      logger.info('bank-agent/connect', 'stream started', { accountId, userId })
 
       try {
         // Check env vars up front — fail fast with a clear message
         if (!process.env.BROWSERLESS_TOKEN) {
           send({ type: 'error', error: 'BROWSERLESS_TOKEN is not set. Add it via: fly secrets set BROWSERLESS_TOKEN=...' })
-          console.error('[bank-agent/connect] BROWSERLESS_TOKEN missing')
+          logger.error('bank-agent/connect', 'BROWSERLESS_TOKEN missing')
           return
         }
         if (!process.env.ENCRYPTION_SECRET) {
           send({ type: 'error', error: 'ENCRYPTION_SECRET is not set. Add it via: fly secrets set ENCRYPTION_SECRET=...' })
-          console.error('[bank-agent/connect] ENCRYPTION_SECRET missing')
+          logger.error('bank-agent/connect', 'ENCRYPTION_SECRET missing')
           return
         }
 
         send({ type: 'status', message: 'Looking up account…' })
-        console.log('[bank-agent/connect] looking up account', accountId)
+        logger.info('bank-agent/connect', 'looking up account', { accountId })
 
         // Verify account belongs to user
         const account = await prisma.account.findFirst({
@@ -86,10 +87,10 @@ export async function POST(request: Request) {
         })
         if (!account) {
           send({ type: 'error', error: 'Account not found or does not belong to you' })
-          console.error('[bank-agent/connect] account not found', { accountId, userId })
+          logger.error('bank-agent/connect', 'account not found', { accountId, userId })
           return
         }
-        console.log('[bank-agent/connect] account found:', account.name)
+        logger.info('bank-agent/connect', 'account found', { name: account.name })
 
         // Check if already connected
         if (account.bankPlaybook) {
@@ -105,20 +106,20 @@ export async function POST(request: Request) {
             triggeredBy: 'connect',
           }
         })
-        console.log('[bank-agent/connect] sync job created:', syncJob.id)
+        logger.info('bank-agent/connect', 'sync job created', { id: syncJob.id })
 
         send({ type: 'status', message: 'Starting bank connection…', jobId: syncJob.id })
 
         // Call worker
-        console.log('[bank-agent/connect] calling connectBank worker', { loginUrl, accountId })
+        logger.info('bank-agent/connect', 'calling connectBank worker', { loginUrl, accountId })
         const result = await connectBank(
           { loginUrl, username, password, accountId },
           (event) => {
-            console.log('[bank-agent/connect] worker event:', JSON.stringify(event))
+            logger.debug('bank-agent/connect', 'worker event', { event })
             send(event)
           }
         )
-        console.log('[bank-agent/connect] worker result:', { success: result.success, error: result.error, csvLen: result.csvText?.length, twoFaType: result.twoFaType, steps: result.discoveredSteps?.length })
+        logger.info('bank-agent/connect', 'worker result', { success: result.success, error: result.error, csvLen: result.csvText?.length, twoFaType: result.twoFaType, steps: result.discoveredSteps?.length })
 
         if (!result.success || !result.csvText) {
           await prisma.syncJob.update({
@@ -134,7 +135,7 @@ export async function POST(request: Request) {
         }
 
         send({ type: 'status', message: 'Processing downloaded transactions…' })
-        console.log('[bank-agent/connect] processing CSV, length:', result.csvText.length)
+        logger.info('bank-agent/connect', 'processing CSV', { csvLen: result.csvText.length })
 
         // Encrypt and save credentials
         const encrypted = encrypt(`${username}:${password}`, userId)
@@ -192,7 +193,7 @@ export async function POST(request: Request) {
           }
         }
 
-        console.log('[bank-agent/connect] CSV processed:', { rows: processed.rows.length, errors: processed.errors })
+        logger.info('bank-agent/connect', 'CSV processed', { rows: processed.rows.length, errors: processed.errors.length })
 
         if (processed.errors.length > 0 && processed.rows.length === 0) {
           await prisma.syncJob.update({
@@ -332,7 +333,7 @@ export async function POST(request: Request) {
 
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err)
-        console.error('[bank-agent/connect] unhandled error:', err)
+        logger.error('bank-agent/connect', 'unhandled error', { message: errorMsg })
         send({ type: 'error', error: errorMsg })
       } finally {
         clearInterval(keepAlive)

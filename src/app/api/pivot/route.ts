@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { Prisma } from '@/generated/prisma/client'
 import type { PivotRow } from '@/lib/pivot/types'
+import { logger } from '@/lib/log'
 
 // TODO: Future optimization: server-side aggregation via Prisma groupBy or raw SQL
 // for users with 10k+ transactions.
@@ -131,7 +132,7 @@ export async function GET(request: Request) {
 
     return ok(rows)
   } catch (err) {
-    console.error('[GET /api/pivot]', err)
+    logger.error('pivot', 'GET error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to load pivot data')
   }
 }

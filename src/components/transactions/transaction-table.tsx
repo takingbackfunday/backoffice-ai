@@ -228,7 +228,18 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
         </p>
       </div>
 
-      {data.error && <p className="text-sm text-red-600" role="alert">{data.error}</p>}
+      {data.error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          <span>{data.error}</span>
+          <button
+            type="button"
+            onClick={data.refetch}
+            className="ml-auto text-xs font-medium text-destructive hover:underline underline-offset-2"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {ai.aiExplanation && (
         <div className="flex items-center gap-2 rounded-md border border-purple-200 bg-purple-50/50 px-3 py-2 text-xs text-purple-800">

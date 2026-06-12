@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import { openrouterChat } from '@/lib/llm/openrouter'
+import { logger } from '@/lib/log'
 
 const RequestSchema = z.object({
   currentInvoice: z.object({
@@ -39,15 +40,15 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (!project) return notFound('Project not found')
 
     const body = await request.json()
-    console.log('[ai-finalize] body keys:', Object.keys(body))
+    logger.info('ai-finalize', 'request', { bodyKeys: Object.keys(body) })
     const parsed = RequestSchema.safeParse(body)
     if (!parsed.success) {
-      console.error('[ai-finalize] validation failed:', parsed.error.errors)
+      logger.error('ai-finalize', 'validation failed', { errors: parsed.error.errors })
       return badRequest(parsed.error.errors.map(e => e.message).join(', '))
     }
 
     const { currentInvoice, clientName, company, paymentTermDays, billingType } = parsed.data
-    console.log('[ai-finalize] calling LLM for project', id, '| total:', currentInvoice.total)
+    logger.info('ai-finalize', 'calling LLM', { projectId: id, total: currentInvoice.total })
 
     const systemPrompt = `Review this invoice for a ${billingType ?? 'freelance'} professional.
 
@@ -70,7 +71,7 @@ Questions: ask only if something seems genuinely unclear or missing (e.g. no due
       [{ role: 'user', content: systemPrompt }],
       'anthropic/claude-sonnet-4.6'
     )
-    console.log('[ai-finalize] raw LLM response (first 300):', raw.slice(0, 300))
+    logger.info('ai-finalize', 'raw LLM response', { preview: raw.slice(0, 300) })
 
     let jsonStr = raw.trim()
     const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -81,9 +82,9 @@ Questions: ask only if something seems genuinely unclear or missing (e.g. no due
     let result: { suggestedNotes: string | null; questions: string[] }
     try {
       result = JSON.parse(jsonStr)
-      console.log('[ai-finalize] parsed ok — suggestedNotes:', !!result.suggestedNotes, '| questions:', result.questions?.length ?? 0)
+      logger.info('ai-finalize', 'parsed ok', { hasNotes: !!result.suggestedNotes, questionsCount: result.questions?.length ?? 0 })
     } catch (parseErr) {
-      console.error('[ai-finalize] JSON parse failed:', parseErr, '| jsonStr:', jsonStr.slice(0, 200))
+      logger.error('ai-finalize', 'JSON parse failed', { preview: jsonStr.slice(0, 200) })
       return ok({ suggestedNotes: null, questions: [] })
     }
 
@@ -92,7 +93,7 @@ Questions: ask only if something seems genuinely unclear or missing (e.g. no due
       questions: Array.isArray(result.questions) ? result.questions : [],
     })
   } catch (err) {
-    console.error('[ai-finalize]', err)
+    logger.error('ai-finalize', 'unhandled error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to finalize invoice')
   }
 }

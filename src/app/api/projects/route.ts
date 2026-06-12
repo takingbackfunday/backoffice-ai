@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { generateSlug } from '@/lib/slug'
+import { logger } from '@/lib/log'
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
@@ -154,7 +155,7 @@ export async function POST(request: Request) {
 
     return created(project)
   } catch (err) {
-    console.error('Failed to create project:', err)
+    logger.error('projects', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to create project')
   }
 }

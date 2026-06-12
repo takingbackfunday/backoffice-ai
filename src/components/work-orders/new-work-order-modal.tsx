@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 interface Workspace { id: string; name: string; type: string; slug: string }
 interface Job { id: string; name: string; status: string }
 interface MaintenanceRequest { id: string; title: string; status: string }
+interface Unit { id: string; unitLabel: string }
 interface Vendor { id: string; name: string; specialty: string | null }
 
 interface Props {
@@ -31,6 +32,7 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
 
   const [jobs, setJobs] = useState<Job[]>([])
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([])
+  const [units, setUnits] = useState<Unit[]>([])
   const [loadingContext, setLoadingContext] = useState(false)
   const [selectedJobId, setSelectedJobId] = useState('')
   const [selectedMaintenanceId, setSelectedMaintenanceId] = useState('')
@@ -38,6 +40,10 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
   const [creatingJob, setCreatingJob] = useState(false)
   const [newJobName, setNewJobName] = useState('')
   const [savingJob, setSavingJob] = useState(false)
+
+  const [creatingMaintenance, setCreatingMaintenance] = useState(false)
+  const [newMaintenance, setNewMaintenance] = useState({ unitId: '', title: '', description: '' })
+  const [savingMaintenance, setSavingMaintenance] = useState(false)
 
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [form, setForm] = useState({ title: '', description: '', vendorId: '', agreedCost: '', scheduledDate: '' })
@@ -95,9 +101,14 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
         const j = await r.json()
         setJobs(j.data ?? [])
       } else if (ws.type === 'PROPERTY') {
-        const r = await fetch(`/api/projects/${ws.id}/maintenance`)
-        const j = await r.json()
-        setMaintenanceRequests(j.data ?? [])
+        const [mrRes, unitsRes] = await Promise.all([
+          fetch(`/api/projects/${ws.id}/maintenance`),
+          fetch(`/api/projects/${ws.id}/units`),
+        ])
+        const mrJson = await mrRes.json()
+        const unitsJson = await unitsRes.json()
+        setMaintenanceRequests(mrJson.data ?? [])
+        setUnits(unitsJson.data ?? [])
       }
     } finally {
       setLoadingContext(false)
@@ -154,6 +165,36 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
       }
     } finally {
       setSavingVendor(false)
+    }
+  }
+
+  async function createMaintenanceRequest() {
+    if (!selectedWorkspace || !newMaintenance.unitId || !newMaintenance.title.trim()) return
+    setSavingMaintenance(true)
+    try {
+      const r = await fetch(`/api/projects/${selectedWorkspace.id}/maintenance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          unitId: newMaintenance.unitId,
+          title: newMaintenance.title.trim(),
+          description: newMaintenance.description.trim() || 'Work order initiated',
+        }),
+      })
+      if (r.ok) {
+        const j = await r.json()
+        const req = j.data as MaintenanceRequest
+        setMaintenanceRequests(prev => [...prev, req])
+        setSelectedMaintenanceId(req.id)
+        setCreatingMaintenance(false)
+        setNewMaintenance({ unitId: '', title: '', description: '' })
+        goToStep3()
+      } else {
+        const j = await r.json()
+        setError(j.error ?? 'Failed to create maintenance request')
+      }
+    } finally {
+      setSavingMaintenance(false)
     }
   }
 
@@ -350,20 +391,68 @@ export function NewWorkOrderModal({ onClose, onCreated, defaultType }: Props) {
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">Which maintenance request is this for? (optional)</p>
-                  <select
-                    defaultValue=""
-                    onChange={e => {
-                      if (e.target.value === '__none__') { setSelectedMaintenanceId(''); goToStep3(); return }
-                      if (e.target.value) { setSelectedMaintenanceId(e.target.value); goToStep3() }
-                    }}
-                    className="w-full rounded border px-2 py-1.5 text-sm bg-background"
-                  >
-                    <option value="" disabled>Select a request…</option>
-                    <option value="__none__">— No specific request —</option>
-                    {maintenanceRequests.map(mr => (
-                      <option key={mr.id} value={mr.id}>{mr.title} ({mr.status})</option>
-                    ))}
-                  </select>
+                  {creatingMaintenance ? (
+                    <div className="space-y-2">
+                      <select
+                        value={newMaintenance.unitId}
+                        onChange={e => setNewMaintenance(p => ({ ...p, unitId: e.target.value }))}
+                        className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                      >
+                        <option value="" disabled>Select a unit…</option>
+                        {units.map(u => (
+                          <option key={u.id} value={u.id}>{u.unitLabel}</option>
+                        ))}
+                      </select>
+                      <input
+                        autoFocus
+                        value={newMaintenance.title}
+                        onChange={e => setNewMaintenance(p => ({ ...p, title: e.target.value }))}
+                        placeholder="Request title *"
+                        className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                      />
+                      <textarea
+                        value={newMaintenance.description}
+                        onChange={e => setNewMaintenance(p => ({ ...p, description: e.target.value }))}
+                        placeholder="Description (optional)"
+                        rows={2}
+                        className="w-full rounded border px-2 py-1.5 text-sm bg-background resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={createMaintenanceRequest}
+                          disabled={savingMaintenance || !newMaintenance.unitId || !newMaintenance.title.trim()}
+                          className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                        >
+                          {savingMaintenance ? 'Creating…' : 'Create'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setCreatingMaintenance(false); setNewMaintenance({ unitId: '', title: '', description: '' }) }}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <select
+                      defaultValue=""
+                      onChange={e => {
+                        if (e.target.value === '__new__') { setCreatingMaintenance(true); return }
+                        if (e.target.value === '__none__') { setSelectedMaintenanceId(''); goToStep3(); return }
+                        if (e.target.value) { setSelectedMaintenanceId(e.target.value); goToStep3() }
+                      }}
+                      className="w-full rounded border px-2 py-1.5 text-sm bg-background"
+                    >
+                      <option value="" disabled>Select a request…</option>
+                      <option value="__none__">— No specific request —</option>
+                      {maintenanceRequests.map(mr => (
+                        <option key={mr.id} value={mr.id}>{mr.title} ({mr.status})</option>
+                      ))}
+                      <option value="__new__">+ New maintenance request…</option>
+                    </select>
+                  )}
                 </>
               )}
               {!creatingJob && (
