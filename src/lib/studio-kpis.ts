@@ -64,7 +64,7 @@ export async function fetchStudioKpis(userId: string): Promise<StudioKpis> {
     WITH client_workspaces AS (
       SELECT cp."id" AS cp_id
       FROM "ClientProfile" cp
-      JOIN "Project" w ON w."id" = cp."workspaceId"
+      JOIN "Project" w ON w."id" = cp."projectId"
       WHERE w."userId" = ${userId} AND w."type" = 'CLIENT' AND w."isActive" = true
     ),
     invoice_agg AS (
@@ -174,7 +174,7 @@ export async function fetchClientCardSummaries(userId: string): Promise<ClientCa
         cp."paymentTermDays",
         cp."billingType"
       FROM "ClientProfile" cp
-      JOIN "Project" w ON w."id" = cp."workspaceId"
+      JOIN "Project" w ON w."id" = cp."projectId"
       WHERE w."userId" = ${userId} AND w."type" = 'CLIENT' AND w."isActive" = true
     ),
     invoice_data AS (
@@ -302,7 +302,7 @@ export async function fetchLightweightQuotes(userId: string): Promise<Lightweigh
       w."slug" AS client_slug
     FROM "Quote" q
     JOIN "ClientProfile" cp ON cp."id" = q."clientProfileId"
-    JOIN "Project" w ON w."id" = cp."workspaceId"
+    JOIN "Project" w ON w."id" = cp."projectId"
     LEFT JOIN "Job" j ON j."id" = q."jobId"
     WHERE w."userId" = ${userId} AND w."type" = 'CLIENT' AND w."isActive" = true
       AND q."status" IN ('ACCEPTED', 'SENT')
@@ -567,7 +567,7 @@ export async function fetchLightweightInvoices(userId: string): Promise<Lightwei
       cp."company" AS client_company
     FROM "Invoice" i
     JOIN "ClientProfile" cp ON cp."id" = i."clientProfileId"
-    JOIN "Project" w ON w."id" = cp."workspaceId"
+    JOIN "Project" w ON w."id" = cp."projectId"
     LEFT JOIN "InvoiceLineItem" li ON li."invoiceId" = i."id"
     LEFT JOIN "Job" j ON j."id" = i."jobId"
     WHERE w."userId" = ${userId} AND w."type" = 'CLIENT' AND w."isActive" = true
@@ -649,9 +649,9 @@ export async function fetchPortfolioKpis(userId: string): Promise<PortfolioKpis>
     overdue_payments: bigint
   }[]>`
     WITH property_workspaces AS (
-      SELECT pp."id" AS pp_id, pp."workspaceId" AS ws_id
+      SELECT pp."id" AS pp_id, pp."projectId" AS ws_id
       FROM "PropertyProfile" pp
-      JOIN "Project" w ON w."id" = pp."workspaceId"
+      JOIN "Project" w ON w."id" = pp."projectId"
       WHERE w."userId" = ${userId} AND w."type" = 'PROPERTY' AND w."isActive" = true
     ),
     all_units AS (
@@ -831,7 +831,7 @@ export async function fetchUnitSummaries(userId: string): Promise<UnitSummary[]>
         pp."propertyType" AS property_type
       FROM "Unit" u
       JOIN "PropertyProfile" pp ON pp."id" = u."propertyProfileId"
-      JOIN "Project" w ON w."id" = pp."workspaceId"
+      JOIN "Project" w ON w."id" = pp."projectId"
       WHERE w."userId" = ${userId} AND w."type" = 'PROPERTY' AND w."isActive" = true
     ),
     active_leases AS (
