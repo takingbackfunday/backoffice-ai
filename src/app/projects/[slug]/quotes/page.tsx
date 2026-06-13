@@ -3,10 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { QuoteList } from '@/components/projects/quote-list'
 
 interface PageParams { params: Promise<{ slug: string }> }
@@ -48,34 +45,26 @@ export default async function ProjectQuotesPage({ params }: PageParams) {
     job: q.job,
   }))
 
+  const hub = getHubRoute(project.type)
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={project.name} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <div className="max-w-4xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Quotes</h2>
-              <Link
-                href={`/projects/${slug}/quotes/new`}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <Plus className="w-3 h-3" /> New Quote
-              </Link>
-            </div>
-            <QuoteList projectSlug={slug} quotes={quotes} />
-          </div>
-        </main>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Quotes' }]}
+    >
+      <div className="max-w-4xl">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold">Quotes</h2>
+          <Link
+            href={`/projects/${slug}/quotes/new`}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Plus className="w-3 h-3" /> New Quote
+          </Link>
+        </div>
+        <QuoteList projectSlug={slug} quotes={quotes} />
       </div>
-    </div>
+    </ProjectPageShell>
   )
 }

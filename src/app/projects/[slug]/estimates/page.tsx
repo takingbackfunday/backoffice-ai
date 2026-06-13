@@ -3,10 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { cn } from '@/lib/utils'
 import Decimal from 'decimal.js'
 import { toDisplay } from '@/lib/money'
@@ -60,98 +57,89 @@ export default async function ProjectEstimatesPage({ params }: PageParams) {
   const fmt = (n: number, currency: string) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
 
+  const hub = getHubRoute(project.type)
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={project.name} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold">{estimates.length} estimate{estimates.length !== 1 ? 's' : ''}</h2>
-            <Link
-              href={`/projects/${slug}/estimates/new`}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Plus className="w-3 h-3" /> New Estimate
-            </Link>
-          </div>
-
-          {estimates.length === 0 ? (
-            <div className="text-center py-16 border border-dashed rounded-lg">
-              <p className="text-sm text-muted-foreground mb-3">No estimates yet.</p>
-              <Link
-                href={`/projects/${slug}/estimates/new`}
-                className="text-xs text-primary hover:underline"
-              >
-                Create your first estimate
-              </Link>
-            </div>
-          ) : (
-            <div className="rounded-lg border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left px-4 py-2 font-medium">Title</th>
-                    <th className="text-left px-4 py-2 font-medium">Job</th>
-                    <th className="text-left px-4 py-2 font-medium">Status</th>
-                    <th className="text-right px-4 py-2 font-medium">Cost</th>
-                    <th className="text-right px-4 py-2 font-medium">Quotes</th>
-                    <th className="text-right px-4 py-2 font-medium">Updated</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {estimates.map(est => {
-                    const cost = estimateCost(est.sections)
-                    return (
-                      <tr key={est.id} className="hover:bg-muted/20">
-                        <td className="px-4 py-2">
-                          <Link
-                            href={`/projects/${slug}/estimates/${est.id}`}
-                            className="font-medium hover:underline"
-                          >
-                            {est.title}
-                            {est.version > 1 && <span className="ml-1.5 text-xs text-muted-foreground">v{est.version}</span>}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-2 text-muted-foreground text-xs">
-                          {est.job ? (
-                            <Link href={`/projects/${slug}/jobs/${est.job.id}`} className="hover:underline">
-                              {est.job.name}
-                            </Link>
-                          ) : '—'}
-                        </td>
-                        <td className="px-4 py-2">
-                          <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-medium', STATUS_STYLES[est.status])}>
-                            {est.status.toLowerCase()}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums">
-                          {cost > 0 ? fmt(cost, est.currency) : '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right text-muted-foreground">
-                          {est._count.quotes > 0 ? est._count.quotes : '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right text-muted-foreground text-xs">
-                          {new Date(est.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </main>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Estimates' }]}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold">{estimates.length} estimate{estimates.length !== 1 ? 's' : ''}</h2>
+        <Link
+          href={`/projects/${slug}/estimates/new`}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Plus className="w-3 h-3" /> New Estimate
+        </Link>
       </div>
-    </div>
+
+      {estimates.length === 0 ? (
+        <div className="text-center py-16 border border-dashed rounded-lg">
+          <p className="text-sm text-muted-foreground mb-3">No estimates yet.</p>
+          <Link
+            href={`/projects/${slug}/estimates/new`}
+            className="text-xs text-primary hover:underline"
+          >
+            Create your first estimate
+          </Link>
+        </div>
+      ) : (
+        <div className="rounded-lg border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-4 py-2 font-medium">Title</th>
+                <th className="text-left px-4 py-2 font-medium">Job</th>
+                <th className="text-left px-4 py-2 font-medium">Status</th>
+                <th className="text-right px-4 py-2 font-medium">Cost</th>
+                <th className="text-right px-4 py-2 font-medium">Quotes</th>
+                <th className="text-right px-4 py-2 font-medium">Updated</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {estimates.map(est => {
+                const cost = estimateCost(est.sections)
+                return (
+                  <tr key={est.id} className="hover:bg-muted/20">
+                    <td className="px-4 py-2">
+                      <Link
+                        href={`/projects/${slug}/estimates/${est.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {est.title}
+                        {est.version > 1 && <span className="ml-1.5 text-xs text-muted-foreground">v{est.version}</span>}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground text-xs">
+                      {est.job ? (
+                        <Link href={`/projects/${slug}/jobs/${est.job.id}`} className="hover:underline">
+                          {est.job.name}
+                        </Link>
+                      ) : '—'}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-medium', STATUS_STYLES[est.status])}>
+                        {est.status.toLowerCase()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      {cost > 0 ? fmt(cost, est.currency) : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right text-muted-foreground">
+                      {est._count.quotes > 0 ? est._count.quotes : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right text-muted-foreground text-xs">
+                      {new Date(est.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </ProjectPageShell>
   )
 }

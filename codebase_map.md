@@ -430,6 +430,10 @@ Post-import work (rules agent, invoice matching, receipt matching) is enqueued a
 | PortalDropdown (createPortal + position:fixed) | `src/components/ui/portal-dropdown.tsx` | For dropdowns inside overflow containers; exports `useAnchorRect`; stamps `data-portal-dropdown` |
 | Outside-click hook | `src/hooks/use-outside-click.ts` | Use with `ignoreSelector: '[data-portal-dropdown]'` |
 | Pending AI changes hook (HITL) | `src/hooks/use-pending-ai-changes.ts` | For AI write confirm/undo pattern |
+| Page breadcrumb | `src/components/layout/page-breadcrumb.tsx` | Server component; accepts `{ label, href? }[]` props; renders `ChevronRight` separators. No hooks. |
+| Project page shell | `src/components/layout/project-page-shell.tsx` | Wraps `Sidebar + Header(breadcrumb) + ProjectDetailHeader + ProjectSubNav + children`. All project pages should use this instead of inline layout boilerplate. |
+| Page shell (non-project) | `src/components/layout/page-shell.tsx` | Simpler shell for non-project nested pages (e.g. vendor detail). Wraps `Sidebar + Header(breadcrumb) + children`. |
+| Header | `src/components/layout/header.tsx` | Accepts `title?: string` or `children?: ReactNode`. Pass `<PageBreadcrumb>` as children for nested pages; use `title` for top-level pages. |
 
 ---
 

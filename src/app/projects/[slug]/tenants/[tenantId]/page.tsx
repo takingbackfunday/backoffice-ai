@@ -1,10 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { TenantDetailClient } from '@/components/projects/tenant-detail-client'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
@@ -43,39 +40,36 @@ export default async function TenantDetailPage({ params }: PageParams) {
 
   if (!tenant) notFound()
 
+  const hub = getHubRoute(project.type)
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={`${project.name} — ${tenant.name}`} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <TenantDetailClient
-            projectId={project.id}
-            tenant={{
-              ...JSON.parse(JSON.stringify(tenant)),
-              leases: tenant.leases.map(l => ({
-                ...JSON.parse(JSON.stringify(l)),
-                invoices: l.invoices.map(inv => {
-                  const { total, paid } = computeInvoiceTotals(inv)
-                  return {
-                    id: inv.id,
-                    lineItemTotal: toDisplay(total),
-                    paymentTotal: toDisplay(paid),
-                  }
-                }),
-              })),
-            }}
-          />
-        </main>
-      </div>
-    </div>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[
+        hub,
+        { label: project.name, href: `/projects/${slug}` },
+        { label: 'Tenants', href: `/projects/${slug}/tenants` },
+        { label: tenant.name },
+      ]}
+    >
+      <TenantDetailClient
+        projectId={project.id}
+        tenant={{
+          ...JSON.parse(JSON.stringify(tenant)),
+          leases: tenant.leases.map(l => ({
+            ...JSON.parse(JSON.stringify(l)),
+            invoices: l.invoices.map(inv => {
+              const { total, paid } = computeInvoiceTotals(inv)
+              return {
+                id: inv.id,
+                lineItemTotal: toDisplay(total),
+                paymentTotal: toDisplay(paid),
+              }
+            }),
+          })),
+        }}
+      />
+    </ProjectPageShell>
   )
 }

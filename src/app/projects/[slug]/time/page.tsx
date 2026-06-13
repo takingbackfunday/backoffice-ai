@@ -1,10 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { TimeTracker } from '@/components/projects/time-tracker'
 
 interface PageParams { params: Promise<{ slug: string }> }
@@ -42,30 +39,21 @@ export default async function ProjectTimePage({ params }: PageParams) {
     : null
   const currency = project.clientProfile.currency ?? 'USD'
 
+  const hub = getHubRoute(project.type)
+
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Header title={project.name} />
-        <main className="flex-1 overflow-y-auto p-6">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-            isDefault={project.isDefault}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <TimeTracker
-            projectId={project.id}
-            entries={JSON.parse(JSON.stringify(entries))}
-            jobs={jobs}
-            defaultRate={defaultRate}
-            currency={currency}
-          />
-        </main>
-      </div>
-    </div>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Time' }]}
+    >
+      <TimeTracker
+        projectId={project.id}
+        entries={JSON.parse(JSON.stringify(entries))}
+        jobs={jobs}
+        defaultRate={defaultRate}
+        currency={currency}
+      />
+    </ProjectPageShell>
   )
 }

@@ -1,13 +1,9 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { InvoiceEditor } from '@/components/projects/invoice-editor'
 import { parsePreferences, DEFAULT_PAYMENT_NOTE } from '@/types/preferences'
-import Link from 'next/link'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
@@ -40,7 +36,6 @@ export default async function EditInvoicePage({ params }: PageParams) {
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
   const parsedPrefs = parsePreferences(prefs?.data)
   const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? DEFAULT_PAYMENT_NOTE
-  const invoiceNotesDefault = parsedPrefs.invoiceNotesDefault ?? ''
   const paymentMethods = parsedPrefs.paymentMethods ?? {}
 
   // PAID and VOID invoices cannot be edited
@@ -51,67 +46,55 @@ export default async function EditInvoicePage({ params }: PageParams) {
   const cp = project.clientProfile
 
   const { paid: totalPaid } = computeInvoiceTotals(invoice)
+  const hub = getHubRoute(project.type)
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={project.name} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <div className="mb-4 flex items-center justify-between">
-            <Link
-              href={`/projects/${slug}/invoices/${invoiceId}`}
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-            >
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to invoice
-            </Link>
-            <h2 className="text-lg font-semibold">Edit {invoice.invoiceNumber}</h2>
-          </div>
-          <InvoiceEditor
-            mode="edit"
-            projectId={project.id}
-            projectSlug={slug}
-            clientName={cp.contactName ?? project.name}
-            clientEmail={cp.email ?? null}
-            paymentTermDays={cp.paymentTermDays}
-            billingType={cp.billingType}
-            company={cp.company ?? null}
-            jobs={cp.jobs.map(j => ({ id: j.id, name: j.name }))}
-            existingInvoice={{
-              id: invoice.id,
-              invoiceNumber: invoice.invoiceNumber,
-              status: invoice.status,
-              jobId: invoice.jobId ?? null,
-              dueDate: invoice.dueDate.toISOString(),
-              issueDate: invoice.issueDate.toISOString(),
-              currency: invoice.currency,
-              notes: invoice.notes ?? null,
-              lineItems: invoice.lineItems.map(i => ({
-                id: i.id,
-                description: i.description,
-                quantity: toDisplay(i.quantity),
-                qtyUnit: i.qtyUnit ?? null,
-                unitPrice: toDisplay(i.unitPrice),
-                isTaxLine: i.isTaxLine,
-              })),
-              totalPaid: toDisplay(totalPaid),
-            }}
-            invoicePaymentNote={invoicePaymentNote}
-            paymentMethods={paymentMethods}
-          />
-        </main>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[
+        hub,
+        { label: project.name, href: `/projects/${slug}` },
+        { label: 'Invoices', href: `/projects/${slug}/invoices` },
+        { label: invoice.invoiceNumber, href: `/projects/${slug}/invoices/${invoiceId}` },
+        { label: 'Edit' },
+      ]}
+    >
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold">Edit {invoice.invoiceNumber}</h2>
       </div>
-    </div>
+      <InvoiceEditor
+        mode="edit"
+        projectId={project.id}
+        projectSlug={slug}
+        clientName={cp.contactName ?? project.name}
+        clientEmail={cp.email ?? null}
+        paymentTermDays={cp.paymentTermDays}
+        billingType={cp.billingType}
+        company={cp.company ?? null}
+        jobs={cp.jobs.map(j => ({ id: j.id, name: j.name }))}
+        existingInvoice={{
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          status: invoice.status,
+          jobId: invoice.jobId ?? null,
+          dueDate: invoice.dueDate.toISOString(),
+          issueDate: invoice.issueDate.toISOString(),
+          currency: invoice.currency,
+          notes: invoice.notes ?? null,
+          lineItems: invoice.lineItems.map(i => ({
+            id: i.id,
+            description: i.description,
+            quantity: toDisplay(i.quantity),
+            qtyUnit: i.qtyUnit ?? null,
+            unitPrice: toDisplay(i.unitPrice),
+            isTaxLine: i.isTaxLine,
+          })),
+          totalPaid: toDisplay(totalPaid),
+        }}
+        invoicePaymentNote={invoicePaymentNote}
+        paymentMethods={paymentMethods}
+      />
+    </ProjectPageShell>
   )
 }

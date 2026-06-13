@@ -1,10 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { EstimateEditor } from '@/components/projects/estimate-editor'
 import { PipelineBreadcrumb } from '@/components/projects/pipeline-breadcrumb'
 import { cn } from '@/lib/utils'
@@ -89,66 +86,63 @@ export default async function EstimateDetailPage({ params }: PageParams) {
     })
   }
 
+  const hub = getHubRoute(project.type)
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={project.name} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <div className="max-w-4xl space-y-4">
-            <div className="mb-1">
-              <PipelineBreadcrumb nodes={pipelineNodes} projectSlug={slug} currentId={estimate.id} />
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[
+        hub,
+        { label: project.name, href: `/projects/${slug}` },
+        { label: 'Estimates', href: `/projects/${slug}/estimates` },
+        { label: estimate.title },
+      ]}
+    >
+      <div className="max-w-4xl space-y-4">
+        <div className="mb-1">
+          <PipelineBreadcrumb nodes={pipelineNodes} projectSlug={slug} currentId={estimate.id} />
+        </div>
+        {versionChain.length > 1 && (
+          <div className="rounded-md border overflow-hidden">
+            <div className="px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/30">
+              Versions ({versionChain.length})
             </div>
-            {versionChain.length > 1 && (
-              <div className="rounded-md border overflow-hidden">
-                <div className="px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/30">
-                  Versions ({versionChain.length})
+            <div className="divide-y">
+              {versionChain.map((v, i) => (
+                <div
+                  key={v.id}
+                  className={cn(
+                    'flex items-center justify-between px-3 py-2 text-xs',
+                    v.id === estimate.id && 'bg-muted/20'
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">{i + 1}.</span>
+                    {v.id === estimate.id ? (
+                      <span className="font-medium">{v.title} v{v.version}</span>
+                    ) : (
+                      <a href={`/projects/${slug}/estimates/${v.id}`} className="font-medium hover:underline underline-offset-2">
+                        {v.title} v{v.version} →
+                      </a>
+                    )}
+                    <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">{v.status.toLowerCase()}</span>
+                    {v.id === estimate.id && <span className="text-[10px] text-muted-foreground">(current)</span>}
+                  </div>
                 </div>
-                <div className="divide-y">
-                  {versionChain.map((v, i) => (
-                    <div
-                      key={v.id}
-                      className={cn(
-                        'flex items-center justify-between px-3 py-2 text-xs',
-                        v.id === estimate.id && 'bg-muted/20'
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">{i + 1}.</span>
-                        {v.id === estimate.id ? (
-                          <span className="font-medium">{v.title} v{v.version}</span>
-                        ) : (
-                          <a href={`/projects/${slug}/estimates/${v.id}`} className="font-medium hover:underline underline-offset-2">
-                            {v.title} v{v.version} →
-                          </a>
-                        )}
-                        <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600">{v.status.toLowerCase()}</span>
-                        {v.id === estimate.id && <span className="text-[10px] text-muted-foreground">(current)</span>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <EstimateEditor
-              projectId={project.id}
-              projectSlug={slug}
-              clientName={project.clientProfile.contactName ?? project.name}
-              billingType={project.clientProfile.billingType}
-              existingEstimate={estimateData}
-              jobs={jobs}
-            />
+              ))}
+            </div>
           </div>
-        </main>
+        )}
+        <EstimateEditor
+          projectId={project.id}
+          projectSlug={slug}
+          clientName={project.clientProfile.contactName ?? project.name}
+          billingType={project.clientProfile.billingType}
+          existingEstimate={estimateData}
+          jobs={jobs}
+        />
       </div>
-    </div>
+    </ProjectPageShell>
   )
 }

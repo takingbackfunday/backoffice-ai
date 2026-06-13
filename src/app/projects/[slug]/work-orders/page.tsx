@@ -1,10 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { WorkOrderList } from '@/components/projects/work-order-list'
 import { toDisplay } from '@/lib/money'
 
@@ -50,27 +47,19 @@ export default async function ProjectWorkOrdersPage({ params }: PageParams) {
     })),
   }))
 
+  const hub = getHubRoute(project.type)
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={project.name} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <WorkOrderList
-            projectId={project.id}
-            projectSlug={slug}
-            workOrders={serialized}
-          />
-        </main>
-      </div>
-    </div>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Work Orders' }]}
+    >
+      <WorkOrderList
+        projectId={project.id}
+        projectSlug={slug}
+        workOrders={serialized}
+      />
+    </ProjectPageShell>
   )
 }

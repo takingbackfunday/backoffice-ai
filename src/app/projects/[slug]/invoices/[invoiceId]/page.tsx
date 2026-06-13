@@ -1,15 +1,12 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { InvoiceDetailClient } from '@/components/projects/invoice-detail-client'
 import { PipelineBreadcrumb } from '@/components/projects/pipeline-breadcrumb'
-import Link from 'next/link'
 import { parsePreferences } from '@/types/preferences'
 import { toDisplay, computeInvoiceTotals } from '@/lib/money'
+
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
 
 async function loadRenegotiationChain(invoiceId: string) {
@@ -242,47 +239,35 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     issueDate: item.issueDate.toISOString(),
   }))
 
+  const hub = getHubRoute(project.type)
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={project.name} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <div style={{ width: '65%' }}>
-            <div className="mb-4 space-y-2">
-              <Link
-                href={`/projects/${slug}/invoices`}
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-              >
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                All invoices
-              </Link>
-              <PipelineBreadcrumb nodes={pipelineNodes} projectSlug={slug} currentId={invoice.id} />
-            </div>
-            <InvoiceDetailClient
-              projectId={project.id}
-              projectSlug={slug}
-              invoice={serialized}
-              paymentMethods={paymentMethods}
-              invoicePaymentNote={invoicePaymentNote}
-              suggestions={suggestions}
-              replacesInvoice={serialized.replacesInvoice}
-              replacedBy={serialized.replacedBy}
-              historyChain={serializedHistory}
-            />
-          </div>
-        </main>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[
+        hub,
+        { label: project.name, href: `/projects/${slug}` },
+        { label: 'Invoices', href: `/projects/${slug}/invoices` },
+        { label: invoice.invoiceNumber },
+      ]}
+    >
+      <div style={{ width: '65%' }}>
+        <div className="mb-4">
+          <PipelineBreadcrumb nodes={pipelineNodes} projectSlug={slug} currentId={invoice.id} />
+        </div>
+        <InvoiceDetailClient
+          projectId={project.id}
+          projectSlug={slug}
+          invoice={serialized}
+          paymentMethods={paymentMethods}
+          invoicePaymentNote={invoicePaymentNote}
+          suggestions={suggestions}
+          replacesInvoice={serialized.replacesInvoice}
+          replacedBy={serialized.replacedBy}
+          historyChain={serializedHistory}
+        />
       </div>
-    </div>
+    </ProjectPageShell>
   )
 }

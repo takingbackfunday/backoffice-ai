@@ -1,10 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { InvoiceList } from '@/components/projects/invoice-list'
 import { parsePreferences } from '@/types/preferences'
 import { toDisplay } from '@/lib/money'
@@ -45,6 +42,7 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
 
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
   const paymentMethods = parsePreferences(prefs?.data).paymentMethods ?? {}
+  const hub = getHubRoute(project.type)
 
   /* ── CLIENT project ─────────────────────────────────────────────── */
   if (project.type === 'CLIENT') {
@@ -79,31 +77,21 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
     }))
 
     return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex flex-1 flex-col">
-          <Header title={project.name} />
-          <main className="flex-1 p-6" role="main">
-            <ProjectDetailHeader
-              id={project.id}
-              name={project.name}
-              type={project.type}
-              isActive={project.isActive}
-              description={project.description}
-            />
-            <ProjectSubNav slug={slug} type={project.type} />
-            <InvoiceList
-              projectId={project.id}
-              projectSlug={slug}
-              jobs={serializedJobs}
-              invoices={serializedInvoices}
-              paymentMethods={paymentMethods}
-              clientEmail={project.clientProfile.email ?? ''}
-              clientName={project.clientProfile.contactName ?? project.name}
-            />
-          </main>
-        </div>
-      </div>
+      <ProjectPageShell
+        project={project}
+        slug={slug}
+        breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Invoices' }]}
+      >
+        <InvoiceList
+          projectId={project.id}
+          projectSlug={slug}
+          jobs={serializedJobs}
+          invoices={serializedInvoices}
+          paymentMethods={paymentMethods}
+          clientEmail={project.clientProfile.email ?? ''}
+          clientName={project.clientProfile.contactName ?? project.name}
+        />
+      </ProjectPageShell>
     )
   }
 
@@ -166,31 +154,21 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
     const clientName = firstTenant?.name ?? firstApplicant?.name ?? project.name
 
     return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex flex-1 flex-col">
-          <Header title={project.name} />
-          <main className="flex-1 p-6" role="main">
-            <ProjectDetailHeader
-              id={project.id}
-              name={project.name}
-              type={project.type}
-              isActive={project.isActive}
-              description={project.description}
-            />
-            <ProjectSubNav slug={slug} type={project.type} />
-            <InvoiceList
-              projectId={project.id}
-              projectSlug={slug}
-              jobs={[]}
-              invoices={serializedInvoices}
-              paymentMethods={paymentMethods}
-              clientEmail={clientEmail}
-              clientName={clientName}
-            />
-          </main>
-        </div>
-      </div>
+      <ProjectPageShell
+        project={project}
+        slug={slug}
+        breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Invoices' }]}
+      >
+        <InvoiceList
+          projectId={project.id}
+          projectSlug={slug}
+          jobs={[]}
+          invoices={serializedInvoices}
+          paymentMethods={paymentMethods}
+          clientEmail={clientEmail}
+          clientName={clientName}
+        />
+      </ProjectPageShell>
     )
   }
 

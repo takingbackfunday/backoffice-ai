@@ -1,11 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
-import { TenantList } from '@/components/projects/tenant-list'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { TenantsApplicantsClient } from '@/components/projects/tenants-applicants-client'
 
 interface PageParams { params: Promise<{ slug: string }> }
@@ -63,30 +59,22 @@ export default async function ProjectTenantsPage({ params }: PageParams) {
     orderBy: { createdAt: 'desc' },
   })
 
+  const hub = getHubRoute(project.type)
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={project.name} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <TenantsApplicantsClient
-            projectId={project.id}
-            projectSlug={slug}
-            tenants={JSON.parse(JSON.stringify(tenants))}
-            units={units}
-            listings={listings}
-            defaultTab={activeApplicantsCount > 0 ? 'applicants' : 'tenants'}
-          />
-        </main>
-      </div>
-    </div>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Tenants' }]}
+    >
+      <TenantsApplicantsClient
+        projectId={project.id}
+        projectSlug={slug}
+        tenants={JSON.parse(JSON.stringify(tenants))}
+        units={units}
+        listings={listings}
+        defaultTab={activeApplicantsCount > 0 ? 'applicants' : 'tenants'}
+      />
+    </ProjectPageShell>
   )
 }

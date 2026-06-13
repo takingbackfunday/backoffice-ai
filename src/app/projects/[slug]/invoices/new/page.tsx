@@ -1,15 +1,11 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { InvoiceEditor } from '@/components/projects/invoice-editor'
 import { parsePreferences, DEFAULT_PAYMENT_NOTE } from '@/types/preferences'
 import { PropertyInvoiceNew } from '@/components/projects/property-invoice-new'
 import { NewInvoiceShortcuts } from '@/components/projects/new-invoice-shortcuts'
-import Link from 'next/link'
 
 interface PageParams { params: Promise<{ slug: string }> }
 
@@ -51,6 +47,7 @@ export default async function NewInvoicePage({ params }: PageParams) {
   const invoicePaymentNote = parsedPrefs.invoicePaymentNote ?? DEFAULT_PAYMENT_NOTE
   const invoiceNotesDefault = parsedPrefs.invoiceNotesDefault ?? ''
   const paymentMethods = parsedPrefs.paymentMethods ?? {}
+  const hub = getHubRoute(project.type)
 
   /* ── PROPERTY project ─────────────────────────────────────────── */
   if (project.type === 'PROPERTY') {
@@ -67,39 +64,20 @@ export default async function NewInvoicePage({ params }: PageParams) {
       .filter(l => l.tenantId)
 
     return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex flex-1 flex-col">
-          <Header title={project.name} />
-          <main className="flex-1 p-6" role="main">
-            <ProjectDetailHeader
-              id={project.id}
-              name={project.name}
-              type={project.type}
-              isActive={project.isActive}
-              description={project.description}
-            />
-            <ProjectSubNav slug={slug} type={project.type} />
-            <div className="mb-4 flex items-center justify-between">
-              <Link
-                href={`/projects/${slug}/invoices`}
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-              >
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                All invoices
-              </Link>
-              <h2 className="text-lg font-semibold">New Invoice</h2>
-            </div>
-            <PropertyInvoiceNew
-              projectId={project.id}
-              projectSlug={slug}
-              activeLeases={activeLeases}
-            />
-          </main>
+      <ProjectPageShell
+        project={project}
+        slug={slug}
+        breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Invoices', href: `/projects/${slug}/invoices` }, { label: 'New' }]}
+      >
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">New Invoice</h2>
         </div>
-      </div>
+        <PropertyInvoiceNew
+          projectId={project.id}
+          projectSlug={slug}
+          activeLeases={activeLeases}
+        />
+      </ProjectPageShell>
     )
   }
 
@@ -117,69 +95,50 @@ export default async function NewInvoicePage({ params }: PageParams) {
   ])
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={project.name} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <div className="mb-4 flex items-center justify-between">
-            <Link
-              href={`/projects/${slug}/invoices`}
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-            >
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              All invoices
-            </Link>
-            <h2 className="text-lg font-semibold">New Invoice</h2>
-          </div>
-          <div className="max-w-3xl">
-          <NewInvoiceShortcuts
-            projectId={project.id}
-            projectSlug={slug}
-            clientName={cp.contactName ?? project.name}
-            hasTransactions={txCount > 0}
-            acceptedQuotes={acceptedQuotes.map(q => ({
-              id: q.id,
-              quoteNumber: q.quoteNumber,
-              title: q.title,
-              totalQuoted: q.totalQuoted ? Number(q.totalQuoted) : null,
-              currency: q.currency,
-            }))}
-          />
-          <InvoiceEditor
-            mode="create"
-            projectId={project.id}
-            projectSlug={slug}
-            clientName={cp.contactName ?? project.name}
-            clientEmail={cp.email ?? null}
-            paymentTermDays={cp.paymentTermDays}
-            billingType={cp.billingType}
-            company={cp.company ?? null}
-            jobs={cp.jobs.map(j => ({ id: j.id, name: j.name }))}
-            lastInvoiceDefaults={invoiceDefaults ? {
-              taxEnabled: invoiceDefaults.taxEnabled ?? false,
-              taxLabel: invoiceDefaults.taxLabel ?? 'Tax',
-              taxMode: invoiceDefaults.taxMode ?? 'percent',
-              taxRate: invoiceDefaults.taxRate ?? '',
-              currency: invoiceDefaults.currency ?? 'USD',
-            } : undefined}
-            invoiceNotesDefault={invoiceNotesDefault}
-            invoicePaymentNote={invoicePaymentNote}
-            paymentMethods={paymentMethods}
-          />
-          </div>
-        </main>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Invoices', href: `/projects/${slug}/invoices` }, { label: 'New' }]}
+    >
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold">New Invoice</h2>
       </div>
-    </div>
+      <div className="max-w-3xl">
+        <NewInvoiceShortcuts
+          projectId={project.id}
+          projectSlug={slug}
+          clientName={cp.contactName ?? project.name}
+          hasTransactions={txCount > 0}
+          acceptedQuotes={acceptedQuotes.map(q => ({
+            id: q.id,
+            quoteNumber: q.quoteNumber,
+            title: q.title,
+            totalQuoted: q.totalQuoted ? Number(q.totalQuoted) : null,
+            currency: q.currency,
+          }))}
+        />
+        <InvoiceEditor
+          mode="create"
+          projectId={project.id}
+          projectSlug={slug}
+          clientName={cp.contactName ?? project.name}
+          clientEmail={cp.email ?? null}
+          paymentTermDays={cp.paymentTermDays}
+          billingType={cp.billingType}
+          company={cp.company ?? null}
+          jobs={cp.jobs.map(j => ({ id: j.id, name: j.name }))}
+          lastInvoiceDefaults={invoiceDefaults ? {
+            taxEnabled: invoiceDefaults.taxEnabled ?? false,
+            taxLabel: invoiceDefaults.taxLabel ?? 'Tax',
+            taxMode: invoiceDefaults.taxMode ?? 'percent',
+            taxRate: invoiceDefaults.taxRate ?? '',
+            currency: invoiceDefaults.currency ?? 'USD',
+          } : undefined}
+          invoiceNotesDefault={invoiceNotesDefault}
+          invoicePaymentNote={invoicePaymentNote}
+          paymentMethods={paymentMethods}
+        />
+      </div>
+    </ProjectPageShell>
   )
 }

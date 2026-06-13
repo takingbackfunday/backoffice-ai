@@ -1,10 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { ProjectDetailHeader } from '@/components/projects/project-detail-header'
-import { ProjectSubNav } from '@/components/projects/project-sub-nav'
+import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { MessagesInbox } from '@/components/projects/messages-inbox'
 
 interface PageParams { params: Promise<{ slug: string }> }
@@ -57,28 +54,19 @@ export default async function ProjectMessagesPage({ params }: PageParams) {
   }
 
   const threads = Array.from(threadMap.values())
+  const hub = getHubRoute(project.type)
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header title={`${project.name} — Messages`} />
-        <main className="flex-1 p-6" role="main">
-          <ProjectDetailHeader
-            id={project.id}
-            name={project.name}
-            type={project.type}
-            isActive={project.isActive}
-            description={project.description}
-          />
-          <ProjectSubNav slug={slug} type={project.type} />
-          <MessagesInbox
-            projectId={project.id}
-            slug={slug}
-            threads={threads}
-          />
-        </main>
-      </div>
-    </div>
+    <ProjectPageShell
+      project={project}
+      slug={slug}
+      breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Messages' }]}
+    >
+      <MessagesInbox
+        projectId={project.id}
+        slug={slug}
+        threads={threads}
+      />
+    </ProjectPageShell>
   )
 }
