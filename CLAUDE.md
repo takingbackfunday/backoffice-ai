@@ -256,3 +256,22 @@ Ownership lookups live in `src/lib/authz.ts` — always scope by `userId`. Route
 
 ### Component size cap — 400 lines + shared PortalDropdown
 No component file may exceed 400 lines. Extract non-visual logic into `use*` hooks (sibling `hooks/` folder) and leaf JSX into their own files. Any dropdown/popover rendered inside a scroll container (`overflow-auto`) must use `src/components/ui/portal-dropdown.tsx` (renders via `createPortal` into `document.body`, positions with `position: fixed`, and stamps `data-portal-dropdown`) plus `src/hooks/use-outside-click.ts` with `ignoreSelector: '[data-portal-dropdown]'`. Do not hand-roll `useAnchorRect` or `mousedown` capture listeners.
+
+### Clerk redirect fallbacks must point to existing routes
+
+The app has no `/onboarding` or `/home` routes. New-user onboarding starts at `/categories` (business-type picker), driven by `UserPreference.data.businessType`. `/dashboard` redirects to `/categories` when `businessType` is unset.
+
+In Clerk Dashboard → Configure → User redirects:
+- **After sign-up fallback** must be `https://backoffice.cv/dashboard` (not `/onboarding`).
+- **After sign-in fallback** should be `https://backoffice.cv/dashboard`.
+- **After logo click** should be `https://backoffice.cv/dashboard` (not `/home`).
+
+### Onboarding flow
+
+New users: sign-up → Clerk redirects to `/dashboard` → `/dashboard` redirects to `/categories` (no `businessType`) → user picks type → `POST /api/setup/business-type` seeds categories, creates a "Business Overhead" workspace for `freelance`/`property`, sets `UserPreference.data.onboardingStep` to `'accounts'`, and returns `redirectTo`:
+
+- **Freelance** → `/studio?onboarding=1` → banner prompts "Add client" → `/projects/new?type=CLIENT`
+- **Property** → `/portfolio?onboarding=1` → banner prompts "Add property" → `/projects/new?type=PROPERTY`
+- **Personal** → `/bank-accounts?onboarding=1` → `/accounts/new?onboarding=1` → `/upload?onboarding=1`
+
+`UserPreference.data.onboardingStep` tracks progress for the personal/bank flow. The Studio and Portfolio onboarding banners only remove the `?onboarding=1` query param on skip. The Bank Accounts and Upload banners post `onboardingStep: 'done'` when skipped; the `/accounts/new` form posts `onboardingStep: 'upload'` after account creation; `/upload` posts `onboardingStep: 'done'` after import completion.

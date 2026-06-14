@@ -11,6 +11,7 @@ Keep this updated when feature areas are added or moved.
 |---|---|---|
 | `/` | `src/app/page.tsx` | — (redirects) |
 | `/dashboard` | `src/app/dashboard/page.tsx` | `src/components/dashboard/dashboard-client.tsx` |
+| `/categories` | `src/app/categories/page.tsx` | `src/components/categories/business-type-picker.tsx`, `src/components/categories/category-manager.tsx` |
 | `/transactions` | `src/app/transactions/page.tsx` | `src/components/transactions/transaction-table.tsx` |
 | `/upload` | `src/app/upload/page.tsx` | `src/components/upload/upload-page-client.tsx` |
 | `/rules` | `src/app/rules/page.tsx` | `src/components/rules/rules-manager.tsx` |
@@ -420,6 +421,30 @@ Post-import work (rules agent, invoice matching, receipt matching) is enqueued a
 **Outstanding vs Overdue — mutually exclusive amounts:** `outstanding` covers SENT + PARTIAL invoices only; `overdue` covers OVERDUE invoices only. An overdue invoice's amount never appears in the Outstanding KPI, client card Outstanding column, or outstanding filter — only in Overdue. Both KPI totals and per-client card figures are derived from invoice statuses client-side, not from the server-computed `client.outstanding` field (which includes overdue).
 
 **Lazy-load pattern:** initial page load fetches lightweight summaries only (card headers + derived status in SQL). Expanded card detail (invoices with line items, quotes, jobs) is fetched on demand via `GET /api/studio/clients/[clientProfileId]`. Lightweight invoices (`flatInvoices`) and quotes (`flatQuotes`) are passed as props for notices, pipeline strip, and recent activity — pre-computed in SQL without line items.
+
+### Onboarding
+
+First-time user flow. `/dashboard` guards `UserPreference.data.businessType`; if unset it redirects to `/categories`. After the user picks a type, the flow diverges:
+- **Freelance** → `/studio?onboarding=1` → banner prompts "Add client" → `/projects/new?type=CLIENT`
+- **Property** → `/portfolio?onboarding=1` → banner prompts "Add property" → `/projects/new?type=PROPERTY`
+- **Personal** → `/bank-accounts?onboarding=1` → `/accounts/new?onboarding=1` → `/upload?onboarding=1`
+
+The onboarding wizard uses `?onboarding=1` query params on existing pages rather than a dedicated `/onboarding` route.
+
+| Task | File |
+|---|---|
+| Business type picker (first step) | `src/components/categories/business-type-picker.tsx` |
+| Overhead explainer modal (after business-type selection) | `src/components/onboarding/overhead-explainer-modal.tsx` |
+| Category management page | `src/app/categories/page.tsx` → `src/components/categories/category-manager.tsx` |
+| Save business type + seed categories | `POST /api/setup/business-type` → `src/app/api/setup/business-type/route.ts` |
+| Reset categories / business type | `POST /api/setup/reset-categories` → `src/app/api/setup/reset-categories/route.ts` |
+| Onboarding banner (reused across pages) | `src/components/onboarding/onboarding-banner.tsx` |
+| Accounts onboarding step | `src/app/accounts/new/page.tsx` |
+| Upload onboarding step | `src/app/upload/page.tsx` |
+| Studio onboarding step (freelance) | `src/app/studio/page.tsx` |
+| Portfolio onboarding step (property) | `src/app/portfolio/page.tsx` |
+| Bank accounts onboarding step | `src/app/bank-accounts/page.tsx` |
+| Preference tracking | `UserPreference.data.onboardingStep` / `businessType` in `src/types/preferences.ts` |
 
 ---
 
