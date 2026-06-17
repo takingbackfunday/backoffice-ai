@@ -60,6 +60,7 @@ export type InvoiceAction =
   | { type: 'SET_ISSUE_DATE'; value: string }
   | { type: 'SET_CURRENCY'; value: string }
   | { type: 'SET_NOTES'; value: string; aiSuggested?: boolean }
+  | { type: 'ADD_LINE_ITEMS'; items: LineItemInput[] }
 
 export interface ExistingInvoice {
   id: string
@@ -167,6 +168,13 @@ function reducer(state: InvoiceState, action: InvoiceAction): InvoiceState {
       return { ...state, currency: action.value }
     case 'SET_NOTES':
       return { ...state, notes: action.value, aiSuggestedNotes: action.aiSuggested ?? false }
+    case 'ADD_LINE_ITEMS': {
+      const hasRealItems = state.lineItems.some(i => i.description.trim())
+      return {
+        ...state,
+        lineItems: hasRealItems ? [...state.lineItems, ...action.items] : action.items,
+      }
+    }
     default:
       return state
   }
@@ -349,13 +357,27 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
       sessionStorage.removeItem('invoice-open-copy-picker')
       openCopyPicker()
     }
+    function onFromTransactionsTrigger() {
+      const pending = sessionStorage.getItem('invoice-from-transactions')
+      if (!pending) return
+      sessionStorage.removeItem('invoice-from-transactions')
+      try {
+        const items = JSON.parse(pending) as LineItemInput[]
+        if (Array.isArray(items) && items.length > 0) {
+          dispatch({ type: 'ADD_LINE_ITEMS', items })
+        }
+      } catch { /* silent */ }
+    }
     onAiTrigger()
     onCopyPickerTrigger()
+    onFromTransactionsTrigger()
     window.addEventListener('invoice-ai-trigger', onAiTrigger)
     window.addEventListener('invoice-copy-picker-trigger', onCopyPickerTrigger)
+    window.addEventListener('invoice-from-transactions-trigger', onFromTransactionsTrigger)
     return () => {
       window.removeEventListener('invoice-ai-trigger', onAiTrigger)
       window.removeEventListener('invoice-copy-picker-trigger', onCopyPickerTrigger)
+      window.removeEventListener('invoice-from-transactions-trigger', onFromTransactionsTrigger)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

@@ -196,6 +196,7 @@ export function StudioInvoiceModal({ clients, paymentMethods, invoiceDefaults, h
                 clientName={selectedClient.contactName ?? selectedClient.name}
                 acceptedQuotes={selectedClient.acceptedQuotes}
                 hasTransactions={hasTransactions}
+                onSelectProject={(id) => setSelectedClientId(id)}
               />
               <InvoiceEditor
                 key={selectedClient.id}

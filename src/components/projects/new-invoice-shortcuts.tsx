@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileText, Layers, Clock, Sparkles } from 'lucide-react'
+import { FromTransactionsModal } from './from-transactions-modal'
 
 interface AcceptedQuote {
   id: string
@@ -18,13 +19,15 @@ interface Props {
   clientName: string
   acceptedQuotes: AcceptedQuote[]
   hasTransactions?: boolean
+  onSelectProject?: (projectId: string) => void
 }
 
-export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, acceptedQuotes, hasTransactions = true }: Props) {
+export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, acceptedQuotes, hasTransactions = true, onSelectProject }: Props) {
   const router = useRouter()
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
   const [creatingFromQuote, setCreatingFromQuote] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showFromTransactions, setShowFromTransactions] = useState(false)
 
   const fmt = (n: number, currency: string) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
@@ -49,8 +52,7 @@ export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, accept
   }
 
   function handleFromTransactions() {
-    sessionStorage.setItem('invoice-ai-prompt', `Create an invoice based on expenses for ${clientName}`)
-    window.dispatchEvent(new CustomEvent('invoice-ai-trigger'))
+    setShowFromTransactions(true)
   }
 
   function handleFromPastInvoice() {
@@ -159,6 +161,14 @@ export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, accept
         </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
+      {showFromTransactions && (
+        <FromTransactionsModal
+          projectId={projectId}
+          projectName={clientName}
+          onClose={() => setShowFromTransactions(false)}
+          onSelectProject={onSelectProject}
+        />
+      )}
     </>
   )
 }
