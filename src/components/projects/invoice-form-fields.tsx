@@ -12,16 +12,13 @@ import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 const fmtFull = (n: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 
-interface InvoiceFormFieldsProps {
+export interface InvoiceFormFieldsTopProps {
   state: InvoiceState
   dispatch: React.Dispatch<InvoiceAction>
-  pendingAiChanges: PendingAiChanges
-  setPendingAiChanges: React.Dispatch<React.SetStateAction<PendingAiChanges>>
-  subtotal: number
-  taxAmount: number
-  total: number
-  totalBelowPaid: boolean
+  quoteNumber?: string
   isSent: boolean
+  totalBelowPaid: boolean
+  existingInvoice?: ExistingInvoice
   mode: 'create' | 'edit'
   projectId: string
   jobs: InvoiceEditorProps['jobs']
@@ -30,23 +27,28 @@ interface InvoiceFormFieldsProps {
   recentInvoices: InvoiceEditorProps['recentInvoices']
   loadingRecent: boolean
   copyFromInvoice: (id: string) => void
-  existingInvoice?: ExistingInvoice
-  quoteNumber?: string
+}
+
+export interface InvoiceFormFieldsBottomProps {
+  state: InvoiceState
+  dispatch: React.Dispatch<InvoiceAction>
+  pendingAiChanges: PendingAiChanges
+  setPendingAiChanges: React.Dispatch<React.SetStateAction<PendingAiChanges>>
+  subtotal: number
+  taxAmount: number
+  total: number
   paymentInstructions: string
   setPaymentInstructions: (v: string) => void
   paymentMethods?: PaymentMethods
 }
 
-export function InvoiceFormFields({
+export function InvoiceFormFieldsTop({
   state,
   dispatch,
-  pendingAiChanges,
-  setPendingAiChanges,
-  subtotal,
-  taxAmount,
-  total,
-  totalBelowPaid,
+  quoteNumber,
   isSent,
+  totalBelowPaid,
+  existingInvoice,
   mode,
   projectId,
   jobs,
@@ -55,12 +57,7 @@ export function InvoiceFormFields({
   recentInvoices,
   loadingRecent,
   copyFromInvoice,
-  existingInvoice,
-  quoteNumber,
-  paymentInstructions,
-  setPaymentInstructions,
-  paymentMethods,
-}: InvoiceFormFieldsProps) {
+}: InvoiceFormFieldsTopProps) {
   return (
     <>
       {/* Quote link badge */}
@@ -127,7 +124,24 @@ export function InvoiceFormFields({
           className="max-w-sm"
         />
       </div>
+    </>
+  )
+}
 
+export function InvoiceFormFieldsBottom({
+  state,
+  dispatch,
+  pendingAiChanges,
+  setPendingAiChanges,
+  subtotal,
+  taxAmount,
+  total,
+  paymentInstructions,
+  setPaymentInstructions,
+  paymentMethods,
+}: InvoiceFormFieldsBottomProps) {
+  return (
+    <>
       {/* Tax */}
       <div className="mb-5">
         <div className="flex items-center gap-3 flex-wrap">

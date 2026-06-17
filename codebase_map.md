@@ -168,7 +168,8 @@ Newly created entities are appended to the component's local state list — no p
 | Create / edit invoice (orchestrator) | `src/components/projects/invoice-editor.tsx` |
 | Invoice form state + HITL + page context | `src/components/projects/hooks/use-invoice-form.ts` |
 | Line items grid | `src/components/projects/line-items-table.tsx` |
-| Meta fields (dates/currency/notes) | `src/components/projects/invoice-form-fields.tsx` |
+| Meta fields — top (quote badge, warnings, job selector) | `src/components/projects/invoice-form-fields.tsx` → `InvoiceFormFieldsTop` |
+| Meta fields — bottom (tax, totals, dates/currency, notes, payment instructions) | `src/components/projects/invoice-form-fields.tsx` → `InvoiceFormFieldsBottom` |
 | AI confirm/undo banner | `src/components/projects/ai-confirm-banner.tsx` |
 | Invoice detail view | `src/components/projects/invoice-detail-client.tsx` |
 | Invoice list | `src/components/projects/invoice-list.tsx` |
@@ -183,6 +184,8 @@ Newly created entities are appended to the component's local state list — no p
 | Status logic | `src/lib/invoice-status.ts` |
 | Auto-match payments at import | `src/lib/invoice-matching.ts` → `matchInvoicePayments()` (Prisma-wired wrapper); `matchTransactionToInvoices()` (pure logic, unit-tested) |
 | Quick-create shortcuts | `src/components/projects/new-invoice-shortcuts.tsx` |
+| From-transactions picker (expense → invoice line items) | `src/components/projects/from-transactions-modal.tsx` |
+| From-transactions hook (fetch, select, tag-to-project) | `src/components/projects/hooks/use-from-transactions.ts` |
 | Invoice number format | `{INITIALS}_{DDMMYYYY}_{SEQ}` — logic in create + renegotiate routes |
 | Payment methods display | `src/components/projects/payment-summary.tsx` — renders bank/PayPal/Stripe/custom from `UserPreference.data.paymentMethods` |
 | Notes default | `UserPreference.data.invoiceNotesDefault` — pre-fills "Notes / payment terms" in editor; onBlur saves back. Not stored on `Invoice`. Deep-link: `/settings#invoice-notes-default`. |

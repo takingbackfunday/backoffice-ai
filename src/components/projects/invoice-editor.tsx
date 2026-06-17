@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Sparkles, Eye } from 'lucide-react'
 import { useChatStore } from '@/stores/chat-store'
 import { LineItemsTable } from './line-items-table'
-import { InvoiceFormFields } from './invoice-form-fields'
+import { InvoiceFormFieldsTop, InvoiceFormFieldsBottom } from './invoice-form-fields'
 import { AiConfirmBanner } from './ai-confirm-banner'
 import { useInvoiceForm } from './hooks/use-invoice-form'
 import type { InvoiceEditorProps } from './hooks/use-invoice-form'
@@ -32,16 +32,13 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
     <div className="flex gap-0 min-h-0">
       <div className="flex-1 min-w-0">
         <div className="pr-6">
-          <InvoiceFormFields
+          <InvoiceFormFieldsTop
             state={form.state}
             dispatch={form.dispatch}
-            pendingAiChanges={form.pendingAiChanges}
-            setPendingAiChanges={form.setPendingAiChanges}
-            subtotal={form.subtotal}
-            taxAmount={form.taxAmount}
-            total={form.total}
-            totalBelowPaid={form.totalBelowPaid}
+            quoteNumber={props.quoteNumber}
             isSent={!!form.isSent}
+            totalBelowPaid={form.totalBelowPaid}
+            existingInvoice={props.existingInvoice}
             mode={mode}
             projectId={projectId}
             jobs={props.jobs}
@@ -50,11 +47,6 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
             recentInvoices={props.recentInvoices}
             loadingRecent={form.loadingRecent}
             copyFromInvoice={form.copyFromInvoice}
-            existingInvoice={props.existingInvoice}
-            quoteNumber={props.quoteNumber}
-            paymentInstructions={paymentInstructions}
-            setPaymentInstructions={setPaymentInstructions}
-            paymentMethods={props.paymentMethods}
           />
 
           <LineItemsTable
@@ -71,6 +63,19 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
             setUnitSuggestions={setUnitSuggestions}
             lineItemsAiChanged={form.pendingAiChanges.lineItems}
             setPendingAiChanges={form.setPendingAiChanges}
+          />
+
+          <InvoiceFormFieldsBottom
+            state={form.state}
+            dispatch={form.dispatch}
+            pendingAiChanges={form.pendingAiChanges}
+            setPendingAiChanges={form.setPendingAiChanges}
+            subtotal={form.subtotal}
+            taxAmount={form.taxAmount}
+            total={form.total}
+            paymentInstructions={paymentInstructions}
+            setPaymentInstructions={setPaymentInstructions}
+            paymentMethods={props.paymentMethods}
           />
 
           {form.hasPendingChanges && (
