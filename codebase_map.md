@@ -74,7 +74,8 @@ Every page listed above has a sibling `page.capabilities.ts` file in the same di
 | Fetch list | `GET /api/transactions` → `src/app/api/transactions/route.ts` |
 | Edit single | `PATCH /api/transactions/[id]` → `src/app/api/transactions/[id]/route.ts` |
 | CSV upload step 1 (parse) | `src/components/upload/csv-dropzone.tsx` (also accepts PDF → `POST /api/upload/pdf`) |
-| PDF statement → CSV | `POST /api/upload/pdf` → `src/lib/ocr/mistral.ts` (`mistralOcrPdf`) + `src/lib/ocr/extract-statement.ts` |
+| PDF statement → CSV | `POST /api/upload/pdf` → `src/lib/ocr/mistral.ts` (`mistralOcrPdf`) + `src/lib/ocr/extract-statement.ts` (`parseStatementRows` — throws `StatementParseError` on malformed LLM output) |
+| CSV row normalization (dates/amounts) | `src/lib/csv-processor.ts` → `processCSV()`, `parseAmount()` (exported, format-aware US/EU — also used by PDF extraction) |
 | CSV upload step 2 (column map + LLM) | `src/components/upload/column-mapper.tsx` → `POST /api/llm/validate-mapping` |
 | CSV upload step 3 (preview) | `src/components/upload/import-preview.tsx` |
 | CSV final import | `POST /api/transactions/import` → `src/app/api/transactions/import/route.ts` |

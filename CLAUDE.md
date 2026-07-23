@@ -113,6 +113,12 @@ All money arithmetic uses `decimal.js` via the `src/lib/money.ts` module. Prisma
 ### Neon timezone mangling for `timestamptz`
 Neon serialises `timestamptz` in UTC+1 in production. JS `Date` from those strings is 1 hour off. Use `$queryRaw` with `to_char(col AT TIME ZONE 'UTC', 'YYYY-MM-DD')` instead of JS Date math. Similarly, strip bare datetime strings to `YYYY-MM-DD` before `new Date()` in `csv-processor.ts`.
 
+### Amount parsing — always use `parseAmount` from csv-processor
+`parseAmount(raw, inverted)` in `src/lib/csv-processor.ts` is the shared, format-aware amount parser. Never parse user- or LLM-supplied amounts with bare `parseFloat`/`Number()` or a plain comma-strip — that silently corrupts European decimals (`12,50` → `1250`, `1.234,56` → `1.234`). Rules: when both `,` and `.` are present the rightmost is the decimal separator; a lone comma is a decimal comma unless it groups exactly 3 digits (`1,234`); multiple dots are European thousands. Handles `$ € £`, apostrophe grouping, parenthesised and trailing-minus (German Soll) negatives. Also used by `parseStatementRows` for LLM string amounts.
+
+### PDF statement extraction — parse errors ≠ empty results
+`parseStatementRows` throws `StatementParseError` on malformed/truncated LLM JSON; a valid response with no usable transactions returns `[]` (route answers 400 "No transactions found"). The `/api/upload/pdf` catch-all appends the underlying cause (Mistral/OpenRouter status codes) to the client-visible error — don't collapse these back into a generic "extraction failed" message.
+
 ### Job model — no `isActive` field
 Use `{ status: 'ACTIVE' }`, not `{ isActive: true }`.
 
