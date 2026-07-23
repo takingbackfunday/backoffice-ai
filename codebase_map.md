@@ -73,7 +73,8 @@ Every page listed above has a sibling `page.capabilities.ts` file in the same di
 | Row components | `src/components/transactions/rows/{transaction-row,new-row}.tsx` |
 | Fetch list | `GET /api/transactions` → `src/app/api/transactions/route.ts` |
 | Edit single | `PATCH /api/transactions/[id]` → `src/app/api/transactions/[id]/route.ts` |
-| CSV upload step 1 (parse) | `src/components/upload/csv-dropzone.tsx` |
+| CSV upload step 1 (parse) | `src/components/upload/csv-dropzone.tsx` (also accepts PDF → `POST /api/upload/pdf`) |
+| PDF statement → CSV | `POST /api/upload/pdf` → `src/lib/ocr/mistral.ts` (`mistralOcrPdf`) + `src/lib/ocr/extract-statement.ts` |
 | CSV upload step 2 (column map + LLM) | `src/components/upload/column-mapper.tsx` → `POST /api/llm/validate-mapping` |
 | CSV upload step 3 (preview) | `src/components/upload/import-preview.tsx` |
 | CSV final import | `POST /api/transactions/import` → `src/app/api/transactions/import/route.ts` |
@@ -320,7 +321,7 @@ Routes: `POST /api/agent/omni` (all events), `GET /api/agent/rules` (status/toke
 
 ### Bank sync
 
-Auto-sync/open-banking providers have been removed. Users import transactions by CSV upload or the manual browser-agent sync.
+Auto-sync/open-banking providers have been removed. Users import transactions by CSV or PDF statement upload, or the manual browser-agent sync.
 
 | Task | File |
 |---|---|

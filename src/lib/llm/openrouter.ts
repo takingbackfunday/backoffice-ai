@@ -143,7 +143,8 @@ export async function openrouterStream(
 
 export async function openrouterChat(
   messages: { role: 'user' | 'assistant' | 'system'; content: string }[],
-  model = 'mistralai/devstral-small'
+  model = 'mistralai/devstral-small',
+  maxTokens = 4096
 ): Promise<string> {
   const t0 = Date.now()
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -152,7 +153,7 @@ export async function openrouterChat(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
     },
-    body: JSON.stringify({ model, messages, max_tokens: 4096 }),
+    body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
   })
 
   if (!res.ok) {

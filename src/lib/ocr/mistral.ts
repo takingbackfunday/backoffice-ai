@@ -59,3 +59,50 @@ export async function mistralOcr(base64Image: string): Promise<{
 
   return { markdown, pagesProcessed: json.usage_info.pages_processed }
 }
+
+/**
+ * Send a base64 PDF to Mistral OCR and get back markdown text for all pages.
+ *
+ * @param base64Pdf - Full data URI: "data:application/pdf;base64,JVBERi0..."
+ * @returns The extracted markdown text from all pages, joined with blank lines.
+ */
+export async function mistralOcrPdf(base64Pdf: string): Promise<{
+  markdown: string
+  pagesProcessed: number
+}> {
+  const apiKey = process.env.MISTRAL_API_KEY
+  if (!apiKey) throw new Error('MISTRAL_API_KEY is not set')
+
+  const t0 = Date.now()
+  const res = await fetch(MISTRAL_OCR_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'mistral-ocr-latest',
+      document: {
+        type: 'document_url',
+        document_url: base64Pdf,
+      },
+    }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    console.error('[mistral-ocr-pdf:error]', { status: res.status, body: text.slice(0, 300) })
+    throw new Error(`Mistral OCR ${res.status}: ${text.slice(0, 200)}`)
+  }
+
+  const json = (await res.json()) as MistralOcrResponse
+  const markdown = json.pages.map((p) => p.markdown).join('\n\n')
+
+  console.log('[mistral-ocr-pdf:res]', {
+    latencyMs: Date.now() - t0,
+    pagesProcessed: json.usage_info.pages_processed,
+    markdownLength: markdown.length,
+  })
+
+  return { markdown, pagesProcessed: json.usage_info.pages_processed }
+}

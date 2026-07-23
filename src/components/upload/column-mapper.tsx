@@ -32,7 +32,7 @@ const ACCOUNT_TYPES = [
   { value: 'TRUST_ACCOUNT', label: 'Trust account' },
 ] as const
 
-const DATE_FORMATS = ['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD']
+const DATE_FORMATS = ['MM/DD/YYYY', 'DD/MM/YYYY', 'DD.MM.YYYY', 'YYYY-MM-DD']
 
 /* ------------------------------------------------------------------ */
 /*  Candidate scoring                                                   */

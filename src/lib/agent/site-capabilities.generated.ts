@@ -1169,9 +1169,10 @@ const _data: any[] = [
   {
     "route": "/upload",
     "title": "Upload transactions",
-    "purpose": "Import bank transactions from a CSV file with AI-assisted column mapping.",
+    "purpose": "Import bank transactions from a CSV file or PDF statement with AI-assisted column mapping.",
     "jobsToBeDone": [
       "Drop a CSV file from any bank to import transactions",
+      "Drop a PDF bank statement to extract and import transactions",
       "Use AI suggestions to map CSV columns to the right fields",
       "Preview which transactions will be imported and which are duplicates",
       "Trigger automatic categorisation via rules after import"
@@ -3159,6 +3160,9 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "file": [
     43
   ],
+  "statement": [
+    43
+  ],
   "assisted": [
     43
   ],
@@ -3169,6 +3173,9 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     43
   ],
   "drop": [
+    43
+  ],
+  "extract": [
     43
   ],
   "columns": [

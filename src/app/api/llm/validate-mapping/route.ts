@@ -59,13 +59,13 @@ Respond with ONLY a JSON object — no markdown, no explanation:
   "amountCol":  { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
   "descCol":    { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
   "notesCol":   { "col": "<column name or null>", "confidence": <0-100>, "reason": "<one sentence>" },
-  "dateFormat": { "value": "<MM/DD/YYYY or DD/MM/YYYY or YYYY-MM-DD>", "confidence": <0-100>, "reason": "<one sentence>" },
+  "dateFormat": { "value": "<MM/DD/YYYY or DD/MM/YYYY or DD.MM.YYYY or YYYY-MM-DD>", "confidence": <0-100>, "reason": "<one sentence>" },
   "amountSign": { "value": "<normal or inverted>", "confidence": <0-100>, "reason": "<one sentence>" }
 }
 
 Rules:
 - For column fields: if correct echo the same column with confidence 80-100; if wrong suggest a better one with lower confidence; if absent set col to null.
-- For dateFormat: inspect the sample date values. "normal" date formats: MM/DD/YYYY (e.g. 12/31/2024), DD/MM/YYYY (e.g. 31/12/2024), YYYY-MM-DD (e.g. 2024-12-31). Pick the best match.
+- For dateFormat: inspect the sample date values. "normal" date formats: MM/DD/YYYY (e.g. 12/31/2024), DD/MM/YYYY (e.g. 31/12/2024), DD.MM.YYYY (e.g. 31.12.2024), YYYY-MM-DD (e.g. 2024-12-31). Pick the best match.
 - For amountSign: "normal" means expenses are negative (e.g. -45.00), "inverted" means expenses are positive (e.g. 45.00 for a debit). Look at the sample amounts — if typical purchases/debits appear as positive numbers, use "inverted".`
 
     const raw = await openrouterChat([{ role: 'user', content: prompt }], 'mistralai/mistral-small-2603')

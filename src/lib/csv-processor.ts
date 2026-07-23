@@ -5,7 +5,7 @@ export interface CsvMapping {
   dateCol: string
   amountCol: string
   descCol: string
-  dateFormat: string   // e.g. "MM/DD/YYYY", "YYYY-MM-DD", "DD/MM/YYYY"
+  dateFormat: string   // e.g. "MM/DD/YYYY", "DD/MM/YYYY", "DD.MM.YYYY", "YYYY-MM-DD"
   amountSign: 'normal' | 'inverted'
   notesCol?: string
 }
@@ -38,6 +38,10 @@ function parseDate(raw: string, format: string): Date | null {
       ;[month, day, year] = parts
     } else if (format === 'DD/MM/YYYY') {
       const parts = clean.split('/')
+      if (parts.length !== 3) return null
+      ;[day, month, year] = parts
+    } else if (format === 'DD.MM.YYYY') {
+      const parts = clean.split('.')
       if (parts.length !== 3) return null
       ;[day, month, year] = parts
     } else if (format === 'YYYY-MM-DD') {

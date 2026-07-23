@@ -138,7 +138,7 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
           {onboarding && (
             <OnboardingBanner
               step={3}
-              message="Upload a CSV from your bank to import transactions."
+              message="Upload a CSV or PDF statement from your bank to import transactions."
               onSkip={handleSkipOnboarding}
             />
           )}
