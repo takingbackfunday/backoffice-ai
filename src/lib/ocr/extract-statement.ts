@@ -1,4 +1,5 @@
 import { openrouterChat } from '@/lib/llm/openrouter'
+import { parseAmount } from '@/lib/csv-processor'
 
 export interface StatementRow {
   date: string // ISO date string YYYY-MM-DD
@@ -85,8 +86,11 @@ export function parseStatementRows(raw: string): StatementRow[] {
     const description = typeof row.description === 'string' ? row.description.trim() : ''
     if (!description) continue
 
-    const amount = typeof row.amount === 'number' ? row.amount : Number(row.amount)
-    if (!Number.isFinite(amount)) continue
+    // Accept JSON numbers directly; route string amounts through the shared
+    // parser so European formats (e.g. "-12,50") survive if the LLM leaks
+    // them despite the prompt asking for dot decimals.
+    const amount = typeof row.amount === 'number' ? row.amount : parseAmount(String(row.amount), false)
+    if (typeof amount !== 'number' || !Number.isFinite(amount)) continue
 
     const notes = typeof row.notes === 'string' && row.notes.trim() ? row.notes.trim() : null
 

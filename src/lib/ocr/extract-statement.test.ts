@@ -67,6 +67,18 @@ describe('parseStatementRows', () => {
     expect(parseStatementRows(raw)[0].amount).toBe(-12.5)
   })
 
+  it('coerces European-format string amounts', () => {
+    const raw = JSON.stringify({
+      transactions: [
+        { date: '2024-06-01', description: 'SHOP', amount: '-12,50', notes: null },
+        { date: '2024-06-01', description: 'SALARY', amount: '3.200,00', notes: null },
+      ],
+    })
+    const rows = parseStatementRows(raw)
+    expect(rows[0].amount).toBe(-12.5)
+    expect(rows[1].amount).toBe(3200)
+  })
+
   it('normalizes blank notes to null', () => {
     const raw = JSON.stringify({
       transactions: [{ date: '2024-06-01', description: 'SHOP', amount: -1, notes: '   ' }],
