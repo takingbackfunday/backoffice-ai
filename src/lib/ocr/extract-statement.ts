@@ -34,8 +34,21 @@ Rules:
 - If a statement row shows separate debit/credit columns, combine them into the single signed "amount".`
 
 /**
+ * Thrown when the LLM response cannot be parsed into a transactions payload
+ * (malformed/truncated JSON, or `transactions` missing). Distinct from a valid
+ * response that simply contains no transactions, which returns [].
+ */
+export class StatementParseError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StatementParseError'
+  }
+}
+
+/**
  * Parse the LLM response into validated statement rows.
- * Returns [] on any parse failure — callers treat empty as "no transactions found".
+ * Throws StatementParseError on malformed LLM output; returns [] when the
+ * response is valid JSON but contains no usable transactions.
  */
 export function parseStatementRows(raw: string): StatementRow[] {
   let jsonStr = raw.trim()
@@ -49,10 +62,17 @@ export function parseStatementRows(raw: string): StatementRow[] {
     parsed = JSON.parse(jsonStr) as { transactions?: unknown }
   } catch {
     console.error('[extract-statement:parse-error]', { raw: raw.slice(0, 500) })
-    return []
+    throw new StatementParseError(
+      'The statement was read, but the extracted transaction data was malformed (possibly truncated). Please try again — or use a CSV export instead.'
+    )
   }
 
-  if (!Array.isArray(parsed.transactions)) return []
+  if (!Array.isArray(parsed.transactions)) {
+    console.error('[extract-statement:no-transactions-array]', { raw: raw.slice(0, 500) })
+    throw new StatementParseError(
+      'The statement was read, but the extracted data had an unexpected shape. Please try again — or use a CSV export instead.'
+    )
+  }
 
   const rows: StatementRow[] = []
   for (const t of parsed.transactions) {

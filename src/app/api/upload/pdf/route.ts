@@ -62,7 +62,8 @@ export async function POST(request: Request) {
       { rowCount: rows.length, pagesProcessed: ocr.pagesProcessed }
     )
   } catch (err) {
-    logger.error('pdf-upload', 'POST error', { message: err instanceof Error ? err.message : String(err) })
-    return serverError('Failed to extract transactions from PDF')
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('pdf-upload', 'POST error', { message })
+    return serverError(`Failed to extract transactions from PDF: ${message}`)
   }
 }

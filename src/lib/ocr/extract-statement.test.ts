@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseStatementRows } from '@/lib/ocr/extract-statement'
+import { parseStatementRows, StatementParseError } from '@/lib/ocr/extract-statement'
 
 describe('parseStatementRows', () => {
   it('parses a clean JSON response', () => {
@@ -25,12 +25,16 @@ describe('parseStatementRows', () => {
     expect(parseStatementRows(raw)).toHaveLength(1)
   })
 
-  it('returns [] on invalid JSON', () => {
-    expect(parseStatementRows('not json at all')).toEqual([])
+  it('throws StatementParseError on invalid JSON', () => {
+    expect(() => parseStatementRows('not json at all')).toThrow(StatementParseError)
   })
 
-  it('returns [] when transactions is not an array', () => {
-    expect(parseStatementRows('{"transactions": "none"}')).toEqual([])
+  it('throws StatementParseError when transactions is not an array', () => {
+    expect(() => parseStatementRows('{"transactions": "none"}')).toThrow(StatementParseError)
+  })
+
+  it('returns [] for a valid response with no transactions', () => {
+    expect(parseStatementRows('{"transactions": []}')).toEqual([])
   })
 
   it('skips rows with invalid dates', () => {
