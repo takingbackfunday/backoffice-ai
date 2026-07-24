@@ -326,6 +326,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                   setShowMakeRuleEditor={edit.setShowMakeRuleEditor}
                   setLastEditedRowId={edit.setLastEditedRowId}
                   handleApplyComplete={handleApplyComplete}
+                  payeeExitGuardRef={edit.payeeExitGuardRef}
                 />
               ))
             )}

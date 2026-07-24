@@ -3,7 +3,7 @@
 import React, { useRef } from 'react'
 import type { CategoryGroup } from '@/components/rules/rule-editor'
 import { PortalDropdown } from '@/components/ui/portal-dropdown'
-import { useOutsideClick } from '@/hooks/use-outside-click'
+import { usePortalOutsideClick } from '@/hooks/use-portal-outside-click'
 import { FunnelIcon } from '../cells/funnel-icon'
 
 export function ColumnFilterPopover({
@@ -36,7 +36,7 @@ export function ColumnFilterPopover({
   const wrapRef = useRef<HTMLDivElement>(null)
   const isActive = Boolean(filterValue || filterValue2)
 
-  useOutsideClick(wrapRef, onClose, { enabled: isOpen })
+  usePortalOutsideClick(wrapRef, onClose, { enabled: isOpen })
 
   return (
     <div ref={wrapRef} className="relative inline-flex items-center">
@@ -119,7 +119,7 @@ export function ColumnFilterPopover({
           {type === 'date' && (
             <div className="text-xs text-muted-foreground italic">Use date column header</div>
           )}
-          {filterValue && (
+          {(filterValue || filterValue2) && (
             <button
               onMouseDown={(e) => { e.stopPropagation(); onChange(''); onChange2?.('') }}
               className="mt-1.5 text-[10px] text-[#534AB7] hover:underline"

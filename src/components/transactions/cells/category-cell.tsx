@@ -33,7 +33,8 @@ export function CategoryCell({
   const allCats = groups.flatMap((g) => g.categories.map((c) => ({ ...c, groupName: g.name })))
   const current = allCats.find((c) => c.id === value)
   const [query, setQuery] = useState(current?.name ?? '')
-  const [open, setOpen] = useState(true)
+  // Only the initially-clicked cell auto-opens; other cells open on interaction.
+  const [open, setOpen] = useState(autoFocus)
   const [activeIdx, setActiveIdx] = useState(0)
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([])
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
@@ -116,9 +117,10 @@ export function CategoryCell({
         ref={inputRef}
         type="text"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
         onKeyDown={handleKeyDown}
         onFocus={() => setOpen(true)}
+        onMouseDown={() => setOpen(true)}
         placeholder="Type to filter…"
         className="w-full rounded border border-blue-400 bg-white px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-400"
         aria-label="Select category"

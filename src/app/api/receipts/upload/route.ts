@@ -83,7 +83,7 @@ export async function POST(request: Request) {
         orderBy: { createdAt: 'desc' },
       })
       if (existing) {
-        return conflict('DUPLICATE_RECEIPT', { existingReceiptId: existing.id })
+        return conflict('DUPLICATE_RECEIPT', { meta: { existingReceiptId: existing.id } })
       }
     }
 
@@ -152,8 +152,10 @@ export async function POST(request: Request) {
             // Clean up the row we just created — this was a duplicate
             await prisma.receipt.delete({ where: { id: receipt.id } })
             return conflict('DUPLICATE_RECEIPT', {
-              existingReceiptId: existingContent[0].id,
-              duplicateType: 'content',
+              meta: {
+                existingReceiptId: existingContent[0].id,
+                duplicateType: 'content',
+              },
             })
           }
         }

@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { ok, created, badRequest, unauthorized, conflict, serverError } from '@/lib/api-response'
 import { logger } from '@/lib/log'
 
 export async function GET() {
@@ -44,6 +44,14 @@ export async function POST(request: Request) {
       const cat = await prisma.category.findFirst({ where: { id: parsed.data.defaultCategoryId, userId } })
       if (!cat) return badRequest('Category not found or does not belong to you')
     }
+
+    // Case-insensitive duplicate check first — prevents Amazon/amazon dupes and
+    // lets the client self-heal by selecting the returned existing payee.
+    const existing = await prisma.payee.findFirst({
+      where: { userId, name: { equals: parsed.data.name, mode: 'insensitive' } },
+      include: { defaultCategory: { include: { group: true } } },
+    })
+    if (existing) return conflict('Payee already exists', { data: existing })
 
     const payee = await prisma.payee.create({
       data: {

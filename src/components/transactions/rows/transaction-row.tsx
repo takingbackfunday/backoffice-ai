@@ -9,11 +9,13 @@ import { toDisplay } from '@/lib/money'
 import { TextCell } from '../cells/text-cell'
 import { WorkspaceCell } from '../cells/workspace-cell'
 import { CategoryCell } from '../cells/category-cell'
-import { PayeeCell } from '../cells/payee-cell'
-import type { MakeRuleSnapType } from '../hooks/use-inline-edit'
+import { PayeeCell, type PayeeDraftHandle } from '../cells/payee-cell'
+import { PayeeCreatePrompt } from '../cells/payee-create-prompt'
+import { DescriptionCell } from '../cells/description-cell'
+import type { EditableField } from '../hooks/use-inline-edit'
+import type { MakeRuleSnapType } from '../hooks/make-rule-snap'
+import { usePayeeCreatePrompt, upsertPayee } from '../hooks/use-payee-create-prompt'
 import { RuleEditor } from '@/components/rules/rule-editor'
-
-type EditableField = 'description' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount' | 'date'
 
 export function renderEditableCell(
   row: TransactionWithRelations,
@@ -27,12 +29,14 @@ export function renderEditableCell(
     categoryGroups: CategoryGroup[]
     payees: Payee[]
     startEdit: (id: string, field: EditableField) => void
-    exitRowEdit: (id: string) => void
+    exitRowEdit: (id: string, opts?: { force?: boolean }) => void
     commitEdit: (id: string, field: EditableField, rawValue: string | null, freshPayee?: Payee) => void
     setPayees: React.Dispatch<React.SetStateAction<Payee[]>>
+    payeeDraftRef: React.RefObject<PayeeDraftHandle | null>
+    payeeAnchorRef: React.RefObject<HTMLTableCellElement | null>
   }
 ) {
-  const { editingRowId, editingRowInitialField, savingIds, errorIds, projects, categoryGroups, payees, startEdit, exitRowEdit, commitEdit, setPayees } = opts
+  const { editingRowId, editingRowInitialField, savingIds, errorIds, projects, categoryGroups, payees, startEdit, exitRowEdit, commitEdit, setPayees, payeeDraftRef, payeeAnchorRef } = opts
   const isEditing = editingRowId === row.id
   const isInitialField = editingRowInitialField === field
   const isSaving = savingIds.has(row.id)
@@ -97,14 +101,16 @@ export function renderEditableCell(
 
     if (field === 'payeeId') {
       return (
-        <td key={field} className="px-3 py-0.5 min-w-[140px]">
+        <td key={field} ref={payeeAnchorRef} className="px-3 py-0.5 min-w-[140px]">
           <PayeeCell
             value={row.payeeId ?? null}
             payees={payees}
+            autoFocus={isInitialField}
+            unmatchedDraftRef={payeeDraftRef}
             onCommit={(v) => commitEdit(row.id, 'payeeId', v)}
             onCancel={() => exitRowEdit(row.id)}
             onNewPayee={(p) => {
-              setPayees((prev) => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))
+              setPayees((prev) => upsertPayee(prev, p))
               commitEdit(row.id, 'payeeId', p.id, p)
             }}
           />
@@ -145,12 +151,23 @@ export function renderEditableCell(
     )
   }
 
+  if (field === 'description') {
+    return (
+      <DescriptionCell
+        key={field}
+        value={displayValue}
+        className={cellClass}
+        onStartEdit={() => { if (!isEditing) startEdit(row.id, field) }}
+      />
+    )
+  }
+
   return (
     <td
       key={field}
       className={cellClass}
       onClick={() => { if (!isEditing) startEdit(row.id, field) }}
-      title="Click to edit"
+      title={field === 'notes' ? undefined : 'Click to edit'}
       data-testid={`cell-${field}`}
     >
       {field === 'categoryId' ? (
@@ -174,12 +191,10 @@ export function renderEditableCell(
               )}
             </a>
           )}
-          <span className="truncate block">{displayValue}</span>
+          <span className="truncate block" title={displayValue}>{displayValue}</span>
         </span>
       ) : (
-        <span className={field === 'description' ? 'max-w-[180px] truncate block' : ''}>
-          {displayValue}
-        </span>
+        <span>{displayValue}</span>
       )}
     </td>
   )
@@ -210,6 +225,7 @@ export function TransactionRow({
   setShowMakeRuleEditor,
   setLastEditedRowId,
   handleApplyComplete,
+  payeeExitGuardRef,
 }: {
   row: TransactionWithRelations
   editingRowId: string | null
@@ -227,7 +243,7 @@ export function TransactionRow({
   payees: Payee[]
   accounts: { id: string; name: string }[]
   startEdit: (id: string, field: EditableField) => void
-  exitRowEdit: (id: string) => void
+  exitRowEdit: (id: string, opts?: { force?: boolean }) => void
   commitEdit: (id: string, field: EditableField, rawValue: string | null, freshPayee?: Payee) => void
   setPayees: React.Dispatch<React.SetStateAction<Payee[]>>
   toggleRow: (id: string) => void
@@ -235,11 +251,20 @@ export function TransactionRow({
   setShowMakeRuleEditor: React.Dispatch<React.SetStateAction<boolean>>
   setLastEditedRowId: React.Dispatch<React.SetStateAction<string | null>>
   handleApplyComplete: () => void
+  payeeExitGuardRef: React.RefObject<((rowId: string) => boolean) | null>
 }) {
   const isDeleting = deletingIds.has(row.id)
   const isSelected = selectedIds.has(row.id)
   const isRowEditing = editingRowId === row.id
-  const cellOpts = { editingRowId, editingRowInitialField, savingIds, errorIds, projects, categoryGroups, payees, startEdit, exitRowEdit, commitEdit, setPayees }
+  const payeePrompt = usePayeeCreatePrompt({
+    rowId: row.id,
+    isRowEditing,
+    payeeExitGuardRef,
+    setPayees,
+    commitEdit,
+    exitRowEdit,
+  })
+  const cellOpts = { editingRowId, editingRowInitialField, savingIds, errorIds, projects, categoryGroups, payees, startEdit, exitRowEdit, commitEdit, setPayees, payeeDraftRef: payeePrompt.payeeDraftRef, payeeAnchorRef: payeePrompt.payeeAnchorRef }
 
   return (
     <>
@@ -312,6 +337,18 @@ export function TransactionRow({
           <td />
         )}
       </tr>
+      {/* Payee create prompt — portaled, anchored to the payee cell */}
+      {payeePrompt.promptName && (
+        <PayeeCreatePrompt
+          anchorRef={payeePrompt.payeeAnchorRef}
+          name={payeePrompt.promptName}
+          busy={payeePrompt.busy}
+          error={payeePrompt.error}
+          onCreate={payeePrompt.handleCreate}
+          onDiscard={payeePrompt.handleDiscard}
+          onDismiss={payeePrompt.handleDismiss}
+        />
+      )}
       {/* Rule editor sub-row — appears below the edited row */}
       {makeRuleSnap && lastEditedRowId === row.id && showMakeRuleEditor && (
         <tr className="border-t border-[#534AB7]/15 bg-[#EEEDFE]/20">
@@ -337,8 +374,8 @@ export function TransactionRow({
                 categoryName: makeRuleSnap.categoryName ?? '',
                 categoryId: makeRuleSnap.categoryId ?? null,
                 categoryRef: null,
-                payeeId: null,
-                payee: makeRuleSnap.payeeName ? { id: '', name: makeRuleSnap.payeeName } : null,
+                payeeId: makeRuleSnap.payeeId ?? null,
+                payee: makeRuleSnap.payeeName ? { id: makeRuleSnap.payeeId ?? '', name: makeRuleSnap.payeeName } : null,
                 projectId: null,
                 workspace: null,
                 conditions: { all: [{ field: 'description', operator: 'contains', value: makeRuleSnap.description }] },

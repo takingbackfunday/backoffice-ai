@@ -5,14 +5,10 @@ import type { TransactionWithRelations } from '@/types'
 import type { Payee } from '@/components/rules/rule-editor'
 import type { Workspace } from '@/generated/prisma/client'
 import { toDisplay } from '@/lib/money'
-type EditableField = 'description' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount' | 'date'
+import { mergeSnap, type MakeRuleSnapType } from './make-rule-snap'
 
-export interface MakeRuleSnapType {
-  description: string
-  payeeName: string | null
-  categoryId: string | null
-  categoryName: string | null
-}
+export type { MakeRuleSnapType }
+export type EditableField = 'description' | 'category' | 'categoryId' | 'payeeId' | 'notes' | 'projectId' | 'amount' | 'date'
 
 const SUGGEST_DELAY_MS = 30000
 
@@ -48,6 +44,10 @@ export function useInlineEdit(opts: {
   const [lastEditedRowId, setLastEditedRowId] = useState<string | null>(null)
   const pendingRuleSnapRef = useRef<{ rowId: string; snap: MakeRuleSnapType } | null>(null)
 
+  // Exit guard registered by the editing row (see use-payee-create-prompt):
+  // returns true when the exit must be blocked (e.g. unmatched payee draft).
+  const payeeExitGuardRef = useRef<((rowId: string) => boolean) | null>(null)
+
   // Fire suggestion request (deferred, background)
   const fireSuggestions = useCallback(() => {
     if (suggestionTimerRef.current) { clearTimeout(suggestionTimerRef.current); suggestionTimerRef.current = null }
@@ -81,7 +81,8 @@ export function useInlineEdit(opts: {
     }
   }, [fireSuggestions])
 
-  function exitRowEdit(id: string) {
+  function exitRowEdit(id: string, opts?: { force?: boolean }) {
+    if (!opts?.force && payeeExitGuardRef.current?.(id)) return
     setEditingRowId(null)
     setEditingRowInitialField(null)
     editingRowIdRef.current = null
@@ -107,6 +108,9 @@ export function useInlineEdit(opts: {
 
   function startEdit(id: string, field: EditableField) {
     if (selectMode || savingIds.has(id) || deletingIds.has(id)) return
+    // Don't abandon the current row while its payee draft is unmatched.
+    const current = editingRowIdRef.current
+    if (current && current !== id && payeeExitGuardRef.current?.(current)) return
     setMakeRuleSnap(null)
     setShowMakeRuleEditor(false)
     pendingRuleSnapRef.current = null
@@ -130,6 +134,44 @@ export function useInlineEdit(opts: {
       const d = new Date(rawValue)
       if (isNaN(d.getTime())) return
       patchValue = d.toISOString()
+    }
+
+    // Stage the make-rule snap + suggestion queue SYNCHRONOUSLY at commit
+    // dispatch (before the PATCH resolves) so clicking Done quickly can't
+    // orphan the snap. The PATCH result only affects rollback, not the snap.
+    if (field === 'categoryId' || field === 'category' || field === 'payeeId') {
+      const allCats = categoryGroups.flatMap((g) => g.categories)
+      const resolvedCatName =
+        field === 'categoryId'
+          ? (allCats.find((c) => c.id === rawValue)?.name ?? null)
+          : field === 'category'
+          ? (rawValue ?? null)
+          : (row.categoryRef?.name ?? (row as unknown as Record<string, unknown>).category as string ?? null)
+      const resolvedPayeeName =
+        field === 'payeeId'
+          ? (freshPayee?.name ?? payees.find((p) => p.id === rawValue)?.name ?? null)
+          : (row.payee?.name ?? null)
+      const resolvedCatId = field === 'categoryId' ? rawValue : (row.categoryId ?? null)
+      const resolvedPayeeId = field === 'payeeId' ? (freshPayee?.id ?? rawValue) : (row.payeeId ?? null)
+
+      const nextSnap: MakeRuleSnapType = {
+        description: row.description,
+        payeeId: resolvedPayeeId,
+        payeeName: resolvedPayeeName,
+        categoryId: resolvedCatId,
+        categoryName: resolvedCatName,
+      }
+
+      // Queue for deferred rule suggestions — nullish-aware merge so a later
+      // edit that doesn't touch the payee/category can't erase earlier values.
+      const prevQueue = editQueueRef.current.get(id) as unknown as Partial<MakeRuleSnapType> | undefined
+      const mergedSnap = mergeSnap(prevQueue ?? null, nextSnap)
+      const editSnapshot = { id: row.id, ...mergedSnap, amount: toDisplay(row.amount) }
+      editQueueRef.current.set(id, editSnapshot as unknown as TransactionWithRelations)
+
+      // Stage the popup snap — same nullish-aware merge with the previous snap
+      const prevSnap = pendingRuleSnapRef.current?.rowId === id ? pendingRuleSnapRef.current.snap : null
+      pendingRuleSnapRef.current = { rowId: id, snap: mergeSnap(prevSnap, nextSnap) }
     }
 
     // Optimistic update
@@ -178,46 +220,6 @@ export function useInlineEdit(opts: {
         body: JSON.stringify(patchBody),
       })
       if (!res.ok) throw new Error('patch failed')
-
-      // Queue this edit for deferred rule suggestion generation.
-      if (field === 'categoryId' || field === 'category' || field === 'payeeId') {
-        const allCats = categoryGroups.flatMap((g) => g.categories)
-        const resolvedCatName =
-          field === 'categoryId'
-            ? (allCats.find((c) => c.id === rawValue)?.name ?? null)
-            : field === 'category'
-            ? (rawValue ?? null)
-            : (row.categoryRef?.name ?? (row as unknown as Record<string, unknown>).category as string ?? null)
-        const resolvedPayeeName =
-          field === 'payeeId'
-            ? (freshPayee?.name ?? payees.find((p) => p.id === rawValue)?.name ?? null)
-            : (row.payee?.name ?? null)
-        const resolvedCatId = field === 'categoryId' ? rawValue : (row.categoryId ?? null)
-
-        const editSnapshot = {
-          id: row.id,
-          description: row.description,
-          payeeName: resolvedPayeeName,
-          categoryId: resolvedCatId,
-          categoryName: resolvedCatName,
-          amount: toDisplay(row.amount),
-        }
-        const existing = editQueueRef.current.get(id) as unknown as typeof editSnapshot | undefined
-        const merged = existing ? { ...existing, ...editSnapshot } : editSnapshot
-        editQueueRef.current.set(id, merged as unknown as TransactionWithRelations)
-
-        // Stage the popup snap — merge with previous snap for this row
-        const prevSnap = pendingRuleSnapRef.current?.rowId === id ? pendingRuleSnapRef.current.snap : null
-        pendingRuleSnapRef.current = {
-          rowId: id,
-          snap: {
-            description: row.description,
-            payeeName: resolvedPayeeName ?? prevSnap?.payeeName ?? null,
-            categoryId: resolvedCatId ?? prevSnap?.categoryId ?? null,
-            categoryName: resolvedCatName ?? prevSnap?.categoryName ?? null,
-          },
-        }
-      }
     } catch {
       // Revert on error
       if (row) {
@@ -237,5 +239,6 @@ export function useInlineEdit(opts: {
     showMakeRuleEditor, setShowMakeRuleEditor,
     lastEditedRowId, setLastEditedRowId,
     startEdit, exitRowEdit, commitEdit,
+    payeeExitGuardRef,
   }
 }

@@ -2,7 +2,7 @@
 
 import React, { useRef } from 'react'
 import { PortalDropdown } from '@/components/ui/portal-dropdown'
-import { useOutsideClick } from '@/hooks/use-outside-click'
+import { usePortalOutsideClick } from '@/hooks/use-portal-outside-click'
 import { FunnelIcon } from '../cells/funnel-icon'
 
 type SortField = 'date' | 'amount' | 'description' | 'category'
@@ -44,7 +44,7 @@ export function DateFilterHeader({
   const isActive = Boolean(dateFrom || dateTo)
   const isSortActive = sortBy === 'date'
 
-  useOutsideClick(wrapRef, () => setOpenFilterCol(null), { enabled: isOpen })
+  usePortalOutsideClick(wrapRef, () => setOpenFilterCol(null), { enabled: isOpen })
 
   return (
     <th className="px-3 py-1 text-left font-medium whitespace-nowrap relative">

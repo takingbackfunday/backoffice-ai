@@ -3,7 +3,16 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { Payee } from '@/components/rules/rule-editor'
 import { PortalDropdown } from '@/components/ui/portal-dropdown'
-import { useOutsideClick } from '@/hooks/use-outside-click'
+import { usePortalOutsideClick } from '@/hooks/use-portal-outside-click'
+
+/** Handle the cell registers so the row can inspect/revert an uncommitted
+ * payee draft before deciding to exit row edit (see use-payee-create-prompt). */
+export interface PayeeDraftHandle {
+  /** Trimmed draft when it doesn't exactly match an existing payee, else null. */
+  getUnmatched: () => string | null
+  /** Reverts the draft back to the committed payee name. */
+  reset: () => void
+}
 
 export function PayeeCell({
   value,
@@ -11,22 +20,44 @@ export function PayeeCell({
   onCommit,
   onCancel,
   onNewPayee,
+  autoFocus = false,
+  unmatchedDraftRef,
 }: {
   value: string | null
   payees: Payee[]
   onCommit: (id: string | null) => void
   onCancel: () => void
   onNewPayee: (p: Payee) => void
+  autoFocus?: boolean
+  unmatchedDraftRef?: React.RefObject<PayeeDraftHandle | null>
 }) {
   const currentName = payees.find((p) => p.id === value)?.name ?? ''
   const [draft, setDraft] = useState(currentName)
-  const [open, setOpen] = useState(true)
+  // Only the initially-clicked cell auto-opens; reopen on interaction below.
+  const [open, setOpen] = useState(autoFocus)
   const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select() }, [])
+  useEffect(() => { if (autoFocus) { inputRef.current?.focus(); inputRef.current?.select() } }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Register the draft handle so an unmatched draft is never discarded silently.
+  useEffect(() => {
+    if (!unmatchedDraftRef) return
+    const ref = unmatchedDraftRef
+    ref.current = {
+      getUnmatched: () => {
+        const d = draft.trim()
+        if (!d) return null
+        const exact = payees.some((p) => p.name.toLowerCase() === d.toLowerCase())
+        return exact ? null : d
+      },
+      reset: () => setDraft(currentName),
+    }
+    return () => { ref.current = null }
+  }, [draft, payees, currentName, unmatchedDraftRef])
 
   const filtered = draft.trim()
     ? payees.filter((p) => p.name.toLowerCase().includes(draft.toLowerCase()))
@@ -39,21 +70,37 @@ export function PayeeCell({
     const name = draft.trim()
     if (!name || creating) return
     setCreating(true)
+    setError(null)
     try {
       const res = await fetch('/api/payees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       })
-      if (!res.ok) { setCreating(false); return }
-      const json = await res.json()
+      const json = await res.json().catch(() => null)
+      // 409 — a case-variant already exists server-side: select it instead of duplicating.
+      if (res.status === 409 && json?.data?.id) {
+        const existing: Payee = { id: json.data.id, name: json.data.name }
+        setOpen(false)
+        setDraft(existing.name)
+        onNewPayee(existing)
+        setCreating(false)
+        return
+      }
+      if (!res.ok || !json?.data?.id) {
+        setError(json?.error ?? 'Failed to create payee')
+        setCreating(false)
+        return
+      }
       const newPayee: Payee = { id: json.data.id, name: json.data.name }
       setOpen(false)
       setDraft(newPayee.name)
       // onNewPayee adds to state AND commits the transaction in one shot,
       // so we skip the separate onCommit call to avoid a double-patch.
       onNewPayee(newPayee)
+      setCreating(false)
     } catch {
+      setError('Failed to create payee')
       setCreating(false)
     }
   }
@@ -61,6 +108,7 @@ export function PayeeCell({
   function pickExisting(p: Payee) {
     setOpen(false)
     setDraft(p.name)
+    setError(null)
     onCommit(p.id)
   }
 
@@ -70,20 +118,20 @@ export function PayeeCell({
       e.preventDefault()
       e.stopPropagation() // don't bubble to row — selecting a payee shouldn't also exit row edit
       const exact = payees.find((p) => p.name.toLowerCase() === draft.trim().toLowerCase())
-      if (exact) { onCommit(exact.id); return }
-      if (filtered.length === 1) { onCommit(filtered[0].id); return }
+      if (exact) { pickExisting(exact); return }
+      if (filtered.length === 1) { pickExisting(filtered[0]); return }
       if (showCreate) createAndCommit()
     }
   }
 
   // Close dropdown on outside click — just commit best match; row-level
-  // outside-click handler owns the actual "exit row" logic.
-  useOutsideClick(wrapRef, () => {
+  // outside-click handler owns the actual "exit row" logic, and the row's
+  // exit guard prompts for unmatched drafts instead of dropping them.
+  usePortalOutsideClick(wrapRef, () => {
     setOpen(false)
     const exact = payees.find((p) => p.name.toLowerCase() === draft.trim().toLowerCase())
     if (exact) onCommit(exact.id)
     else if (draft.trim() === '') onCommit(null)
-    // If no match, leave as-is — don't call onCancel (that would exit row edit)
   }, { enabled: open })
 
   return (
@@ -91,14 +139,20 @@ export function PayeeCell({
       <input
         ref={inputRef}
         value={draft}
-        onChange={(e) => { setDraft(e.target.value); setOpen(true) }}
+        onChange={(e) => { setDraft(e.target.value); setOpen(true); setError(null) }}
         onKeyDown={handleKeyDown}
+        onMouseDown={() => setOpen(true)}
         placeholder="Type to search or create…"
         disabled={creating}
         className="w-full rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-60"
         aria-label="Select or create payee"
         autoComplete="off"
       />
+      {error && (
+        <p role="alert" className="absolute left-0 top-full mt-0.5 z-10 whitespace-nowrap rounded bg-red-50 px-1 py-0.5 text-[10px] text-red-600 shadow-sm">
+          {error}
+        </p>
+      )}
       <PortalDropdown anchorRef={wrapRef} open={open && (filtered.length > 0 || showCreate)} widthFromAnchor>
         <ul
           ref={listRef}
