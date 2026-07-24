@@ -388,6 +388,13 @@ export async function runRulesAgentInBackground(userId: string, sourceEditIds?: 
 
   const { parsePreferences } = await import('@/types/preferences')
   const pref = await prisma.userPreference.findUnique({ where: { userId } })
+
+  // AI rule suggestions are opt-in — skip silently when the user hasn't enabled them.
+  if (!parsePreferences(pref?.data).aiRuleSuggestions) {
+    console.log(`[rules-agent-bg:${runId}] skipped — aiRuleSuggestions not enabled for userId:${userId}`)
+    return
+  }
+
   await prisma.userPreference.upsert({
     where: { userId },
     update: { data: { ...parsePreferences(pref?.data), lastRulesAgentRun: Date.now() } as never },

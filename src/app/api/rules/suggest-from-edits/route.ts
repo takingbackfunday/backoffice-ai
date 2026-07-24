@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { parsePreferences } from '@/types/preferences'
 import { logger } from '@/lib/log'
 import { openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
 import {
@@ -48,6 +49,12 @@ export async function POST(request: Request) {
   try {
     const { userId } = await auth()
     if (!userId) return unauthorized()
+
+    // AI rule suggestions are opt-in — no-op (and spend no tokens) when off.
+    const pref = await prisma.userPreference.findUnique({ where: { userId } })
+    if (!parsePreferences(pref?.data).aiRuleSuggestions) {
+      return ok({ count: 0, suggestions: [] })
+    }
 
     const body = await request.json()
     const parsed = RequestSchema.safeParse(body)

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { PaymentSettingsForm } from '@/components/settings/payment-settings-form'
+import { AiFeaturesForm } from '@/components/settings/ai-features-form'
 import { parsePreferences } from '@/types/preferences'
 
 export default async function SettingsPage() {
@@ -45,6 +46,7 @@ export default async function SettingsPage() {
             initialVatNumber={fromVatNumber}
             initialWebsite={fromWebsite}
           />
+          <AiFeaturesForm initialAiRuleSuggestions={!!data.aiRuleSuggestions} />
         </main>
       </div>
     </div>

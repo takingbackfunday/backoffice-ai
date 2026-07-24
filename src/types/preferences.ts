@@ -36,6 +36,10 @@ export interface UserPreferenceData {
   // Dashboard display currency
   dashboardCurrency?: 'USD' | 'EUR' | 'GBP'
 
+  // AI features (opt-in — absent/false = off for new AND existing users)
+  aiRuleSuggestions?: boolean
+  aiSuggestionsNudgeDismissed?: boolean
+
   // Internal / system
   lastRulesAgentRun?: number
   onboardingStep?: string

@@ -1,7 +1,9 @@
 import { auth } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { ok, created, badRequest, unauthorized, serverError } from '@/lib/api-response'
+import { ok, badRequest, unauthorized, serverError, type ApiResponse } from '@/lib/api-response'
+import { resolveRulePayee, conflictsForSavedRule } from '@/lib/rules/rule-write'
 
 const ConditionDefSchema = z.object({
   field: z.enum([
@@ -30,6 +32,7 @@ const CreateRuleSchema = z.object({
   conditions: ConditionGroupSchema,
   categoryName: z.string().default(''),
   categoryId: z.string().nullable().optional(),
+  payeeId: z.string().nullable().optional(),
   payeeName: z.string().nullable().optional(),
   workspaceId: z.string().nullable().optional(),
   setNotes: z.string().nullable().optional(),
@@ -69,7 +72,7 @@ export async function POST(request: Request) {
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
-    const { workspaceId, payeeName, categoryId, setNotes, addTags, ...rest } = parsed.data
+    const { workspaceId, payeeName, payeeId: rawPayeeId, categoryId, setNotes, addTags, ...rest } = parsed.data
 
     // Verify project belongs to user if provided
     if (workspaceId) {
@@ -77,16 +80,10 @@ export async function POST(request: Request) {
       if (!project) return badRequest('Project not found or does not belong to you')
     }
 
-    // Upsert payee by name if provided
-    let payeeId: string | null = null
-    if (payeeName) {
-      const payee = await prisma.payee.upsert({
-        where: { userId_name: { userId, name: payeeName } },
-        update: {},
-        create: { userId, name: payeeName },
-      })
-      payeeId = payee.id
-    }
+    // Payees are never created implicitly — resolve an existing one or reject.
+    const resolved = await resolveRulePayee(userId, { payeeId: rawPayeeId, payeeName })
+    if ('error' in resolved) return badRequest(resolved.error)
+    const payeeId = resolved.payeeId
 
     const rule = await prisma.categorizationRule.create({
       data: {
@@ -105,7 +102,9 @@ export async function POST(request: Request) {
       },
     })
 
-    return created(rule)
+    // Informational conflict warnings (defense in depth — never blocks the write)
+    const conflicts = await conflictsForSavedRule(userId, rule)
+    return NextResponse.json<ApiResponse<typeof rule>>({ data: rule, error: null, meta: { conflicts } }, { status: 201 })
   } catch {
     return serverError('Failed to create rule')
   }

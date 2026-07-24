@@ -1,194 +1,31 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import type { Workspace } from '@/generated/prisma/client'
 import { RuleEditor, Toast, type UserRule, type CategoryGroup, type Payee } from './rule-editor'
-import { RulesAgent, SuggestionCard, type PersistedSuggestion } from './rules-agent'
+import { RulesAgent, type PersistedSuggestion } from './rules-agent'
+import { RuleCard } from './rule-card'
+import { RuleSuggestionsPanel } from './rule-suggestions-panel'
+import { PaymentSuggestionsPanel, type PaymentSuggestion } from './payment-suggestions-panel'
 import { StarterRules } from './starter-rules'
-
-// ── Local helpers (only needed for RuleCard display) ──────────────────────────
-
-function fmtRuleDate(d: string | Date | undefined): string {
-  if (!d) return ''
-  const date = new Date(d)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / 86400000)
-  if (diffDays === 0) return 'today'
-  if (diffDays === 1) return 'yesterday'
-  if (diffDays < 30) return `${diffDays}d ago`
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`
-  return `${Math.floor(diffDays / 365)}y ago`
-}
-
-const FIELD_LABELS: Record<string, string> = {
-  description: 'Description', payeeName: 'Payee',
-  rawDescription: 'Raw description', amount: 'Amount', currency: 'Currency',
-}
-
-const OPERATOR_LABELS: Record<string, string> = {
-  contains: 'contains', equals: 'equals', starts_with: 'starts with',
-  regex: 'matches regex', gt: '>', lt: '<', gte: '≥', lte: '≤',
-  in: 'is one of', oneOf: 'is one of',
-}
-
-function conditionSummary(rule: UserRule): string {
-  const defs = rule.conditions.all ?? rule.conditions.any ?? []
-  const join = rule.conditions.any ? ' OR ' : ' AND '
-  return defs
-    .map((c) => {
-      const val = Array.isArray(c.value) ? c.value.join(', ') : `"${c.value}"`
-      return `${FIELD_LABELS[c.field] ?? c.field} ${OPERATOR_LABELS[c.operator] ?? c.operator} ${val}`
-    })
-    .join(join) || '(no conditions)'
-}
-
-// ── Rule card ─────────────────────────────────────────────────────────────────
-
-function RuleCard({
-  rule, onEdit, onDelete, onToggle, deleting, toggling, selected, onSelect,
-}: {
-  rule: UserRule
-  onEdit: () => void
-  onDelete: () => void
-  onToggle: () => void
-  deleting: boolean
-  toggling: boolean
-  selected: boolean
-  onSelect: () => void
-}) {
-  const defs = rule.conditions.all ?? rule.conditions.any ?? []
-  const joinWord = rule.conditions.any ? 'OR' : 'AND'
-
-  return (
-    <div className={`border border-black/10 rounded-lg px-3.5 py-2.5 bg-white transition-opacity ${deleting ? 'opacity-30' : !rule.isActive ? 'opacity-50' : ''} ${selected ? 'border-[#534AB7]/30 bg-[#EEEDFE]/20' : ''}`}>
-      <div className="flex items-center justify-between gap-3">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={onSelect}
-          className="cursor-pointer shrink-0"
-          aria-label={`Select rule ${rule.name}`}
-        />
-
-        {/* Condition pills → action pills */}
-        <div className="min-w-0 flex-1 flex items-center gap-2">
-          {/* Left: conditions stacked vertically */}
-          <div className="flex flex-col gap-1 flex-1 min-w-0">
-            {defs.map((c, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <span className={`text-[10px] text-muted-foreground font-medium w-5 text-center shrink-0 ${i === 0 ? 'invisible' : ''}`}>{joinWord}</span>
-                <span className="text-xs px-2 py-0.5 rounded bg-[#E6F1FB] text-[#0C447C]">
-                  <span className="font-medium">{FIELD_LABELS[c.field] ?? c.field}</span>
-                  {' '}{OPERATOR_LABELS[c.operator] ?? c.operator}{' '}
-                  {Array.isArray(c.value) ? c.value.join(', ') : `"${c.value}"`}
-                </span>
-              </div>
-            ))}
-            {defs.length === 0 && (
-              <span className="text-xs text-muted-foreground">(no conditions)</span>
-            )}
-          </div>
-
-          {/* Arrow */}
-          <svg className="w-3.5 h-3.5 text-muted-foreground shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
-
-          {/* Right: actions stacked vertically */}
-          <div className="flex flex-col gap-1 flex-shrink-0">
-            {(rule.categoryRef?.name ?? rule.categoryName) && (
-              <span className="text-xs px-2 py-0.5 rounded bg-[#EEEDFE]">
-                <span className="text-[#534AB7]/80">cat </span>
-                <span className="text-[#3C3489] font-medium">{rule.categoryRef?.name ?? rule.categoryName}</span>
-              </span>
-            )}
-            {rule.payee && (
-              <span className="text-xs px-2 py-0.5 rounded bg-[#E1F5EE]">
-                <span className="text-[#0F6E56]/80">payee </span>
-                <span className="text-[#085041] font-medium">{rule.payee.name}</span>
-              </span>
-            )}
-            {rule.workspace && (
-              <span className="text-xs px-2 py-0.5 rounded bg-[#FEF3E2]">
-                <span className="text-amber-600/80">proj </span>
-                <span className="text-amber-800 font-medium">{rule.workspace.name}</span>
-              </span>
-            )}
-            {!rule.categoryRef?.name && !rule.categoryName && !rule.payee && !rule.workspace && (
-              <span className="text-xs text-muted-foreground">(no actions)</span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          {rule.updatedAt && (
-            <span className="text-[10px] text-muted-foreground/70 tabular-nums" title={new Date(rule.updatedAt).toLocaleString()}>
-              {fmtRuleDate(rule.updatedAt)}
-            </span>
-          )}
-          <span className="text-xs text-muted-foreground tabular-nums">#{rule.priority}</span>
-
-          <button onClick={onToggle} disabled={toggling}
-            className={`relative inline-flex h-[18px] w-8 rounded-full transition-colors disabled:opacity-50 ${rule.isActive ? 'bg-[#085041]' : 'bg-gray-200'}`}
-            aria-label={rule.isActive ? 'Disable rule' : 'Enable rule'}>
-            <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform mt-[2px] ${rule.isActive ? 'translate-x-[14px]' : 'translate-x-[2px]'}`} />
-          </button>
-
-          <button onClick={onEdit}
-            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            aria-label="Edit rule" title="Edit">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-
-          <button onClick={onDelete} disabled={deleting}
-            className="rounded p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
-            aria-label="Delete rule" title="Delete">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Payment suggestion type ────────────────────────────────────────────────────
-
-interface PaymentSuggestion {
-  id: string
-  confidence: string
-  reasoning: string
-  transaction: { id: string; description: string; date: string; amount: number }
-  invoice: { id: string; invoiceNumber: string }
-}
-
-// ── Main RulesManager ─────────────────────────────────────────────────────────
+import { detectRuleConflicts, groupConflictsByRule } from '@/lib/rules/rule-conflicts'
+import { userRuleToLike } from './rule-types'
 
 export function RulesManager({
-  initialRules,
-  initialWorkspaces,
-  initialPayees,
-  initialAccounts,
-  initialCategoryGroups,
-  initialPendingSuggestions,
-  initialPaymentSuggestions,
+  initialRules, initialWorkspaces, initialPayees, initialAccounts, initialCategoryGroups,
+  initialPendingSuggestions, initialPaymentSuggestions, aiSuggestionsEnabled, aiNudgeDismissed,
 }: {
-  initialRules?: UserRule[]
-  initialWorkspaces?: Workspace[]
-  initialPayees?: Payee[]
-  initialAccounts?: { id: string; name: string }[]
-  initialCategoryGroups?: CategoryGroup[]
-  initialPendingSuggestions?: PersistedSuggestion[]
-  initialPaymentSuggestions?: PaymentSuggestion[]
+  initialRules?: UserRule[]; initialWorkspaces?: Workspace[]; initialPayees?: Payee[]
+  initialAccounts?: { id: string; name: string }[]; initialCategoryGroups?: CategoryGroup[]
+  initialPendingSuggestions?: PersistedSuggestion[]; initialPaymentSuggestions?: PaymentSuggestion[]
+  aiSuggestionsEnabled?: boolean; aiNudgeDismissed?: boolean
 } = {}) {
   const searchParams = useSearchParams()
   const autoAgent = searchParams.get('agent') === '1'
   const autoNew = searchParams.get('new') === '1'
+  const aiEnabled = aiSuggestionsEnabled ?? false
 
   const [rules, setRules] = useState<UserRule[]>(initialRules ?? [])
   const [projects, setWorkspaces] = useState<Workspace[]>(initialWorkspaces ?? [])
@@ -207,7 +44,7 @@ export function RulesManager({
   const [bulkDeleteProgress, setBulkDeleteProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<{ updated: number; total: number } | null>(null)
-  const [showAgent, setShowAgent] = useState(autoAgent)
+  const [showAgent, setShowAgent] = useState(autoAgent && aiEnabled)
   const [showStarter, setShowStarter] = useState(false)
   const [agentFinishedSummary, setAgentFinishedSummary] = useState<{ uncategorised: number; noPayee: number } | null>(null)
   const [query, setQuery] = useState('')
@@ -215,17 +52,17 @@ export function RulesManager({
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [pendingSuggestions, setPendingSuggestions] = useState<PersistedSuggestion[]>(initialPendingSuggestions ?? [])
-  const [suggestionsOpen, setSuggestionsOpen] = useState(true)
-  const [ignoringAll, setIgnoringAll] = useState(false)
-  const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<Set<number>>(new Set())
-
-  // Payment suggestions
   const [paymentSuggestions, setPaymentSuggestions] = useState<PaymentSuggestion[]>(initialPaymentSuggestions ?? [])
-  const [paymentSuggestionsOpen, setPaymentSuggestionsOpen] = useState(true)
-  const [reviewingPaymentId, setReviewingPaymentId] = useState<string | null>(null)
+  const [nudgeDismissed, setNudgeDismissed] = useState(aiNudgeDismissed ?? false)
+
+  const conflicts = useMemo(() => detectRuleConflicts(rules.map(userRuleToLike)), [rules])
+  const conflictsById = useMemo(() => groupConflictsByRule(conflicts), [conflicts])
+
+  function handlePayeeCreated(p: Payee) {
+    setPayees((prev) => [...prev.filter((x) => x.id !== p.id), p].sort((a, b) => a.name.localeCompare(b.name)))
+  }
 
   useEffect(() => {
-    // Skip fetch if data was passed from the server
     if (initialRules) return
     Promise.all([
       fetch('/api/rules').then((r) => r.json()),
@@ -245,9 +82,9 @@ export function RulesManager({
       if (!paymentSuggestionsJson.error && !initialPaymentSuggestions) setPaymentSuggestions(paymentSuggestionsJson.data ?? [])
     }).catch(() => setError('Failed to load'))
       .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialRules])
 
-  // Auto-dismiss agent banner after 8s
   useEffect(() => {
     if (agentFinishedSummary) {
       if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current)
@@ -258,59 +95,24 @@ export function RulesManager({
 
   async function toggleActive(rule: UserRule) {
     setTogglingId(rule.id)
-    const res = await fetch(`/api/rules/${rule.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isActive: !rule.isActive }),
-    })
+    const res = await fetch(`/api/rules/${rule.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !rule.isActive }) })
     if (res.ok) setRules((prev) => prev.map((r) => r.id === rule.id ? { ...r, isActive: !r.isActive } : r))
     setTogglingId(null)
   }
 
   async function deleteRule(id: string) {
     setDeletingId(id)
-    const res = await fetch(`/api/rules/${id}`, { method: 'DELETE' })
-    if (res.ok) setRules((prev) => prev.filter((r) => r.id !== id))
+    if ((await fetch(`/api/rules/${id}`, { method: 'DELETE' })).ok) setRules((prev) => prev.filter((r) => r.id !== id))
     setDeletingId(null)
   }
 
-  async function reviewPaymentSuggestion(suggestionId: string, action: 'accept' | 'dismiss') {
-    setReviewingPaymentId(suggestionId)
-    try {
-      const res = await fetch('/api/invoice-payment-suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ suggestionId, action }),
-      })
-      if (res.ok) {
-        setPaymentSuggestions(prev => prev.filter(s => s.id !== suggestionId))
-        showToast(action === 'accept' ? 'Payment recorded on invoice' : 'Suggestion dismissed')
-      } else {
-        showToast('Failed to review suggestion', 'error')
-      }
-    } finally {
-      setReviewingPaymentId(null)
-    }
-  }
-
-
-  async function ignoreAllSuggestions() {
-    setIgnoringAll(true)
-    const res = await fetch('/api/rules/suggestions', { method: 'DELETE' })
-    if (res.ok) setPendingSuggestions([])
-    setIgnoringAll(false)
-  }
-
   async function applyAllRules() {
-    setApplying(true)
-    setApplyResult(null)
+    setApplying(true); setApplyResult(null)
     try {
       const res = await fetch('/api/rules/apply', { method: 'POST' })
       const json = await res.json()
       if (res.ok && !json.error) setApplyResult(json.data)
-    } finally {
-      setApplying(false)
-    }
+    } finally { setApplying(false) }
   }
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
@@ -320,43 +122,27 @@ export function RulesManager({
   }
 
   function handleApplyComplete(result: { updated: number; total: number } | null) {
-    if (result) {
-      showToast(`Applied — ${result.updated} transaction${result.updated !== 1 ? 's' : ''} updated`)
-    } else {
-      showToast('Apply failed', 'error')
-    }
+    if (result) showToast(`Applied — ${result.updated} transaction${result.updated !== 1 ? 's' : ''} updated`)
+    else showToast('Apply failed', 'error')
   }
 
   function handleEditorSave(rule: UserRule) {
-    if (editingRule) {
-      setRules((prev) => prev.map((r) => r.id === rule.id ? rule : r))
-    } else {
-      setRules((prev) => [rule, ...prev])
-    }
-    setShowEditor(false)
-    setEditingRule(undefined)
+    setRules((prev) => editingRule ? prev.map((r) => r.id === rule.id ? rule : r) : [rule, ...prev])
+    setShowEditor(false); setEditingRule(undefined)
   }
 
-  function openNewEditor() {
-    setEditingRule(undefined)
-    setShowEditor(true)
-  }
-
-  function openEditEditor(rule: UserRule) {
-    setEditingRule(rule)
-    setShowEditor(true)
-  }
-
-  function closeEditor() {
-    setShowEditor(false)
-    setEditingRule(undefined)
-  }
+  const openNewEditor = () => { setEditingRule(undefined); setShowEditor(true) }
+  const openEditEditor = (rule: UserRule) => { setEditingRule(rule); setShowEditor(true) }
+  const closeEditor = () => { setShowEditor(false); setEditingRule(undefined) }
 
   function handleAgentClose(summary?: { uncategorised: number; noPayee: number }) {
     setShowAgent(false)
-    if (summary) {
-      setAgentFinishedSummary(summary)
-    }
+    if (summary) setAgentFinishedSummary(summary)
+  }
+
+  async function dismissNudge() {
+    setNudgeDismissed(true)
+    fetch('/api/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ aiSuggestionsNudgeDismissed: true }) })
   }
 
   const filteredRules = query.trim()
@@ -378,42 +164,23 @@ export function RulesManager({
   const someSelected = selectedIds.size > 0
 
   function toggleAll() {
-    if (allFilteredSelected) {
-      setSelectedIds((s) => { const n = new Set(s); filteredRules.forEach((r) => n.delete(r.id)); return n })
-    } else {
-      setSelectedIds((s) => { const n = new Set(s); filteredRules.forEach((r) => n.add(r.id)); return n })
-    }
+    setSelectedIds((s) => { const n = new Set(s); filteredRules.forEach((r) => allFilteredSelected ? n.delete(r.id) : n.add(r.id)); return n })
   }
 
-  function toggleSelect(id: string) {
-    setSelectedIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
-  }
+  const toggleSelect = (id: string) => setSelectedIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   async function confirmBulkDelete() {
     const ids = Array.from(selectedIds)
-    setBulkDeleteConfirm(false)
-    setBulkDeleting(true)
-    setBulkDeleteProgress({ done: 0, total: ids.length })
+    setBulkDeleteConfirm(false); setBulkDeleting(true); setBulkDeleteProgress({ done: 0, total: ids.length })
     let done = 0
-    await Promise.allSettled(
-      ids.map((id) =>
-        fetch(`/api/rules/${id}`, { method: 'DELETE' }).then((r) => {
-          if (!r.ok) throw new Error('failed')
-          setRules((prev) => prev.filter((rule) => rule.id !== id))
-          done++
-          setBulkDeleteProgress({ done, total: ids.length })
-        })
-      )
-    )
-    setSelectedIds(new Set())
-    setBulkDeleting(false)
-    setBulkDeleteProgress({ done: 0, total: 0 })
+    await Promise.allSettled(ids.map((id) =>
+      fetch(`/api/rules/${id}`, { method: 'DELETE' }).then((r) => { if (!r.ok) throw new Error('failed'); setRules((prev) => prev.filter((rule) => rule.id !== id)); done++; setBulkDeleteProgress({ done, total: ids.length }) })
+    ))
+    setSelectedIds(new Set()); setBulkDeleting(false); setBulkDeleteProgress({ done: 0, total: 0 })
   }
 
   return (
     <div className="space-y-6">
-
-      {/* Header */}
       <div>
         <h2 className="text-xl font-medium">Your rules</h2>
         <p className="text-[13px] text-muted-foreground mt-0.5">
@@ -421,7 +188,6 @@ export function RulesManager({
         </p>
       </div>
 
-      {/* Agent finished banner */}
       {agentFinishedSummary && (
         <div className="flex items-center gap-2 text-[12px] bg-[#E1F5EE] text-[#085041] rounded-lg px-3 py-1.5">
           <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -432,7 +198,6 @@ export function RulesManager({
         </div>
       )}
 
-      {/* Primary toolbar: secondary actions left, new rule right */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <button
@@ -441,12 +206,14 @@ export function RulesManager({
           >
             {showStarter ? 'Hide starter rules' : 'Starter rules'}
           </button>
-          <button
-            onClick={() => setShowAgent((v) => !v)}
-            className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${showAgent ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489] hover:bg-[#e5e3fd]' : 'border-[#534AB7]/40 text-[#534AB7] hover:bg-[#EEEDFE]'}`}
-          >
-            {showAgent ? 'Hide agent' : 'Run rules agent'}
-          </button>
+          {aiEnabled && (
+            <button
+              onClick={() => setShowAgent((v) => !v)}
+              className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${showAgent ? 'border-[#534AB7]/40 bg-[#EEEDFE] text-[#3C3489] hover:bg-[#e5e3fd]' : 'border-[#534AB7]/40 text-[#534AB7] hover:bg-[#EEEDFE]'}`}
+            >
+              {showAgent ? 'Hide agent' : 'Run rules agent'}
+            </button>
+          )}
         </div>
         {!showEditor && (
           <button
@@ -459,7 +226,6 @@ export function RulesManager({
         )}
       </div>
 
-      {/* Agent panel */}
       {showAgent && (
         <RulesAgent
           categoryGroups={categoryGroups}
@@ -469,17 +235,16 @@ export function RulesManager({
           onRuleAccepted={(rule) => setRules((prev) => [rule as UserRule, ...prev])}
           onClose={handleAgentClose}
           onApplyComplete={handleApplyComplete}
+          onPayeeCreated={handlePayeeCreated}
         />
       )}
 
-      {/* Starter rules panel */}
       {showStarter && (
         <div className="rounded-xl border border-black/10 bg-[#FAFAFA] p-4">
           <StarterRules
             onInstalled={(count) => {
               setShowStarter(false)
               showToast(`${count} starter rule${count !== 1 ? 's' : ''} installed`)
-              // Refresh the rules list so newly installed rules appear immediately
               fetch('/api/rules').then((r) => r.json()).then((json) => {
                 if (!json.error) setRules(json.data ?? [])
               })
@@ -488,7 +253,6 @@ export function RulesManager({
         </div>
       )}
 
-      {/* Editor */}
       {showEditor && (
         <RuleEditor
           projects={projects}
@@ -499,145 +263,48 @@ export function RulesManager({
           onSave={handleEditorSave}
           onCancel={closeEditor}
           onApplyComplete={handleApplyComplete}
+          allRules={rules}
+          onPayeeCreated={handlePayeeCreated}
         />
       )}
 
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {/* Pending suggestions from transaction edits */}
-      {pendingSuggestions.length > 0 && (
-        <div className="rounded-xl border border-[#534AB7]/25 bg-[#FAFAFE] overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setSuggestionsOpen((v) => !v)}
-            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#EEEDFE]/40 transition-colors"
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="text-[13px]">💡</span>
-              <div>
-                <span className="text-sm font-medium text-[#3C3489]">
-                  {pendingSuggestions.length - dismissedSuggestionIds.size} rule suggestion{pendingSuggestions.length - dismissedSuggestionIds.size !== 1 ? 's' : ''} from your recent edits
-                </span>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Review and accept to automate these patterns</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); ignoreAllSuggestions() }}
-                disabled={ignoringAll}
-                className="text-[11px] text-muted-foreground hover:text-foreground border border-black/15 rounded px-2 py-1 disabled:opacity-50"
-              >
-                {ignoringAll ? 'Ignoring…' : 'Ignore all'}
-              </button>
-              <svg
-                className={`w-4 h-4 text-[#534AB7] transition-transform ${suggestionsOpen ? 'rotate-180' : ''}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </button>
-
-          {suggestionsOpen && (
-            <div className="border-t border-[#534AB7]/10 divide-y divide-black/5">
-              {pendingSuggestions.map((s, i) =>
-                dismissedSuggestionIds.has(i) ? null : (
-                  <div key={s.id} className="p-4">
-                    <SuggestionCard
-                      suggestion={s}
-                      index={i}
-                      total={pendingSuggestions.length}
-                      categoryGroups={categoryGroups}
-                      payees={payees}
-                      projects={projects}
-                      accounts={accounts}
-                      onAccepted={(rule) => {
-                        setRules((prev) => [rule, ...prev])
-                        setDismissedSuggestionIds((d) => new Set(d).add(i))
-                        showToast(`Rule accepted — ${rule.categoryName ?? rule.name}`)
-                      }}
-                      onDecline={() => setDismissedSuggestionIds((d) => new Set(d).add(i))}
-                      onApplyComplete={handleApplyComplete}
-                    />
-                  </div>
-                )
-              )}
-            </div>
-          )}
+      {!aiEnabled && !nudgeDismissed && (
+        <div className="flex items-start gap-3 rounded-lg border border-dashed border-black/20 px-4 py-3">
+          <span className="text-[13px]">💡</span>
+          <div className="flex-1 text-[13px] text-muted-foreground">
+            AI rule suggestions are off.{' '}
+            <Link href="/settings#ai-features" className="text-[#534AB7] underline hover:no-underline">
+              Turn them on in Settings
+            </Link>{' '}
+            to get automatic rule ideas from your edits and imports.
+          </div>
+          <button type="button" onClick={dismissNudge} className="text-muted-foreground hover:text-foreground leading-none shrink-0" aria-label="Dismiss">✕</button>
         </div>
       )}
 
-      {/* Pending payment suggestions */}
-      {paymentSuggestions.length > 0 && (
-        <div className="rounded-xl border border-green-200 bg-green-50/50 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setPaymentSuggestionsOpen(v => !v)}
-            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-green-50 transition-colors"
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="text-[13px]">💸</span>
-              <div>
-                <span className="text-sm font-medium text-green-900">
-                  {paymentSuggestions.length} payment suggestion{paymentSuggestions.length !== 1 ? 's' : ''}
-                </span>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Incoming transactions that may be invoice payments — review and attribute</p>
-              </div>
-            </div>
-            <svg
-              className={`w-4 h-4 text-green-700 transition-transform ${paymentSuggestionsOpen ? 'rotate-180' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {paymentSuggestionsOpen && (
-            <div className="border-t border-green-200 divide-y divide-green-100">
-              {paymentSuggestions.map(s => {
-                const isReviewing = reviewingPaymentId === s.id
-                const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-                const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                return (
-                  <div key={s.id} className="px-4 py-3 flex items-start gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-semibold tabular-nums">{fmt(Number(s.transaction.amount))}</span>
-                        <span className="text-xs text-muted-foreground">{fmtDate(s.transaction.date)}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.confidence === 'high' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                          {s.confidence}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{s.transaction.description}</p>
-                      <p className="text-xs text-foreground mt-1">{s.reasoning}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        disabled={isReviewing}
-                        onClick={() => reviewPaymentSuggestion(s.id, 'accept')}
-                        className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-                      >
-                        {isReviewing ? '…' : 'Accept'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isReviewing}
-                        onClick={() => reviewPaymentSuggestion(s.id, 'dismiss')}
-                        className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+      {aiEnabled && (
+        <RuleSuggestionsPanel
+          suggestions={pendingSuggestions}
+          categoryGroups={categoryGroups}
+          payees={payees}
+          projects={projects}
+          accounts={accounts}
+          onAccepted={(rule) => setRules((prev) => [rule, ...prev])}
+          onIgnoreAll={() => setPendingSuggestions([])}
+          onApplyComplete={handleApplyComplete}
+          onPayeeCreated={handlePayeeCreated}
+          showToast={showToast}
+        />
       )}
+
+      <PaymentSuggestionsPanel
+        suggestions={paymentSuggestions}
+        onReviewed={(id) => setPaymentSuggestions((prev) => prev.filter((s) => s.id !== id))}
+        showToast={showToast}
+      />
 
       {!loading && rules.length === 0 && !showEditor && (
         <p className="text-sm text-muted-foreground rounded-lg border border-dashed px-4 py-8 text-center">
@@ -645,22 +312,15 @@ export function RulesManager({
         </p>
       )}
 
-      {/* Rule cards */}
       {rules.length > 0 && (
         <div className="flex flex-col gap-1">
-          {/* Search + apply row */}
           <div className="flex items-center gap-2 mb-1">
             <div className="relative flex-1 max-w-xs">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
               </svg>
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search rules…"
-                className="w-full pl-8 pr-3 py-1.5 text-[13px] border border-black/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-              />
+              <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search rules…"
+                className="w-full pl-8 pr-3 py-1.5 text-[13px] border border-black/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
             </div>
             <button
               onClick={applyAllRules}
@@ -676,16 +336,9 @@ export function RulesManager({
             )}
           </div>
 
-          {/* Select-all + bulk toolbar */}
           <div className="flex items-center gap-3 px-1 text-xs">
-            <input
-              type="checkbox"
-              checked={allFilteredSelected}
-              ref={(el) => { if (el) el.indeterminate = someSelected && !allFilteredSelected }}
-              onChange={toggleAll}
-              className="cursor-pointer"
-              aria-label="Select all rules"
-            />
+            <input type="checkbox" checked={allFilteredSelected} ref={(el) => { if (el) el.indeterminate = someSelected && !allFilteredSelected }}
+              onChange={toggleAll} className="cursor-pointer" aria-label="Select all rules" />
             {(someSelected || bulkDeleting) ? (
               bulkDeleting ? (
                 <>
@@ -726,6 +379,7 @@ export function RulesManager({
               toggling={togglingId === rule.id}
               selected={selectedIds.has(rule.id)}
               onSelect={() => toggleSelect(rule.id)}
+              conflicts={conflictsById.get(rule.id)}
             />
           ))}
         </div>

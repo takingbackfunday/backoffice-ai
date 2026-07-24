@@ -107,12 +107,9 @@ export function renderEditableCell(
             payees={payees}
             autoFocus={isInitialField}
             unmatchedDraftRef={payeeDraftRef}
-            onCommit={(v) => commitEdit(row.id, 'payeeId', v)}
+            onCommit={(v, freshPayee) => commitEdit(row.id, 'payeeId', v, freshPayee)}
             onCancel={() => exitRowEdit(row.id)}
-            onNewPayee={(p) => {
-              setPayees((prev) => upsertPayee(prev, p))
-              commitEdit(row.id, 'payeeId', p.id, p)
-            }}
+            onNewPayee={(p) => setPayees((prev) => upsertPayee(prev, p))}
           />
         </td>
       )

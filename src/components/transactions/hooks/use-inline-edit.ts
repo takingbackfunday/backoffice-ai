@@ -23,8 +23,10 @@ export function useInlineEdit(opts: {
   selectMode: boolean
   deletingIds: Set<string>
   setDeletingIds: React.Dispatch<React.SetStateAction<Set<string>>>
+  /** AI rule suggestions opt-in (default off) — when false, edit queues are dropped without firing. */
+  aiSuggestionsEnabled?: boolean
 }) {
-  const { localRows, setLocalRows, setError, projects, categoryGroups, payees, setPayees, selectMode, deletingIds, setDeletingIds } = opts
+  const { localRows, setLocalRows, setError, projects, categoryGroups, payees, setPayees, selectMode, deletingIds, setDeletingIds, aiSuggestionsEnabled = false } = opts
 
   const [editingRowId, setEditingRowId] = useState<string | null>(null)
   const [editingRowInitialField, setEditingRowInitialField] = useState<EditableField | null>(null)
@@ -37,6 +39,8 @@ export function useInlineEdit(opts: {
   // Edit queue for deferred rule suggestions
   const editQueueRef = useRef<Map<string, TransactionWithRelations>>(new Map())
   const suggestionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const aiEnabledRef = useRef(aiSuggestionsEnabled)
+  useEffect(() => { aiEnabledRef.current = aiSuggestionsEnabled }, [aiSuggestionsEnabled])
 
   // Make-rule state
   const [makeRuleSnap, setMakeRuleSnap] = useState<MakeRuleSnapType | null>(null)
@@ -55,6 +59,7 @@ export function useInlineEdit(opts: {
     if (queue.size === 0) return
     const snapshots = Array.from(queue.values())
     editQueueRef.current = new Map()
+    if (!aiEnabledRef.current) return // AI suggestions are opt-in — drop the queue silently
     fetch('/api/rules/suggest-from-edits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

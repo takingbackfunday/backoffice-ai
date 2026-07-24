@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header'
 import { RulesManager } from '@/components/rules/rules-manager'
 import { prisma } from '@/lib/prisma'
 import { seedDefaultCategories } from '@/lib/seed-categories'
+import { parsePreferences } from '@/types/preferences'
 
 export const metadata = { title: 'Rules — Backoffice AI' }
 
@@ -14,7 +15,7 @@ export default async function RulesPage() {
   if (!userId) redirect('/sign-in')
 
   // Fetch all data server-side in parallel — no client-side waterfall
-  const [rules, projects, payees, categoryGroupsRaw, accounts, pendingSuggestions] = await Promise.all([
+  const [rules, projects, payees, categoryGroupsRaw, accounts, pendingSuggestions, prefRow] = await Promise.all([
     prisma.categorizationRule.findMany({
       where: { userId },
       include: {
@@ -47,6 +48,7 @@ export default async function RulesPage() {
       where: { userId, status: 'PENDING' },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.userPreference.findUnique({ where: { userId } }),
   ])
 
   // Seed categories if first visit
@@ -59,6 +61,8 @@ export default async function RulesPage() {
       orderBy: { sortOrder: 'asc' },
     })
   }
+
+  const prefs = parsePreferences(prefRow?.data)
 
   return (
     <div className="flex min-h-screen">
@@ -84,6 +88,8 @@ export default async function RulesPage() {
                 name: g.name,
                 categories: g.categories.map((c) => ({ id: c.id, name: c.name })),
               }))}
+              aiSuggestionsEnabled={!!prefs.aiRuleSuggestions}
+              aiNudgeDismissed={!!prefs.aiSuggestionsNudgeDismissed}
             />
           </Suspense>
         </main>

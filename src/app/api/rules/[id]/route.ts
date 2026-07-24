@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { resolveRulePayee, conflictsForSavedRule } from '@/lib/rules/rule-write'
 
 const ConditionDefSchema = z.object({
   field: z.enum([
@@ -28,6 +29,7 @@ const UpdateRuleSchema = z.object({
   conditions: ConditionGroupSchema.optional(),
   categoryName: z.string().optional(),
   categoryId: z.string().nullable().optional(),
+  payeeId: z.string().nullable().optional(),
   payeeName: z.string().nullable().optional(),
   workspaceId: z.string().nullable().optional(),
   setNotes: z.string().nullable().optional(),
@@ -51,21 +53,16 @@ export async function PATCH(
     const parsed = UpdateRuleSchema.safeParse(body)
     if (!parsed.success) return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
 
-    const { payeeName, ...rest } = parsed.data
+    const { payeeName, payeeId: rawPayeeId, ...rest } = parsed.data
 
-    // Upsert payee by name if provided
+    // Payees are never created implicitly — resolve an existing one or reject.
+    // Tri-state: payeeId/payeeName both absent → untouched; resolves → set;
+    // explicit null with no name → clear.
     let payeeId: string | null | undefined = undefined
-    if (payeeName !== undefined) {
-      if (payeeName) {
-        const payee = await prisma.payee.upsert({
-          where: { userId_name: { userId, name: payeeName } },
-          update: {},
-          create: { userId, name: payeeName },
-        })
-        payeeId = payee.id
-      } else {
-        payeeId = null
-      }
+    if (rawPayeeId !== undefined || payeeName !== undefined) {
+      const resolved = await resolveRulePayee(userId, { payeeId: rawPayeeId, payeeName })
+      if ('error' in resolved) return badRequest(resolved.error)
+      payeeId = resolved.payeeId
     }
 
     const rule = await prisma.categorizationRule.update({
@@ -77,7 +74,8 @@ export async function PATCH(
         payee: true,
       },
     })
-    return ok(rule)
+    const conflicts = await conflictsForSavedRule(userId, rule)
+    return ok(rule, { conflicts })
   } catch {
     return serverError('Failed to update rule')
   }

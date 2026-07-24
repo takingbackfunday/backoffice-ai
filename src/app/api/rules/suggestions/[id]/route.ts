@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { ok, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { resolveRulePayee } from '@/lib/rules/rule-write'
 
 // Accept a suggestion → create the real CategorizationRule
 // Optional body: { conditions, categoryId, categoryName, payeeId, payeeName } to override suggestion data
@@ -28,10 +29,24 @@ export async function POST(
     const conditions = (overrides.conditions ?? suggestion.conditions) as object
     const categoryName = (overrides.categoryName as string | undefined) ?? suggestion.categoryName
     const categoryId = (overrides.categoryId as string | null | undefined) ?? suggestion.categoryId ?? null
-    const payeeId = (overrides.payeeId as string | null | undefined) ?? suggestion.payeeId ?? null
-    const payeeName = (overrides.payeeName as string | null | undefined) ?? suggestion.payeeName
     const workspaceId = (overrides.workspaceId as string | null | undefined) ?? suggestion.workspaceId ?? null
     const workspaceName = suggestion.workspaceName ?? null
+
+    // Payee: explicit overrides resolve-or-reject (never create implicitly);
+    // no override → keep the suggestion's own payee (validated when created).
+    const rawPayeeId = overrides.payeeId as string | null | undefined
+    const rawPayeeName = overrides.payeeName as string | null | undefined
+    let payeeId: string | null
+    let payeeName: string | null
+    if (rawPayeeId !== undefined || rawPayeeName !== undefined) {
+      const resolved = await resolveRulePayee(userId, { payeeId: rawPayeeId, payeeName: rawPayeeName })
+      if ('error' in resolved) return badRequest(resolved.error)
+      payeeId = resolved.payeeId
+      payeeName = resolved.payeeName
+    } else {
+      payeeId = suggestion.payeeId ?? null
+      payeeName = suggestion.payeeName
+    }
 
     const ruleName = `${categoryName}${payeeName ? ` — ${payeeName}` : ''}${workspaceName ? ` [${workspaceName}]` : ''} (suggested)`
 

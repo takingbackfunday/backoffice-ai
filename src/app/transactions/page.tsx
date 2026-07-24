@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { TransactionTable } from '@/components/transactions/transaction-table'
 import { prisma } from '@/lib/prisma'
+import { parsePreferences } from '@/types/preferences'
 
 const PAGE_SIZE = 200
 
@@ -13,7 +14,7 @@ export default async function TransactionsPage() {
 
   const where = { account: { userId } }
 
-  const [projects, categoryGroups, payees, accounts, total, transactions] = await Promise.all([
+  const [projects, categoryGroups, payees, accounts, total, transactions, prefRow] = await Promise.all([
     prisma.workspace.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -45,7 +46,9 @@ export default async function TransactionsPage() {
       orderBy: { date: 'desc' },
       take: PAGE_SIZE,
     }),
+    prisma.userPreference.findUnique({ where: { userId } }),
   ])
+  const aiSuggestionsEnabled = !!parsePreferences(prefRow?.data).aiRuleSuggestions
 
   return (
     <div className="flex min-h-screen">
@@ -64,6 +67,7 @@ export default async function TransactionsPage() {
             }))}
             initialPayees={payees}
             initialAccounts={accounts}
+            aiSuggestionsEnabled={aiSuggestionsEnabled}
           />
         </main>
       </div>

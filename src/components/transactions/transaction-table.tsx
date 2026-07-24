@@ -24,9 +24,10 @@ interface Props {
   initialCategoryGroups?: CategoryGroup[]
   initialPayees?: Payee[]
   initialAccounts?: { id: string; name: string }[]
+  aiSuggestionsEnabled?: boolean
 }
 
-export function TransactionTable({ initialRows, initialTotal, initialWorkspaces, initialCategoryGroups, initialPayees, initialAccounts }: Props) {
+export function TransactionTable({ initialRows, initialTotal, initialWorkspaces, initialCategoryGroups, initialPayees, initialAccounts, aiSuggestionsEnabled = false }: Props) {
   const data = useTransactionData({ initialRows, initialTotal })
 
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>(initialAccounts ?? [])
@@ -59,6 +60,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
     selectMode: bulk.selectMode,
     deletingIds: bulk.deletingIds,
     setDeletingIds: bulk.setDeletingIds,
+    aiSuggestionsEnabled,
   })
 
   // NL search

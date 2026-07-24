@@ -16,6 +16,16 @@ export async function GET() {
     return new Response('Unauthorized', { status: 401 })
   }
 
+  // AI rule suggestions are opt-in — refuse to run when off.
+  const pref = await prisma.userPreference.findUnique({ where: { userId } })
+  const prefs = parsePreferences(pref?.data)
+  if (!prefs.aiRuleSuggestions) {
+    return new Response(
+      `data: ${JSON.stringify({ type: 'error', error: 'AI rule suggestions are turned off. Enable them in Settings → AI features.' })}\n\n`,
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+    )
+  }
+
   // Budget gate
   const budget = await checkDailyBudget(userId)
   if (!budget.ok) {
@@ -26,8 +36,7 @@ export async function GET() {
   }
 
   const COOLDOWN_MS = 30_000
-  const pref = await prisma.userPreference.findUnique({ where: { userId } })
-  const lastRun = parsePreferences(pref?.data).lastRulesAgentRun
+  const lastRun = prefs.lastRulesAgentRun
   if (lastRun && Date.now() - lastRun < COOLDOWN_MS) {
     return new Response(
       `data: ${JSON.stringify({ type: 'error', error: 'Please wait 30 seconds between analyses.' })}\n\n`,
@@ -36,7 +45,7 @@ export async function GET() {
   }
   await prisma.userPreference.upsert({
     where: { userId },
-    update: { data: { ...parsePreferences(pref?.data), lastRulesAgentRun: Date.now() } as never },
+    update: { data: { ...prefs, lastRulesAgentRun: Date.now() } as never },
     create: { userId, data: { lastRulesAgentRun: Date.now() } },
   })
 

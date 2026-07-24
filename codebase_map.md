@@ -91,8 +91,10 @@ Every page listed above has a sibling `page.capabilities.ts` file in the same di
 | Condition evaluation (shared) | `src/lib/rules/evaluate-condition.ts` → `matchesConditions`, `getFieldValue`, `evaluateOperator` |
 | Load user rules from DB | `src/lib/rules/user-rules.ts` → `loadUserRules()` |
 | Batch categorize at import | `src/lib/rules/categorize-batch.ts` |
-| Rules UI | `src/components/rules/rules-manager.tsx` |
-| Rule editor (inline + modal) | `src/components/rules/rule-editor.tsx` |
+| Rules UI | `src/components/rules/rules-manager.tsx` (uses `RuleCard`, `RuleSuggestionsPanel`, `PaymentSuggestionsPanel`) |
+| Rule editor (inline + modal) | `src/components/rules/rule-editor.tsx` (uses `ConditionRow`, `OutputRow`, `LivePreview`, `RuleConflictBanner`) |
+| Shared rule types + constants | `src/components/rules/rule-types.ts` — `UserRule`, `Payee`, `CategoryGroup`, `userRuleToLike()` |
+| Conflict detection (pure) | `src/lib/rules/rule-conflicts.ts` → `detectRuleConflicts()`, `groupConflictsByRule()` |
 | AI rules agent (SSE, toolbar) | `src/components/rules/rules-agent.tsx` → `GET /api/agent/rules` |
 | AI rules agent route | `src/app/api/agent/rules/route.ts` |
 | AI rules tools + validator | `src/lib/agent/rules-tools.ts` — `dispatchRulesTool()`, `loadRulesContext()`, `emit_rule_suggestion()` |

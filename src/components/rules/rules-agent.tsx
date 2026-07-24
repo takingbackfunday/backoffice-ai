@@ -40,6 +40,7 @@ interface RulesAgentProps {
   onRuleAccepted: (rule: unknown) => void
   onClose: (summary?: { uncategorised: number; noPayee: number }) => void
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
+  onPayeeCreated?: (p: Payee) => void
 }
 
 // ── Suggestion → UserRule shape ───────────────────────────────────────────────
@@ -60,6 +61,7 @@ function suggestionToRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): 
     payeeId: s.payeeId,
     payee: s.payeeName ? { id: s.payeeId ?? '', name: s.payeeName } : null,
     projectId: s.workspaceId ?? null,
+    workspaceId: s.workspaceId ?? null,
     workspace: s.workspaceId && s.workspaceName ? { id: s.workspaceId, name: s.workspaceName } : null,
     conditions: s.conditions,
     isActive: true,
@@ -79,6 +81,7 @@ async function saveRule(s: AgentSuggestion, categoryGroups: CategoryGroup[]): Pr
       conditions: s.conditions,
       categoryId: rule.categoryId,
       categoryName: rule.categoryName,
+      payeeId: s.payeeId ?? undefined,
       payeeName: s.payeeName ?? undefined,
       workspaceId: s.workspaceId ?? undefined,
       isActive: true,
@@ -118,6 +121,7 @@ export function SuggestionCard({
   onAccepted,
   onDecline,
   onApplyComplete,
+  onPayeeCreated,
 }: {
   suggestion: AgentSuggestion | PersistedSuggestion
   index: number
@@ -129,6 +133,7 @@ export function SuggestionCard({
   onAccepted: (rule: UserRule, index: number) => void
   onDecline: () => void
   onApplyComplete?: (result: { updated: number; total: number } | null) => void
+  onPayeeCreated?: (p: Payee) => void
 }) {
   const isPersisted = 'id' in suggestion
 
@@ -180,7 +185,10 @@ export function SuggestionCard({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
     })
-    if (!res.ok) return
+    if (!res.ok) {
+      const json = await res.json().catch(() => null)
+      throw new Error(json?.error ?? 'Failed to accept suggestion')
+    }
     const json = await res.json()
     onAccepted(json.data, index)
     if (shouldApply) {
@@ -215,6 +223,7 @@ export function SuggestionCard({
       onApplyComplete={onApplyComplete}
       cardHeader={header}
       onSaveOverride={isPersisted ? handleSaveOverride : undefined}
+      onPayeeCreated={onPayeeCreated}
     />
   )
 }
@@ -234,7 +243,7 @@ const THINKING_MESSAGES = [
   'Almost there…',
 ]
 
-export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleAccepted, onClose, onApplyComplete }: RulesAgentProps) {
+export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleAccepted, onClose, onApplyComplete, onPayeeCreated }: RulesAgentProps) {
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [statusMessages, setStatusMessages] = useState<string[]>([])
   const [thinkingIdx, setThinkingIdx] = useState(0)
@@ -489,6 +498,7 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
                           setExpandedAuto((prev) => { const n = new Set(prev); n.delete(i); return n })
                         }}
                         onApplyComplete={onApplyComplete}
+                        onPayeeCreated={onPayeeCreated}
                       />
                     </div>
                   )
@@ -528,6 +538,7 @@ export function RulesAgent({ categoryGroups, payees, projects, accounts, onRuleA
                 onAccepted={accept}
                 onDecline={() => decline(i)}
                 onApplyComplete={onApplyComplete}
+                onPayeeCreated={onPayeeCreated}
               />
             )
           )}
