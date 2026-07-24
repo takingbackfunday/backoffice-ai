@@ -3,9 +3,9 @@
 import React from 'react'
 
 /**
- * View-mode description cell: responsive max-width and the full bank
- * description as a native tooltip (the row-level "Click to edit" title is
- * deliberately not set here so it doesn't suppress this one).
+ * View-mode description cell: text wraps within a responsive max-width so
+ * long bank descriptions stay fully visible (break-words handles long
+ * unbroken strings).
  */
 export function DescriptionCell({
   value,
@@ -18,7 +18,7 @@ export function DescriptionCell({
 }) {
   return (
     <td className={className} onClick={onStartEdit} data-testid="cell-description">
-      <span className="max-w-[clamp(180px,22vw,420px)] truncate block" title={value}>
+      <span className="max-w-[clamp(180px,22vw,420px)] block whitespace-normal break-words">
         {value}
       </span>
     </td>
