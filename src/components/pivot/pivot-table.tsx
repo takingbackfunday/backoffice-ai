@@ -8,6 +8,7 @@ import { formatValue } from '@/lib/pivot/engine'
 interface PivotTableProps {
   result: PivotResult
   config: PivotConfig
+  symbol?: string
 }
 
 function getLabel(key: string) {
@@ -20,7 +21,7 @@ function cellClass(value: number): string {
   return 'text-muted-foreground'
 }
 
-export function PivotTable({ result, config }: PivotTableProps) {
+export function PivotTable({ result, config, symbol = '$' }: PivotTableProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const tableRef = useRef<HTMLTableElement>(null)
   const [stickyOffsets, setStickyOffsets] = useState<number[]>([])
@@ -114,11 +115,11 @@ export function PivotTable({ result, config }: PivotTableProps) {
         </td>
         {hasColData && displayColKeys.map(ck => (
           <td key={ck} className={`px-3 py-2 text-right tabular-nums text-sm ${cellClass(colTotals[ck] ?? 0)}`}>
-            {formatValue(colTotals[ck] ?? 0, aggregation as AggregationType, config.truncateNumbers)}
+            {formatValue(colTotals[ck] ?? 0, aggregation as AggregationType, config.truncateNumbers, { symbol })}
           </td>
         ))}
         <td className={`px-3 py-2 text-right tabular-nums text-sm border-l ${cellClass(grandTotal)}`}>
-          {formatValue(grandTotal, aggregation as AggregationType, config.truncateNumbers)}
+          {formatValue(grandTotal, aggregation as AggregationType, config.truncateNumbers, { symbol })}
         </td>
       </tr>
     )
@@ -149,12 +150,12 @@ export function PivotTable({ result, config }: PivotTableProps) {
                 ))}
                 {hasColData && displayColKeys.map(ck => (
                   <td key={ck} className={`px-3 py-2 text-right tabular-nums text-sm border-b ${cellClass(fr.cells[ck] ?? 0)}`}>
-                    {fr.cells[ck] !== undefined ? formatValue(fr.cells[ck], aggregation as AggregationType, config.truncateNumbers) : '—'}
+                    {fr.cells[ck] !== undefined ? formatValue(fr.cells[ck], aggregation as AggregationType, config.truncateNumbers, { symbol }) : '—'}
                   </td>
                 ))}
                 {showGrandTotals && (
                   <td className={`px-3 py-2 text-right tabular-nums text-sm border-b border-l ${cellClass(fr.rowTotal)}`}>
-                    {formatValue(fr.rowTotal, aggregation as AggregationType, config.truncateNumbers)}
+                    {formatValue(fr.rowTotal, aggregation as AggregationType, config.truncateNumbers, { symbol })}
                   </td>
                 )}
               </tr>
@@ -210,12 +211,12 @@ export function PivotTable({ result, config }: PivotTableProps) {
                       {/* Data cells — subtotals when collapsed, first child when expanded */}
                       {hasColData && isCollapsed && displayColKeys.map(ck => (
                         <td key={ck} className={`px-3 py-2 text-right tabular-nums text-sm border-b ${cellClass(group.subtotals[ck] ?? 0)}`}>
-                          {formatValue(group.subtotals[ck] ?? 0, aggregation as AggregationType, config.truncateNumbers)}
+                          {formatValue(group.subtotals[ck] ?? 0, aggregation as AggregationType, config.truncateNumbers, { symbol })}
                         </td>
                       ))}
                       {hasColData && !isCollapsed && firstChild && displayColKeys.map(ck => (
                         <td key={ck} className={`px-3 py-2 text-right tabular-nums text-sm border-b ${cellClass(firstChild.cells[ck] ?? 0)}`}>
-                          {firstChild.cells[ck] !== undefined ? formatValue(firstChild.cells[ck], aggregation as AggregationType, config.truncateNumbers) : '—'}
+                          {firstChild.cells[ck] !== undefined ? formatValue(firstChild.cells[ck], aggregation as AggregationType, config.truncateNumbers, { symbol }) : '—'}
                         </td>
                       ))}
                       {hasColData && !isCollapsed && !firstChild && displayColKeys.map(ck => (
@@ -223,12 +224,12 @@ export function PivotTable({ result, config }: PivotTableProps) {
                       ))}
                       {showGrandTotals && isCollapsed && (
                         <td className={`px-3 py-2 text-right tabular-nums text-sm border-b border-l ${cellClass(group.rowTotal)}`}>
-                          {formatValue(group.rowTotal, aggregation as AggregationType, config.truncateNumbers)}
+                          {formatValue(group.rowTotal, aggregation as AggregationType, config.truncateNumbers, { symbol })}
                         </td>
                       )}
                       {showGrandTotals && !isCollapsed && firstChild && (
                         <td className={`px-3 py-2 text-right tabular-nums text-sm border-b border-l ${cellClass(firstChild.rowTotal)}`}>
-                          {formatValue(firstChild.rowTotal, aggregation as AggregationType, config.truncateNumbers)}
+                          {formatValue(firstChild.rowTotal, aggregation as AggregationType, config.truncateNumbers, { symbol })}
                         </td>
                       )}
                       {showGrandTotals && !isCollapsed && !firstChild && <td className="px-3 py-2 border-b border-l" />}
@@ -258,12 +259,12 @@ export function PivotTable({ result, config }: PivotTableProps) {
                     ))}
                     {hasColData && displayColKeys.map(ck => (
                       <td key={ck} className={`px-3 py-2 text-right tabular-nums text-sm border-b ${cellClass(child.cells[ck] ?? 0)}`}>
-                        {child.cells[ck] !== undefined ? formatValue(child.cells[ck], aggregation as AggregationType, config.truncateNumbers) : '—'}
+                        {child.cells[ck] !== undefined ? formatValue(child.cells[ck], aggregation as AggregationType, config.truncateNumbers, { symbol }) : '—'}
                       </td>
                     ))}
                     {showGrandTotals && (
                       <td className={`px-3 py-2 text-right tabular-nums text-sm border-b border-l ${cellClass(child.rowTotal)}`}>
-                        {formatValue(child.rowTotal, aggregation as AggregationType, config.truncateNumbers)}
+                        {formatValue(child.rowTotal, aggregation as AggregationType, config.truncateNumbers, { symbol })}
                       </td>
                     )}
                   </tr>
@@ -280,12 +281,12 @@ export function PivotTable({ result, config }: PivotTableProps) {
                     </td>
                     {hasColData && displayColKeys.map(ck => (
                       <td key={ck} className={`px-3 py-2 text-right tabular-nums text-sm ${cellClass(group.subtotals[ck] ?? 0)}`}>
-                        {formatValue(group.subtotals[ck] ?? 0, aggregation as AggregationType, config.truncateNumbers)}
+                        {formatValue(group.subtotals[ck] ?? 0, aggregation as AggregationType, config.truncateNumbers, { symbol })}
                       </td>
                     ))}
                     {showGrandTotals && (
                       <td className={`px-3 py-2 text-right tabular-nums text-sm border-l ${cellClass(group.rowTotal)}`}>
-                        {formatValue(group.rowTotal, aggregation as AggregationType, config.truncateNumbers)}
+                        {formatValue(group.rowTotal, aggregation as AggregationType, config.truncateNumbers, { symbol })}
                       </td>
                     )}
                   </tr>

@@ -13,17 +13,23 @@ export function aggregate(values: number[], type: AggregationType): number {
   }
 }
 
-export function formatValue(value: number, aggregationType: AggregationType, truncate?: boolean): string {
+export function formatValue(
+  value: number,
+  aggregationType: AggregationType,
+  truncate?: boolean,
+  opts?: { symbol?: string },
+): string {
   if (aggregationType === 'count') {
     return Math.round(value).toLocaleString()
   }
+  const symbol = opts?.symbol ?? '$'
   const abs = Math.abs(value)
   const formatted = truncate
     ? Math.round(abs).toLocaleString()
     : abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  if (value < 0) return `($${formatted})`
-  if (value === 0) return truncate ? '$0' : '$0.00'
-  return `$${formatted}`
+  if (value < 0) return `(${symbol}${formatted})`
+  if (value === 0) return truncate ? `${symbol}0` : `${symbol}0.00`
+  return `${symbol}${formatted}`
 }
 
 export function computePivot(

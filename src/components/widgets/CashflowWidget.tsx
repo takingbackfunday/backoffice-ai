@@ -8,7 +8,8 @@ import {
 import type { CashflowPoint } from '@/app/api/widgets/cashflow/route'
 import { RelativeDateRangePicker, resolveExpr, toDateString } from './RelativeDateRangePicker'
 import type { RelativeDateRange } from './RelativeDateRangePicker'
-import type { DashboardCurrency } from '@/lib/fx'
+import type { DashboardCurrency } from '@/lib/currency'
+import { CURRENCY_SYMBOLS, DEFAULT_CURRENCY } from '@/lib/currency'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -154,11 +155,11 @@ function CategoryFilterDropdown({
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' }
+const SYMBOLS = CURRENCY_SYMBOLS as Record<string, string>
 
-function fmt(value: number | null | undefined, currency = 'USD'): string {
+function fmt(value: number | null | undefined, currency = DEFAULT_CURRENCY): string {
   if (value == null || !isFinite(value)) return ''
-  const sym = SYMBOLS[currency] ?? '$'
+  const sym = SYMBOLS[currency] ?? CURRENCY_SYMBOLS[DEFAULT_CURRENCY]
   const abs = Math.abs(value)
   if (abs >= 1000) return `${sym}${(value / 1000).toFixed(1)}k`
   return `${sym}${value.toFixed(0)}`

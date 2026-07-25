@@ -4,9 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { Sidebar } from '@/components/layout/sidebar'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
 import { parsePreferences } from '@/types/preferences'
-import type { DashboardCurrency } from '@/lib/fx'
-
-const SUPPORTED: DashboardCurrency[] = ['USD', 'EUR', 'GBP']
+import { isDashboardCurrency, DEFAULT_CURRENCY } from '@/lib/currency'
+import type { DashboardCurrency } from '@/lib/currency'
 
 async function getDefaultCurrency(userId: string): Promise<DashboardCurrency> {
   const earliest = await prisma.account.findFirst({
@@ -14,8 +13,8 @@ async function getDefaultCurrency(userId: string): Promise<DashboardCurrency> {
     orderBy: { createdAt: 'asc' },
     select: { currency: true },
   })
-  const c = earliest?.currency?.toUpperCase() ?? 'USD'
-  return (SUPPORTED.includes(c as DashboardCurrency) ? c : 'USD') as DashboardCurrency
+  const c = earliest?.currency?.toUpperCase() ?? DEFAULT_CURRENCY
+  return isDashboardCurrency(c) ? c : DEFAULT_CURRENCY
 }
 
 export default async function DashboardPage() {

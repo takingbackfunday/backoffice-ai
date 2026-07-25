@@ -7,6 +7,8 @@ import { computePivot } from '@/lib/pivot/engine'
 import { PivotToolbar } from './pivot-toolbar'
 import { PivotFieldBar } from './pivot-field-bar'
 import { PivotTable } from './pivot-table'
+import { useCurrencyStore } from '@/stores/currency-store'
+import { CURRENCY_SYMBOLS } from '@/lib/currency'
 import Link from 'next/link'
 
 const DEFAULT_CONFIG: PivotConfig = {
@@ -21,15 +23,24 @@ const DEFAULT_CONFIG: PivotConfig = {
 }
 
 export function PivotPageClient() {
+  const { currency, hydrated, hydrate } = useCurrencyStore()
   const [data, setData] = useState<PivotRow[]>([])
   const [loading, setLoading] = useState(true)
   const [config, setConfig] = useState<PivotConfig>(DEFAULT_CONFIG)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didRestorePrefs = useRef(false)
 
-  // Fetch data — retries once after 3s to handle Fly.io cold-start race
-  // where the proxy marks the machine reachable before Next.js is fully ready
+  // Hydrate the currency store on mount (idempotent)
   useEffect(() => {
+    hydrate()
+  }, [hydrate])
+
+  // Fetch data — retries once after 3s to handle Fly.io cold-start race
+  // where the proxy marks the machine reachable before Next.js is fully ready.
+  // Waits for the currency store to hydrate so the first fetch includes the
+  // correct currency param (avoids a double fetch / flash of unconverted data).
+  useEffect(() => {
+    if (!hydrated) return
     let cancelled = false
 
     async function load(attempt = 0) {
@@ -37,7 +48,7 @@ export function PivotPageClient() {
       const timeoutId = setTimeout(() => controller.abort(), 15000)
       let retrying = false
       try {
-        const r = await fetch('/api/pivot', { signal: controller.signal })
+        const r = await fetch(`/api/pivot?currency=${currency}`, { signal: controller.signal })
         const res = await r.json()
         if (!cancelled && res.data) setData(res.data)
       } catch (err: unknown) {
@@ -57,7 +68,7 @@ export function PivotPageClient() {
 
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [hydrated, currency])
 
   // Restore preferences on mount
   useEffect(() => {
@@ -210,10 +221,10 @@ export function PivotPageClient() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `pivot-${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `pivot-${currency}-${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
-  }, [pivotResult, config])
+  }, [pivotResult, config, currency])
 
   if (loading) {
     return (
@@ -271,6 +282,7 @@ export function PivotPageClient() {
       <PivotTable
         result={pivotResult}
         config={config}
+        symbol={CURRENCY_SYMBOLS[currency]}
       />
     </div>
   )

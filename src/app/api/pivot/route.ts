@@ -4,6 +4,9 @@ import { ok, unauthorized, serverError } from '@/lib/api-response'
 import { Prisma } from '@/generated/prisma/client'
 import type { PivotRow } from '@/lib/pivot/types'
 import { logger } from '@/lib/log'
+import { convertAmounts } from '@/lib/fx'
+import { isDashboardCurrency } from '@/lib/currency'
+import type { DashboardCurrency } from '@/lib/currency'
 
 // TODO: Future optimization: server-side aggregation via Prisma groupBy or raw SQL
 // for users with 10k+ transactions.
@@ -43,6 +46,7 @@ interface RawTxRow {
   payee_name: string | null
   account_name: string
   account_type: string
+  account_currency: string
   workspace_name: string | null
   workspace_type: string | null
 }
@@ -55,6 +59,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
+    const currencyParam = searchParams.get('currency')
+    const targetCurrency: DashboardCurrency | null =
+      isDashboardCurrency(currencyParam) ? currencyParam : null
 
     // Use $queryRaw so Postgres formats the date as a UTC string directly.
     // This bypasses the neon client's timezone-mangled JS Date serialisation.
@@ -83,6 +90,7 @@ export async function GET(request: Request) {
         p.name AS payee_name,
         a.name AS account_name,
         a.type AS account_type,
+        a.currency AS account_currency,
         w.name AS workspace_name,
         w.type AS workspace_type
       FROM "Transaction" t
@@ -130,7 +138,22 @@ export async function GET(request: Request) {
       }
     })
 
-    return ok(rows)
+    // Convert amounts to the requested display currency (per-row source
+    // currency → target). When no currency param is supplied, rows are
+    // returned raw — preserving the behaviour of pre-currency callers.
+    if (targetCurrency) {
+      const converted = await convertAmounts(
+        rows.map((r, i) => ({
+          amount: r.amount,
+          currency: txRows[i].account_currency ?? 'USD',
+          month: r.date.slice(0, 7),
+        })),
+        targetCurrency,
+      )
+      for (let i = 0; i < rows.length; i++) rows[i].amount = converted[i]
+    }
+
+    return ok(rows, targetCurrency ? { currency: targetCurrency } : undefined)
   } catch (err) {
     logger.error('pivot', 'GET error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to load pivot data')

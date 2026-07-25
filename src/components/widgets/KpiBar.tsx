@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import type { KpiData } from '@/app/api/widgets/kpi/route'
-import type { DashboardCurrency } from '@/lib/fx'
-
-const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' }
+import type { DashboardCurrency } from '@/lib/currency'
+import { CURRENCY_SYMBOLS, DEFAULT_CURRENCY } from '@/lib/currency'
 
 function fmt(value: number | null | undefined, currency: string): string {
   if (value == null || !isFinite(value)) return ''
-  const sym = SYMBOLS[currency] ?? '$'
+  const sym = CURRENCY_SYMBOLS[currency as DashboardCurrency] ?? CURRENCY_SYMBOLS[DEFAULT_CURRENCY]
   const abs = Math.abs(value)
   if (abs >= 1_000_000) return `${sym}${(value / 1_000_000).toFixed(1)}M`
   if (abs >= 1000) return `${sym}${(value / 1000).toFixed(1)}k`

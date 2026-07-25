@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { DashboardHeader } from './dashboard-header'
 import { KpiBar } from '@/components/widgets/KpiBar'
 import { ExpensesByCategoryWidget } from '@/components/widgets/ExpensesByCategoryWidget'
@@ -8,28 +8,23 @@ import { ExpensesByDonutWidget } from '@/components/widgets/ExpensesByDonutWidge
 import { CashflowWidget } from '@/components/widgets/CashflowWidget'
 import { NetWorthWidget } from '@/components/widgets/NetWorthWidget'
 import { AgentQA } from '@/components/dashboard/agent-qa'
-import type { DashboardCurrency } from '@/lib/fx'
+import { useCurrencyStore } from '@/stores/currency-store'
+import type { DashboardCurrency } from '@/lib/currency'
 
 interface DashboardClientProps {
   initialCurrency: DashboardCurrency
 }
 
 export function DashboardClient({ initialCurrency }: DashboardClientProps) {
-  const [currency, setCurrency] = useState<DashboardCurrency>(initialCurrency)
+  const { currency, hydrate } = useCurrencyStore()
 
-  async function handleCurrencyChange(next: DashboardCurrency) {
-    setCurrency(next)
-    // Persist to user preferences (fire and forget — UI updates immediately)
-    fetch('/api/preferences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dashboardCurrency: next }),
-    }).catch(() => {/* non-critical */})
-  }
+  useEffect(() => {
+    hydrate(initialCurrency)
+  }, [hydrate, initialCurrency])
 
   return (
     <>
-      <DashboardHeader currency={currency} onCurrencyChange={handleCurrencyChange} />
+      <DashboardHeader />
       <main className="flex-1 p-4 sm:p-5 space-y-4 max-w-[1200px] w-full" role="main">
         {/* KPI strip — last full month */}
         <KpiBar currency={currency} />
