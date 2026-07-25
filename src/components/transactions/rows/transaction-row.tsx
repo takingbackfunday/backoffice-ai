@@ -297,24 +297,7 @@ export function TransactionRow({
         <td className="px-3 py-0.5 text-muted-foreground whitespace-nowrap">{row.account.name}</td>
         {renderEditableCell(row, 'description', cellOpts)}
         {renderEditableCell(row, 'amount', cellOpts)}
-        <td className="px-3 py-0.5 text-xs text-muted-foreground whitespace-nowrap">{row.account.currency ?? '—'}</td>
-        {renderEditableCell(row, 'payeeId', cellOpts)}
-        {renderEditableCell(row, 'categoryId', cellOpts)}
-        <td className="px-3 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
-          {row.categoryRef?.group?.name ?? '—'}
-        </td>
-        {renderEditableCell(row, 'notes', cellOpts)}
-        {renderEditableCell(row, 'projectId', cellOpts)}
-        {isRowEditing ? (
-          <td className="px-2 py-0.5 whitespace-nowrap">
-            <button
-              onMouseDown={(e) => { e.preventDefault(); exitRowEdit(row.id) }}
-              className="text-xs px-2 py-0.5 rounded bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors"
-            >
-              Done
-            </button>
-          </td>
-        ) : makeRuleSnap && lastEditedRowId === row.id && !showMakeRuleEditor ? (
+        {!isRowEditing && makeRuleSnap && lastEditedRowId === row.id && !showMakeRuleEditor ? (
           <td className="px-2 py-0.5 whitespace-nowrap">
             <div className="flex items-center gap-1">
               <span className="text-[11px]">💡</span>
@@ -330,6 +313,25 @@ export function TransactionRow({
                 aria-label="Dismiss"
               >✕</button>
             </div>
+          </td>
+        ) : (
+          <td className="px-3 py-0.5 text-xs text-muted-foreground whitespace-nowrap">{row.account.currency ?? '—'}</td>
+        )}
+        {renderEditableCell(row, 'payeeId', cellOpts)}
+        {renderEditableCell(row, 'categoryId', cellOpts)}
+        <td className="px-3 py-0.5 text-xs text-muted-foreground whitespace-nowrap">
+          {row.categoryRef?.group?.name ?? '—'}
+        </td>
+        {renderEditableCell(row, 'notes', cellOpts)}
+        {renderEditableCell(row, 'projectId', cellOpts)}
+        {isRowEditing ? (
+          <td className="px-2 py-0.5 whitespace-nowrap">
+            <button
+              onMouseDown={(e) => { e.preventDefault(); exitRowEdit(row.id) }}
+              className="text-xs px-2 py-0.5 rounded bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors"
+            >
+              Done
+            </button>
           </td>
         ) : (
           <td />
