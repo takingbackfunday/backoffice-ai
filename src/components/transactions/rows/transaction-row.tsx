@@ -6,6 +6,7 @@ import type { Payee } from '@/components/rules/rule-editor'
 import type { CategoryGroup } from '@/components/rules/rule-editor'
 import type { Workspace } from '@/generated/prisma/client'
 import { toDisplay } from '@/lib/money'
+import { categoryPillColor } from '@/lib/category-colors'
 import { TextCell } from '../cells/text-cell'
 import { WorkspaceCell } from '../cells/workspace-cell'
 import { CategoryCell } from '../cells/category-cell'
@@ -168,7 +169,7 @@ export function renderEditableCell(
       data-testid={`cell-${field}`}
     >
       {field === 'categoryId' ? (
-        <span className={displayValue !== '—' ? 'text-[10px] rounded-full bg-blue-100 text-blue-700 px-1.5 py-px max-w-[120px] truncate block' : ''}>
+        <span className={displayValue !== '—' ? `text-[10px] rounded-full ${categoryPillColor(displayValue)} px-1.5 py-px max-w-[120px] truncate block` : ''}>
           {displayValue}
         </span>
       ) : field === 'notes' ? (
