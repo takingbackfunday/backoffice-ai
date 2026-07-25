@@ -9,10 +9,14 @@
 //   possible-overlap — conditions may overlap with different outputs, but we can't
 //                      prove containment (soft warning; never blocks saving)
 //
-// Detection is deliberately conservative: `regex`, `not_*`, and multi-condition
-// `any` groups can't be proven either way, so they only ever produce
-// `possible-overlap` (and only when the two rules share a field). Rules that
-// share no condition field are never flagged.
+// Detection is deliberately conservative: `regex` only flags when the other
+// condition's keyword appears in the pattern; `not_*` operators are treated as
+// filters (they don't establish overlap); multi-condition `any` groups can't be
+// proven for shadowing so they only produce `possible-overlap` (when the two
+// rules share a field and have different outputs). Substring matching requires
+// the shorter keyword to be ≥ 6 chars to avoid noise. Rules that share no
+// condition field are never flagged. Rules that set the same category are not
+// flagged for possible-overlap (the generic→specific override is intentional).
 
 export interface ConditionDefLike {
   field: string
@@ -92,6 +96,11 @@ function outputsEqual(a: UserRuleLike, b: UserRuleLike): boolean {
     (a.workspaceId ?? null) === (b.workspaceId ?? null) &&
     (a.setNotes ?? null) === (b.setNotes ?? null)
   )
+}
+
+/** Both rules set the same category — the generic→specific override is intentional. */
+function categoriesMatch(a: UserRuleLike, b: UserRuleLike): boolean {
+  return categoryKey(a) !== null && categoryKey(a) === categoryKey(b)
 }
 
 // ── Condition group helpers ───────────────────────────────────────────────────
@@ -230,10 +239,24 @@ function disjointPair(a: ConditionDefLike, b: ConditionDefLike): boolean {
   return false
 }
 
+/** Negation operators restrict the match set — they don't establish overlap. */
+const NEGATION_OPS = new Set(['not_contains', 'not_equals', 'excludes'])
+
+/** Minimum keyword length for substring-based overlap flagging. */
+const MIN_SUBSTRING_LEN = 6
+
 /**
  * Two conditions (same field) look like they could match the same transaction.
  * Only "related" keywords count — `contains "rent"` vs `contains "spotify"` is
  * not flagged, otherwise every pair of description rules would warn.
+ *
+ * Noise-control measures:
+ * - Negation operators (not_contains, not_equals, excludes) return false — they
+ *   are filters, not matchers, and don't contribute to overlap.
+ * - regex only flags when the other condition's keyword literally appears in
+ *   the pattern string; two regexes against each other are skipped entirely.
+ * - Substring matching requires the shorter keyword to be ≥ MIN_SUBSTRING_LEN
+ *   characters, avoiding false positives like "mobil" ⊂ "tmobile".
  */
 function relatedPair(a: ConditionDefLike, b: ConditionDefLike): boolean {
   if (NUMERIC_FIELDS.has(a.field)) {
@@ -245,14 +268,26 @@ function relatedPair(a: ConditionDefLike, b: ConditionDefLike): boolean {
   if (disjointPair(a, b)) return false
   const ao = normOp(a.operator)
   const bo = normOp(b.operator)
-  const UNPROVABLE = new Set(['regex', 'not_contains', 'not_equals', 'includes', 'excludes'])
-  if (UNPROVABLE.has(ao) || UNPROVABLE.has(bo)) return true
+  // Negation operators are filters, not matchers — they restrict the match set
+  // and don't establish that two rules overlap.
+  if (NEGATION_OPS.has(ao) || NEGATION_OPS.has(bo)) return false
   const av = textVal(a)
   const bv = textVal(b)
-  // substring/prefix/suffix relations in either direction
-  if (av.includes(bv) || bv.includes(av)) return true
-  // oneOf vs a string op: some member related
-  if (ao === 'oneOf' || bo === 'oneOf') return true // not disjoint (checked above) ⇒ some member compatible
+  // regex: only flag if the other condition's keyword literally appears in the
+  // pattern. Two regexes against each other are unprovable — skip.
+  if (ao === 'regex' || bo === 'regex') {
+    if (ao === 'regex' && bo === 'regex') return false
+    const regexVal = ao === 'regex' ? av : bv
+    const otherVal = ao === 'regex' ? bv : av
+    return otherVal.length > 0 && regexVal.includes(otherVal)
+  }
+  // substring/prefix/suffix relations — only when the shorter keyword is long
+  // enough to be meaningful (avoids "mobil" ⊂ "tmobile" false positives).
+  const shorter = av.length <= bv.length ? av : bv
+  const longer = av.length <= bv.length ? bv : av
+  if (shorter.length >= MIN_SUBSTRING_LEN && longer.includes(shorter)) return true
+  // oneOf vs a string op: some member related (not disjoint, checked above)
+  if (ao === 'oneOf' || bo === 'oneOf') return true
   return false
 }
 
@@ -351,6 +386,7 @@ export function detectRuleConflicts(rules: UserRuleLike[]): RuleConflict[] {
 
       if (provablyDisjoint(earlier, later)) continue
       if (outputsEqual(earlier, later)) continue
+      if (categoriesMatch(earlier, later)) continue
       if (!hasRelatedPair(earlier, later)) continue
 
       push('possible-overlap', later, earlier,

@@ -214,6 +214,75 @@ describe('detectRuleConflicts', () => {
     const b = rule({ priority: 20, conditions: { all: [{ field: 'amount', operator: 'between', value: [10, 20] }] } })
     expect(kinds(detectRuleConflicts([a, b]))).toEqual(['shadowed'])
   })
+
+  // ── Noise-control fixes ─────────────────────────────────────────────────────
+
+  it('not_contains does NOT auto-flag possible-overlap against unrelated rules', () => {
+    const a = rule({ priority: 10, conditions: { all: [contains('description', 'uber')] }, categoryId: 'c1' })
+    const b = rule({ priority: 20, conditions: { all: [contains('description', 'spotify'), { field: 'description', operator: 'not_contains', value: 'ads' }] }, categoryId: 'c2' })
+    expect(detectRuleConflicts([a, b])).toEqual([])
+  })
+
+  it('not_contains narrows a rule but does not create overlap noise with the wider rule', () => {
+    const narrow = rule({ priority: 10, conditions: { all: [contains('description', 'uber eats')] }, categoryId: 'c1' })
+    const wide = rule({ priority: 20, conditions: { all: [contains('description', 'uber'), { field: 'description', operator: 'not_contains', value: 'uber eats' }] }, categoryId: 'c2' })
+    // "uber" is only 4 chars → below MIN_SUBSTRING_LEN → no possible-overlap from
+    // the substring check. The not_contains term is a filter → returns false.
+    // No shadow either (wide runs later). Net: no conflict.
+    expect(detectRuleConflicts([narrow, wide])).toEqual([])
+  })
+
+  it('regex only flags possible-overlap when the other keyword appears in the pattern', () => {
+    const a = rule({ priority: 10, conditions: { all: [contains('description', 'amazon')] }, categoryId: 'c1' })
+    const b = rule({ priority: 20, conditions: { all: [{ field: 'description', operator: 'regex', value: '^amazon' }] }, categoryId: 'c2' })
+    expect(kinds(detectRuleConflicts([a, b]))).toEqual(['possible-overlap', 'possible-overlap'])
+
+    const c = rule({ priority: 10, conditions: { all: [contains('description', 'amazon')] }, categoryId: 'c1' })
+    const d = rule({ priority: 20, conditions: { all: [{ field: 'description', operator: 'regex', value: '^\\d{4}$' }] }, categoryId: 'c2' })
+    expect(detectRuleConflicts([c, d])).toEqual([])
+  })
+
+  it('two regex conditions against each other do not flag possible-overlap', () => {
+    const a = rule({ priority: 10, conditions: { all: [{ field: 'description', operator: 'regex', value: '^amazon' }] }, categoryId: 'c1' })
+    const b = rule({ priority: 20, conditions: { all: [{ field: 'description', operator: 'regex', value: '^ebay' }] }, categoryId: 'c2' })
+    expect(detectRuleConflicts([a, b])).toEqual([])
+  })
+
+  it('short shared substring (< 6 chars) does NOT flag possible-overlap with any groups', () => {
+    const a = rule({ priority: 10, conditions: { any: [contains('description', 'exxon'), contains('description', 'mobil')] }, categoryId: 'c1' })
+    const b = rule({ priority: 20, conditions: { any: [contains('description', 't-mobile'), contains('description', 'tmobile')] }, categoryId: 'c2' })
+    // "mobil" (5 chars) ⊂ "tmobile" but below MIN_SUBSTRING_LEN; multi-def any
+    // groups can't be proven for shadow → previously auto-flagged, now skipped.
+    expect(detectRuleConflicts([a, b])).toEqual([])
+  })
+
+  it('substring at exactly 6 chars still flags possible-overlap (narrower first)', () => {
+    const narrow = rule({ priority: 10, conditions: { all: [contains('description', 'amazon prime')] }, categoryId: 'c1' })
+    const wide = rule({ priority: 20, conditions: { all: [contains('description', 'amazon')] }, categoryId: 'c2' })
+    // "amazon" is exactly 6 chars → still flags. Narrower runs first → no shadow.
+    expect(kinds(detectRuleConflicts([narrow, wide]))).toEqual(['possible-overlap', 'possible-overlap'])
+  })
+
+  it('same category with different payees does NOT flag possible-overlap (any groups)', () => {
+    const generic = rule({ priority: 10, conditions: { any: [contains('description', 'restaurant'), contains('description', 'bistro')] }, categoryId: 'c1' })
+    const specific = rule({ priority: 20, conditions: { any: [contains('description', 'Courthouse Restaurant')] }, categoryId: 'c1', payeeId: 'p1' })
+    // Multi-def any groups → can't prove shadow. categoriesMatch → skip possible-overlap.
+    expect(detectRuleConflicts([generic, specific])).toEqual([])
+  })
+
+  it('same category — narrower all-group shadowed by wider all-group (still flagged)', () => {
+    const wide = rule({ priority: 10, conditions: { all: [contains('description', 'restaurant')] }, categoryId: 'c1' })
+    const narrow = rule({ priority: 20, conditions: { all: [contains('description', 'restaurant pirosmani')] }, categoryId: 'c1', payeeId: 'p1' })
+    // Shadow detection still fires — categoriesMatch only skips possible-overlap.
+    expect(kinds(detectRuleConflicts([wide, narrow]))).toEqual(['shadowed'])
+  })
+
+  it('different categories with overlapping keywords still flag possible-overlap (narrower first)', () => {
+    const narrow = rule({ priority: 10, conditions: { all: [contains('description', 'amazon warehouse')] }, categoryId: 'c1' })
+    const wide = rule({ priority: 20, conditions: { all: [contains('description', 'amazon')] }, categoryId: 'c2' })
+    // Narrower first → no shadow. Different categories → categoriesMatch false. → possible-overlap.
+    expect(kinds(detectRuleConflicts([narrow, wide]))).toEqual(['possible-overlap', 'possible-overlap'])
+  })
 })
 
 describe('groupConflictsByRule', () => {
