@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Workspace } from '@/generated/prisma/client'
 import { detectRuleConflicts, type UserRuleLike } from '@/lib/rules/rule-conflicts'
 import { ConditionRow } from './condition-row'
@@ -105,7 +105,13 @@ export function RuleEditor({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [addOutputOpen, setAddOutputOpen] = useState(false)
+  const [confirmingConflict, setConfirmingConflict] = useState(false)
   const applyAfterSaveRef = useRef(false)
+  const formRef = useRef<HTMLFormElement>(null)
+  /** Set once the user has explicitly acknowledged a conflict and chosen to save anyway. */
+  const confirmedConflictRef = useRef(false)
+  /** Preserves the "apply after save" intent across the confirmation step. */
+  const pendingApplyRef = useRef(false)
 
   const usedTypes = new Set(outputs.map((o) => o.type))
   const availableToAdd = (['category', 'payee', 'project', 'notes'] as OutputActionType[])
@@ -163,6 +169,15 @@ export function RuleEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conditions, op, outputs, priority, allRules, categoryGroups, editingRule?.id])
 
+  // If the user edits away the conflict while the confirmation panel is open,
+  // dismiss it so we don't show a stale "conflicts with 0 rules" prompt.
+  useEffect(() => {
+    if (liveConflicts.length === 0) {
+      setConfirmingConflict(false)
+      confirmedConflictRef.current = false
+    }
+  }, [liveConflicts])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const validDefs = conditions.filter((c) => c.value.trim() !== '')
@@ -173,6 +188,17 @@ export function RuleEditor({
     if (!categoryOutput && !payeeHasValue && !outputs.find((o) => o.type === 'project')?.value.trim()) {
       setError('Add at least one output action.'); return
     }
+
+    // Conflict gate: when live conflicts are detected, require explicit
+    // confirmation before saving. The first matching rule wins, so a
+    // conflicting rule may silently never fire — the user must acknowledge.
+    if (liveConflicts.length > 0 && !confirmedConflictRef.current) {
+      pendingApplyRef.current = applyAfterSaveRef.current
+      setConfirmingConflict(true)
+      return
+    }
+    confirmedConflictRef.current = false
+    setConfirmingConflict(false)
 
     setSaving(true)
     setError(null)
@@ -241,7 +267,7 @@ export function RuleEditor({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg border border-black/[0.1] bg-white overflow-hidden" data-testid="rule-editor">
+    <form ref={formRef} onSubmit={handleSubmit} className="rounded-lg border border-black/[0.1] bg-white overflow-hidden" data-testid="rule-editor">
       {/* Optional card header (e.g. suggestion metadata) */}
       {cardHeader}
 
@@ -311,7 +337,40 @@ export function RuleEditor({
         <LivePreview conditions={conditions} op={op} outputs={outputs} categoryGroups={categoryGroups} projects={projects} payees={payees} />
       </div>
 
-      <RuleConflictBanner conflicts={liveConflicts} />
+      {confirmingConflict ? (
+        <div className="mx-3 mb-2 rounded-md border border-amber-400 bg-amber-50 px-3 py-2" role="alert" data-testid="rule-conflict-confirm">
+          <p className="text-[11px] font-semibold text-amber-800 mb-0.5">
+            ⚠ {liveConflicts.length === 1 ? 'This rule conflicts with an existing rule' : `This rule conflicts with ${liveConflicts.length} existing rules`}
+          </p>
+          <ul className="space-y-0.5 mb-1.5">
+            {liveConflicts.slice(0, 3).map((c) => (
+              <li key={`${c.kind}-${c.otherRuleId}`} className="text-[11px] text-amber-800/90 leading-snug">
+                {c.explanation}
+              </li>
+            ))}
+            {liveConflicts.length > 3 && (
+              <li className="text-[11px] text-amber-800/70">…and {liveConflicts.length - 3} more</li>
+            )}
+          </ul>
+          <p className="text-[11px] text-amber-800 mb-2">
+            The first matching rule wins, so this rule may never fire. Save it anyway?
+          </p>
+          <div className="flex items-center gap-2">
+            <button type="button"
+              onClick={() => { applyAfterSaveRef.current = pendingApplyRef.current; confirmedConflictRef.current = true; formRef.current?.requestSubmit() }}
+              className="rounded bg-amber-600 text-white px-3 py-1 text-[12px] font-medium hover:bg-amber-700">
+              Save anyway
+            </button>
+            <button type="button"
+              onClick={() => { setConfirmingConflict(false); confirmedConflictRef.current = false }}
+              className="rounded border border-black/20 px-3 py-1 text-[12px] hover:bg-muted">
+              Keep editing
+            </button>
+          </div>
+        </div>
+      ) : (
+        <RuleConflictBanner conflicts={liveConflicts} />
+      )}
 
       {error && <p className="text-xs text-red-600 px-3 pb-1.5" role="alert">{error}</p>}
 
@@ -319,13 +378,13 @@ export function RuleEditor({
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-black/[0.07]">
         <div className="flex items-center gap-1.5">
           {(!editingRule || showSaveAndApply) && (
-            <button type="submit" disabled={saving}
+            <button type="submit" disabled={saving || confirmingConflict}
               onClick={() => { applyAfterSaveRef.current = true }}
               className="rounded bg-[#085041] text-[#E1F5EE] px-3 py-1 text-[12px] font-medium disabled:opacity-50 hover:opacity-90">
               {saving ? 'Saving…' : (saveLabel ? `${saveLabel} & apply` : (editingRule?.id ? 'Update & apply' : 'Save & apply'))}
             </button>
           )}
-          <button type="submit" disabled={saving}
+          <button type="submit" disabled={saving || confirmingConflict}
             onClick={() => { applyAfterSaveRef.current = false }}
             className="rounded border border-black/20 text-[#555] px-3 py-1 text-[12px] disabled:opacity-50 hover:bg-muted">
             {saving ? 'Saving…' : (saveLabel ?? (editingRule?.id ? 'Update & apply' : 'Save rule'))}

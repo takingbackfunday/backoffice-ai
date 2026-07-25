@@ -58,6 +58,16 @@ export function RulesManager({
   const conflicts = useMemo(() => detectRuleConflicts(rules.map(userRuleToLike)), [rules])
   const conflictsById = useMemo(() => groupConflictsByRule(conflicts), [conflicts])
 
+  // When editing a rule, the editor is rendered inline next to that rule's card
+  // (not at the top of the page). Scroll it into the viewport on open so the
+  // user doesn't have to jump back to the top.
+  const editorScrollRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (showEditor && editingRule && editorScrollRef.current) {
+      editorScrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [showEditor, editingRule])
+
   function handlePayeeCreated(p: Payee) {
     setPayees((prev) => [...prev.filter((x) => x.id !== p.id), p].sort((a, b) => a.name.localeCompare(b.name)))
   }
@@ -160,6 +170,11 @@ export function RulesManager({
       })
     : rules
 
+  // If the rule being edited is filtered out of the list (e.g. the user
+  // searched while editing), fall back to rendering the editor at the top so
+  // it doesn't silently vanish.
+  const editingInList = !!editingRule && filteredRules.some((r) => r.id === editingRule.id)
+
   const allFilteredSelected = filteredRules.length > 0 && filteredRules.every((r) => selectedIds.has(r.id))
   const someSelected = selectedIds.size > 0
 
@@ -253,7 +268,7 @@ export function RulesManager({
         </div>
       )}
 
-      {showEditor && (
+      {showEditor && (!editingRule || !editingInList) && (
         <RuleEditor
           projects={projects}
           payees={payees}
@@ -369,18 +384,35 @@ export function RulesManager({
             <p className="text-sm text-muted-foreground text-center py-4">No rules match &quot;{query}&quot;</p>
           )}
           {filteredRules.map((rule) => (
-            <RuleCard
-              key={rule.id}
-              rule={rule}
-              onEdit={() => openEditEditor(rule)}
-              onDelete={() => deleteRule(rule.id)}
-              onToggle={() => toggleActive(rule)}
-              deleting={deletingId === rule.id}
-              toggling={togglingId === rule.id}
-              selected={selectedIds.has(rule.id)}
-              onSelect={() => toggleSelect(rule.id)}
-              conflicts={conflictsById.get(rule.id)}
-            />
+            showEditor && editingRule?.id === rule.id ? (
+              <div key={rule.id} ref={editorScrollRef} data-testid="inline-rule-editor">
+                <RuleEditor
+                  projects={projects}
+                  payees={payees}
+                  accounts={accounts}
+                  categoryGroups={categoryGroups}
+                  editingRule={editingRule}
+                  onSave={handleEditorSave}
+                  onCancel={closeEditor}
+                  onApplyComplete={handleApplyComplete}
+                  allRules={rules}
+                  onPayeeCreated={handlePayeeCreated}
+                />
+              </div>
+            ) : (
+              <RuleCard
+                key={rule.id}
+                rule={rule}
+                onEdit={() => openEditEditor(rule)}
+                onDelete={() => deleteRule(rule.id)}
+                onToggle={() => toggleActive(rule)}
+                deleting={deletingId === rule.id}
+                toggling={togglingId === rule.id}
+                selected={selectedIds.has(rule.id)}
+                onSelect={() => toggleSelect(rule.id)}
+                conflicts={conflictsById.get(rule.id)}
+              />
+            )
           ))}
         </div>
       )}
