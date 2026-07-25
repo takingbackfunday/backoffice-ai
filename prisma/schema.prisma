@@ -133,6 +133,23 @@ model ImportBatch {
   createdAt    DateTime      @default(now())
 }
 
+model ImportProfile {
+  id         String   @id @default(cuid())
+  userId     String
+  signature  String
+  headers    Json
+  mapping    Json
+  accountId  String?
+  source     String   @default("csv")
+  useCount   Int      @default(1)
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, signature])
+  @@index([userId])
+}
+
 enum AccountType {
   CREDIT_CARD
   DEBIT_CARD

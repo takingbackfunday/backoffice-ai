@@ -1,357 +1,17 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Papa from 'papaparse'
 import { useUploadStore } from '@/stores/upload-store'
 import type { CsvMapping } from '@/lib/csv-processor'
-import type { PreviewRow } from '@/types'
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                               */
-/* ------------------------------------------------------------------ */
-
-type ColValidation = { col: string | null; confidence: number; reason: string }
-type ValValidation = { value: string; confidence: number; reason: string }
-type MappingValidation = Record<'dateCol' | 'amountCol' | 'descCol' | 'notesCol', ColValidation> & {
-  dateFormat?: ValValidation
-  amountSign?: ValValidation
-}
-
-interface Account {
-  id: string
-  name: string
-  currency: string
-  institution: { name: string }
-}
-
-const ACCOUNT_TYPES = [
-  { value: 'CHECKING', label: 'Checking' },
-  { value: 'SAVINGS', label: 'Savings' },
-  { value: 'CREDIT_CARD', label: 'Credit card' },
-  { value: 'BUSINESS_CHECKING', label: 'Business checking' },
-  { value: 'TRUST_ACCOUNT', label: 'Trust account' },
-] as const
+import type { PreviewRow, FilePreviewMeta } from '@/types'
+import { guessMapping, scoreCandidates, type MappedField } from '@/lib/guess-mapping'
+import { ColSelect, type MappingValidation } from './col-select'
+import { AccountRail } from './account-rail'
+import type { Account } from './new-account-form'
+import { PreviewTable, previewNewCount } from './preview-table'
 
 const DATE_FORMATS = ['MM/DD/YYYY', 'DD/MM/YYYY', 'DD.MM.YYYY', 'YYYY-MM-DD']
-
-/* ------------------------------------------------------------------ */
-/*  Candidate scoring                                                   */
-/* ------------------------------------------------------------------ */
-
-type MappedField = 'dateCol' | 'amountCol' | 'descCol' | 'notesCol'
-
-function scoreCandidates(headers: string[], field: MappedField): { col: string; score: number }[] {
-  const norm = (s: string) => s.toLowerCase().replace(/[\s_\-().]/g, '')
-
-  const patterns: Record<MappedField, { exact: RegExp[]; strong: RegExp[]; moderate: RegExp[] }> = {
-    dateCol: {
-      exact:    [/^date$/],
-      strong:   [/^txndate$/, /^transdate$/, /^transactiondate$/, /^posteddate$/, /^valuedate$/, /^settlementdate$/],
-      moderate: [/date/],
-    },
-    amountCol: {
-      exact:    [/^amount$/],
-      strong:   [/^txnamount$/, /^transactionamount$/, /^debitcredit$/, /^credit$/, /^debit$/, /^amt$/],
-      moderate: [/amount/, /amt/],
-    },
-    descCol: {
-      exact:    [/^description$/, /^narrative$/],
-      strong:   [/^details$/, /^particulars$/, /^paymentdetails$/, /^transactiondetails$/, /^txndescription$/],
-      moderate: [/desc/, /narr/, /detail/],
-    },
-    notesCol: {
-      exact:    [/^notes$/, /^note$/, /^memo$/, /^remarks$/],
-      strong:   [/^reference$/, /^comment/],
-      moderate: [/note/, /memo/],
-    },
-  }
-
-  const { exact, strong, moderate } = patterns[field]
-  const scored: { col: string; score: number }[] = []
-
-  for (const h of headers) {
-    const n = norm(h)
-    let score = 0
-    if (exact.some((p) => p.test(n))) score = 1.0
-    else if (strong.some((p) => p.test(n))) score = 0.9
-    else if (moderate.some((p) => p.test(n))) score = 0.8
-    if (score >= 0.8) scored.push({ col: h, score })
-  }
-
-  return scored.sort((a, b) => b.score - a.score)
-}
-
-/* ------------------------------------------------------------------ */
-/*  Deterministic header auto-mapper                                    */
-/* ------------------------------------------------------------------ */
-
-function guessMapping(headers: string[]): Partial<CsvMapping> {
-  const norm = (s: string) => s.toLowerCase().replace(/[\s_\-().]/g, '')
-  const find = (patterns: RegExp[]) =>
-    headers.find((h) => patterns.some((p) => p.test(norm(h)))) ?? undefined
-
-  const dateCol = find([
-    /^date$/, /^txndate/, /^transdate/, /^transaction.*date/, /^posted.*date/,
-    /^valuedate/, /^settlementdate/, /date/,
-  ])
-  const amountCol = find([
-    /^amount$/, /^txnamount/, /^transactionamount/, /^debitcredit$/,
-    /^credit$/, /^debit$/, /^amt$/, /amount/,
-  ])
-  const descCol = find([
-    /^description$/, /^narrative$/, /^details$/, /^particulars$/,
-    /^paymentdetails/, /^transactiondetails/, /^txndescription/,
-    /desc/, /narr/, /detail/,
-  ])
-  const notesCol = find([
-    /^notes$/, /^note$/, /^memo$/, /^remarks$/, /^comment/, /^reference$/,
-    /notes/, /memo/,
-  ])
-  const dateFormat = (() => {
-    const h = (dateCol ?? '').toLowerCase()
-    if (h.includes('iso') || h.includes('yyyy')) return 'YYYY-MM-DD'
-    return 'MM/DD/YYYY'
-  })()
-
-  return {
-    ...(dateCol ? { dateCol } : {}),
-    ...(amountCol ? { amountCol } : {}),
-    ...(descCol ? { descCol } : {}),
-    ...(notesCol ? { notesCol } : {}),
-    dateFormat,
-    amountSign: 'normal',
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/*  ColSelect                                                           */
-/* ------------------------------------------------------------------ */
-
-function ColSelect({
-  id,
-  label,
-  value,
-  headers,
-  onChange,
-  validation,
-  candidates,
-  required,
-}: {
-  id: string
-  label: string
-  value: string | undefined
-  headers: string[]
-  onChange: (v: string | undefined) => void
-  validation?: ColValidation
-  candidates?: { col: string; score: number }[]
-  required?: boolean
-}) {
-  const suggestions = useMemo(() => {
-    const map = new Map<string, number>()
-    if (validation?.col && validation.confidence > 0) {
-      map.set(validation.col, validation.confidence)
-    }
-    for (const c of candidates ?? []) {
-      if (!map.has(c.col)) map.set(c.col, Math.round(c.score * 100))
-    }
-    return Array.from(map.entries())
-      .map(([col, pct]) => ({ col, pct }))
-      .sort((a, b) => b.pct - a.pct)
-  }, [candidates, validation])
-
-  const suggestedKeys = new Set(suggestions.map((s) => s.col))
-  const otherHeaders = headers.filter((h) => !suggestedKeys.has(h))
-  const needsThrob = required && !value
-
-  return (
-    <div>
-      <label htmlFor={id} className="block text-xs font-medium mb-1">{label}</label>
-      <select
-        id={id}
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value || undefined)}
-        className={`w-full rounded-md border px-3 py-1.5 text-sm${needsThrob ? ' col-throb' : ''}`}
-        data-testid={id}
-      >
-        <option value="">— select —</option>
-        {suggestions.length > 0 ? (
-          <>
-            <optgroup label="Suggested">
-              {suggestions.map((s) => (
-                <option key={s.col} value={s.col}>{s.col} — {s.pct}%</option>
-              ))}
-            </optgroup>
-            {otherHeaders.length > 0 && (
-              <optgroup label="All columns">
-                {otherHeaders.map((h) => (
-                  <option key={h} value={h}>{h}</option>
-                ))}
-              </optgroup>
-            )}
-          </>
-        ) : (
-          headers.map((h) => (
-            <option key={h} value={h}>{h}</option>
-          ))
-        )}
-      </select>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Inline account creator                                              */
-/* ------------------------------------------------------------------ */
-
-function NewAccountForm({
-  onCreated,
-  onCancel,
-}: {
-  onCreated: (account: Account) => void
-  onCancel: () => void
-}) {
-  const [accountName, setAccountName] = useState('')
-  const [bankName, setBankName] = useState('')
-  const [currency, setCurrency] = useState('USD')
-  const [accountType, setAccountType] = useState<typeof ACCOUNT_TYPES[number]['value']>('CHECKING')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleCreate() {
-    if (!accountName.trim() || !bankName.trim() || currency.length !== 3) return
-    setSaving(true)
-    setError(null)
-    try {
-      // 1. Create institution schema (placeholder mapping — filled in by the column mapper)
-      const instRes = await fetch('/api/institutions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: bankName.trim(),
-          country: 'US',
-          csvMapping: { dateCol: '', amountCol: '', descCol: '', dateFormat: 'MM/DD/YYYY', amountSign: 'normal' },
-        }),
-      })
-      const instJson = await instRes.json()
-      if (!instRes.ok || instJson.error) {
-        setError(instJson.error ?? 'Failed to create institution')
-        return
-      }
-
-      // 2. Create account linked to the new institution
-      const accRes = await fetch('/api/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          institutionSchemaId: instJson.data.id,
-          name: accountName.trim(),
-          type: accountType,
-          currency: currency.toUpperCase(),
-        }),
-      })
-      const accJson = await accRes.json()
-      if (!accRes.ok || accJson.error) {
-        setError(accJson.error ?? 'Failed to create account')
-        return
-      }
-
-      onCreated({
-        id: accJson.data.id,
-        name: accJson.data.name,
-        currency: accJson.data.currency,
-        institution: { name: bankName.trim() },
-      })
-    } catch {
-      setError('Network error. Please try again.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="rounded-lg border bg-muted/30 p-3 space-y-3 mt-2">
-      <div>
-        <label className="block text-xs font-medium mb-1">
-          Account name <span className="text-destructive">*</span>
-        </label>
-        <input
-          type="text"
-          value={accountName}
-          onChange={(e) => setAccountName(e.target.value)}
-          placeholder="e.g. HSBC Visa, Revolut GBP, Main Checking"
-          className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
-          autoFocus
-        />
-        <p className="text-[10px] text-muted-foreground mt-0.5">A label for your own use — helps tell accounts apart</p>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium mb-1">
-          Bank / institution <span className="text-destructive">*</span>
-        </label>
-        <input
-          type="text"
-          value={bankName}
-          onChange={(e) => setBankName(e.target.value)}
-          placeholder="e.g. HSBC, Chase, Revolut"
-          className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="block text-xs font-medium mb-1">
-            Currency <span className="text-destructive">*</span>
-          </label>
-          <input
-            type="text"
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))}
-            placeholder="USD"
-            maxLength={3}
-            className="w-full rounded-md border bg-background px-2.5 py-1.5 text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-primary/40"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium mb-1">Type</label>
-          <select
-            value={accountType}
-            onChange={(e) => setAccountType(e.target.value as typeof accountType)}
-            className="w-full rounded-md border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
-          >
-            {ACCOUNT_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {error && <p className="text-xs text-red-600">{error}</p>}
-
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={saving || !accountName.trim() || !bankName.trim() || currency.length !== 3}
-          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-        >
-          {saving ? 'Creating…' : 'Create account'}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  ColumnMapper                                                        */
-/* ------------------------------------------------------------------ */
 
 export function ColumnMapper({
   accounts: initialAccounts = [],
@@ -362,27 +22,46 @@ export function ColumnMapper({
   loadingAccounts?: boolean
   onAccountCreated?: (account: Account) => void
 }) {
-  const { csvHeaders, accountId, filename, csvText, setStep, setAccountId } = useUploadStore()
-  const reset = useUploadStore((s) => s.reset)
+  const { files, accountId, profileHit, setStep, setAccountId, reset, removeFile, clearProfileHit } = useUploadStore()
+  const csvHeaders = files[0]?.headers ?? []
+  const source = files[0]?.source ?? 'csv'
+  const displayFilename = files.length === 1 ? files[0].filename : `${files.length} files`
 
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts)
-  const [showNewAccount, setShowNewAccount] = useState(false)
-
-  // Sync if parent updates accounts (e.g. lazy fetch completes)
   useEffect(() => { setAccounts(initialAccounts) }, [initialAccounts])
 
   const [mapping, setMapping] = useState<Partial<CsvMapping>>(() => guessMapping([]))
   const [validation, setValidation] = useState<MappingValidation | null>(null)
   const [validating, setValidating] = useState(false)
-
-  // Candidate chips — computed client-side from headers
   const [candidates, setCandidates] = useState<Record<MappedField, { col: string; score: number }[]>>({
     dateCol: [], amountCol: [], descCol: [], notesCol: [],
   })
 
-  // Apply auto-mapping once headers are available
+  const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
+  const [totalRows, setTotalRows] = useState(0)
+  const [skippedCount, setSkippedCount] = useState(0)
+  const [duplicateCount, setDuplicateCount] = useState(0)
+  const [perFile, setPerFile] = useState<FilePreviewMeta[]>([])
+  const [parseErrors, setParseErrors] = useState<string[]>([])
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const isValid = !!(mapping.dateCol && mapping.amountCol && mapping.descCol)
+  const newRows = previewRows.filter((r) => !r.isDuplicate)
+  const set = (field: keyof CsvMapping) => (v: string | undefined) =>
+    setMapping((m) => ({ ...m, [field]: v }))
+
+  // ── Initialize mapping: profile hit → pre-fill; else deterministic guess ──
   useEffect(() => {
-    if (csvHeaders.length > 0) {
+    if (csvHeaders.length === 0) return
+    if (profileHit) {
+      setMapping(profileHit.mapping as Partial<CsvMapping>)
+    } else {
       setMapping(guessMapping(csvHeaders))
       setCandidates({
         dateCol: scoreCandidates(csvHeaders, 'dateCol'),
@@ -392,12 +71,15 @@ export function ColumnMapper({
       })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [csvHeaders.join(',')])
+  }, [csvHeaders.join(','), profileHit])
 
-  // Fire LLM validation once when headers + csvText first become available
+  // ── LLM validation: only for non-profile CSV sessions ──
   useEffect(() => {
-    if (!csvHeaders.length || !csvText) return
-    const parsed = Papa.parse<Record<string, string>>(csvText, { header: true, skipEmptyLines: true })
+    if (!csvHeaders.length || !files.length || profileHit) return
+    if (source === 'pdf') return
+    const firstFile = files[0]
+    if (!firstFile?.csvText) return
+    const parsed = Papa.parse<Record<string, string>>(firstFile.csvText, { header: true, skipEmptyLines: true })
     const first20 = parsed.data.slice(0, 20)
     setValidating(true)
     fetch('/api/llm/validate-mapping', {
@@ -409,7 +91,6 @@ export function ColumnMapper({
       .then((j) => {
         if (!j.error) {
           setValidation(j.data)
-          // Only auto-apply at 99%+ confidence — anything below that the user must confirm
           setMapping((m) => {
             const next = { ...m }
             for (const field of ['dateCol', 'amountCol', 'descCol', 'notesCol'] as const) {
@@ -425,37 +106,14 @@ export function ColumnMapper({
       .catch(() => {})
       .finally(() => setValidating(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [csvHeaders.join(','), csvText])
+  }, [csvHeaders.join(','), files[0]?.csvText, profileHit])
 
-  // Live preview state
-  const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
-  const [totalRows, setTotalRows] = useState(0)
-  const [skippedCount, setSkippedCount] = useState(0)
-  const [duplicateCount, setDuplicateCount] = useState(0)
-  const [parseErrors, setParseErrors] = useState<string[]>([])
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewError, setPreviewError] = useState<string | null>(null)
-
-  // Import state
-  const [importing, setImporting] = useState(false)
-  const [importError, setImportError] = useState<string | null>(null)
-
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const isValid = !!(mapping.dateCol && mapping.amountCol && mapping.descCol)
-
-  const set = (field: keyof CsvMapping) => (v: string | undefined) =>
-    setMapping((m) => ({ ...m, [field]: v }))
-
-  const newRows = previewRows.filter((r) => !r.isDuplicate)
-
-  // Auto-preview whenever mapping + accountId are complete, debounced 400ms
+  // ── Auto-preview: debounced, sends all files ──
   useEffect(() => {
-    if (!isValid || !accountId || !csvText) {
+    if (!isValid || !accountId || files.length === 0) {
       setPreviewRows([])
       return
     }
-
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       setPreviewLoading(true)
@@ -465,7 +123,11 @@ export function ColumnMapper({
         const res = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accountId, csvText, mapping }),
+          body: JSON.stringify({
+            accountId,
+            mapping,
+            files: files.map((f) => ({ filename: f.filename, csvText: f.csvText })),
+          }),
         })
         const json = await res.json()
         if (!res.ok || json.error) {
@@ -477,6 +139,7 @@ export function ColumnMapper({
         setTotalRows(json.meta?.totalRows ?? 0)
         setSkippedCount(json.meta?.skippedCount ?? 0)
         setDuplicateCount(json.meta?.duplicateCount ?? 0)
+        setPerFile(json.meta?.perFile ?? [])
         setParseErrors(json.meta?.errors ?? [])
       } catch {
         setPreviewError('Network error while loading preview.')
@@ -484,27 +147,44 @@ export function ColumnMapper({
         setPreviewLoading(false)
       }
     }, 400)
-
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [mapping, isValid, accountId, csvText])
+  }, [mapping, isValid, accountId, files])
 
   const handleImport = async () => {
-    if (!accountId || !filename || newRows.length === 0) return
+    if (!accountId || newRows.length === 0) return
     setImporting(true)
     setImportError(null)
     try {
+      const fileMap = new Map<string, typeof newRows>()
+      for (const row of newRows) {
+        const fname = row.filename ?? files[0]?.filename ?? 'upload.csv'
+        if (!fileMap.has(fname)) fileMap.set(fname, [])
+        fileMap.get(fname)!.push(row)
+      }
+      const importFiles = files
+        .map((f) => ({
+          filename: f.filename,
+          rows: (fileMap.get(f.filename) ?? []).map((r) => ({
+            date: r.date,
+            amount: r.amount,
+            description: r.description,
+            notes: r.notes ?? null,
+            category: r.suggestedCategory ?? null,
+            categoryId: r.suggestedCategoryId ?? null,
+            payeeId: r.payeeId ?? null,
+            duplicateHash: r.duplicateHash,
+            rawData: r.rawData,
+          })),
+        }))
+        .filter((f) => f.rows.length > 0)
+
       const res = await fetch('/api/transactions/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           accountId,
-          filename,
-          rows: newRows.map((r) => ({
-            ...r,
-            category: r.suggestedCategory ?? null,
-            categoryId: r.suggestedCategoryId ?? null,
-            payeeId: r.payeeId ?? null,
-          })),
+          files: importFiles,
+          profile: { headers: csvHeaders, mapping, source },
         }),
       })
       const json = await res.json()
@@ -519,6 +199,8 @@ export function ColumnMapper({
       setImporting(false)
     }
   }
+
+  const newCount = previewNewCount(previewRows)
 
   return (
     <>
@@ -537,120 +219,79 @@ export function ColumnMapper({
     <div className="flex gap-6 h-full min-h-0" data-testid="column-mapper-form">
       {/* Left: account selector + mapping controls */}
       <div className="w-72 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
+        <AccountRail
+          accounts={accounts}
+          loadingAccounts={loadingAccounts}
+          accountId={accountId}
+          onAccountIdChange={setAccountId}
+          onAccountCreated={(a) => { setAccounts((prev) => [...prev, a]); onAccountCreated?.(a) }}
+        />
 
-        {/* Account selector */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-semibold text-foreground">Account</p>
-            {!showNewAccount && (
-              <button
-                type="button"
-                onClick={() => setShowNewAccount(true)}
-                className="text-xs text-primary hover:underline"
-              >
-                + New account
-              </button>
-            )}
-          </div>
-
-          {showNewAccount ? (
-            <NewAccountForm
-              onCreated={(account) => {
-                setAccounts((prev) => [...prev, account])
-                onAccountCreated?.(account)
-                setAccountId(account.id)
-                setShowNewAccount(false)
-              }}
-              onCancel={() => setShowNewAccount(false)}
-            />
-          ) : loadingAccounts ? (
-            <p className="text-xs text-muted-foreground">Loading accounts…</p>
-          ) : accounts.length === 0 ? (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">No accounts yet.</p>
-              <button
-                type="button"
-                onClick={() => setShowNewAccount(true)}
-                className="text-xs text-primary hover:underline"
-              >
-                Create your first account →
-              </button>
-            </div>
-          ) : (
-            <select
-              value={accountId ?? ''}
-              onChange={(e) => setAccountId(e.target.value || '')}
-              className={`w-full rounded-md border px-3 py-1.5 text-sm${!accountId ? ' account-throb' : ''}`}
-              data-testid="account-select"
+        {/* Profile hit banner */}
+        {profileHit && (
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 space-y-1">
+            <p className="text-xs font-medium text-blue-800">
+              Saved mapping (used {profileHit.useCount}×, last{' '}
+              {new Date(profileHit.lastUsedAt).toLocaleDateString()})
+            </p>
+            <button
+              type="button"
+              onClick={clearProfileHit}
+              className="text-xs text-blue-600 hover:underline"
             >
-              <option value="">— select account —</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} · {a.institution.name} · {a.currency}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {!accountId && !showNewAccount && (
-            <p className="text-[10px] text-amber-600 mt-1">Select an account to enable preview and import</p>
-          )}
-        </div>
+              Re-detect columns
+            </button>
+          </div>
+        )}
 
         <div className="border-t pt-4">
           <p className="text-xs font-semibold text-foreground">Map columns</p>
-          <p className="text-xs text-muted-foreground mt-0.5 break-all">{filename}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 break-all">{displayFilename}</p>
         </div>
+
+        {/* File list (multi-file) */}
+        {files.length > 1 && (
+          <div className="space-y-1">
+            {files.map((f) => (
+              <div key={f.filename} className="flex items-center justify-between text-xs">
+                <span className="truncate flex-1">{f.filename}</span>
+                {!importing && (
+                  <button
+                    type="button"
+                    onClick={() => removeFile(f.filename)}
+                    className="text-muted-foreground hover:text-red-600 ml-2"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         {validating && <p className="text-xs text-muted-foreground">Checking with AI…</p>}
 
-        {/* Date column + Date format */}
-        <ColSelect
-          id="select-dateCol"
-          label="Date column *"
-          value={mapping.dateCol}
-          headers={csvHeaders}
-          onChange={set('dateCol')}
-          validation={validation?.dateCol}
-          candidates={candidates.dateCol}
-          required
-        />
+        <ColSelect id="select-dateCol" label="Date column *" value={mapping.dateCol} headers={csvHeaders}
+          onChange={set('dateCol')} validation={validation?.dateCol} candidates={candidates.dateCol} required />
         <div>
           <label htmlFor="select-dateFormat" className="block text-xs font-medium mb-1">Date format *</label>
-          <select
-            id="select-dateFormat"
-            value={mapping.dateFormat ?? 'MM/DD/YYYY'}
+          <select id="select-dateFormat" value={mapping.dateFormat ?? 'MM/DD/YYYY'}
             onChange={(e) => setMapping((m) => ({ ...m, dateFormat: e.target.value }))}
-            className="w-full rounded-md border px-3 py-1.5 text-sm"
-            data-testid="select-dateFormat"
-          >
+            className="w-full rounded-md border px-3 py-1.5 text-sm" data-testid="select-dateFormat">
             {DATE_FORMATS.map((f) => {
-            const aiPct = validation?.dateFormat?.value === f ? validation.dateFormat.confidence : null
-            return <option key={f} value={f}>{f}{aiPct ? ` — ${aiPct}%` : ''}</option>
-          })}
+              const aiPct = validation?.dateFormat?.value === f ? validation.dateFormat.confidence : null
+              return <option key={f} value={f}>{f}{aiPct ? ` — ${aiPct}%` : ''}</option>
+            })}
           </select>
         </div>
 
-        {/* Amount column + Amount sign */}
-        <ColSelect
-          id="select-amountCol"
-          label="Amount column *"
-          value={mapping.amountCol}
-          headers={csvHeaders}
-          onChange={set('amountCol')}
-          validation={validation?.amountCol}
-          candidates={candidates.amountCol}
-          required
-        />
+        <ColSelect id="select-amountCol" label="Amount column *" value={mapping.amountCol} headers={csvHeaders}
+          onChange={set('amountCol')} validation={validation?.amountCol} candidates={candidates.amountCol} required />
         <div>
           <label htmlFor="select-amountSign" className="block text-xs font-medium mb-1">Amount sign *</label>
-          <select
-            id="select-amountSign"
-            value={mapping.amountSign ?? 'normal'}
+          <select id="select-amountSign" value={mapping.amountSign ?? 'normal'}
             onChange={(e) => setMapping((m) => ({ ...m, amountSign: e.target.value as 'normal' | 'inverted' }))}
-            className="w-full rounded-md border px-3 py-1.5 text-sm"
-            data-testid="select-amountSign"
-          >
+            className="w-full rounded-md border px-3 py-1.5 text-sm" data-testid="select-amountSign">
             {(['normal', 'inverted'] as const).map((v) => {
               const label = v === 'normal' ? 'Expenses are negative' : 'Expenses are positive'
               const aiPct = validation?.amountSign?.value === v ? validation.amountSign.confidence : null
@@ -659,66 +300,40 @@ export function ColumnMapper({
           </select>
         </div>
 
-        <ColSelect
-          id="select-descCol"
-          label="Description column *"
-          value={mapping.descCol}
-          headers={csvHeaders}
-          onChange={set('descCol')}
-          validation={validation?.descCol}
-          candidates={candidates.descCol}
-          required
-        />
-
-        <ColSelect
-          id="select-notesCol"
-          label="Notes (optional)"
-          value={mapping.notesCol}
-          headers={csvHeaders}
-          onChange={set('notesCol')}
-          validation={validation?.notesCol}
-          candidates={candidates.notesCol}
-        />
+        <ColSelect id="select-descCol" label="Description column *" value={mapping.descCol} headers={csvHeaders}
+          onChange={set('descCol')} validation={validation?.descCol} candidates={candidates.descCol} required />
+        <ColSelect id="select-notesCol" label="Notes (optional)" value={mapping.notesCol} headers={csvHeaders}
+          onChange={set('notesCol')} validation={validation?.notesCol} candidates={candidates.notesCol} />
 
         {/* Import button */}
         <div className="pt-2 space-y-2">
-          <button
-            onClick={handleImport}
-            disabled={importing || newRows.length === 0 || previewLoading || !accountId}
+          <button onClick={handleImport}
+            disabled={importing || newCount === 0 || previewLoading || !accountId}
             className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
             data-testid="confirm-import-btn"
-            aria-label={`Import ${newRows.length} new transactions`}
-          >
-            {importing ? 'Importing…' : `Import ${newRows.length} transaction${newRows.length !== 1 ? 's' : ''}`}
+            aria-label={`Import ${newCount} new transactions`}>
+            {importing ? 'Importing…' : `Import ${newCount} transaction${newCount !== 1 ? 's' : ''}`}
           </button>
-          <button
-            onClick={reset}
+          <button onClick={reset}
             className="w-full rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
-            data-testid="cancel-import-btn"
-          >
+            data-testid="cancel-import-btn">
             Cancel
           </button>
-          {importError && (
-            <p className="text-xs text-red-600" role="alert">{importError}</p>
-          )}
+          {importError && <p className="text-xs text-red-600" role="alert">{importError}</p>}
         </div>
       </div>
 
       {/* Right: live preview */}
       <div className="flex-1 min-w-0 flex flex-col gap-3">
         <div className="space-y-2">
-          <div className="flex items-center gap-4 text-xs min-h-5">
+          <div className="flex items-center gap-4 text-xs min-h-5 flex-wrap">
             {previewLoading && <span className="text-muted-foreground">Updating preview…</span>}
             {!previewLoading && isValid && accountId && (
               <>
                 <span><strong>{totalRows}</strong> rows total</span>
-                <span className="text-green-600"><strong>{newRows.length}</strong> new</span>
-                {duplicateCount > 0 && (
-                  <span className="text-muted-foreground"><strong>{duplicateCount}</strong> duplicates</span>
-                )}
-                {skippedCount > 0 && (
-                  <span className="text-amber-600"><strong>{skippedCount}</strong> could not be parsed</span>
-                )}
+                <span className="text-green-600"><strong>{newCount}</strong> new</span>
+                {duplicateCount > 0 && <span className="text-muted-foreground"><strong>{duplicateCount}</strong> duplicates</span>}
+                {skippedCount > 0 && <span className="text-amber-600"><strong>{skippedCount}</strong> could not be parsed</span>}
               </>
             )}
             {!previewLoading && (!isValid || !accountId) && (
@@ -728,6 +343,17 @@ export function ColumnMapper({
             )}
             {previewError && <span className="text-red-600">{previewError}</span>}
           </div>
+
+          {/* Per-file row count strip */}
+          {perFile.length > 1 && !previewLoading && (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {perFile.map((f) => (
+                <span key={f.filename} className="rounded bg-muted px-2 py-0.5">
+                  {f.filename} — {f.rowCount} rows
+                </span>
+              ))}
+            </div>
+          )}
 
           {parseErrors.length > 0 && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 space-y-1" role="alert">
@@ -743,77 +369,7 @@ export function ColumnMapper({
           )}
         </div>
 
-        <div className="overflow-auto rounded-lg border flex-1">
-          <table className="w-full text-xs" aria-label="Transaction preview" data-testid="preview-table">
-            <thead className="bg-muted sticky top-0 text-xs uppercase tracking-wide">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Date</th>
-                <th className="px-3 py-2 text-left font-medium">Description</th>
-                <th className="px-3 py-2 text-left font-medium">Notes</th>
-                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Amount</th>
-                <th className="px-3 py-2 text-left font-medium">Payee</th>
-                <th className="px-3 py-2 text-left font-medium">Category</th>
-                <th className="px-3 py-2 text-left font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {previewRows.length === 0 && !previewLoading ? (
-                <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
-                    {isValid && accountId ? 'No rows found.' : 'Preview will appear here.'}
-                  </td>
-                </tr>
-              ) : (
-                previewRows.slice(0, 100).map((row, i) => (
-                  <tr
-                    key={`${i}-${row.duplicateHash}`}
-                    className={`border-t ${row.isDuplicate ? 'opacity-40' : ''}`}
-                    data-testid={`preview-row-${row.isDuplicate ? 'duplicate' : 'new'}`}
-                  >
-                    <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">
-                      {new Date(row.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-3 py-1.5 max-w-[180px]">
-                      <span className="block truncate">{row.description}</span>
-                    </td>
-                    <td className="px-3 py-1.5 max-w-[120px] text-muted-foreground">
-                      <span className="block truncate">{row.notes ?? '—'}</span>
-                    </td>
-                    <td className={`px-3 py-1.5 text-right font-mono ${row.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {row.amount >= 0 ? '+' : ''}{row.amount.toFixed(2)}
-                    </td>
-                    <td className="px-3 py-1.5 text-muted-foreground">
-                      {row.payeeId
-                        ? <span className="text-green-700">✓ matched</span>
-                        : <span>—</span>}
-                    </td>
-                    <td className="px-3 py-1.5">
-                      {row.suggestedCategory ? (
-                        <span
-                          className={`rounded-full px-2 py-0.5 ${
-                            row.suggestionConfidence === 'high'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-amber-100 text-amber-700'
-                          }`}
-                          title={row.suggestionConfidence === 'medium' ? 'Review suggested' : undefined}
-                        >
-                          {row.suggestedCategory}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-1.5">
-                      {row.isDuplicate
-                        ? <span className="text-muted-foreground">duplicate</span>
-                        : <span className="text-green-600">new</span>}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <PreviewTable rows={previewRows} loading={previewLoading} />
       </div>
     </div>
     </>

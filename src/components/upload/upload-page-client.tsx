@@ -52,7 +52,10 @@ function toDisplayStep(step: string): DisplayStep {
 
 export function UploadPageClient({ initialAccounts, onboarding }: { initialAccounts?: Account[]; onboarding?: boolean }) {
   const router = useRouter()
-  const { step, reset } = useUploadStore()
+  const step = useUploadStore((s) => s.step)
+  const reset = useUploadStore((s) => s.reset)
+  const files = useUploadStore((s) => s.files)
+  const removeFile = useUploadStore((s) => s.removeFile)
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
   const [loadingAccounts, setLoadingAccounts] = useState(!initialAccounts)
   const [recentJobs, setRecentJobs] = useState<BackgroundJob[]>([])
@@ -160,11 +163,30 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
 
           {/* Step 2: Select account + Map columns + live preview + import */}
           {(step === 'map-columns' || step === 'preview') && (
-            <ColumnMapper
-              accounts={accounts}
-              loadingAccounts={loadingAccounts}
-              onAccountCreated={(a) => setAccounts((prev) => [...prev, a])}
-            />
+            <>
+              {files.length > 1 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {files.map((f) => (
+                    <span key={f.filename} className="inline-flex items-center gap-1.5 rounded-md border bg-muted/50 px-2.5 py-1 text-xs">
+                      {f.filename}
+                      <button
+                        type="button"
+                        onClick={() => removeFile(f.filename)}
+                        className="text-muted-foreground hover:text-red-600"
+                        aria-label={`Remove ${f.filename}`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <ColumnMapper
+                accounts={accounts}
+                loadingAccounts={loadingAccounts}
+                onAccountCreated={(a) => setAccounts((prev) => [...prev, a])}
+              />
+            </>
           )}
 
         </main>

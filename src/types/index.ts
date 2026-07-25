@@ -1,7 +1,7 @@
-import type { Account, Workspace, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee } from '@/generated/prisma/client'
+import type { Account, Workspace, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee, ImportProfile } from '@/generated/prisma/client'
 
 // Re-export Prisma types for convenience
-export type { Account, Workspace, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee }
+export type { Account, Workspace, Transaction, ImportBatch, InstitutionSchema, Category, CategoryGroup, Payee, ImportProfile }
 export type Project = Workspace  // backward compat alias
 
 export type AccountType = 'CREDIT_CARD' | 'DEBIT_CARD' | 'CHECKING' | 'SAVINGS' | 'BUSINESS_CHECKING' | 'TRUST_ACCOUNT'
@@ -27,6 +27,7 @@ export interface PreviewRow {
   duplicateHash: string
   isDuplicate: boolean
   rawData: Record<string, string>
+  filename?: string
   // Populated by the rules engine on the server
   suggestedCategory: string | null
   suggestedCategoryId: string | null
@@ -35,16 +36,31 @@ export interface PreviewRow {
   matchedRuleId: string | null
 }
 
+// A single parsed file ready for mapping/preview/import
+export interface UploadFile {
+  filename: string
+  headers: string[]
+  csvText: string
+  source: 'csv' | 'pdf'
+}
+
+// Per-file preview metadata returned by the preview API
+export interface FilePreviewMeta {
+  filename: string
+  rowCount: number
+}
+
 // Upload wizard state shape
 export interface UploadState {
   step: 'upload' | 'map-columns' | 'preview' | 'done'
   accountId: string | null
-  filename: string | null
-  csvHeaders: string[]
+  files: UploadFile[]
+  signature: string | null
+  profileHit: ImportProfile | null
   previewRows: PreviewRow[]
   totalRows: number
   duplicateCount: number
-  csvText: string | null
+  perFile: FilePreviewMeta[]
 }
 
 // Paginated list meta

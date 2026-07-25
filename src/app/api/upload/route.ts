@@ -8,18 +8,29 @@ import { categorizeRows } from '@/lib/rules/categorize-batch'
 import { loadUserRules } from '@/lib/rules/user-rules'
 import { logger } from '@/lib/log'
 
+const MappingSchema = z.object({
+  dateCol: z.string(),
+  amountCol: z.string(),
+  descCol: z.string(),
+  dateFormat: z.string(),
+  amountSign: z.enum(['normal', 'inverted']),
+  notesCol: z.string().optional(),
+})
+
+const UploadFileSchema = z.object({
+  filename: z.string().min(1),
+  csvText: z.string().min(1),
+})
+
 const UploadBodySchema = z.object({
   accountId: z.string().min(1),
-  csvText: z.string().min(1),
-  mapping: z.object({
-    dateCol: z.string(),
-    amountCol: z.string(),
-    descCol: z.string(),
-    dateFormat: z.string(),
-    amountSign: z.enum(['normal', 'inverted']),
-    notesCol: z.string().optional(),
-  }),
-})
+  mapping: MappingSchema,
+  files: z.array(UploadFileSchema).min(1).optional(),
+  csvText: z.string().min(1).optional(),
+}).refine(
+  (d) => d.files || d.csvText,
+  { message: 'Either files or csvText is required' }
+)
 
 export async function POST(request: Request) {
   try {
@@ -32,25 +43,40 @@ export async function POST(request: Request) {
       return badRequest(parsed.error.errors.map((e) => e.message).join(', '))
     }
 
-    const { accountId, csvText, mapping } = parsed.data
+    const { accountId, mapping } = parsed.data
+    const files = parsed.data.files
+      ?? [{ filename: 'upload.csv', csvText: parsed.data.csvText! }]
 
-    // Verify account belongs to user
     const account = await prisma.account.findFirst({ where: { id: accountId, userId } })
     if (!account) return notFound('Account not found or does not belong to you')
 
-    const result = processCSV(csvText, mapping as CsvMapping, accountId)
+    // Process each file and accumulate rows
+    const perFile: { filename: string; rowCount: number }[] = []
+    const allRows: ({ filename: string } & ReturnType<typeof processCSV>['rows'][number])[] = []
+    const allErrors: string[] = []
+    let totalParsed = 0
+    let totalSkipped = 0
 
-    // Check which hashes already exist (duplicates — scoped to this user's accounts)
-    const hashes = result.rows.map((r) => r.duplicateHash)
+    for (const file of files) {
+      const result = processCSV(file.csvText, mapping as CsvMapping, accountId)
+      perFile.push({ filename: file.filename, rowCount: result.totalParsed })
+      allRows.push(...result.rows.map((r) => ({ ...r, filename: file.filename })))
+      allErrors.push(...result.errors)
+      totalParsed += result.totalParsed
+      totalSkipped += result.skippedCount
+    }
+
+    // Dedup against existing transactions (scoped to this user's accounts)
+    const hashes = allRows.map((r) => r.duplicateHash)
     const existing = await prisma.transaction.findMany({
       where: { duplicateHash: { in: hashes }, account: { userId } },
       select: { duplicateHash: true },
     })
     const existingHashes = new Set(existing.map((e) => e.duplicateHash))
 
-    // Run categorization rules (user rules only — system rules removed)
+    // Run categorization rules
     const userRules = await loadUserRules(userId)
-    const baseRows = result.rows.map((row) => ({
+    const baseRows = allRows.map((row) => ({
       description: row.description,
       notes: row.notes ?? null,
       amount: row.amount,
@@ -60,8 +86,7 @@ export async function POST(request: Request) {
     }))
     const categorized = categorizeRows(baseRows, userRules)
 
-    // Resolve category string names → category IDs (for rows where categoryId is not set by a user rule).
-    // Only look up existing categories — do NOT seed here (seeding is triggered lazily by GET /api/category-groups).
+    // Resolve category names → IDs
     const allCategories = await prisma.category.findMany({ where: { userId } })
     const categoryNameMap = new Map<string, string>(
       allCategories.map((c) => [c.name.toLowerCase(), c.id])
@@ -72,7 +97,7 @@ export async function POST(request: Request) {
         row.suggestedCategoryId ??
         (row.suggestedCategory ? (categoryNameMap.get(row.suggestedCategory.toLowerCase()) ?? null) : null)
       const resolvedPayeeId = row.suggestedPayeeId ?? null
-      const originalRow = result.rows.find((r) => r.duplicateHash === row.duplicateHash)
+      const originalRow = allRows.find((r) => r.duplicateHash === row.duplicateHash)
 
       return {
         date: row.date,
@@ -82,6 +107,7 @@ export async function POST(request: Request) {
         duplicateHash: row.duplicateHash,
         isDuplicate: existingHashes.has(row.duplicateHash),
         rawData: originalRow?.rawData ?? {},
+        filename: originalRow?.filename,
         suggestedCategory: row.suggestedCategory,
         suggestedCategoryId: resolvedCategoryId,
         payeeId: resolvedPayeeId,
@@ -91,11 +117,12 @@ export async function POST(request: Request) {
     })
 
     return ok(preview, {
-      totalRows: result.totalParsed,
-      parsedRows: result.rows.length,
+      totalRows: totalParsed,
+      parsedRows: allRows.length,
       duplicateCount: preview.filter((r) => r.isDuplicate).length,
-      skippedCount: result.skippedCount,
-      errors: result.errors,
+      skippedCount: totalSkipped,
+      errors: allErrors,
+      perFile,
     })
   } catch (err) {
     logger.error('upload', 'POST error', { message: err instanceof Error ? err.message : String(err) })
