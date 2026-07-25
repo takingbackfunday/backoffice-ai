@@ -280,9 +280,16 @@ export function TransactionRow({
         onClick={selectMode ? () => toggleRow(row.id) : undefined}
         onKeyDown={isRowEditing ? (e) => { if (e.key === 'Enter') exitRowEdit(row.id) } : undefined}
       >
-        {/* Checkbox — only shown in select mode */}
+        {/* Checkbox — only shown in select mode; Done button when editing */}
         <td className="px-3 py-0.5 w-8" onClick={(e) => e.stopPropagation()}>
-          {selectMode && (
+          {isRowEditing ? (
+            <button
+              onMouseDown={(e) => { e.preventDefault(); exitRowEdit(row.id) }}
+              className="text-xs px-2 py-0.5 rounded bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors"
+            >
+              Done
+            </button>
+          ) : selectMode && (
             <input
               type="checkbox"
               checked={isSelected}
