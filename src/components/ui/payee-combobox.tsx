@@ -140,6 +140,9 @@ export function PayeeCombobox({
     if (e.key === 'Escape') { setOpen(false); onCancel?.(); return }
     if (e.key === 'Enter') {
       e.preventDefault()
+      // Dropdown closed (value already committed) — let Enter bubble so the
+      // row's Enter handler can exit edit mode, same as the text cells.
+      if (!open) return
       e.stopPropagation() // don't bubble — picking a payee shouldn't submit forms / exit row edit
       const exact = payees.find((p) => p.name.toLowerCase() === draft.trim().toLowerCase())
       if (exact) { pickExisting(exact); return }

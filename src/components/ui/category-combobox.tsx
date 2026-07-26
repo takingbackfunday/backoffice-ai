@@ -110,6 +110,9 @@ export function CategoryCombobox({
     if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); return }
     if (e.key === 'Enter') {
       e.preventDefault()
+      // Dropdown closed (value already committed) — let Enter bubble so the
+      // row's Enter handler can exit edit mode, same as the text cells.
+      if (!open) return
       e.stopPropagation() // don't bubble — picking a category shouldn't submit forms / exit row edit
       if (query.trim() === '' && activeIdx === -1) { commit(null); return }
       const picked = filtered[activeIdx]
