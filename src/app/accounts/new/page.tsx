@@ -76,7 +76,7 @@ export default function NewAccountPage() {
         body: JSON.stringify({
           name: customBankName.trim(),
           country,
-          csvMapping: { dateCol: 'Date', amountCol: 'Amount', descCol: 'Description', dateFormat: 'MM/dd/yyyy', amountSign: 'normal' },
+          csvMapping: { dateCol: 'Date', amountCol: 'Amount', descCol: 'Description', amountSign: 'normal' },
         }),
       })
       const instJson = await instRes.json()

@@ -64,18 +64,15 @@ export function guessMapping(headers: string[]): Partial<CsvMapping> {
     /^notes$/, /^note$/, /^memo$/, /^remarks$/, /^comment/, /^reference$/,
     /notes/, /memo/,
   ])
-  const dateFormat = (() => {
-    const h = (dateCol ?? '').toLowerCase()
-    if (h.includes('iso') || h.includes('yyyy')) return 'YYYY-MM-DD'
-    return 'MM/DD/YYYY'
-  })()
+
+  // No dateFormat here — it's auto-detected from the column's values
+  // (detectDateFormat in date-format.ts), not guessed from the header name.
 
   return {
     ...(dateCol ? { dateCol } : {}),
     ...(amountCol ? { amountCol } : {}),
     ...(descCol ? { descCol } : {}),
     ...(notesCol ? { notesCol } : {}),
-    dateFormat,
     amountSign: 'normal',
   }
 }

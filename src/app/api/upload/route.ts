@@ -12,7 +12,7 @@ const MappingSchema = z.object({
   dateCol: z.string(),
   amountCol: z.string(),
   descCol: z.string(),
-  dateFormat: z.string(),
+  dateFormat: z.string().optional(),
   amountSign: z.enum(['normal', 'inverted']),
   notesCol: z.string().optional(),
 })

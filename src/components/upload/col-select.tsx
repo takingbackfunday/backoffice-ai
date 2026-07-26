@@ -5,7 +5,6 @@ import { useMemo } from 'react'
 export type ColValidation = { col: string | null; confidence: number; reason: string }
 export type ValValidation = { value: string; confidence: number; reason: string }
 export type MappingValidation = Record<'dateCol' | 'amountCol' | 'descCol' | 'notesCol', ColValidation> & {
-  dateFormat?: ValValidation
   amountSign?: ValValidation
 }
 

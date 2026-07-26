@@ -1,11 +1,13 @@
 import Papa from 'papaparse'
 import { buildDuplicateHash } from './dedup'
+import { detectDateFormat, parseDateWithFormat, parseDateFallback, isKnownDateFormat } from './date-format'
 
 export interface CsvMapping {
   dateCol: string
   amountCol: string
   descCol: string
-  dateFormat: string   // e.g. "MM/DD/YYYY", "DD/MM/YYYY", "DD.MM.YYYY", "YYYY-MM-DD"
+  /** Optional — when absent, the format is auto-detected from the column's values (see date-format.ts). */
+  dateFormat?: string
   amountSign: 'normal' | 'inverted'
   notesCol?: string
 }
@@ -26,56 +28,33 @@ export interface ProcessResult {
   totalParsed: number
 }
 
-function parseDate(raw: string, format: string): Date | null {
-  const clean = raw?.trim()
-  if (!clean) return null
-  try {
-    let year: string, month: string, day: string
-
-    if (format === 'MM/DD/YYYY') {
-      const parts = clean.split('/')
-      if (parts.length !== 3) return null
-      ;[month, day, year] = parts
-    } else if (format === 'DD/MM/YYYY') {
-      const parts = clean.split('/')
-      if (parts.length !== 3) return null
-      ;[day, month, year] = parts
-    } else if (format === 'DD.MM.YYYY') {
-      const parts = clean.split('.')
-      if (parts.length !== 3) return null
-      ;[day, month, year] = parts
-    } else if (format === 'YYYY-MM-DD') {
-      const parts = clean.split('-')
-      if (parts.length !== 3) return null
-      ;[year, month, day] = parts
-    } else {
-      // Strip time component from datetime strings (e.g. "2025-01-01T00:00:00" from XLSX exports).
-      // Parsing a bare datetime without a timezone offset uses local time, which shifts the date
-      // for servers not in UTC. We only care about the date, so force UTC midnight.
-      const datePart = clean.split('T')[0].split(' ')[0]
-      const isoMatch = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-      if (isoMatch) {
-        ;[, year, month, day] = isoMatch
-      } else {
-        const d = new Date(clean)
-        return isNaN(d.getTime()) ? null : d
-      }
-    }
-
-    if (!year || !month || !day) return null
-    const m = month.padStart(2, '0')
-    const d2 = day.padStart(2, '0')
-    // Sanity check ranges before constructing
-    const y = parseInt(year, 10)
-    const mo = parseInt(m, 10)
-    const dy = parseInt(d2, 10)
-    if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || dy < 1 || dy > 31) return null
-
-    const date = new Date(`${year}-${m}-${d2}`)
-    return isNaN(date.getTime()) ? null : date
-  } catch {
-    return null
+/**
+ * Resolve the format to parse with: the explicit mapping format when given,
+ * otherwise auto-detected from the column's values. Returns null when neither
+ * is available (every row will then fail with an "unrecognised date" error).
+ */
+function resolveDateFormat(data: Record<string, string>[], mapping: CsvMapping): string | null {
+  if (mapping.dateFormat) return mapping.dateFormat
+  const samples: string[] = []
+  for (const row of data) {
+    const v = row[mapping.dateCol]?.trim()
+    if (v) samples.push(v)
+    if (samples.length >= 200) break
   }
+  return detectDateFormat(samples).format
+}
+
+function parseRowDate(rawDate: string, format: string | null, autoMode: boolean): Date | null {
+  let date: Date | null = null
+  if (format) date = parseDateWithFormat(rawDate, format)
+  // Per-row fallback: in auto mode a stray value may differ from the file's main
+  // format (e.g. one ISO datetime among DD.MM.YYYY rows). Legacy profiles with
+  // unrecognised format ids (e.g. 'MM/dd/yyyy') also fall through here, matching
+  // the old new Date() else-branch. An explicit known format stays strict.
+  if (!date && (autoMode || !format || !isKnownDateFormat(format))) {
+    date = parseDateFallback(rawDate)
+  }
+  return date
 }
 
 /**
@@ -172,6 +151,9 @@ export function processCSV(
     }
   }
 
+  const autoFormat = !mapping.dateFormat
+  const dateFormat = resolveDateFormat(result.data, mapping)
+
   for (let i = 0; i < result.data.length; i++) {
     const row = result.data[i]
     const rowNum = i + 2 // 1-based + header row
@@ -192,9 +174,13 @@ export function processCSV(
       continue
     }
 
-    const date = parseDate(rawDate, mapping.dateFormat)
+    const date = parseRowDate(rawDate, dateFormat, autoFormat)
     if (!date) {
-      if (errors.length < 5) errors.push(`Row ${rowNum}: "${rawDate}" doesn't match format ${mapping.dateFormat} — is the date column correct?`)
+      if (errors.length < 5) {
+        errors.push(autoFormat
+          ? `Row ${rowNum}: "${rawDate}" is not a recognisable date — is the date column correct?`
+          : `Row ${rowNum}: "${rawDate}" doesn't match format ${mapping.dateFormat} — is the date column correct?`)
+      }
       skippedCount++
       continue
     }

@@ -10,7 +10,7 @@ const CreateInstitutionSchema = z.object({
     dateCol: z.string(),
     amountCol: z.string(),
     descCol: z.string(),
-    dateFormat: z.string(),
+    dateFormat: z.string().optional(),
     amountSign: z.enum(['normal', 'inverted']),
   }),
   isGlobal: z.boolean().optional().default(false),

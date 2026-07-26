@@ -6,12 +6,11 @@ import { useUploadStore } from '@/stores/upload-store'
 import type { CsvMapping } from '@/lib/csv-processor'
 import type { PreviewRow, FilePreviewMeta } from '@/types'
 import { guessMapping, scoreCandidates, type MappedField } from '@/lib/guess-mapping'
+import { detectDateFormat, renderDateExample } from '@/lib/date-format'
 import { ColSelect, type MappingValidation } from './col-select'
 import { AccountRail } from './account-rail'
 import type { Account } from './new-account-form'
 import { PreviewTable, previewNewCount } from './preview-table'
-
-const DATE_FORMATS = ['MM/DD/YYYY', 'DD/MM/YYYY', 'DD.MM.YYYY', 'YYYY-MM-DD']
 
 export function ColumnMapper({
   accounts: initialAccounts = [],
@@ -46,6 +45,10 @@ export function ColumnMapper({
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
 
+  // Date format auto-detection: ambiguity ask + unrecognised-column hint
+  const [dateAmbiguity, setDateAmbiguity] = useState<{ chosen: string; alternatives: string[]; exampleRaw: string } | null>(null)
+  const [dateUnrecognised, setDateUnrecognised] = useState(false)
+
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
 
@@ -73,6 +76,43 @@ export function ColumnMapper({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [csvHeaders.join(','), profileHit])
 
+  // ── Date format auto-detection: scans the actual values in the mapped date
+  // column. Unambiguous → applied silently. Ambiguous (MM/DD vs DD/MM) → applied
+  // with a regional prior + an inline confirmation prompt. Nothing recognised →
+  // hint shown; the preview's per-row errors guide the user from there. ──
+  useEffect(() => {
+    setDateAmbiguity(null)
+    setDateUnrecognised(false)
+    if (!mapping.dateCol || files.length === 0) return
+    // A saved profile carries an explicit format — respect it, no detection.
+    if ((profileHit?.mapping as Partial<CsvMapping> | undefined)?.dateFormat) return
+
+    const samples: string[] = []
+    for (const f of files) {
+      const parsed = Papa.parse<Record<string, string>>(f.csvText, { header: true, skipEmptyLines: true, preview: 250 })
+      for (const row of parsed.data) {
+        const v = row[mapping.dateCol]?.trim()
+        if (v) samples.push(v)
+      }
+    }
+    const det = detectDateFormat(samples)
+    if (det.format) {
+      setMapping((m) => ({ ...m, dateFormat: det.format! }))
+      if (det.ambiguous) {
+        setDateAmbiguity({ chosen: det.format, alternatives: det.alternatives, exampleRaw: det.exampleRaw ?? '' })
+      }
+    } else {
+      setMapping((m) => {
+        if (!m.dateFormat) return m
+        const next = { ...m }
+        delete next.dateFormat
+        return next
+      })
+      setDateUnrecognised(samples.length > 0)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapping.dateCol, files, profileHit])
+
   // ── LLM validation: only for non-profile CSV sessions ──
   useEffect(() => {
     if (!csvHeaders.length || !files.length || profileHit) return
@@ -97,7 +137,6 @@ export function ColumnMapper({
               const v = j.data?.[field]
               if (v?.confidence >= 99 && v.col) next[field] = v.col
             }
-            if (j.data?.dateFormat?.confidence >= 99 && j.data.dateFormat.value) next.dateFormat = j.data.dateFormat.value
             if (j.data?.amountSign?.confidence >= 99 && j.data.amountSign.value) next.amountSign = j.data.amountSign.value
             return next
           })
@@ -273,17 +312,41 @@ export function ColumnMapper({
 
         <ColSelect id="select-dateCol" label="Date column *" value={mapping.dateCol} headers={csvHeaders}
           onChange={set('dateCol')} validation={validation?.dateCol} candidates={candidates.dateCol} required />
-        <div>
-          <label htmlFor="select-dateFormat" className="block text-xs font-medium mb-1">Date format *</label>
-          <select id="select-dateFormat" value={mapping.dateFormat ?? 'MM/DD/YYYY'}
-            onChange={(e) => setMapping((m) => ({ ...m, dateFormat: e.target.value }))}
-            className="w-full rounded-md border px-3 py-1.5 text-sm" data-testid="select-dateFormat">
-            {DATE_FORMATS.map((f) => {
-              const aiPct = validation?.dateFormat?.value === f ? validation.dateFormat.confidence : null
-              return <option key={f} value={f}>{f}{aiPct ? ` — ${aiPct}%` : ''}</option>
-            })}
-          </select>
-        </div>
+
+        {/* Date format is auto-detected — only surfaces when genuinely ambiguous (MM/DD vs DD/MM) */}
+        {dateAmbiguity && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 space-y-1.5" data-testid="date-ambiguity-prompt">
+            <p className="text-xs text-amber-900">
+              Dates like <strong>{dateAmbiguity.exampleRaw}</strong> can be read two ways. We&apos;re using{' '}
+              <strong>{renderDateExample(dateAmbiguity.exampleRaw, dateAmbiguity.chosen)}</strong> — tap to change:
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {[dateAmbiguity.chosen, ...dateAmbiguity.alternatives].map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => {
+                    setMapping((m) => ({ ...m, dateFormat: fmt }))
+                    setDateAmbiguity((a) => (a ? { ...a, chosen: fmt } : a))
+                  }}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    fmt === dateAmbiguity.chosen
+                      ? 'border-amber-600 bg-amber-600 text-white'
+                      : 'border-amber-300 bg-white text-amber-900 hover:border-amber-500'
+                  }`}
+                  data-testid={`date-format-choice-${fmt}`}
+                >
+                  {renderDateExample(dateAmbiguity.exampleRaw, fmt)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {dateUnrecognised && mapping.dateCol && (
+          <p className="text-xs text-amber-700" data-testid="date-unrecognised-hint">
+            We can&apos;t recognise the dates in &quot;{mapping.dateCol}&quot; — double-check the date column selection.
+          </p>
+        )}
 
         <ColSelect id="select-amountCol" label="Amount column *" value={mapping.amountCol} headers={csvHeaders}
           onChange={set('amountCol')} validation={validation?.amountCol} candidates={candidates.amountCol} required />

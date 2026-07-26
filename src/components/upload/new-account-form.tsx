@@ -42,7 +42,7 @@ export function NewAccountForm({
         body: JSON.stringify({
           name: bankName.trim(),
           country: 'US',
-          csvMapping: { dateCol: '', amountCol: '', descCol: '', dateFormat: 'MM/DD/YYYY', amountSign: 'normal' },
+          csvMapping: { dateCol: '', amountCol: '', descCol: '', amountSign: 'normal' },
         }),
       })
       const instJson = await instRes.json()

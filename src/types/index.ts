@@ -13,7 +13,7 @@ export interface CsvMapping {
   dateCol: string
   amountCol: string
   descCol: string
-  dateFormat: string
+  dateFormat?: string  // optional — auto-detected from column values when absent
   amountSign: 'normal' | 'inverted'
   notesCol?: string
 }

@@ -116,3 +116,66 @@ describe('processCSV — European semicolon CSV with comma decimals', () => {
     expect(result.rows[0].date.toISOString().slice(0, 10)).toBe('2026-07-23')
   })
 })
+
+describe('processCSV — automatic date format detection (no dateFormat in mapping)', () => {
+  const autoMapping: CsvMapping = {
+    dateCol: 'Date',
+    amountCol: 'Amount',
+    descCol: 'Description',
+    amountSign: 'normal',
+  }
+
+  it('detects DD.MM.YYYY from the data', () => {
+    const csv = 'Date,Description,Amount\n23.07.2026,Grocery,-45.50\n01.01.2026,Salary,3200.00'
+    const result = processCSV(csv, autoMapping, 'acct-1')
+    expect(result.skippedCount).toBe(0)
+    expect(result.rows[0].date.toISOString().slice(0, 10)).toBe('2026-07-23')
+    expect(result.rows[1].date.toISOString().slice(0, 10)).toBe('2026-01-01')
+  })
+
+  it('detects ISO dates and ISO datetimes', () => {
+    const csv = 'Date,Description,Amount\n2026-07-23,Grocery,-45.50\n2026-01-01T00:00:00,Salary,3200.00'
+    const result = processCSV(csv, autoMapping, 'acct-1')
+    expect(result.skippedCount).toBe(0)
+    expect(result.rows[0].date.toISOString().slice(0, 10)).toBe('2026-07-23')
+    expect(result.rows[1].date.toISOString().slice(0, 10)).toBe('2026-01-01')
+  })
+
+  it('detects MM/DD/YYYY when a day > 12 disambiguates', () => {
+    const csv = 'Date,Description,Amount\n12/31/2024,Party,-99.00\n01/15/2025,Rent,-500.00'
+    const result = processCSV(csv, autoMapping, 'acct-1')
+    expect(result.skippedCount).toBe(0)
+    expect(result.rows[0].date.toISOString().slice(0, 10)).toBe('2024-12-31')
+    expect(result.rows[1].date.toISOString().slice(0, 10)).toBe('2025-01-15')
+  })
+
+  it('applies the US prior for fully ambiguous slash dates', () => {
+    const csv = 'Date,Description,Amount\n05/06/2024,Ambiguous,-10.00'
+    const result = processCSV(csv, autoMapping, 'acct-1')
+    expect(result.skippedCount).toBe(0)
+    expect(result.rows[0].date.toISOString().slice(0, 10)).toBe('2024-05-06')
+  })
+
+  it('parses stray rows that deviate from the file main format', () => {
+    const csv = [
+      'Date,Description,Amount',
+      '23.07.2026,A,-1.00',
+      '01.08.2026,B,-2.00',
+      '15.08.2026,C,-3.00',
+      '31.08.2026,D,-4.00',
+      '2026-09-01T00:00:00,Stray ISO,-5.00',
+    ].join('\n')
+    const result = processCSV(csv, autoMapping, 'acct-1')
+    expect(result.skippedCount).toBe(0)
+    expect(result.rows).toHaveLength(5)
+    expect(result.rows[4].date.toISOString().slice(0, 10)).toBe('2026-09-01')
+  })
+
+  it('skips unrecognisable dates with a clear error', () => {
+    const csv = 'Date,Description,Amount\nnot-a-date,Grocery,-45.50\nstill-not,Salary,3200.00'
+    const result = processCSV(csv, autoMapping, 'acct-1')
+    expect(result.rows).toHaveLength(0)
+    expect(result.skippedCount).toBe(2)
+    expect(result.errors.some((e) => e.includes('not a recognisable date'))).toBe(true)
+  })
+})
