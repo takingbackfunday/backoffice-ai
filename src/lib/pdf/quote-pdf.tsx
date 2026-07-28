@@ -155,20 +155,21 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
 
         {/* Scope notes */}
         {quote.scopeNotes ? (
-          <View style={S.scopeBox}>
+          <View style={S.scopeBox} wrap={false}>
             <Text style={S.scopeText}>{quote.scopeNotes}</Text>
           </View>
         ) : null}
 
         {/* Notes */}
         {quote.notes ? (
-          <View style={S.notesBox}>
+          <View style={S.notesBox} wrap={false}>
             <Text style={S.notesText}>{quote.notes}</Text>
           </View>
         ) : null}
 
         {/* Line items table */}
-        <View style={S.tableHeader}>
+        {/* Deliberately not `fixed`: react-pdf fixed elements overlap our mid-page header on page 2+. */}
+        <View style={S.tableHeader} minPresenceAhead={60}>
           <Text style={[S.thText, S.colDesc]}>Description</Text>
           <Text style={[S.thText, S.colQty]}>Qty</Text>
           <Text style={[S.thText, S.colRate]}>Unit Price</Text>
@@ -181,7 +182,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
               <Text style={S.sectionHeader}>{section.name}</Text>
             ) : null}
             {section.items.filter(i => !i.isOptional).map((item, ii) => (
-              <View key={ii} style={S.tableRow}>
+              <View key={ii} style={S.tableRow} wrap={false}>
                 <View style={S.colDesc}>
                   <Text style={S.tdText}>{item.description}</Text>
                   {item.unit ? <Text style={S.tdMuted}>{item.unit}</Text> : null}
@@ -199,7 +200,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
           <View>
             <Text style={[S.sectionHeader, { marginTop: 16 }]}>Optional Add-ons</Text>
             {optionalItems.map((item, ii) => (
-              <View key={ii} style={S.tableRowOptional}>
+              <View key={ii} style={S.tableRowOptional} wrap={false}>
                 <View style={S.colDesc}>
                   <Text style={S.tdText}>{item.description}</Text>
                   <Text style={S.optionalBadge}>(Optional)</Text>
@@ -213,7 +214,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
         ) : null}
 
         {/* Totals */}
-        <View style={S.totalsSection}>
+        <View style={S.totalsSection} wrap={false}>
           {optionalItems.length > 0 ? (
             <>
               <View style={S.totalRow}>
@@ -234,7 +235,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
 
         {/* Payment schedule */}
         {quote.paymentSchedule && quote.paymentSchedule.length > 0 ? (
-          <View style={S.scheduleBox}>
+          <View style={S.scheduleBox} wrap={false}>
             <Text style={S.scheduleTitle}>Payment Schedule</Text>
             {quote.paymentSchedule.map((row, i) => (
               <View key={i} style={S.scheduleRow}>
@@ -247,7 +248,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
 
         {/* Terms */}
         {quote.terms ? (
-          <View style={S.termsBox}>
+          <View style={S.termsBox} wrap={false}>
             <Text style={S.termsTitle}>Terms & Conditions</Text>
             <Text style={S.termsText}>{quote.terms}</Text>
           </View>

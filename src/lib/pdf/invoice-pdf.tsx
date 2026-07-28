@@ -81,6 +81,10 @@ const S = StyleSheet.create({
   headerRight: { alignItems: 'flex-end' },
   invoiceLabel: { fontSize: 20, fontFamily: 'Helvetica-Bold', color: '#111', marginBottom: 4 },
   invoiceNum: { fontSize: 11, color: '#555' },
+  headerSummaryBox: { backgroundColor: '#f5f5f5', borderRadius: 4, padding: 10, marginTop: 12, alignItems: 'flex-end' },
+  headerSummaryLabel: { fontSize: 7, color: '#888', fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
+  headerSummaryAmount: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#111' },
+  headerSummaryDue: { fontSize: 8, color: '#555', marginTop: 2 },
   // Meta row
   metaRow: { flexDirection: 'row', gap: 24, marginBottom: 28 },
   metaBlock: { flex: 1 },
@@ -145,6 +149,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
   const payments = invoice.payments ?? []
   const totalPaid = invoice.totalPaid ?? payments.reduce((s, p) => s + p.amount, 0)
   const balance = total - totalPaid
+  const isOverdue = balance > 0 && new Date(invoice.dueDate) < new Date(new Date().toDateString())
 
   const pm = paymentMethods
   const hasBankTransfer = pm?.bankTransfer && Object.values(pm.bankTransfer).some(v => v)
@@ -171,6 +176,19 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
           <View style={S.headerRight}>
             <Text style={S.invoiceLabel}>INVOICE</Text>
             <Text style={S.invoiceNum}>{invoice.invoiceNumber}</Text>
+
+            {/* Amount due summary — always on page 1 */}
+            <View style={S.headerSummaryBox}>
+              <Text style={S.headerSummaryLabel}>{totalPaid > 0 ? 'Balance due' : 'Total due'}</Text>
+              <Text style={[S.headerSummaryAmount, balance <= 0 ? { color: '#16a34a' } : isOverdue ? { color: '#dc2626' } : {}]}>
+                {fmt(Math.max(balance, 0), invoice.currency)}
+              </Text>
+              {balance > 0 && (
+                <Text style={[S.headerSummaryDue, isOverdue ? { color: '#dc2626' } : {}]}>
+                  {isOverdue ? `Overdue · Due ${fmtDate(invoice.dueDate)}` : `Due ${fmtDate(invoice.dueDate)}`}
+                </Text>
+              )}
+            </View>
           </View>
         </View>
 
@@ -203,7 +221,8 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
         <View style={S.divider} />
 
         {/* Line items table */}
-        <View style={S.tableHeader}>
+        {/* We deliberately do NOT use `fixed` on the table header: react-pdf renders fixed elements at their original Y on every page, which overlaps our mid-page header on subsequent pages. `minPresenceAhead` keeps the header with its rows instead. */}
+        <View style={S.tableHeader} minPresenceAhead={60}>
           <Text style={[S.thText, S.colDesc]}>Description</Text>
           <Text style={[S.thText, S.colQty]}>Qty</Text>
           <Text style={[S.thText, S.colRate]}>Rate</Text>
@@ -211,7 +230,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
         </View>
 
         {regularItems.map((item, i) => (
-          <View key={i} style={S.tableRow}>
+          <View key={i} style={S.tableRow} wrap={false}>
             <Text style={[S.tdText, S.colDesc]}>{item.description}</Text>
             <Text style={[S.tdMuted, S.colQty]}>{item.quantity % 1 === 0 ? item.quantity : item.quantity.toFixed(2)}{item.qtyUnit ? ` ${item.qtyUnit}` : ''}</Text>
             <Text style={[S.tdMuted, S.colRate]}>{fmt(item.unitPrice, invoice.currency)}</Text>
@@ -220,7 +239,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
         ))}
 
         {taxItems.map((item, i) => (
-          <View key={i} style={S.tableRowTax}>
+          <View key={i} style={S.tableRowTax} wrap={false}>
             <Text style={[S.tdItalic, S.colDesc]}>{item.description}</Text>
             <Text style={[S.tdMuted, S.colQty]}> </Text>
             <Text style={[S.tdMuted, S.colRate]}> </Text>
@@ -229,7 +248,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
         ))}
 
         {/* Totals */}
-        <View style={S.totalsSection}>
+        <View style={S.totalsSection} wrap={false}>
           {taxTotal > 0 && (
             <View style={S.totalRow}>
               <Text style={S.totalLabel}>Subtotal</Text>
@@ -264,7 +283,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
 
         {/* Notes */}
         {invoice.notes && (
-          <View style={S.notesSection}>
+          <View style={S.notesSection} wrap={false}>
             <Text style={S.notesLabel}>Notes</Text>
             <Text style={S.notesText}>{invoice.notes}</Text>
           </View>
@@ -272,17 +291,17 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
 
         {/* Payment methods */}
         {hasPayment && (
-          <View style={S.paySection}>
+          <View style={S.paySection} wrap={false}>
             <Text style={S.payTitle}>How to pay</Text>
 
             {payNote ? (
-              <View style={{ backgroundColor: '#fef3c7', borderRadius: 4, padding: 8, marginBottom: 10 }}>
+              <View style={{ backgroundColor: '#fef3c7', borderRadius: 4, padding: 8, marginBottom: 10 }} wrap={false}>
                 <Text style={{ fontSize: 8.5, color: '#92400e', fontFamily: 'Helvetica-Bold' }}>{payNote}</Text>
               </View>
             ) : null}
 
             {hasBankTransfer && pm?.bankTransfer && (
-              <View style={S.payBlock}>
+              <View style={S.payBlock} wrap={false}>
                 <Text style={S.payBlockTitle}>Bank Transfer{pm.bankTransfer.bankName ? ` — ${pm.bankTransfer.bankName}` : ''}</Text>
                 {pm.bankTransfer.accountName && (
                   <View style={S.payRow}><Text style={S.payKey}>Account name</Text><Text style={S.payVal}>{pm.bankTransfer.accountName}</Text></View>
@@ -306,21 +325,21 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
             )}
 
             {hasPaypal && pm?.paypal && (
-              <View style={S.payBlock}>
+              <View style={S.payBlock} wrap={false}>
                 <Text style={S.payBlockTitle}>PayPal</Text>
                 <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.paypal.link}</Text></View>
               </View>
             )}
 
             {hasStripe && pm?.stripe && (
-              <View style={S.payBlock}>
+              <View style={S.payBlock} wrap={false}>
                 <Text style={S.payBlockTitle}>Pay by card (Stripe)</Text>
                 <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.stripe.link}</Text></View>
               </View>
             )}
 
             {hasCustom && pm?.custom?.map((item, i) => (
-              <View key={i} style={S.payBlock}>
+              <View key={i} style={S.payBlock} wrap={false}>
                 <Text style={S.payBlockTitle}>{item.label}</Text>
                 <View style={S.payRow}><Text style={S.payVal}>{item.value}</Text></View>
               </View>
