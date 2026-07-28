@@ -21,7 +21,7 @@ function makeInvoice(overrides: Partial<PdfInvoice> = {}): PdfInvoice {
 
 function countPages(buffer: Buffer): number {
   const text = buffer.toString('binary')
-  const matches = text.match(/\/Type\s*\/Page(?!s)/g)
+  const matches = text.match(/\/Type\s*\/Page\b(?!s)/g)
   return matches?.length ?? 0
 }
 
@@ -75,10 +75,9 @@ describe('generateInvoicePdf', () => {
         'Thank you for your business. Please ensure payment reaches us by the due date to avoid late fees. ' +
         'For international transfers, allow 3-5 working days for clearance. Include the invoice number as the payment reference. ' +
         'If you have any questions, reply to this invoice or contact accounts@studioone.test.',
-      invoicePaymentNote: 'Payments are non-refundable once work has commenced.',
     })
 
-    const buffer = await generateInvoicePdf(invoice, paymentMethods)
+    const buffer = await generateInvoicePdf(invoice, paymentMethods, 'Payments are non-refundable once work has commenced.')
     expect(buffer.toString('ascii', 0, 4)).toBe('%PDF')
     expect(countPages(buffer)).toBeGreaterThanOrEqual(2)
   })

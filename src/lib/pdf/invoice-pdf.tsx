@@ -119,6 +119,8 @@ const S = StyleSheet.create({
   // Payment methods
   paySection: { marginTop: 4 },
   payTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  payNoteBox: { backgroundColor: '#fef3c7', borderRadius: 4, padding: 8, marginBottom: 10 },
+  payNoteText: { fontSize: 8.5, color: '#92400e', fontFamily: 'Helvetica-Bold' },
   payBlock: { marginBottom: 10 },
   payBlockTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111', marginBottom: 3 },
   payRow: { flexDirection: 'row', marginBottom: 2 },
@@ -149,7 +151,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
   const payments = invoice.payments ?? []
   const totalPaid = invoice.totalPaid ?? payments.reduce((s, p) => s + p.amount, 0)
   const balance = total - totalPaid
-  const isOverdue = balance > 0 && new Date(invoice.dueDate) < new Date(new Date().toDateString())
+  const isOverdue = balance > 0 && invoice.dueDate.slice(0, 10) < new Date().toISOString().slice(0, 10)
 
   const pm = paymentMethods
   const hasBankTransfer = pm?.bankTransfer && Object.values(pm.bankTransfer).some(v => v)
@@ -295,8 +297,8 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
             <Text style={S.payTitle}>How to pay</Text>
 
             {payNote ? (
-              <View style={{ backgroundColor: '#fef3c7', borderRadius: 4, padding: 8, marginBottom: 10 }} wrap={false}>
-                <Text style={{ fontSize: 8.5, color: '#92400e', fontFamily: 'Helvetica-Bold' }}>{payNote}</Text>
+              <View style={S.payNoteBox} wrap={false}>
+                <Text style={S.payNoteText}>{payNote}</Text>
               </View>
             ) : null}
 

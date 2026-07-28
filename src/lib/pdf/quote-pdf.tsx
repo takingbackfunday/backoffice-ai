@@ -179,7 +179,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
         {quote.sections.map((section, si) => (
           <View key={si}>
             {quote.sections.length > 1 ? (
-              <Text style={S.sectionHeader}>{section.name}</Text>
+              <Text style={S.sectionHeader} minPresenceAhead={24}>{section.name}</Text>
             ) : null}
             {section.items.filter(i => !i.isOptional).map((item, ii) => (
               <View key={ii} style={S.tableRow} wrap={false}>
@@ -198,7 +198,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
         {/* Optional items */}
         {optionalItems.length > 0 ? (
           <View>
-            <Text style={[S.sectionHeader, { marginTop: 16 }]}>Optional Add-ons</Text>
+            <Text style={[S.sectionHeader, { marginTop: 16 }]} minPresenceAhead={24}>Optional Add-ons</Text>
             {optionalItems.map((item, ii) => (
               <View key={ii} style={S.tableRowOptional} wrap={false}>
                 <View style={S.colDesc}>
