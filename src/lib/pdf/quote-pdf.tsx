@@ -53,43 +53,43 @@ function fmtDate(iso: string) {
 const S = StyleSheet.create({
   page: { fontFamily: 'Helvetica', fontSize: 9, color: '#111', padding: 48, backgroundColor: '#fff' },
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 36 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 22 },
   fromName: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: '#111' },
   headerRight: { alignItems: 'flex-end' },
   quoteLabel: { fontSize: 20, fontFamily: 'Helvetica-Bold', color: '#111', marginBottom: 4 },
   quoteNum: { fontSize: 11, color: '#555' },
   // Meta row
-  metaRow: { flexDirection: 'row', gap: 24, marginBottom: 28 },
+  metaRow: { flexDirection: 'row', gap: 24, marginBottom: 16 },
   metaBlock: { flex: 1 },
   metaLabel: { fontSize: 7, color: '#888', fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
   metaValue: { fontSize: 9, color: '#111' },
   // Divider
-  divider: { borderBottomWidth: 1, borderBottomColor: '#e5e5e5', marginBottom: 16 },
+  divider: { borderBottomWidth: 1, borderBottomColor: '#e5e5e5', marginBottom: 10 },
   // Scope notes
-  scopeBox: { backgroundColor: '#f9f9f9', borderRadius: 4, padding: 12, marginBottom: 20 },
+  scopeBox: { backgroundColor: '#f9f9f9', borderRadius: 4, padding: 10, marginBottom: 12 },
   scopeText: { fontSize: 9, color: '#333', lineHeight: 1.5 },
   // Table
-  tableHeader: { flexDirection: 'row', backgroundColor: '#f5f5f5', borderRadius: 2, paddingHorizontal: 8, paddingVertical: 6, marginBottom: 2 },
-  tableRow: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  tableRowOptional: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', backgroundColor: '#fafafa' },
+  tableHeader: { flexDirection: 'row', backgroundColor: '#f5f5f5', borderRadius: 2, paddingHorizontal: 8, paddingVertical: 5, marginBottom: 2 },
+  tableRow: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  tableRowOptional: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', backgroundColor: '#fafafa' },
   colDesc: { flex: 1 },
   colQty: { width: 48, textAlign: 'right' },
   colRate: { width: 72, textAlign: 'right' },
   colTotal: { width: 80, textAlign: 'right' },
   thText: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase', letterSpacing: 0.4 },
-  tdText: { fontSize: 9, color: '#111' },
-  tdMuted: { fontSize: 9, color: '#777' },
-  tdItalic: { fontSize: 9, color: '#777', fontFamily: 'Helvetica-Oblique' },
+  tdText: { fontSize: 8, color: '#111' },
+  tdMuted: { fontSize: 8, color: '#777' },
+  tdItalic: { fontSize: 8, color: '#777', fontFamily: 'Helvetica-Oblique' },
   optionalBadge: { fontSize: 7, color: '#888', fontFamily: 'Helvetica-Oblique' },
   // Totals
-  totalsSection: { alignItems: 'flex-end', marginTop: 12, marginBottom: 20 },
+  totalsSection: { alignItems: 'flex-end', marginTop: 8 },
   totalRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 4 },
   totalLabel: { fontSize: 9, color: '#555', width: 120, textAlign: 'right' },
   totalValue: { fontSize: 9, color: '#111', fontFamily: 'Helvetica-Bold', width: 88, textAlign: 'right' },
   grandTotalLabel: { fontSize: 11, color: '#111', fontFamily: 'Helvetica-Bold', width: 120, textAlign: 'right' },
   grandTotalValue: { fontSize: 11, color: '#111', fontFamily: 'Helvetica-Bold', width: 88, textAlign: 'right' },
   // Payment schedule
-  scheduleBox: { marginBottom: 20 },
+  scheduleBox: { marginBottom: 12 },
   scheduleTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111', marginBottom: 8 },
   scheduleRow: { flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   scheduleLabel: { flex: 1, fontSize: 9, color: '#333' },
@@ -99,10 +99,10 @@ const S = StyleSheet.create({
   termsTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
   termsText: { fontSize: 8, color: '#666', lineHeight: 1.5 },
   // Notes
-  notesBox: { marginBottom: 16 },
+  notesBox: { marginBottom: 10 },
   notesText: { fontSize: 9, color: '#444', lineHeight: 1.5 },
   // Section header
-  sectionHeader: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 4 },
+  sectionHeader: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 8, marginBottom: 4 },
 })
 
 /* ------------------------------------------------------------------ */

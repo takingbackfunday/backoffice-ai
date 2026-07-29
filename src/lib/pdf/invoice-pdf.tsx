@@ -131,18 +131,20 @@ const S = StyleSheet.create({
   balanceValue: { width: 80, textAlign: 'right', fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#111' },
   // Footer
   footer: { position: 'absolute', bottom: 32, left: 48, right: 48 },
+  footerInFlow: { marginTop: 24 },
   footerRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#e5e5e5', paddingTop: 6, marginTop: 2 },
   footerText: { fontSize: 7, color: '#aaa' },
 })
 
 /* ------------------------------------------------------------------ */
 /*  Footer height estimate                                              */
-/*  The notes / how-to-pay blocks render as a `fixed` footer on every   */
-/*  page, so they are taken out of the flow and react-pdf will NOT      */
-/*  reserve space for them. We estimate their height and use it as the  */
-/*  page's paddingBottom so line items never flow underneath.           */
-/*  Estimates are deliberately generous — too much bottom padding is    */
-/*  harmless, too little causes overlap.                                */
+/*  The notes / how-to-pay blocks render as a `fixed` footer pinned to  */
+/*  the bottom of every page except the last (there they flow below the */
+/*  totals). Fixed elements are taken out of the flow and react-pdf     */
+/*  will NOT reserve space for them, so we estimate their height and    */
+/*  use it as the page's paddingBottom — line items never flow          */
+/*  underneath. Estimates are deliberately generous: too much bottom    */
+/*  padding is harmless, too little causes overlap.                     */
 /* ------------------------------------------------------------------ */
 
 function estLines(text: string, charsPerLine: number): number {
@@ -178,10 +180,104 @@ function estimateFooterHeight(invoice: PdfInvoice, pm: PaymentMethods | undefine
 }
 
 /* ------------------------------------------------------------------ */
+/*  Footer content                                                      */
+/*  Notes / how-to-pay blocks + page-number row. The blocks are pinned  */
+/*  to the bottom of pages 1..n-1 via the fixed footer; on the last     */
+/*  page they render in-flow right below the totals (closer to the      */
+/*  content) and only the page-number row stays pinned.                 */
+/* ------------------------------------------------------------------ */
+
+function FooterBlocks({ invoice, paymentMethods: pm, payNote }: { invoice: PdfInvoice; paymentMethods?: PaymentMethods; payNote: string }) {
+  const hasBankTransfer = pm?.bankTransfer && Object.values(pm.bankTransfer).some(v => v)
+  const hasPaypal = !!pm?.paypal?.link
+  const hasStripe = !!pm?.stripe?.link
+  const hasCustom = (pm?.custom?.length ?? 0) > 0
+  const hasPayment = hasBankTransfer || hasPaypal || hasStripe || hasCustom
+
+  return (
+    <>
+      {invoice.notes && (
+        <View style={S.notesSection}>
+          <Text style={S.notesLabel}>Notes</Text>
+          <Text style={S.notesText}>{invoice.notes}</Text>
+        </View>
+      )}
+
+      {hasPayment && (
+        <View style={S.paySection}>
+          <Text style={S.payTitle}>How to pay</Text>
+
+          {payNote ? (
+            <View style={S.payNoteBox}>
+              <Text style={S.payNoteText}>{payNote}</Text>
+            </View>
+          ) : null}
+
+          {hasBankTransfer && pm?.bankTransfer && (
+            <View style={S.payBlock}>
+              <Text style={S.payBlockTitle}>Bank Transfer{pm.bankTransfer.bankName ? ` — ${pm.bankTransfer.bankName}` : ''}</Text>
+              {pm.bankTransfer.accountName && (
+                <View style={S.payRow}><Text style={S.payKey}>Account name</Text><Text style={S.payVal}>{pm.bankTransfer.accountName}</Text></View>
+              )}
+              {pm.bankTransfer.iban && (
+                <View style={S.payRow}><Text style={S.payKey}>IBAN</Text><Text style={S.payVal}>{pm.bankTransfer.iban}</Text></View>
+              )}
+              {pm.bankTransfer.swift && (
+                <View style={S.payRow}><Text style={S.payKey}>SWIFT / BIC</Text><Text style={S.payVal}>{pm.bankTransfer.swift}</Text></View>
+              )}
+              {pm.bankTransfer.sortCode && (
+                <View style={S.payRow}><Text style={S.payKey}>Sort code</Text><Text style={S.payVal}>{pm.bankTransfer.sortCode}</Text></View>
+              )}
+              {pm.bankTransfer.accountNumber && (
+                <View style={S.payRow}><Text style={S.payKey}>Account number</Text><Text style={S.payVal}>{pm.bankTransfer.accountNumber}</Text></View>
+              )}
+              {pm.bankTransfer.routingNumber && (
+                <View style={S.payRow}><Text style={S.payKey}>Routing number</Text><Text style={S.payVal}>{pm.bankTransfer.routingNumber}</Text></View>
+              )}
+            </View>
+          )}
+
+          {hasPaypal && pm?.paypal && (
+            <View style={S.payBlock}>
+              <Text style={S.payBlockTitle}>PayPal</Text>
+              <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.paypal.link}</Text></View>
+            </View>
+          )}
+
+          {hasStripe && pm?.stripe && (
+            <View style={S.payBlock}>
+              <Text style={S.payBlockTitle}>Pay by card (Stripe)</Text>
+              <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.stripe.link}</Text></View>
+            </View>
+          )}
+
+          {hasCustom && pm?.custom?.map((item, i) => (
+            <View key={i} style={S.payBlock}>
+              <Text style={S.payBlockTitle}>{item.label}</Text>
+              <View style={S.payRow}><Text style={S.payVal}>{item.value}</Text></View>
+            </View>
+          ))}
+
+        </View>
+      )}
+    </>
+  )
+}
+
+function FooterRow({ invoice, onTotalPages }: { invoice: PdfInvoice; onTotalPages?: (n: number) => void }) {
+  return (
+    <View style={S.footerRow}>
+      <Text style={S.footerText}>{invoice.invoiceNumber} · {invoice.fromName}</Text>
+      <Text style={S.footerText} render={({ pageNumber, totalPages }) => { onTotalPages?.(totalPages); return `Page ${pageNumber} of ${totalPages}` }} />
+    </View>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /*  PDF Component                                                       */
 /* ------------------------------------------------------------------ */
 
-function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: PdfInvoice; paymentMethods?: PaymentMethods; invoicePaymentNote?: string }) {
+function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote, totalPages, onTotalPages }: { invoice: PdfInvoice; paymentMethods?: PaymentMethods; invoicePaymentNote?: string; totalPages?: number; onTotalPages?: (n: number) => void }) {
   const regularItems = invoice.lineItems.filter(i => !i.isTaxLine)
   const taxItems = invoice.lineItems.filter(i => i.isTaxLine)
   const subtotal = regularItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
@@ -311,79 +407,27 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
           )}
         </View>
 
-        {/* Fixed footer — notes, how-to-pay and page numbers repeat at the bottom of every page. */}
-        {/* Space is reserved for this block via the page's dynamic paddingBottom (see estimateFooterHeight). */}
-        <View style={S.footer} fixed>
-          {invoice.notes && (
-            <View style={S.notesSection}>
-              <Text style={S.notesLabel}>Notes</Text>
-              <Text style={S.notesText}>{invoice.notes}</Text>
-            </View>
-          )}
-
-          {hasPayment && (
-            <View style={S.paySection}>
-              <Text style={S.payTitle}>How to pay</Text>
-
-              {payNote ? (
-                <View style={S.payNoteBox}>
-                  <Text style={S.payNoteText}>{payNote}</Text>
-                </View>
-              ) : null}
-
-              {hasBankTransfer && pm?.bankTransfer && (
-                <View style={S.payBlock}>
-                  <Text style={S.payBlockTitle}>Bank Transfer{pm.bankTransfer.bankName ? ` — ${pm.bankTransfer.bankName}` : ''}</Text>
-                  {pm.bankTransfer.accountName && (
-                    <View style={S.payRow}><Text style={S.payKey}>Account name</Text><Text style={S.payVal}>{pm.bankTransfer.accountName}</Text></View>
-                  )}
-                  {pm.bankTransfer.iban && (
-                    <View style={S.payRow}><Text style={S.payKey}>IBAN</Text><Text style={S.payVal}>{pm.bankTransfer.iban}</Text></View>
-                  )}
-                  {pm.bankTransfer.swift && (
-                    <View style={S.payRow}><Text style={S.payKey}>SWIFT / BIC</Text><Text style={S.payVal}>{pm.bankTransfer.swift}</Text></View>
-                  )}
-                  {pm.bankTransfer.sortCode && (
-                    <View style={S.payRow}><Text style={S.payKey}>Sort code</Text><Text style={S.payVal}>{pm.bankTransfer.sortCode}</Text></View>
-                  )}
-                  {pm.bankTransfer.accountNumber && (
-                    <View style={S.payRow}><Text style={S.payKey}>Account number</Text><Text style={S.payVal}>{pm.bankTransfer.accountNumber}</Text></View>
-                  )}
-                  {pm.bankTransfer.routingNumber && (
-                    <View style={S.payRow}><Text style={S.payKey}>Routing number</Text><Text style={S.payVal}>{pm.bankTransfer.routingNumber}</Text></View>
-                  )}
-                </View>
-              )}
-
-              {hasPaypal && pm?.paypal && (
-                <View style={S.payBlock}>
-                  <Text style={S.payBlockTitle}>PayPal</Text>
-                  <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.paypal.link}</Text></View>
-                </View>
-              )}
-
-              {hasStripe && pm?.stripe && (
-                <View style={S.payBlock}>
-                  <Text style={S.payBlockTitle}>Pay by card (Stripe)</Text>
-                  <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.stripe.link}</Text></View>
-                </View>
-              )}
-
-              {hasCustom && pm?.custom?.map((item, i) => (
-                <View key={i} style={S.payBlock}>
-                  <Text style={S.payBlockTitle}>{item.label}</Text>
-                  <View style={S.payRow}><Text style={S.payVal}>{item.value}</Text></View>
-                </View>
-              ))}
-
-            </View>
-          )}
-
-          <View style={S.footerRow}>
-            <Text style={S.footerText}>{invoice.invoiceNumber} · {invoice.fromName}</Text>
-            <Text style={S.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+        {/* Last-page footer: notes / how-to-pay flow right below the totals instead of sitting */}
+        {/* at the bottom of the page. Rendered once the page count is known (generateInvoicePdf). */}
+        {totalPages !== undefined && (invoice.notes || hasPayment) && (
+          <View style={S.footerInFlow} wrap={false}>
+            <FooterBlocks invoice={invoice} paymentMethods={pm} payNote={payNote} />
           </View>
-        </View>
+        )}
+
+        {/* Fixed footer: full blocks pinned at the bottom of pages 1..n-1; on the last page only */}
+        {/* the page-number row stays pinned (the blocks are in-flow above). Space for the pinned */}
+        {/* blocks is reserved via the page's dynamic paddingBottom (see estimateFooterHeight).   */}
+        <View style={S.footer} fixed render={({ pageNumber }) =>
+          totalPages !== undefined && pageNumber >= totalPages ? (
+            <FooterRow invoice={invoice} onTotalPages={onTotalPages} />
+          ) : (
+            <View>
+              <FooterBlocks invoice={invoice} paymentMethods={pm} payNote={payNote} />
+              <FooterRow invoice={invoice} onTotalPages={onTotalPages} />
+            </View>
+          )
+        } />
 
       </Page>
     </Document>
@@ -399,6 +443,22 @@ export async function generateInvoicePdf(
   paymentMethods?: PaymentMethods,
   invoicePaymentNote?: string,
 ): Promise<Buffer> {
-  const buffer = await renderToBuffer(<InvoicePDF invoice={invoice} paymentMethods={paymentMethods} invoicePaymentNote={invoicePaymentNote} />)
-  return Buffer.from(buffer)
+  // Render passes: the last page's notes / how-to-pay blocks flow below the totals instead
+  // of being pinned, and appending that in-flow footer can itself push the page count up by
+  // one. Re-render until the probed page count matches the one we laid out with, so the
+  // pinned footer is suppressed on exactly the right page. The fixed footer repeats on every
+  // page, so its page-number Text reports the current totalPages on each pass.
+  let totalPages: number | undefined // undefined = probe pass: footer pinned on all pages
+  let buffer: Buffer | null = null
+  for (let pass = 0; pass < 3; pass++) {
+    let probed = 0
+    buffer = await renderToBuffer(
+      // react-pdf fires render callbacks twice: a layout pass with totalPages undefined,
+      // then with the real count — record only finite values.
+      <InvoicePDF invoice={invoice} paymentMethods={paymentMethods} invoicePaymentNote={invoicePaymentNote} totalPages={totalPages} onTotalPages={n => { if (Number.isFinite(n)) probed = Math.max(probed, n) }} />,
+    )
+    if (probed === 0 || probed === totalPages) break // probe failed (keep pinned layout) or stable
+    totalPages = probed
+  }
+  return Buffer.from(buffer!)
 }

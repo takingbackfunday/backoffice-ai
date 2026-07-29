@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import zlib from 'node:zlib'
 import { generateInvoicePdf, type PdfInvoice, type PaymentMethods } from './invoice-pdf'
 
 function makeInvoice(overrides: Partial<PdfInvoice> = {}): PdfInvoice {
@@ -23,6 +24,33 @@ function countPages(buffer: Buffer): number {
   const text = buffer.toString('binary')
   const matches = text.match(/\/Type\s*\/Page\b(?!s)/g)
   return matches?.length ?? 0
+}
+
+/** Inflate every FlateDecode stream and decode […] TJ text ops (hex chunks → ASCII). */
+function extractText(buffer: Buffer): string {
+  const raw = buffer.toString('binary')
+  let out = ''
+  const re = /stream\r?\n/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(raw))) {
+    const end = raw.indexOf('endstream', m.index)
+    if (end === -1) continue
+    const chunk = Buffer.from(raw.slice(m.index + m[0].length, end), 'binary')
+    try {
+      out += zlib.inflateSync(chunk).toString('latin1') + '\n'
+    } catch {
+      /* not a flate stream */
+    }
+  }
+  return out.replace(/\[(.*?)\]\s*TJ/gs, (_, inner: string) =>
+    [...inner.matchAll(/<([0-9A-Fa-f]+)>/g)]
+      .map(x => Buffer.from(x[1], 'hex').toString('latin1'))
+      .join('') + '\n',
+  )
+}
+
+function occurrences(haystack: string, needle: string): number {
+  return haystack.split(needle).length - 1
 }
 
 describe('generateInvoicePdf', () => {
@@ -80,5 +108,36 @@ describe('generateInvoicePdf', () => {
     const buffer = await generateInvoicePdf(invoice, paymentMethods, 'Payments are non-refundable once work has commenced.')
     expect(buffer.toString('ascii', 0, 4)).toBe('%PDF')
     expect(countPages(buffer)).toBeGreaterThanOrEqual(2)
+  })
+
+  it('single page: notes/how-to-pay flow below the totals (rendered once), page row pinned', async () => {
+    const invoice = makeInvoice({
+      notes: 'Thank you for your business.',
+    })
+    const pm: PaymentMethods = { bankTransfer: { accountName: 'Studio One Ltd', iban: 'GB82WEST12345698765432' } }
+    const buffer = await generateInvoicePdf(invoice, pm, 'Ref: INV-001')
+    expect(countPages(buffer)).toBe(1)
+    const text = extractText(buffer)
+    // In-flow footer renders the blocks exactly once — no doubling with the pinned footer.
+    expect(occurrences(text, 'HOW TO PAY')).toBe(1)
+    expect(occurrences(text, 'NOTES')).toBe(1)
+    expect(occurrences(text, 'Page 1 of 1')).toBe(1)
+  })
+
+  it('multi page: footer blocks appear once per page — pinned on 1..n-1, in-flow on the last', async () => {
+    const lineItems = Array.from({ length: 80 }, (_, i) => ({
+      description: `Line item ${i + 1} — comprehensive design and development work`,
+      quantity: 1,
+      unitPrice: 150,
+    }))
+    const invoice = makeInvoice({ lineItems, notes: 'Thank you for your business.' })
+    const pm: PaymentMethods = { bankTransfer: { accountName: 'Studio One Ltd', iban: 'GB82WEST12345698765432' } }
+    const buffer = await generateInvoicePdf(invoice, pm, 'Ref: INV-001')
+    const pages = countPages(buffer)
+    expect(pages).toBeGreaterThanOrEqual(2)
+    const text = extractText(buffer)
+    expect(occurrences(text, 'HOW TO PAY')).toBe(pages)
+    expect(occurrences(text, `Page 1 of ${pages}`)).toBe(1)
+    expect(occurrences(text, `Page ${pages} of ${pages}`)).toBe(1)
   })
 })
