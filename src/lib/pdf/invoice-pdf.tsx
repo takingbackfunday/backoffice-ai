@@ -196,13 +196,6 @@ function FooterBlocks({ invoice, paymentMethods: pm, payNote }: { invoice: PdfIn
 
   return (
     <>
-      {invoice.notes && (
-        <View style={S.notesSection}>
-          <Text style={S.notesLabel}>Notes</Text>
-          <Text style={S.notesText}>{invoice.notes}</Text>
-        </View>
-      )}
-
       {hasPayment && (
         <View style={S.paySection}>
           <Text style={S.payTitle}>How to pay</Text>
@@ -258,6 +251,13 @@ function FooterBlocks({ invoice, paymentMethods: pm, payNote }: { invoice: PdfIn
             </View>
           ))}
 
+        </View>
+      )}
+
+      {invoice.notes && (
+        <View style={S.notesSection}>
+          <Text style={S.notesLabel}>Notes</Text>
+          <Text style={S.notesText}>{invoice.notes}</Text>
         </View>
       )}
     </>
