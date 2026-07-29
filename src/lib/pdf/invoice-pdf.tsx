@@ -81,10 +81,6 @@ const S = StyleSheet.create({
   headerRight: { alignItems: 'flex-end' },
   invoiceLabel: { fontSize: 20, fontFamily: 'Helvetica-Bold', color: '#111', marginBottom: 4 },
   invoiceNum: { fontSize: 11, color: '#555' },
-  headerSummaryBox: { backgroundColor: '#f5f5f5', borderRadius: 4, padding: 10, marginTop: 12, alignItems: 'flex-end' },
-  headerSummaryLabel: { fontSize: 7, color: '#888', fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
-  headerSummaryAmount: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#111' },
-  headerSummaryDue: { fontSize: 8, color: '#555', marginTop: 2 },
   // Meta row
   metaRow: { flexDirection: 'row', gap: 24, marginBottom: 28 },
   metaBlock: { flex: 1 },
@@ -113,7 +109,7 @@ const S = StyleSheet.create({
   grandTotalValue: { width: 80, textAlign: 'right', fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#111' },
   grandTotalRow: { flexDirection: 'row', justifyContent: 'flex-end', borderTopWidth: 1.5, borderTopColor: '#111', paddingTop: 6, marginTop: 2 },
   // Notes
-  notesSection: { backgroundColor: '#f9f9f9', borderRadius: 4, padding: 12, marginBottom: 20 },
+  notesSection: { backgroundColor: '#f9f9f9', borderRadius: 4, padding: 12, marginBottom: 12 },
   notesLabel: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
   notesText: { fontSize: 9, color: '#333', lineHeight: 1.5 },
   // Payment methods
@@ -134,9 +130,52 @@ const S = StyleSheet.create({
   balanceLabel: { width: 120, textAlign: 'right', fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#111', paddingRight: 12 },
   balanceValue: { width: 80, textAlign: 'right', fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#111' },
   // Footer
-  footer: { position: 'absolute', bottom: 32, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between' },
+  footer: { position: 'absolute', bottom: 32, left: 48, right: 48 },
+  footerRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#e5e5e5', paddingTop: 6, marginTop: 2 },
   footerText: { fontSize: 7, color: '#aaa' },
 })
+
+/* ------------------------------------------------------------------ */
+/*  Footer height estimate                                              */
+/*  The notes / how-to-pay blocks render as a `fixed` footer on every   */
+/*  page, so they are taken out of the flow and react-pdf will NOT      */
+/*  reserve space for them. We estimate their height and use it as the  */
+/*  page's paddingBottom so line items never flow underneath.           */
+/*  Estimates are deliberately generous — too much bottom padding is    */
+/*  harmless, too little causes overlap.                                */
+/* ------------------------------------------------------------------ */
+
+function estLines(text: string, charsPerLine: number): number {
+  return text.split('\n').reduce((n, seg) => n + Math.max(1, Math.ceil(seg.length / charsPerLine)), 0)
+}
+
+function estimateFooterHeight(invoice: PdfInvoice, pm: PaymentMethods | undefined, hasPayment: boolean, payNote: string): number {
+  let h = 17 // page-number row (border + padding + text)
+  if (invoice.notes) {
+    h += 24 /* box padding */ + 14 /* label */ + estLines(invoice.notes, 85) * 13.5 + 12 /* margin */
+  }
+  if (hasPayment && pm) {
+    h += 4 + 18 // section margin + "How to pay" title
+    if (payNote) h += 16 + estLines(payNote, 90) * 11 + 10
+    if (pm.bankTransfer && Object.values(pm.bankTransfer).some(v => v)) {
+      const rows = [
+        pm.bankTransfer.accountName,
+        pm.bankTransfer.iban,
+        pm.bankTransfer.swift,
+        pm.bankTransfer.sortCode,
+        pm.bankTransfer.accountNumber,
+        pm.bankTransfer.routingNumber,
+      ].filter(Boolean).length
+      h += 13 + rows * 12 + 10
+    }
+    if (pm.paypal?.link) h += 13 + 12 + 10
+    if (pm.stripe?.link) h += 13 + 12 + 10
+    for (const item of pm.custom ?? []) {
+      h += 13 + estLines(item.value, 80) * 11 + 10
+    }
+  }
+  return h
+}
 
 /* ------------------------------------------------------------------ */
 /*  PDF Component                                                       */
@@ -151,7 +190,6 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
   const payments = invoice.payments ?? []
   const totalPaid = invoice.totalPaid ?? payments.reduce((s, p) => s + p.amount, 0)
   const balance = total - totalPaid
-  const isOverdue = balance > 0 && invoice.dueDate.slice(0, 10) < new Date().toISOString().slice(0, 10)
 
   const pm = paymentMethods
   const hasBankTransfer = pm?.bankTransfer && Object.values(pm.bankTransfer).some(v => v)
@@ -161,9 +199,12 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
   const hasPayment = hasBankTransfer || hasPaypal || hasStripe || hasCustom
   const payNote = invoicePaymentNote || ''
 
+  // Reserve space at the bottom of every page for the fixed footer (32 = footer bottom offset, 12 = safety margin)
+  const pagePaddingBottom = 32 + Math.ceil(estimateFooterHeight(invoice, pm, hasPayment, payNote)) + 12
+
   return (
     <Document>
-      <Page size="A4" style={S.page}>
+      <Page size="A4" style={[S.page, { paddingBottom: pagePaddingBottom }]}>
 
         {/* Header */}
         <View style={S.header}>
@@ -178,19 +219,6 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
           <View style={S.headerRight}>
             <Text style={S.invoiceLabel}>INVOICE</Text>
             <Text style={S.invoiceNum}>{invoice.invoiceNumber}</Text>
-
-            {/* Amount due summary — always on page 1 */}
-            <View style={S.headerSummaryBox}>
-              <Text style={S.headerSummaryLabel}>{totalPaid > 0 ? 'Balance due' : 'Total due'}</Text>
-              <Text style={[S.headerSummaryAmount, balance <= 0 ? { color: '#16a34a' } : isOverdue ? { color: '#dc2626' } : {}]}>
-                {fmt(Math.max(balance, 0), invoice.currency)}
-              </Text>
-              {balance > 0 && (
-                <Text style={[S.headerSummaryDue, isOverdue ? { color: '#dc2626' } : {}]}>
-                  {isOverdue ? `Overdue · Due ${fmtDate(invoice.dueDate)}` : `Due ${fmtDate(invoice.dueDate)}`}
-                </Text>
-              )}
-            </View>
           </View>
         </View>
 
@@ -283,77 +311,78 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote }: { invoice: 
           )}
         </View>
 
-        {/* Notes */}
-        {invoice.notes && (
-          <View style={S.notesSection} wrap={false}>
-            <Text style={S.notesLabel}>Notes</Text>
-            <Text style={S.notesText}>{invoice.notes}</Text>
-          </View>
-        )}
-
-        {/* Payment methods */}
-        {hasPayment && (
-          <View style={S.paySection} wrap={false}>
-            <Text style={S.payTitle}>How to pay</Text>
-
-            {payNote ? (
-              <View style={S.payNoteBox} wrap={false}>
-                <Text style={S.payNoteText}>{payNote}</Text>
-              </View>
-            ) : null}
-
-            {hasBankTransfer && pm?.bankTransfer && (
-              <View style={S.payBlock} wrap={false}>
-                <Text style={S.payBlockTitle}>Bank Transfer{pm.bankTransfer.bankName ? ` — ${pm.bankTransfer.bankName}` : ''}</Text>
-                {pm.bankTransfer.accountName && (
-                  <View style={S.payRow}><Text style={S.payKey}>Account name</Text><Text style={S.payVal}>{pm.bankTransfer.accountName}</Text></View>
-                )}
-                {pm.bankTransfer.iban && (
-                  <View style={S.payRow}><Text style={S.payKey}>IBAN</Text><Text style={S.payVal}>{pm.bankTransfer.iban}</Text></View>
-                )}
-                {pm.bankTransfer.swift && (
-                  <View style={S.payRow}><Text style={S.payKey}>SWIFT / BIC</Text><Text style={S.payVal}>{pm.bankTransfer.swift}</Text></View>
-                )}
-                {pm.bankTransfer.sortCode && (
-                  <View style={S.payRow}><Text style={S.payKey}>Sort code</Text><Text style={S.payVal}>{pm.bankTransfer.sortCode}</Text></View>
-                )}
-                {pm.bankTransfer.accountNumber && (
-                  <View style={S.payRow}><Text style={S.payKey}>Account number</Text><Text style={S.payVal}>{pm.bankTransfer.accountNumber}</Text></View>
-                )}
-                {pm.bankTransfer.routingNumber && (
-                  <View style={S.payRow}><Text style={S.payKey}>Routing number</Text><Text style={S.payVal}>{pm.bankTransfer.routingNumber}</Text></View>
-                )}
-              </View>
-            )}
-
-            {hasPaypal && pm?.paypal && (
-              <View style={S.payBlock} wrap={false}>
-                <Text style={S.payBlockTitle}>PayPal</Text>
-                <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.paypal.link}</Text></View>
-              </View>
-            )}
-
-            {hasStripe && pm?.stripe && (
-              <View style={S.payBlock} wrap={false}>
-                <Text style={S.payBlockTitle}>Pay by card (Stripe)</Text>
-                <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.stripe.link}</Text></View>
-              </View>
-            )}
-
-            {hasCustom && pm?.custom?.map((item, i) => (
-              <View key={i} style={S.payBlock} wrap={false}>
-                <Text style={S.payBlockTitle}>{item.label}</Text>
-                <View style={S.payRow}><Text style={S.payVal}>{item.value}</Text></View>
-              </View>
-            ))}
-
-          </View>
-        )}
-
-        {/* Footer */}
+        {/* Fixed footer — notes, how-to-pay and page numbers repeat at the bottom of every page. */}
+        {/* Space is reserved for this block via the page's dynamic paddingBottom (see estimateFooterHeight). */}
         <View style={S.footer} fixed>
-          <Text style={S.footerText}>{invoice.invoiceNumber} · {invoice.fromName}</Text>
-          <Text style={S.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+          {invoice.notes && (
+            <View style={S.notesSection}>
+              <Text style={S.notesLabel}>Notes</Text>
+              <Text style={S.notesText}>{invoice.notes}</Text>
+            </View>
+          )}
+
+          {hasPayment && (
+            <View style={S.paySection}>
+              <Text style={S.payTitle}>How to pay</Text>
+
+              {payNote ? (
+                <View style={S.payNoteBox}>
+                  <Text style={S.payNoteText}>{payNote}</Text>
+                </View>
+              ) : null}
+
+              {hasBankTransfer && pm?.bankTransfer && (
+                <View style={S.payBlock}>
+                  <Text style={S.payBlockTitle}>Bank Transfer{pm.bankTransfer.bankName ? ` — ${pm.bankTransfer.bankName}` : ''}</Text>
+                  {pm.bankTransfer.accountName && (
+                    <View style={S.payRow}><Text style={S.payKey}>Account name</Text><Text style={S.payVal}>{pm.bankTransfer.accountName}</Text></View>
+                  )}
+                  {pm.bankTransfer.iban && (
+                    <View style={S.payRow}><Text style={S.payKey}>IBAN</Text><Text style={S.payVal}>{pm.bankTransfer.iban}</Text></View>
+                  )}
+                  {pm.bankTransfer.swift && (
+                    <View style={S.payRow}><Text style={S.payKey}>SWIFT / BIC</Text><Text style={S.payVal}>{pm.bankTransfer.swift}</Text></View>
+                  )}
+                  {pm.bankTransfer.sortCode && (
+                    <View style={S.payRow}><Text style={S.payKey}>Sort code</Text><Text style={S.payVal}>{pm.bankTransfer.sortCode}</Text></View>
+                  )}
+                  {pm.bankTransfer.accountNumber && (
+                    <View style={S.payRow}><Text style={S.payKey}>Account number</Text><Text style={S.payVal}>{pm.bankTransfer.accountNumber}</Text></View>
+                  )}
+                  {pm.bankTransfer.routingNumber && (
+                    <View style={S.payRow}><Text style={S.payKey}>Routing number</Text><Text style={S.payVal}>{pm.bankTransfer.routingNumber}</Text></View>
+                  )}
+                </View>
+              )}
+
+              {hasPaypal && pm?.paypal && (
+                <View style={S.payBlock}>
+                  <Text style={S.payBlockTitle}>PayPal</Text>
+                  <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.paypal.link}</Text></View>
+                </View>
+              )}
+
+              {hasStripe && pm?.stripe && (
+                <View style={S.payBlock}>
+                  <Text style={S.payBlockTitle}>Pay by card (Stripe)</Text>
+                  <View style={S.payRow}><Text style={S.payKey}>Link</Text><Text style={S.payVal}>{pm.stripe.link}</Text></View>
+                </View>
+              )}
+
+              {hasCustom && pm?.custom?.map((item, i) => (
+                <View key={i} style={S.payBlock}>
+                  <Text style={S.payBlockTitle}>{item.label}</Text>
+                  <View style={S.payRow}><Text style={S.payVal}>{item.value}</Text></View>
+                </View>
+              ))}
+
+            </View>
+          )}
+
+          <View style={S.footerRow}>
+            <Text style={S.footerText}>{invoice.invoiceNumber} · {invoice.fromName}</Text>
+            <Text style={S.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+          </View>
         </View>
 
       </Page>
