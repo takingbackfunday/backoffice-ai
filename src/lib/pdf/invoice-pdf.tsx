@@ -76,32 +76,32 @@ function fmtDate(iso: string) {
 const S = StyleSheet.create({
   page: { fontFamily: 'Helvetica', fontSize: 9, color: '#111', padding: 48, backgroundColor: '#fff' },
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 36 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 22 },
   fromName: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: '#111' },
   headerRight: { alignItems: 'flex-end' },
   invoiceLabel: { fontSize: 20, fontFamily: 'Helvetica-Bold', color: '#111', marginBottom: 4 },
   invoiceNum: { fontSize: 11, color: '#555' },
   // Meta row
-  metaRow: { flexDirection: 'row', gap: 24, marginBottom: 28 },
+  metaRow: { flexDirection: 'row', gap: 24, marginBottom: 16 },
   metaBlock: { flex: 1 },
   metaLabel: { fontSize: 7, color: '#888', fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
   metaValue: { fontSize: 9, color: '#111' },
   // Divider
-  divider: { borderBottomWidth: 1, borderBottomColor: '#e5e5e5', marginBottom: 16 },
+  divider: { borderBottomWidth: 1, borderBottomColor: '#e5e5e5', marginBottom: 10 },
   // Table
-  tableHeader: { flexDirection: 'row', backgroundColor: '#f5f5f5', borderRadius: 2, paddingHorizontal: 8, paddingVertical: 6, marginBottom: 2 },
-  tableRow: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  tableRowTax: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', backgroundColor: '#fafafa' },
+  tableHeader: { flexDirection: 'row', backgroundColor: '#f5f5f5', borderRadius: 2, paddingHorizontal: 8, paddingVertical: 5, marginBottom: 2 },
+  tableRow: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  tableRowTax: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', backgroundColor: '#fafafa' },
   colDesc: { flex: 1 },
   colQty: { width: 48, textAlign: 'right' },
   colRate: { width: 72, textAlign: 'right' },
   colTotal: { width: 72, textAlign: 'right' },
   thText: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase', letterSpacing: 0.4 },
-  tdText: { fontSize: 9, color: '#111' },
-  tdMuted: { fontSize: 9, color: '#777' },
-  tdItalic: { fontSize: 9, color: '#777', fontFamily: 'Helvetica-Oblique' },
+  tdText: { fontSize: 8, color: '#111' },
+  tdMuted: { fontSize: 8, color: '#777' },
+  tdItalic: { fontSize: 8, color: '#777', fontFamily: 'Helvetica-Oblique' },
   // Totals
-  totalsSection: { alignItems: 'flex-end', marginTop: 12, marginBottom: 20 },
+  totalsSection: { alignItems: 'flex-end', marginTop: 8 },
   totalRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 0, marginBottom: 4 },
   totalLabel: { width: 120, textAlign: 'right', fontSize: 9, color: '#555', paddingRight: 12 },
   totalValue: { width: 80, textAlign: 'right', fontSize: 9, color: '#111', fontFamily: 'Helvetica-Bold' },
@@ -109,15 +109,15 @@ const S = StyleSheet.create({
   grandTotalValue: { width: 80, textAlign: 'right', fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#111' },
   grandTotalRow: { flexDirection: 'row', justifyContent: 'flex-end', borderTopWidth: 1.5, borderTopColor: '#111', paddingTop: 6, marginTop: 2 },
   // Notes
-  notesSection: { backgroundColor: '#f9f9f9', borderRadius: 4, padding: 12, marginBottom: 12 },
+  notesSection: { backgroundColor: '#f9f9f9', borderRadius: 4, padding: 10, marginBottom: 8 },
   notesLabel: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
   notesText: { fontSize: 9, color: '#333', lineHeight: 1.5 },
   // Payment methods
   paySection: { marginTop: 4 },
-  payTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  payNoteBox: { backgroundColor: '#fef3c7', borderRadius: 4, padding: 8, marginBottom: 10 },
+  payTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  payNoteBox: { backgroundColor: '#fef3c7', borderRadius: 4, padding: 7, marginBottom: 8 },
   payNoteText: { fontSize: 8.5, color: '#92400e', fontFamily: 'Helvetica-Bold' },
-  payBlock: { marginBottom: 10 },
+  payBlock: { marginBottom: 8 },
   payBlockTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111', marginBottom: 3 },
   payRow: { flexDirection: 'row', marginBottom: 2 },
   payKey: { width: 100, fontSize: 8, color: '#888' },
@@ -152,11 +152,11 @@ function estLines(text: string, charsPerLine: number): number {
 function estimateFooterHeight(invoice: PdfInvoice, pm: PaymentMethods | undefined, hasPayment: boolean, payNote: string): number {
   let h = 17 // page-number row (border + padding + text)
   if (invoice.notes) {
-    h += 24 /* box padding */ + 14 /* label */ + estLines(invoice.notes, 85) * 13.5 + 12 /* margin */
+    h += 20 /* box padding */ + 14 /* label */ + estLines(invoice.notes, 85) * 13.5 + 8 /* margin */
   }
   if (hasPayment && pm) {
-    h += 4 + 18 // section margin + "How to pay" title
-    if (payNote) h += 16 + estLines(payNote, 90) * 11 + 10
+    h += 4 + 17 // section margin + "How to pay" title
+    if (payNote) h += 14 + estLines(payNote, 90) * 11 + 8
     if (pm.bankTransfer && Object.values(pm.bankTransfer).some(v => v)) {
       const rows = [
         pm.bankTransfer.accountName,
@@ -166,12 +166,12 @@ function estimateFooterHeight(invoice: PdfInvoice, pm: PaymentMethods | undefine
         pm.bankTransfer.accountNumber,
         pm.bankTransfer.routingNumber,
       ].filter(Boolean).length
-      h += 13 + rows * 12 + 10
+      h += 13 + rows * 12 + 8
     }
-    if (pm.paypal?.link) h += 13 + 12 + 10
-    if (pm.stripe?.link) h += 13 + 12 + 10
+    if (pm.paypal?.link) h += 13 + 12 + 8
+    if (pm.stripe?.link) h += 13 + 12 + 8
     for (const item of pm.custom ?? []) {
-      h += 13 + estLines(item.value, 80) * 11 + 10
+      h += 13 + estLines(item.value, 80) * 11 + 8
     }
   }
   return h
