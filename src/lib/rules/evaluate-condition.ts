@@ -43,7 +43,7 @@ export function getFieldValue(
 // ── Operator evaluator ─────────────────────────────────────────────────────────
 
 export function evaluateOperator(
-  fieldValue: string | number | string[] | null,
+  fieldValue: string | number | string[] | null | undefined,
   operator: string,
   target: string | number | string[] | [number, number]
 ): boolean {

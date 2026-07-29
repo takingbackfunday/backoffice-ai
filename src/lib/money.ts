@@ -65,7 +65,7 @@ export const fmtMoney = (m: Decimal.Value): string =>
   money(m).toDecimalPlaces(2).toFixed(2)
 
 interface InvoiceWithLineItemsAndPayments {
-  lineItems: { quantity: Decimal.Value; unitPrice: Decimal.Value; forgivenAt?: Date | null }[]
+  lineItems: { quantity: Decimal.Value | null | undefined; unitPrice: Decimal.Value; forgivenAt?: Date | null }[]
   payments: { amount: Decimal.Value; voidedAt?: Date | null }[]
 }
 
