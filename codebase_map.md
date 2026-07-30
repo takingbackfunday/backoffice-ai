@@ -389,9 +389,11 @@ Post-import work (rules agent, invoice matching, receipt matching) is enqueued a
 | Dashboard layout | `src/components/dashboard/dashboard-client.tsx` |
 | Dashboard header (currency picker) | `src/components/dashboard/dashboard-header.tsx` |
 | KPI bar | `src/components/widgets/KpiBar.tsx` → `GET /api/widgets/kpi` |
+| Dashboard charts (shared filters) | `src/components/widgets/DashboardChartsWidget.tsx` |
 | Cashflow chart | `src/components/widgets/CashflowWidget.tsx` → `GET /api/widgets/cashflow` |
 | Net worth | `src/components/widgets/NetWorthWidget.tsx` → `GET /api/widgets/networth` |
-| Expenses by category | `src/components/widgets/ExpensesByCategoryWidget.tsx` → `GET /api/widgets/categories` |
+| Expenses by category | `src/components/widgets/ExpensesByCategoryWidget.tsx` → `POST /api/widgets/data` |
+| Expenses breakdown | `src/components/widgets/ExpensesByDonutWidget.tsx` → `POST /api/widgets/data` |
 | Generic widget data | `GET/POST /api/widgets/data` |
 | Widget data pipeline | `src/lib/widgets/data-fetcher.ts` → `data-transformer.ts` |
 | Chart routing | `src/components/widgets/charts/ChartRouter.tsx` |

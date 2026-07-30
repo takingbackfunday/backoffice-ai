@@ -2,22 +2,28 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { getColor } from '@/lib/widgets/colors'
+import { sortSeriesByTotal } from '@/lib/widgets/series-order'
+import { CURRENCY_SYMBOLS, DEFAULT_CURRENCY } from '@/lib/currency'
+import type { DashboardCurrency } from '@/lib/currency'
 import type { ChartDataPoint, WidgetConfig } from '@/types/widgets'
 
 interface Props {
   data: ChartDataPoint[]
   seriesKeys: string[]
   config: WidgetConfig
+  currency?: DashboardCurrency
 }
 
-function formatAmount(value: number | null | undefined): string {
+function formatAmount(value: number | null | undefined, currency = DEFAULT_CURRENCY): string {
   if (value == null || !isFinite(value)) return ''
-  if (Math.abs(value) >= 1000) return `$${(value / 1000).toFixed(1)}k`
-  return `$${value.toFixed(0)}`
+  const sym = CURRENCY_SYMBOLS[currency] ?? CURRENCY_SYMBOLS[DEFAULT_CURRENCY]
+  if (Math.abs(value) >= 1000) return `${sym}${(value / 1000).toFixed(1)}k`
+  return `${sym}${value.toFixed(0)}`
 }
 
-export function DonutChartWidget({ data, seriesKeys, config }: Props) {
-  const slices = seriesKeys.map((key, i) => ({
+export function DonutChartWidget({ data, seriesKeys, config, currency = DEFAULT_CURRENCY }: Props) {
+  const orderedKeys = sortSeriesByTotal(data, seriesKeys)
+  const slices = orderedKeys.map((key, i) => ({
     name: key,
     value: data.reduce((sum, d) => sum + (typeof d[key] === 'number' ? (d[key] as number) : 0), 0),
     color: getColor(config.colorScheme, i),
@@ -47,7 +53,7 @@ export function DonutChartWidget({ data, seriesKeys, config }: Props) {
             </Pie>
             {config.showTooltip && (
               <Tooltip
-                formatter={(v) => [formatAmount(Number(v)), '']}
+                formatter={(value, name) => [formatAmount(Number(value), currency), name]}
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
               />
             )}
