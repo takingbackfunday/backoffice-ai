@@ -295,8 +295,16 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote, totalPages, o
   const hasPayment = hasBankTransfer || hasPaypal || hasStripe || hasCustom
   const payNote = invoicePaymentNote || ''
 
-  // Reserve space at the bottom of every page for the fixed footer (32 = footer bottom offset, 12 = safety margin)
-  const pagePaddingBottom = 32 + Math.ceil(estimateFooterHeight(invoice, pm, hasPayment, payNote)) + 12
+  // Reserve space at the bottom of every page for the fixed footer.
+  // Pages 1..n-1 pin the full notes/how-to-pay blocks, so we need enough bottom padding to
+  // keep content clear of them. The last page flows those blocks in-line below the totals and
+  // only the page-number row stays pinned; using the large reserve there would double-pay the
+  // footer height and can push a one-page invoice onto a second page. The probe pass also uses
+  // the minimal reserve so it discovers the true minimum page count without the full reserve
+  // inflating the layout up front.
+  const fullReserve = 32 + Math.ceil(estimateFooterHeight(invoice, pm, hasPayment, payNote)) + 12
+  const minimalReserve = 32 + 17 + 12 // FooterRow only: bottom offset + row height + safety
+  const pagePaddingBottom = totalPages === undefined || totalPages === 1 ? minimalReserve : fullReserve
 
   return (
     <Document>
@@ -450,7 +458,7 @@ export async function generateInvoicePdf(
   // page, so its page-number Text reports the current totalPages on each pass.
   let totalPages: number | undefined // undefined = probe pass: footer pinned on all pages
   let buffer: Buffer | null = null
-  for (let pass = 0; pass < 3; pass++) {
+  for (let pass = 0; pass < 6; pass++) {
     let probed = 0
     buffer = await renderToBuffer(
       // react-pdf fires render callbacks twice: a layout pass with totalPages undefined,

@@ -124,6 +124,27 @@ describe('generateInvoicePdf', () => {
     expect(occurrences(text, 'Page 1 of 1')).toBe(1)
   })
 
+  it('borderline one-page invoice with notes and payment methods stays on one page', async () => {
+    const lineItems = Array.from({ length: 20 }, (_, i) => ({
+      description: `Item ${i + 1}`,
+      quantity: 1,
+      unitPrice: 100,
+    }))
+    const invoice = makeInvoice({
+      lineItems,
+      notes: 'Thank you for your business. Payment due within 14 days.',
+    })
+    const pm: PaymentMethods = {
+      bankTransfer: { accountName: 'Studio One Ltd', iban: 'GB82WEST12345698765432' },
+    }
+    const buffer = await generateInvoicePdf(invoice, pm, 'Ref: INV-001')
+    const text = extractText(buffer)
+    expect(countPages(buffer)).toBe(1)
+    expect(occurrences(text, 'HOW TO PAY')).toBe(1)
+    expect(occurrences(text, 'NOTES')).toBe(1)
+    expect(occurrences(text, 'Page 1 of 1')).toBe(1)
+  })
+
   it('multi page: footer blocks appear once per page — pinned on 1..n-1, in-flow on the last', async () => {
     const lineItems = Array.from({ length: 80 }, (_, i) => ({
       description: `Line item ${i + 1} — comprehensive design and development work`,
