@@ -18,6 +18,7 @@ const PatchInvoiceSchema = z.object({
   status: z.enum(['DRAFT', 'SENT', 'PARTIAL', 'PAID', 'OVERDUE', 'VOID']).optional(),
   jobId: z.string().optional().nullable(),
   dueDate: z.string().optional(),
+  issueDate: z.string().optional(),
   notes: z.string().optional().nullable(),
   lineItems: z.array(LineItemSchema).min(1).optional(),
 })
@@ -74,6 +75,7 @@ export const PATCH = authedRoute<{ id: string; invoiceId: string }, z.infer<type
           status: body.status,
           jobId: body.jobId !== undefined ? body.jobId : undefined,
           dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+          issueDate: body.issueDate ? new Date(body.issueDate) : undefined,
           notes: body.notes,
         },
         include: invoiceInclude,

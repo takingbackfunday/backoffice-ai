@@ -32,6 +32,7 @@ const CreateInvoiceSchema = z.object({
   period: z.string().regex(/^\d{4}-\d{2}$/).optional(),
   appendToCurrentDraft: z.boolean().default(false),
   dueDate: z.string().min(1, 'Due date is required'),
+  issueDate: z.string().optional(),
   currency: z.string().default('USD'),
   notes: z.string().optional(),
   lineItems: z.array(LineItemSchema).min(1, 'At least one line item is required'),
@@ -128,6 +129,7 @@ export const POST = authedRoute<{ id: string }, z.infer<typeof CreateInvoiceSche
           quoteId: body.quoteId ?? null,
           invoiceNumber,
           dueDate: new Date(body.dueDate),
+          issueDate: body.issueDate ? new Date(body.issueDate) : undefined,
           currency: body.currency,
           notes: body.notes,
           lineItems: {
@@ -209,6 +211,7 @@ export const POST = authedRoute<{ id: string }, z.infer<typeof CreateInvoiceSche
           invoiceNumber,
           period: body.period ?? null,
           dueDate: new Date(body.dueDate),
+          issueDate: body.issueDate ? new Date(body.issueDate) : undefined,
           currency: body.currency,
           notes: body.notes,
           lineItems: {
