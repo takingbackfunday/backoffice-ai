@@ -1,6 +1,9 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
+import { fetchImageAsDataUri } from '@/lib/pdf/fetch-image'
+import { parsePreferences } from '@/types/preferences'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 export async function POST(req: NextRequest) {
@@ -11,6 +14,7 @@ export async function POST(req: NextRequest) {
     paymentMethods?: PaymentMethods
     businessName?: string
     yourName?: string
+    logoUrl?: string | null
     invoicePaymentNote?: string
     fromEmail?: string
     fromPhone?: string
@@ -20,6 +24,11 @@ export async function POST(req: NextRequest) {
   }
 
   const fromName = body.businessName || body.yourName || 'Your Business Name'
+
+  const prefs = await prisma.userPreference.findUnique({ where: { userId } })
+  const prefsData = parsePreferences(prefs?.data)
+  const logoUrl = body.logoUrl === undefined ? prefsData.logoUrl : body.logoUrl
+  const logoDataUri = logoUrl ? await fetchImageAsDataUri(logoUrl) : null
 
   const today = new Date()
   const due = new Date(today)
@@ -45,6 +54,7 @@ export async function POST(req: NextRequest) {
       fromAddress: body.fromAddress || undefined,
       fromVatNumber: body.fromVatNumber || undefined,
       fromWebsite: body.fromWebsite || undefined,
+      logoUrl: logoDataUri,
       clientName: 'Sample Client',
       clientCompany: 'Sample Co Ltd',
       clientEmail: 'client@example.com',

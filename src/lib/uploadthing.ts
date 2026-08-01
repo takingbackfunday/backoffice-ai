@@ -36,6 +36,18 @@ export const ourFileRouter = {
       return { url: file.ufsUrl }
     }),
 
+  // Business logo for invoices/quotes (PNG/JPEG only)
+  logoImage: f({ image: { maxFileSize: '2MB', maxFileCount: 1 } })
+    .middleware(async () => {
+      const { auth: clerkAuth } = await import('@clerk/nextjs/server')
+      const { userId } = await clerkAuth()
+      if (!userId) throw new Error('Unauthorized')
+      return { userId }
+    })
+    .onUploadComplete(async ({ file }) => {
+      return { url: file.ufsUrl }
+    }),
+
   // Vendor documents: W9, insurance certs, contracts (PDF only)
   vendorDocument: f({ pdf: { maxFileSize: '16MB', maxFileCount: 1 } })
     .middleware(async () => {

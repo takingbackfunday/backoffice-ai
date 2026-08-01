@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
+import { fetchImageAsDataUri } from '@/lib/pdf/fetch-image'
 import { parsePreferences } from '@/types/preferences'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 import { logger } from '@/lib/log'
@@ -37,6 +38,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const prefsData = parsePreferences(prefs?.data)
     const paymentMethods = prefsData.paymentMethods ?? {}
     const invoicePaymentNote = prefsData.invoicePaymentNote
+    const logoDataUri = prefsData.logoUrl ? await fetchImageAsDataUri(prefsData.logoUrl) : null
     const cp = invoice.clientProfile
     const leaseTenant = invoice.lease?.tenant
     const directTenant = invoice.tenant
@@ -65,6 +67,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       fromAddress: prefsData.fromAddress,
       fromVatNumber: prefsData.fromVatNumber,
       fromWebsite: prefsData.fromWebsite,
+      logoUrl: logoDataUri,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: toDisplay(i.quantity),

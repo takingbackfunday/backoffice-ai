@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateQuotePdf } from '@/lib/pdf/quote-pdf'
+import { fetchImageAsDataUri } from '@/lib/pdf/fetch-image'
 import { parsePreferences } from '@/types/preferences'
 import { toDisplay } from '@/lib/money'
 import { logger } from '@/lib/log'
@@ -25,6 +26,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     const prefs = await prisma.userPreference.findUnique({ where: { userId } })
     const prefsData = parsePreferences(prefs?.data)
+    const logoDataUri = prefsData.logoUrl ? await fetchImageAsDataUri(prefsData.logoUrl) : null
     const fromName = prefsData.businessName || prefsData.yourName || quote.clientProfile.workspace.name || 'Quote'
 
     const pdfBuffer = await generateQuotePdf({
@@ -41,6 +43,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       clientName: quote.clientProfile.contactName ?? quote.clientProfile.workspace.name,
       clientEmail: quote.clientProfile.email ?? undefined,
       fromName,
+      logoUrl: logoDataUri,
       sections: quote.sections.map(s => ({
         name: s.name,
         items: s.items.map(i => ({

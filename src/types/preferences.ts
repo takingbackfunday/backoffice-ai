@@ -15,6 +15,7 @@ export interface UserPreferenceData {
   yourName?: string
   displayName?: string
   businessType?: string
+  logoUrl?: string
 
   // Invoice sender details
   fromEmail?: string

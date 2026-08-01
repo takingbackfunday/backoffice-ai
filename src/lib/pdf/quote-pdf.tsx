@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -31,6 +31,7 @@ export interface PdfQuote {
   clientName: string | null | undefined
   clientEmail?: string
   fromName: string
+  logoUrl?: string | null
   sections: PdfQuoteSection[]
 }
 
@@ -127,7 +128,13 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
       <Page size="A4" style={S.page}>
         {/* Header */}
         <View style={S.header}>
-          <Text style={S.fromName}>{quote.fromName}</Text>
+          <View>
+            {quote.logoUrl && (
+              // eslint-disable-next-line jsx-a11y/alt-text -- Next.js maps Image components to this rule; react-pdf <Image> has no alt prop and renders into the PDF, not the DOM
+              <Image src={quote.logoUrl} style={{ maxWidth: 140, maxHeight: 56, objectFit: 'contain', marginBottom: 8 }} />
+            )}
+            <Text style={S.fromName}>{quote.fromName}</Text>
+          </View>
           <View style={S.headerRight}>
             <Text style={S.quoteLabel}>QUOTE</Text>
             <Text style={S.quoteNum}>{quote.quoteNumber}{quote.version > 1 ? ` v${quote.version}` : ''}</Text>

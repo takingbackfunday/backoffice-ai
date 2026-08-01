@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
 import { sendInvoiceEmail } from '@/lib/email'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
+import { fetchImageAsDataUri } from '@/lib/pdf/fetch-image'
 import { parsePreferences } from '@/types/preferences'
 import { toDisplay, computeInvoiceTotals } from '@/lib/money'
 import { logger } from '@/lib/log'
@@ -38,6 +39,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     const prefsData = parsePreferences(prefs?.data)
     const paymentMethods = prefsData.paymentMethods ?? {}
     const invoicePaymentNote = prefsData.invoicePaymentNote
+    const logoDataUri = prefsData.logoUrl ? await fetchImageAsDataUri(prefsData.logoUrl) : null
     const fromName = prefsData.businessName || prefsData.yourName || project.name
 
     const { total, paid: totalPaid } = computeInvoiceTotals(invoice)
@@ -58,6 +60,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
       fromAddress: prefsData.fromAddress,
       fromVatNumber: prefsData.fromVatNumber,
       fromWebsite: prefsData.fromWebsite,
+      logoUrl: logoDataUri,
       lineItems: invoice.lineItems.map(li => ({
         description: li.description,
         quantity: toDisplay(li.quantity),

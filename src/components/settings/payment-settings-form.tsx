@@ -3,11 +3,13 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import { LogoUpload } from '@/components/settings/logo-upload'
 
 interface Props {
   initial: PaymentMethods
   initialBusinessName?: string
   initialYourName?: string
+  initialLogoUrl?: string
   initialPaymentNote?: string
   initialNotesDefault?: string
   initialEmail?: string
@@ -55,6 +57,7 @@ export function PaymentSettingsForm({
   initial,
   initialBusinessName = '',
   initialYourName = '',
+  initialLogoUrl = '',
   initialPaymentNote = '',
   initialNotesDefault = '',
   initialEmail = '',
@@ -65,6 +68,7 @@ export function PaymentSettingsForm({
 }: Props) {
   const [businessName, setBusinessName] = useState(initialBusinessName)
   const [yourName, setYourName] = useState(initialYourName)
+  const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrl || null)
   const [email, setEmail] = useState(initialEmail)
   const [phone, setPhone] = useState(initialPhone)
   const [address, setAddress] = useState(initialAddress)
@@ -113,6 +117,7 @@ export function PaymentSettingsForm({
       paymentMethods,
       businessName: businessName || null,
       yourName: yourName || null,
+      logoUrl: logoUrl || null,
       invoicePaymentNote: paymentNote || null,
       invoiceNotesDefault: notesDefault || null,
       fromEmail: email || null,
@@ -171,6 +176,7 @@ export function PaymentSettingsForm({
       <div className="space-y-4 max-w-xl">
 
         <Section title="Business profile">
+          <LogoUpload initialLogoUrl={logoUrl ?? undefined} onChange={setLogoUrl} />
           <div className="grid grid-cols-2 gap-2">
             <F label="Business / trading name" value={businessName} onChange={setBusinessName} placeholder="Acme Studio" />
             <F label="Your name" value={yourName} onChange={setYourName} placeholder="Jane Smith" />

@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -37,6 +37,7 @@ export interface PdfInvoice {
   fromAddress?: string | null
   fromVatNumber?: string | null
   fromWebsite?: string | null
+  logoUrl?: string | null
   lineItems: PdfLineItem[]
   totalPaid?: number
   payments?: PdfPayment[]
@@ -313,6 +314,10 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote, totalPages, o
         {/* Header */}
         <View style={S.header}>
           <View>
+            {invoice.logoUrl && (
+              // eslint-disable-next-line jsx-a11y/alt-text -- Next.js maps Image components to this rule; react-pdf <Image> has no alt prop and renders into the PDF, not the DOM
+              <Image src={invoice.logoUrl} style={{ maxWidth: 140, maxHeight: 56, objectFit: 'contain', marginBottom: 8 }} />
+            )}
             <Text style={S.fromName}>{invoice.fromName}</Text>
             {invoice.fromAddress && <Text style={[S.metaValue, { color: '#555', marginTop: 3 }]}>{invoice.fromAddress}</Text>}
             {invoice.fromEmail && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.fromEmail}</Text>}

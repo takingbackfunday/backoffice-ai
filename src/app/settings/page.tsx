@@ -23,6 +23,7 @@ export default async function SettingsPage() {
   const fromAddress = data.fromAddress ?? ''
   const fromVatNumber = data.fromVatNumber ?? ''
   const fromWebsite = data.fromWebsite ?? ''
+  const logoUrl = data.logoUrl ?? ''
 
   return (
     <div className="flex min-h-screen">
@@ -38,6 +39,7 @@ export default async function SettingsPage() {
             initial={paymentMethods}
             initialBusinessName={businessName}
             initialYourName={yourName}
+            initialLogoUrl={logoUrl}
             initialPaymentNote={invoicePaymentNote}
             initialNotesDefault={invoiceNotesDefault}
             initialEmail={fromEmail}
