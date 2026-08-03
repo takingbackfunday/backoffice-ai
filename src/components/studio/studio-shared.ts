@@ -98,6 +98,31 @@ export interface PendingMarkSentQuoteItem {
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
+export function clientMatchesFilter(
+  client: Pick<Client, 'id' | 'clientProfileId'>,
+  filter: Exclude<ClientFilter, null>,
+  flat: FlatInvoice[],
+  flatQuotes: FlatQuote[],
+): boolean {
+  const now = new Date()
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
+
+  switch (filter) {
+    case 'outstanding':
+      return flat.some(i => i.clientId === client.id && (getDisplayStatus(i) === 'SENT' || getDisplayStatus(i) === 'PARTIAL'))
+    case 'overdue':
+      return flat.some(i => i.clientId === client.id && getDisplayStatus(i) === 'OVERDUE')
+    case 'unsent':
+      return flat.some(i => i.clientId === client.id && i.status === 'DRAFT')
+    case 'collected':
+      return flat.some(i => i.clientId === client.id && getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= thirtyDaysAgo)
+    case 'awaiting-quotes':
+      return flatQuotes.some(q => q.clientProfileId === client.clientProfileId && q.status === 'SENT')
+    case 'uninvoiced-quotes':
+      return flatQuotes.some(q => q.clientProfileId === client.clientProfileId && q.status === 'ACCEPTED' && !q.hasInvoice)
+  }
+}
+
 export const fmt = (n: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
 

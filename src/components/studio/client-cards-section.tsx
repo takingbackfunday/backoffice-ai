@@ -1,10 +1,11 @@
 import { ClientCard } from '@/components/studio/client-card'
-import { getDisplayStatus } from '@/components/studio/studio-shared'
-import type { Client, ClientDetail, FlatInvoice, ClientFilter } from '@/components/studio/studio-shared'
+import { clientMatchesFilter } from '@/components/studio/studio-shared'
+import type { Client, ClientDetail, FlatInvoice, FlatQuote, ClientFilter } from '@/components/studio/studio-shared'
 
 interface Props {
   clients: Client[]
   flat: FlatInvoice[]
+  flatQuotes: FlatQuote[]
   clientFilter: ClientFilter
   setClientFilter: (f: ClientFilter) => void
   clientSearch: string
@@ -21,7 +22,7 @@ interface Props {
 }
 
 export function ClientCardsSection({
-  clients, flat, clientFilter, setClientFilter, clientSearch, setClientSearch,
+  clients, flat, flatQuotes, clientFilter, setClientFilter, clientSearch, setClientSearch,
   expandedClient, setExpandedClient, fetchCardDetail, cardDetails, cardLoading,
   cardsRef, onNavigate, onDraftInvoice, onLogTime,
 }: Props) {
@@ -58,29 +59,8 @@ export function ClientCardsSection({
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {clients.filter(client => {
-          // KPI / notice filter
-          if (clientFilter === 'outstanding') {
-            const clientFlat = flat.filter(i => i.clientId === client.id)
-            if (!clientFlat.some(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' })) return false
-          }
-          if (clientFilter === 'overdue') {
-            const clientFlat = flat.filter(i => i.clientId === client.id)
-            if (!clientFlat.some(i => getDisplayStatus(i) === 'OVERDUE')) return false
-          }
-          if (clientFilter === 'unsent') {
-            const clientFlat = flat.filter(i => i.clientId === client.id)
-            if (!clientFlat.some(i => i.status === 'DRAFT')) return false
-          }
-          if (clientFilter === 'collected') {
-            const clientFlat = flat.filter(i => i.clientId === client.id)
-            if (!clientFlat.some(i => getDisplayStatus(i) === 'PAID')) return false
-          }
-          if (clientFilter === 'awaiting-quotes') {
-            if (client.sentQuotes.length === 0) return false
-          }
-          if (clientFilter === 'uninvoiced-quotes') {
-            if (!client.acceptedQuotes.some(q => !q.hasInvoice)) return false
-          }
+          // KPI / notice filter — shared predicate
+          if (clientFilter && !clientMatchesFilter(client, clientFilter, flat, flatQuotes)) return false
           // Omni search
           if (!clientSearch.trim()) return true
           const q = clientSearch.toLowerCase()

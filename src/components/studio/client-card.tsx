@@ -20,6 +20,9 @@ export function ClientCard({
   client, isExpanded, clientFilter, clientInvoices, detail, loading,
   onExpand, onNavigate, onDraftInvoice, onLogTime,
 }: Props) {
+  const now = new Date()
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
+
   return (
     <div
       style={{ borderRadius: 14, border: `1px solid ${isExpanded ? '#c7c4e8' : '#e8e6df'}`, background: '#fff', overflow: 'hidden', transition: 'border-color 0.15s' }}
@@ -28,8 +31,6 @@ export function ClientCard({
       {(() => {
         const clientOverdueTotal = clientInvoices.filter(i => getDisplayStatus(i) === 'OVERDUE').reduce((s, i) => s + (i.total - i.paid), 0)
         const clientOutstandingTotal = clientInvoices.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' }).reduce((s, i) => s + (i.total - i.paid), 0)
-        const now = new Date()
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
         const startOfYear = new Date(now.getFullYear(), 0, 1)
         const clientCollectedPast30 = clientInvoices.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= thirtyDaysAgo).reduce((s, i) => s + i.paid, 0)
         const clientCollectedYtd = clientInvoices.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= startOfYear).reduce((s, i) => s + i.paid, 0)
@@ -127,7 +128,7 @@ export function ClientCard({
                   : clientFilter === 'outstanding'
                   ? detail.invoices.filter(i => { const s = getDisplayStatus(i); return s === 'SENT' || s === 'PARTIAL' })
                   : clientFilter === 'collected'
-                  ? detail.invoices.filter(i => getDisplayStatus(i) === 'PAID')
+                  ? detail.invoices.filter(i => getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= thirtyDaysAgo)
                   : detail.invoices
                 return visibleInvoices.length > 0 ? (
                 <div>

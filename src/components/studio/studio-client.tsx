@@ -13,7 +13,7 @@ import { ActionBanner } from '@/components/ui/action-banner'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
 import { StudioTopSection } from '@/components/studio/studio-top-section'
 import { ClientCardsSection } from '@/components/studio/client-cards-section'
-import { fmt, getDisplayStatus } from '@/components/studio/studio-shared'
+import { fmt, getDisplayStatus, clientMatchesFilter } from '@/components/studio/studio-shared'
 import type {
   Kpis, Client, FlatQuote, ClientDetail, FlatInvoice, ClientFilter,
   PendingMarkSentItem, PendingMarkSentQuoteItem,
@@ -100,6 +100,16 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
     }
   }, [cardDetails, cardLoading])
 
+  // Fetch card details for all clients matched by an active notice/KPI filter
+  useEffect(() => {
+    if (!clientFilter) return
+    for (const c of clients) {
+      if (c.clientProfileId && clientMatchesFilter(c, clientFilter, flat, flatQuotes)) {
+        fetchCardDetail(c.clientProfileId)
+      }
+    }
+  }, [clientFilter, clients, flat, flatQuotes, fetchCardDetail])
+
   const notices = useMemo(() => {
     const items: { dot: string; label: string; detail: string; onClick: () => void }[] = []
 
@@ -113,7 +123,7 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
         const next: ClientFilter = clientFilter === 'overdue' ? null : 'overdue'
         setClientFilter(next)
         if (next) {
-          const first = clients.find(c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE'))
+          const first = clients.find(c => clientMatchesFilter(c, 'overdue', flat, flatQuotes))
           if (first) setExpandedClient(first.id)
         } else setExpandedClient(null)
         setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -130,7 +140,7 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
         const next: ClientFilter = clientFilter === 'unsent' ? null : 'unsent'
         setClientFilter(next)
         if (next) {
-          const first = clients.find(c => flat.some(i => i.clientId === c.id && i.status === 'DRAFT'))
+          const first = clients.find(c => clientMatchesFilter(c, 'unsent', flat, flatQuotes))
           if (first) setExpandedClient(first.id)
         } else setExpandedClient(null)
         setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -149,7 +159,7 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
         const next: ClientFilter = clientFilter === 'awaiting-quotes' ? null : 'awaiting-quotes'
         setClientFilter(next)
         if (next) {
-          const first = clients.find(c => flatQuotes.some(q => q.clientProfileId === c.clientProfileId && q.status === 'SENT'))
+          const first = clients.find(c => clientMatchesFilter(c, 'awaiting-quotes', flat, flatQuotes))
           if (first) setExpandedClient(first.id)
         } else setExpandedClient(null)
         setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -168,7 +178,7 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
         const next: ClientFilter = clientFilter === 'uninvoiced-quotes' ? null : 'uninvoiced-quotes'
         setClientFilter(next)
         if (next) {
-          const first = clients.find(c => flatQuotes.some(q => q.clientProfileId === c.clientProfileId && q.status === 'ACCEPTED' && !q.hasInvoice))
+          const first = clients.find(c => clientMatchesFilter(c, 'uninvoiced-quotes', flat, flatQuotes))
           if (first) setExpandedClient(first.id)
         } else setExpandedClient(null)
         setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -276,6 +286,7 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
       <ClientCardsSection
         clients={clients}
         flat={flat}
+        flatQuotes={flatQuotes}
         clientFilter={clientFilter}
         setClientFilter={setClientFilter}
         clientSearch={clientSearch}

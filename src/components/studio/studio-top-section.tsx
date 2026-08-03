@@ -1,7 +1,7 @@
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { KpiCard } from '@/components/studio/studio-badges'
-import { fmt, getDisplayStatus, deriveRecentActivity } from '@/components/studio/studio-shared'
+import { fmt, getDisplayStatus, deriveRecentActivity, clientMatchesFilter } from '@/components/studio/studio-shared'
 import type { Kpis, Client, FlatInvoice, FlatQuote, ClientFilter } from '@/components/studio/studio-shared'
 
 interface Notice {
@@ -64,11 +64,11 @@ export function StudioTopSection({
         })
         const collectedYtdTotal = collectedYtd.reduce((s, i) => s + i.paid, 0)
 
-        function handleKpiClick(filter: 'outstanding' | 'overdue' | 'collected', matchFn: (c: typeof clients[0]) => boolean) {
+        function handleKpiClick(filter: 'outstanding' | 'overdue' | 'collected') {
           const next = clientFilter === filter ? null : filter
           setClientFilter(next)
           if (next) {
-            const first = clients.find(matchFn)
+            const first = clients.find(c => clientMatchesFilter(c, filter, flat, flatQuotes))
             if (first) setExpandedClient(first.id)
           } else {
             setExpandedClient(null)
@@ -85,7 +85,7 @@ export function StudioTopSection({
               sub={outstandingInvs.length > 0 ? `${outstandingInvs.length} invoice${outstandingInvs.length !== 1 ? 's' : ''}` : ''}
               color={kpis.totalOutstanding > 0 ? 'amber' : 'neutral'}
               active={clientFilter === 'outstanding'}
-              onClick={kpis.totalOutstanding > 0 ? () => handleKpiClick('outstanding', c => flat.some(i => i.clientId === c.id && (getDisplayStatus(i) === 'SENT' || getDisplayStatus(i) === 'PARTIAL'))) : undefined}
+              onClick={kpis.totalOutstanding > 0 ? () => handleKpiClick('outstanding') : undefined}
             />
             <KpiCard
               label="Invoices Overdue"
@@ -93,7 +93,7 @@ export function StudioTopSection({
               sub={overdueInvs.length > 0 ? `${overdueInvs.length} invoice${overdueInvs.length !== 1 ? 's' : ''}` : ''}
               color={kpis.overdueCount > 0 ? 'red' : 'neutral'}
               active={clientFilter === 'overdue'}
-              onClick={kpis.overdueCount > 0 ? () => handleKpiClick('overdue', c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'OVERDUE')) : undefined}
+              onClick={kpis.overdueCount > 0 ? () => handleKpiClick('overdue') : undefined}
             />
             <KpiCard
               label="Invoices Collected Past 30 Days"
@@ -101,7 +101,7 @@ export function StudioTopSection({
               sub={collectedPast30.length > 0 ? `${collectedPast30.length} paid` : ''}
               color={collectedPast30Total > 0 ? 'green' : 'neutral'}
               active={clientFilter === 'collected'}
-              onClick={collectedPast30.length > 0 ? () => handleKpiClick('collected', c => flat.some(i => i.clientId === c.id && getDisplayStatus(i) === 'PAID' && new Date(i.issueDate) >= thirtyDaysAgo)) : undefined}
+              onClick={collectedPast30.length > 0 ? () => handleKpiClick('collected') : undefined}
             />
             <KpiCard label="Invoices Collected since start of Year" value={collectedYtdTotal > 0 ? fmt(collectedYtdTotal) : '—'} sub={collectedYtd.length > 0 ? `${collectedYtd.length} paid` : ''} color={collectedYtdTotal > 0 ? 'green' : 'neutral'} />
             <KpiCard label="Clients" value={kpis.activeClients} sub="active" color="neutral" />
