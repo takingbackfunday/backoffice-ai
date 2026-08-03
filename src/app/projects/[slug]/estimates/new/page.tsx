@@ -25,8 +25,9 @@ export default async function NewEstimatePage({ params }: PageParams) {
       project={project}
       slug={slug}
       breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Estimates', href: `/projects/${slug}/estimates` }, { label: 'New' }]}
+      contentWidth="lg"
     >
-      <div className="max-w-4xl">
+      <div>
         <div className="mb-6">
           <h2 className="text-lg font-semibold">New Estimate</h2>
         </div>

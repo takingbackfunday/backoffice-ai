@@ -78,6 +78,7 @@ export default async function ProjectDetailPage({ params }: PageParams) {
       project={project}
       slug={slug}
       breadcrumb={[hub, { label: project.name }]}
+      contentWidth={project.type === 'CLIENT' ? 'lg' : undefined}
     >
       {/* CLIENT overview */}
       {project.type === 'CLIENT' && project.clientProfile && (

@@ -154,8 +154,9 @@ export default async function JobDetailPage({ params }: PageParams) {
         { label: 'Jobs', href: `/projects/${slug}/jobs` },
         { label: job.name },
       ]}
+      contentWidth="lg"
     >
-      <div className="max-w-4xl">
+      <div>
         {/* Job header */}
         <div className="flex items-start gap-3 mb-2">
           <h2 className="text-lg font-semibold">{job.name}</h2>

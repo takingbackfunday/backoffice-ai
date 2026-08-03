@@ -64,6 +64,7 @@ export default async function ProjectEstimatesPage({ params }: PageParams) {
       project={project}
       slug={slug}
       breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Estimates' }]}
+      contentWidth="lg"
     >
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold">{estimates.length} estimate{estimates.length !== 1 ? 's' : ''}</h2>

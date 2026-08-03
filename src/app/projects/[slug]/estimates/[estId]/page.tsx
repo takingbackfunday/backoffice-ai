@@ -98,8 +98,9 @@ export default async function EstimateDetailPage({ params }: PageParams) {
         { label: 'Estimates', href: `/projects/${slug}/estimates` },
         { label: estimate.title },
       ]}
+      contentWidth="lg"
     >
-      <div className="max-w-4xl space-y-4">
+      <div className="space-y-4">
         <div className="mb-1">
           <PipelineBreadcrumb nodes={pipelineNodes} projectSlug={slug} currentId={estimate.id} />
         </div>

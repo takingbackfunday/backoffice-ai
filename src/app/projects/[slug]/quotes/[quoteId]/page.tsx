@@ -149,8 +149,9 @@ export default async function QuoteDetailPage({ params }: PageParams) {
         { label: 'Quotes', href: `/projects/${slug}/quotes` },
         { label: quote.quoteNumber },
       ]}
+      contentWidth="lg"
     >
-      <div className="max-w-4xl space-y-4">
+      <div className="space-y-4">
         <div className="mb-1">
           <PipelineBreadcrumb nodes={pipelineNodes} projectSlug={slug} currentId={quote.id} />
         </div>
