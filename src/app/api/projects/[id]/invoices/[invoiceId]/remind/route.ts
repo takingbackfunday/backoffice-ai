@@ -29,7 +29,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         ],
       },
       include: {
-        clientProfile: { select: { email: true, contactName: true, phone: true, address: true, workspace: { select: { name: true, slug: true } } } },
+        clientProfile: { select: { email: true, contactName: true, company: true, phone: true, address: true, workspace: { select: { name: true, slug: true } } } },
         tenant: { select: { id: true, name: true, email: true, phone: true } },
         lease: { include: { unit: true, tenant: { select: { name: true, email: true, phone: true } } } },
         lineItems: true,
@@ -72,6 +72,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       currency: invoice.currency,
       notes: invoice.notes,
       clientName: recipientName,
+      clientCompany: cp?.company ?? undefined,
       clientEmail: email,
       clientPhone: clientPhone ?? undefined,
       clientAddress: clientAddress ?? undefined,

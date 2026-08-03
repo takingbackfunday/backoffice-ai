@@ -57,11 +57,11 @@ export function ClientInfoEditor({ projectId, isDefault = false, profile }: Prop
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client: {
-          contactName: data.contactName || undefined,
-          company: data.company || undefined,
-          email: data.email || undefined,
-          phone: data.phone || undefined,
-          address: data.address || undefined,
+          contactName: data.contactName || null,
+          company: data.company || null,
+          email: data.email || null,
+          phone: data.phone || null,
+          address: data.address || null,
         },
       }),
     })

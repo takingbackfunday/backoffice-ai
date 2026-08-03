@@ -84,6 +84,16 @@ export interface InvoiceEditorProps {
   paymentTermDays: number
   billingType: string
   company: string | null
+  workspaceName?: string
+  fromName?: string
+  fromAddress?: string | null
+  fromEmail?: string | null
+  fromPhone?: string | null
+  fromWebsite?: string | null
+  fromVatNumber?: string | null
+  clientContactName?: string | null
+  clientAddress?: string | null
+  clientPhone?: string | null
   jobs: { id: string; name: string }[]
   lastInvoiceDefaults?: {
     taxEnabled: boolean

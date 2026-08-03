@@ -58,6 +58,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       currency: invoice.currency,
       notes: invoice.notes,
       clientName,
+      clientCompany: cp?.company ?? undefined,
       clientEmail: clientEmail ?? undefined,
       clientPhone: clientPhone ?? undefined,
       clientAddress: clientAddress ?? undefined,

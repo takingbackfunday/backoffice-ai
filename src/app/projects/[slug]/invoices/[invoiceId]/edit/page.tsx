@@ -67,13 +67,23 @@ export default async function EditInvoicePage({ params }: PageParams) {
         mode="edit"
         projectId={project.id}
         projectSlug={slug}
+        workspaceName={project.name}
         clientName={cp.contactName ?? project.name}
+        clientContactName={cp.contactName ?? null}
         clientEmail={cp.email ?? null}
+        clientAddress={cp.address ?? null}
+        clientPhone={cp.phone ?? null}
         paymentTermDays={cp.paymentTermDays}
         billingType={cp.billingType}
         company={cp.company ?? null}
         jobs={cp.jobs.map(j => ({ id: j.id, name: j.name }))}
-        existingInvoice={{
+        fromName={parsedPrefs.businessName || parsedPrefs.yourName || project.name}
+        fromAddress={parsedPrefs.fromAddress ?? null}
+        fromEmail={parsedPrefs.fromEmail ?? null}
+        fromPhone={parsedPrefs.fromPhone ?? null}
+        fromWebsite={parsedPrefs.fromWebsite ?? null}
+        fromVatNumber={parsedPrefs.fromVatNumber ?? null}
+        existingInvoice={{ 
           id: invoice.id,
           invoiceNumber: invoice.invoiceNumber,
           status: invoice.status,

@@ -9,6 +9,7 @@ import { InvoiceFormFieldsTop, InvoiceFormFieldsBottom } from './invoice-form-fi
 import { AiConfirmBanner } from './ai-confirm-banner'
 import { useInvoiceForm } from './hooks/use-invoice-form'
 import type { InvoiceEditorProps } from './hooks/use-invoice-form'
+import { InvoicePartiesPreview } from './invoice-parties-preview'
 
 export function InvoiceEditor(props: InvoiceEditorProps) {
   const { mode, projectId, projectSlug } = props
@@ -33,6 +34,24 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
     <div className="flex gap-0 min-h-0">
       <div className="flex-1 min-w-0">
         <div className="pr-6">
+          {props.fromName && (
+            <InvoicePartiesPreview
+              projectId={projectId}
+              workspaceName={props.workspaceName ?? ''}
+              fromName={props.fromName}
+              fromAddress={props.fromAddress}
+              fromEmail={props.fromEmail}
+              fromPhone={props.fromPhone}
+              fromWebsite={props.fromWebsite}
+              fromVatNumber={props.fromVatNumber}
+              clientContactName={props.clientContactName}
+              clientCompany={props.company}
+              clientAddress={props.clientAddress}
+              clientEmail={props.clientEmail}
+              clientPhone={props.clientPhone}
+            />
+          )}
+
           <InvoiceFormFieldsTop
             state={form.state}
             dispatch={form.dispatch}

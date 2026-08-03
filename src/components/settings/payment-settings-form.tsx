@@ -175,7 +175,7 @@ export function PaymentSettingsForm({
     <>
       <div className="space-y-4 max-w-xl">
 
-        <Section title="Business profile">
+        <Section title="Business profile" id="business-profile">
           <LogoUpload initialLogoUrl={logoUrl ?? undefined} onChange={setLogoUrl} />
           <div className="grid grid-cols-2 gap-2">
             <F label="Business / trading name" value={businessName} onChange={setBusinessName} placeholder="Acme Studio" />
