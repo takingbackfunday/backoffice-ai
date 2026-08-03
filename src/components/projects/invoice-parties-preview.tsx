@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { GuardedLink } from '@/components/ui/guarded-link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -27,6 +27,7 @@ export interface InvoicePartiesPreviewProps {
   clientAddress?: string | null
   clientEmail?: string | null
   clientPhone?: string | null
+  dirty?: boolean
 }
 
 interface RowProps {
@@ -70,6 +71,7 @@ export function InvoicePartiesPreview({
   clientAddress,
   clientEmail,
   clientPhone,
+  dirty = false,
 }: InvoicePartiesPreviewProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -154,12 +156,13 @@ export function InvoicePartiesPreview({
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 From
               </span>
-              <Link
+              <GuardedLink
                 href="/settings#business-profile"
+                dirty={dirty}
                 className="text-[10px] text-muted-foreground transition-colors hover:text-foreground"
               >
                 Update in Settings →
-              </Link>
+              </GuardedLink>
             </div>
             <div className="space-y-1.5">
               <PreviewRow label="Name" value={fromName} />

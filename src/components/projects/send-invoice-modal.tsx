@@ -281,7 +281,7 @@ export function SendInvoiceModal({
 
               {/* Payment methods preview */}
               <PaymentSummary pm={paymentMethods} />
-              <Link href="/settings" className="text-xs text-primary hover:underline">
+              <Link href="/settings#payment-methods" className="text-xs text-primary hover:underline">
                 Edit payment methods
               </Link>
 

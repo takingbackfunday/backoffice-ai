@@ -663,7 +663,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-semibold text-muted-foreground">Payment info</h3>
-            <Link href="/settings" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/settings#payment-methods" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
               <Settings className="h-3 w-3" /> Payment settings
             </Link>
           </div>

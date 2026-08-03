@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { GuardedLink } from '@/components/ui/guarded-link'
 import { X, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { JobSelect } from './job-select'
@@ -40,6 +41,7 @@ export interface InvoiceFormFieldsBottomProps {
   paymentInstructions: string
   setPaymentInstructions: (v: string) => void
   paymentMethods?: PaymentMethods
+  dirty?: boolean
 }
 
 export function InvoiceFormFieldsTop({
@@ -139,6 +141,7 @@ export function InvoiceFormFieldsBottom({
   paymentInstructions,
   setPaymentInstructions,
   paymentMethods,
+  dirty,
 }: InvoiceFormFieldsBottomProps) {
   return (
     <>
@@ -303,6 +306,12 @@ export function InvoiceFormFieldsBottom({
         {paymentMethods && (
           <div className="mt-2">
             <PaymentSummary pm={paymentMethods} />
+            <div className="mt-1 flex justify-end">
+              <GuardedLink href="/settings#payment-methods" dirty={!!dirty}
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                Update in Settings →
+              </GuardedLink>
+            </div>
           </div>
         )}
       </div>

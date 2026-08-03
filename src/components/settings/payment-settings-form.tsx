@@ -192,6 +192,7 @@ export function PaymentSettingsForm({
           </div>
         </Section>
 
+        <div id="payment-methods" className="space-y-4">
         <Section title="Bank transfer">
           <div className="grid grid-cols-2 gap-2">
             <F label="Account name" value={accountName} onChange={setAccountName} placeholder="Your Name or Business" />
@@ -249,6 +250,7 @@ export function PaymentSettingsForm({
             </button>
           </div>
         </Section>
+        </div>
 
         <Section title="Notes / payment terms default" id="invoice-notes-default">
           <textarea

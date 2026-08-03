@@ -238,6 +238,11 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
       }
 
   const [state, dispatch] = useReducer(reducer, initial)
+  const [dirty, setDirty] = useState(false)
+  const trackedDispatch = useCallback<React.Dispatch<InvoiceAction>>(
+    (action) => { setDirty(true); dispatch(action) },
+    [dispatch],
+  )
 
   const [pendingAiChanges, setPendingAiChanges] = useState<PendingAiChanges>(NO_CHANGES)
   const [preAiSnapshot, setPreAiSnapshot] = useState<InvoiceState | null>(null)
@@ -259,22 +264,22 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
     })
     switch (action.type) {
       case 'set_line_items':
-        dispatch({ type: 'SET_LINE_ITEMS', items: action.lineItems })
+        trackedDispatch({ type: 'SET_LINE_ITEMS', items: action.lineItems })
         break
       case 'set_tax':
-        dispatch({ type: 'SET_TAX_FROM_AI', label: action.label, amount: action.amount })
+        trackedDispatch({ type: 'SET_TAX_FROM_AI', label: action.label, amount: action.amount })
         break
       case 'set_due_date':
-        dispatch({ type: 'SET_DUE_DATE', value: action.value })
+        trackedDispatch({ type: 'SET_DUE_DATE', value: action.value })
         break
       case 'set_notes':
-        dispatch({ type: 'SET_NOTES', value: action.value, aiSuggested: true })
+        trackedDispatch({ type: 'SET_NOTES', value: action.value, aiSuggested: true })
         break
       case 'set_currency':
-        dispatch({ type: 'SET_CURRENCY', value: action.value })
+        trackedDispatch({ type: 'SET_CURRENCY', value: action.value })
         break
     }
-  }, [dispatch])
+  }, [trackedDispatch])
 
   usePageContext({
     entityType: 'invoice',
@@ -341,16 +346,16 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
       const json = await res.json()
       if (!res.ok || json.error) return
       const inv = json.data
-      dispatch({
+      trackedDispatch({
         type: 'SET_LINE_ITEMS',
         items: (inv.lineItems as { description: string; quantity: number; qtyUnit?: string | null; unitPrice: number; isTaxLine: boolean }[])
           .filter((i) => !i.isTaxLine)
           .map((i) => ({ id: uid(), description: i.description, quantity: String(i.quantity), qtyUnit: i.qtyUnit ?? '', unitPrice: String(i.unitPrice), isTaxLine: false })),
       })
-      if (inv.notes) dispatch({ type: 'SET_NOTES', value: inv.notes })
-      if (inv.currency) dispatch({ type: 'SET_CURRENCY', value: inv.currency })
+      if (inv.notes) trackedDispatch({ type: 'SET_NOTES', value: inv.notes })
+      if (inv.currency) trackedDispatch({ type: 'SET_CURRENCY', value: inv.currency })
       const taxLine = (inv.lineItems as { isTaxLine: boolean; description: string; unitPrice: number }[]).find(i => i.isTaxLine)
-      if (taxLine) dispatch({ type: 'SET_TAX_FROM_AI', label: taxLine.description, amount: taxLine.unitPrice })
+      if (taxLine) trackedDispatch({ type: 'SET_TAX_FROM_AI', label: taxLine.description, amount: taxLine.unitPrice })
     } catch { /* silent */ }
   }
 
@@ -374,7 +379,7 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
       try {
         const items = JSON.parse(pending) as LineItemInput[]
         if (Array.isArray(items) && items.length > 0) {
-          dispatch({ type: 'ADD_LINE_ITEMS', items })
+          trackedDispatch({ type: 'ADD_LINE_ITEMS', items })
         }
       } catch { /* silent */ }
     }
@@ -416,17 +421,17 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
 
   function undoAiChanges() {
     if (!preAiSnapshot) return
-    dispatch({ type: 'SET_LINE_ITEMS', items: preAiSnapshot.lineItems })
-    if (preAiSnapshot.notes !== state.notes) dispatch({ type: 'SET_NOTES', value: preAiSnapshot.notes })
-    if (preAiSnapshot.dueDate !== state.dueDate) dispatch({ type: 'SET_DUE_DATE', value: preAiSnapshot.dueDate })
-    if (preAiSnapshot.issueDate !== state.issueDate) dispatch({ type: 'SET_ISSUE_DATE', value: preAiSnapshot.issueDate })
-    if (preAiSnapshot.currency !== state.currency) dispatch({ type: 'SET_CURRENCY', value: preAiSnapshot.currency })
-    if (preAiSnapshot.jobId !== state.jobId) dispatch({ type: 'SET_JOB', jobId: preAiSnapshot.jobId })
+    trackedDispatch({ type: 'SET_LINE_ITEMS', items: preAiSnapshot.lineItems })
+    if (preAiSnapshot.notes !== state.notes) trackedDispatch({ type: 'SET_NOTES', value: preAiSnapshot.notes })
+    if (preAiSnapshot.dueDate !== state.dueDate) trackedDispatch({ type: 'SET_DUE_DATE', value: preAiSnapshot.dueDate })
+    if (preAiSnapshot.issueDate !== state.issueDate) trackedDispatch({ type: 'SET_ISSUE_DATE', value: preAiSnapshot.issueDate })
+    if (preAiSnapshot.currency !== state.currency) trackedDispatch({ type: 'SET_CURRENCY', value: preAiSnapshot.currency })
+    if (preAiSnapshot.jobId !== state.jobId) trackedDispatch({ type: 'SET_JOB', jobId: preAiSnapshot.jobId })
     if (preAiSnapshot.taxEnabled !== state.taxEnabled || preAiSnapshot.taxRate !== state.taxRate) {
-      dispatch({ type: 'SET_TAX_ENABLED', enabled: preAiSnapshot.taxEnabled })
-      dispatch({ type: 'SET_TAX_LABEL', label: preAiSnapshot.taxLabel })
-      dispatch({ type: 'SET_TAX_MODE', mode: preAiSnapshot.taxMode })
-      dispatch({ type: 'SET_TAX_RATE', rate: preAiSnapshot.taxRate })
+      trackedDispatch({ type: 'SET_TAX_ENABLED', enabled: preAiSnapshot.taxEnabled })
+      trackedDispatch({ type: 'SET_TAX_LABEL', label: preAiSnapshot.taxLabel })
+      trackedDispatch({ type: 'SET_TAX_MODE', mode: preAiSnapshot.taxMode })
+      trackedDispatch({ type: 'SET_TAX_RATE', rate: preAiSnapshot.taxRate })
     }
     setPendingAiChanges(NO_CHANGES)
     setPreAiSnapshot(null)
@@ -520,6 +525,7 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
         if (!res.ok || json.error) { setSaveError(json.error ?? 'Failed to update invoice'); return }
         invoiceId = existingInvoiceId!
       }
+      setDirty(false)
       return invoiceId
     } finally {
       setSaving(false)
@@ -528,7 +534,8 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
 
   return {
     state,
-    dispatch,
+    dispatch: trackedDispatch,
+    dirty,
     pendingAiChanges,
     setPendingAiChanges,
     hasPendingChanges,

@@ -49,6 +49,7 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
               clientAddress={props.clientAddress}
               clientEmail={props.clientEmail}
               clientPhone={props.clientPhone}
+              dirty={form.dirty}
             />
           )}
 
@@ -96,6 +97,7 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
             paymentInstructions={paymentInstructions}
             setPaymentInstructions={setPaymentInstructions}
             paymentMethods={props.paymentMethods}
+            dirty={form.dirty}
           />
 
           {form.hasPendingChanges && (
