@@ -153,6 +153,7 @@ Both CLIENT (freelance) and PROPERTY workspaces share the same schema. `WorkOrde
 - `WorkOrderPanel` — vendor (WO form + expanded panel picker)
 - `NewWorkOrderModal` — project (step 1, calls `POST /api/projects`; PROPERTY type requires address), job (step 2 CLIENT, calls `POST /api/projects/[id]/jobs`)
 - `IntakeBillModal` — project (step 1), work order with nested vendor creation (step 2, calls `POST /api/projects/[id]/work-orders`)
+- `DraftInvoicePickerModal` — client (on success it navigates to `/projects/[slug]/invoices/new` rather than appending to local state)
 - Maintenance request creation is intentionally absent — the API requires `unitId`, which is unavailable in modal context.
 
 Newly created entities are appended to the component's local state list — no page reload needed.
@@ -420,11 +421,11 @@ Post-import work (rules agent, invoice matching, receipt matching) is enqueued a
 | Client cards section (search, filter, list) | `src/components/studio/client-cards-section.tsx` |
 | Shared types + helpers (fmt, getDisplayStatus, deriveRecentActivity) | `src/components/studio/studio-shared.ts` |
 | Status badges + KPI cards | `src/components/studio/studio-badges.tsx` |
-| Draft invoice creation modal | `src/components/studio/studio-invoice-modal.tsx` |
+| Draft invoice client picker | `src/components/studio/draft-invoice-picker-modal.tsx` — selects/creates a client, then navigates to /projects/[slug]/invoices/new |
 | Action modals | `src/components/studio/studio-action-modals.tsx` |
 | Mark sent modal | `src/components/studio/mark-sent-modal.tsx` |
 
-**Take notice — filter behaviour:** clicking a notice filters the client card list in-place and expands all matching cards (same pattern as KPI bar filters). `clientFilter` state accepts `'outstanding' | 'overdue' | 'unsent' | 'collected' | 'awaiting-quotes' | 'uninvoiced-quotes'`. Notices that are informational-only (payment matches, recent payments) have no `onClick`. Clicking an invoice row in a client card navigates directly to the invoice detail page — there is no preview modal.
+**Take notice — filter behaviour:** clicking a notice filters the client card list in-place and expands all matching cards (same pattern as KPI bar filters). `clientFilter` state accepts `'outstanding' | 'overdue' | 'unsent' | 'collected' | 'awaiting-quotes' | 'uninvoiced-quotes'`. Notices that are informational-only (payment matches, recent payments) have no `onClick`. Clicking an invoice row in a client card navigates directly to the invoice detail page — there is no preview modal. "Draft invoice" actions navigate to the client's new-invoice page; the Take Action entry first asks which client via `DraftInvoicePickerModal`.
 
 **Filtered card appearance:** when `clientFilter` is active, card headers collapse to client name + chevron only (stat columns hidden). The expanded body shows only the items relevant to the active filter: `overdue` → overdue invoices; `unsent` → draft invoices; `outstanding` → sent/partial invoices only (overdue excluded); `collected` → paid invoices; `awaiting-quotes` → sent quotes; `uninvoiced-quotes` → accepted quotes without an invoice. Section labels ("Invoices", "Accepted quotes") are also hidden in filter mode.
 
@@ -466,8 +467,8 @@ The onboarding wizard uses `?onboarding=1` query params on existing pages rather
 | Outside-click hook | `src/hooks/use-outside-click.ts` | Use with `ignoreSelector: '[data-portal-dropdown]'` |
 | Pending AI changes hook (HITL) | `src/hooks/use-pending-ai-changes.ts` | For AI write confirm/undo pattern |
 | Page breadcrumb | `src/components/layout/page-breadcrumb.tsx` | Server component; accepts `{ label, href? }[]` props; renders `ChevronRight` separators. No hooks. |
-| Project page shell | `src/components/layout/project-page-shell.tsx` | Wraps `Sidebar + Header(breadcrumb) + ProjectDetailHeader + ProjectSubNav + children`. All project pages should use this instead of inline layout boilerplate. |
-| Page shell (non-project) | `src/components/layout/page-shell.tsx` | Simpler shell for non-project nested pages (e.g. vendor detail). Wraps `Sidebar + Header(breadcrumb) + children`. |
+| Project page shell | `src/components/layout/project-page-shell.tsx` | Wraps `Sidebar + Header(breadcrumb) + ProjectDetailHeader + ProjectSubNav + children`. All project pages should use this instead of inline layout boilerplate.; Accepts optional `contentWidth` ('md'|'lg') to constrain the content column — prefer over ad-hoc max-w wrappers. |
+| Page shell (non-project) | `src/components/layout/page-shell.tsx` | Simpler shell for non-project nested pages (e.g. vendor detail). Wraps `Sidebar + Header(breadcrumb) + children`.; Accepts optional `contentWidth` ('md'|'lg') to constrain the content column — prefer over ad-hoc max-w wrappers. |
 | Header | `src/components/layout/header.tsx` | Accepts `title?: string` or `children?: ReactNode`. Pass `<PageBreadcrumb>` as children for nested pages; use `title` for top-level pages. |
 
 ---

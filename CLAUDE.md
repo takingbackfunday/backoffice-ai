@@ -266,6 +266,9 @@ Ownership lookups live in `src/lib/authz.ts` — always scope by `userId`. Route
 ### Component size cap — 400 lines + shared PortalDropdown
 No component file may exceed 400 lines. Extract non-visual logic into `use*` hooks (sibling `hooks/` folder) and leaf JSX into their own files. Any dropdown/popover rendered inside a scroll container (`overflow-auto`) must use `src/components/ui/portal-dropdown.tsx` (renders via `createPortal` into `document.body`, positions with `position: fixed`, and stamps `data-portal-dropdown`) plus `src/hooks/use-outside-click.ts` with `ignoreSelector: '[data-portal-dropdown]'`. Do not hand-roll `useAnchorRect` or `mousedown` capture listeners.
 
+### Content width — use the shells' `contentWidth` prop, not ad-hoc wrappers
+`ProjectPageShell` and `PageShell` accept `contentWidth?: 'md' | 'lg'` (`md` = `max-w-3xl`, `lg` = `max-w-4xl`, left-aligned; logic in `src/components/layout/content-width.ts`). Constrain form/detail-style pages with it; leave data-dense pages (full-width tables, side-by-side layouts like the quote generator) fluid. Never add inner `max-w-*` wrapper divs on shell-based pages — migrate them to the prop.
+
 ### Clerk redirect fallbacks must point to existing routes
 
 The app has no `/onboarding` or `/home` routes. New-user onboarding starts at `/categories` (business-type picker), driven by `UserPreference.data.businessType`. `/dashboard` redirects to `/categories` when `businessType` is unset.
