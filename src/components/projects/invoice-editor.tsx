@@ -24,6 +24,7 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
   async function handleSave(sendAfter: boolean) {
     const invoiceId = await form.handleSave(sendAfter, mode, props.existingInvoice?.id)
     if (invoiceId) {
+      router.refresh()
       router.push(`/projects/${projectSlug}/invoices/${invoiceId}${sendAfter ? '?send=1' : ''}`)
     }
   }

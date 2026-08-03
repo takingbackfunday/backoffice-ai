@@ -504,7 +504,7 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
         const res = await fetch(`/api/projects/${projectId}/invoices/${existingInvoiceId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jobId: state.jobId || undefined, dueDate: state.dueDate, issueDate: state.issueDate || undefined, currency: state.currency, notes: state.notes || undefined, lineItems: lineItemsPayload }),
+          body: JSON.stringify({ jobId: state.jobId || null, dueDate: state.dueDate, issueDate: state.issueDate || undefined, currency: state.currency, notes: state.notes || null, lineItems: lineItemsPayload }),
         })
         const json = await res.json()
         if (!res.ok || json.error) { setSaveError(json.error ?? 'Failed to update invoice'); return }
