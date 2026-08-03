@@ -245,6 +245,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     <ProjectPageShell
       project={project}
       slug={slug}
+      contentWidth="lg"
       breadcrumb={[
         hub,
         { label: project.name, href: `/projects/${slug}` },

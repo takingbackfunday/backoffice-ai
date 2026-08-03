@@ -98,13 +98,13 @@ export default async function NewInvoicePage({ params }: PageParams) {
     <ProjectPageShell
       project={project}
       slug={slug}
+      contentWidth="md"
       breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Invoices', href: `/projects/${slug}/invoices` }, { label: 'New' }]}
     >
       <div className="mb-4">
         <h2 className="text-lg font-semibold">New Invoice</h2>
       </div>
-      <div className="max-w-3xl">
-        <NewInvoiceShortcuts
+      <NewInvoiceShortcuts
           projectId={project.id}
           projectSlug={slug}
           clientName={cp.contactName ?? project.name}
@@ -148,7 +148,6 @@ export default async function NewInvoicePage({ params }: PageParams) {
           invoicePaymentNote={invoicePaymentNote}
           paymentMethods={paymentMethods}
         />
-      </div>
     </ProjectPageShell>
   )
 }
