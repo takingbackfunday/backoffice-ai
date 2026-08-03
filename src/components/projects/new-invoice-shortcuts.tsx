@@ -19,10 +19,9 @@ interface Props {
   clientName: string
   acceptedQuotes: AcceptedQuote[]
   hasTransactions?: boolean
-  onSelectProject?: (projectId: string) => void
 }
 
-export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, acceptedQuotes, hasTransactions = true, onSelectProject }: Props) {
+export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, acceptedQuotes, hasTransactions = true }: Props) {
   const router = useRouter()
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
   const [creatingFromQuote, setCreatingFromQuote] = useState(false)
@@ -166,7 +165,6 @@ export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, accept
           projectId={projectId}
           projectName={clientName}
           onClose={() => setShowFromTransactions(false)}
-          onSelectProject={onSelectProject}
         />
       )}
     </>

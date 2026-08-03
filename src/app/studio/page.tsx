@@ -1,7 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { parsePreferences } from '@/types/preferences'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { StudioClient } from '@/components/studio/studio-client'
@@ -22,13 +21,12 @@ export default async function StudioPage({ searchParams }: PageProps) {
 
   // Parallel fetch: KPIs, card summaries, lightweight invoices, and quotes via SQL
   // Plus auxiliary data (preferences, suggestions, etc.)
-  const [kpis, cardSummaries, flatInvoices, flatQuotes, overheadWorkspace, prefs, pendingSuggestions, recentPaymentsCount, txCount] = await Promise.all([
+  const [kpis, cardSummaries, flatInvoices, flatQuotes, overheadWorkspace, pendingSuggestions, recentPaymentsCount] = await Promise.all([
     fetchStudioKpis(userId),
     fetchClientCardSummaries(userId),
     fetchLightweightInvoices(userId),
     fetchLightweightQuotes(userId),
     prisma.workspace.findFirst({ where: { userId, isDefault: true }, select: { id: true } }),
-    prisma.userPreference.findUnique({ where: { userId } }),
     prisma.invoicePaymentSuggestion.count({ where: { userId, status: 'PENDING' } }),
     prisma.invoicePayment.count({
       where: {
@@ -41,11 +39,7 @@ export default async function StudioPage({ searchParams }: PageProps) {
         },
       },
     }),
-    prisma.transaction.count({ where: { account: { userId } } }),
   ])
-  const prefsData = parsePreferences(prefs?.data)
-  const paymentMethods = prefsData.paymentMethods ?? {}
-  const invoiceDefaults = prefsData.invoiceDefaults
 
   // Build client cards from SQL summaries
   const clients = cardSummaries.map(cs => ({
@@ -82,13 +76,10 @@ export default async function StudioPage({ searchParams }: PageProps) {
             flatInvoices={flatInvoices}
             flatQuotes={flatQuotes}
             kpis={kpis}
-            paymentMethods={paymentMethods}
             pendingSuggestions={pendingSuggestions}
             recentPaymentsCount={recentPaymentsCount}
-            invoiceDefaults={invoiceDefaults}
             isOnboarding={isOnboarding}
             hasOverheadWorkspace={!!overheadWorkspace}
-            hasTransactions={txCount > 0}
           />
         </main>
       </div>

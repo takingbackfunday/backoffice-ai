@@ -3,20 +3,19 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { StudioInvoiceModal } from '@/components/studio/studio-invoice-modal'
+import { DraftInvoicePickerModal } from '@/components/studio/draft-invoice-picker-modal'
 import { NewClientModal, NewJobModal, NewEstimateModal, NewQuoteModal, LogTimeModal } from '@/components/studio/studio-action-modals'
 import { MarkSentModal } from '@/components/studio/mark-sent-modal'
 import { MarkSentQuoteModal } from '@/components/studio/mark-sent-quote-modal'
 import { NewWorkOrderModal } from '@/components/work-orders/new-work-order-modal'
 import { IntakeBillModal } from '@/components/work-orders/intake-bill-modal'
-import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { ActionBanner } from '@/components/ui/action-banner'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
 import { StudioTopSection } from '@/components/studio/studio-top-section'
 import { ClientCardsSection } from '@/components/studio/client-cards-section'
 import { fmt, getDisplayStatus } from '@/components/studio/studio-shared'
 import type {
-  Kpis, Client, InvoiceDefaults, FlatQuote, ClientDetail, FlatInvoice, ClientFilter,
+  Kpis, Client, FlatQuote, ClientDetail, FlatInvoice, ClientFilter,
   PendingMarkSentItem, PendingMarkSentQuoteItem,
 } from '@/components/studio/studio-shared'
 
@@ -25,16 +24,13 @@ interface Props {
   flatInvoices: FlatInvoice[]
   flatQuotes: FlatQuote[]
   kpis: Kpis
-  paymentMethods: PaymentMethods
   pendingSuggestions?: number
   recentPaymentsCount?: number
-  invoiceDefaults?: InvoiceDefaults
   isOnboarding?: boolean
   hasOverheadWorkspace?: boolean
-  hasTransactions?: boolean
 }
 
-export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialKpis, paymentMethods, pendingSuggestions = 0, recentPaymentsCount = 0, invoiceDefaults, isOnboarding = false, hasOverheadWorkspace = true, hasTransactions = true }: Props) {
+export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialKpis, pendingSuggestions = 0, recentPaymentsCount = 0, isOnboarding = false, hasOverheadWorkspace = true }: Props) {
   const router = useRouter()
   const [kpis] = useState(initialKpis)
   const [expandedClient, setExpandedClient] = useState<string | null>(null)
@@ -42,7 +38,7 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
   const [clientFilter, setClientFilter] = useState<ClientFilter>(null)
   const [creatingOverhead, setCreatingOverhead] = useState(false)
   const cardsRef = useRef<HTMLDivElement>(null)
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false)
+  const [showInvoicePicker, setShowInvoicePicker] = useState(false)
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [showNewJobModal, setShowNewJobModal] = useState(false)
   const [showNewEstimateModal, setShowNewEstimateModal] = useState(false)
@@ -268,7 +264,7 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
           onNewJob: () => setShowNewJobModal(true),
           onNewEstimate: () => setShowNewEstimateModal(true),
           onNewQuote: () => setShowNewQuoteModal(true),
-          onDraftInvoice: () => setShowInvoiceModal(true),
+          onDraftInvoice: () => setShowInvoicePicker(true),
           onLogTime: () => setShowLogTimeModal(true),
           onAddReceipt: () => router.push('/receipts?upload=1'),
           onNewWorkOrder: () => setShowNewWorkOrderModal(true),
@@ -291,21 +287,13 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
         cardLoading={cardLoading}
         cardsRef={cardsRef}
         onNavigate={path => router.push(path)}
-        onDraftInvoice={clientId => { setPreselectedClientId(clientId); setShowInvoiceModal(true) }}
+        onDraftInvoice={clientId => { const c = clients.find(x => x.id === clientId); if (c) router.push(`/projects/${c.slug}/invoices/new`) }}
         onLogTime={clientId => { setPreselectedClientId(clientId); setShowLogTimeModal(true) }}
       />
 
 
-      {/* Studio invoice creation modal */}
-      {showInvoiceModal && (
-        <StudioInvoiceModal
-          clients={clients}
-          paymentMethods={paymentMethods}
-          invoiceDefaults={invoiceDefaults}
-          hasTransactions={hasTransactions}
-          initialClientId={preselectedClientId ?? undefined}
-          onClose={() => { setShowInvoiceModal(false); setPreselectedClientId(null) }}
-        />
+      {showInvoicePicker && (
+        <DraftInvoicePickerModal clients={clients} onClose={() => setShowInvoicePicker(false)} />
       )}
       {showNewClientModal && (
         <NewClientModal
