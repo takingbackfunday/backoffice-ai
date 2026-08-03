@@ -175,12 +175,15 @@ The DB column is `projectId` but Prisma maps it to `workspaceId` via `@map("proj
 ### Invoice editor — description column uses `minmax`, not `1fr`
 The line-items grid is `grid-cols-[minmax(120px,1fr)_140px_110px_100px_32px]`. The description column must use `minmax(120px,1fr)` — plain `1fr` collapses to zero in constrained grid contexts.
 
-### Invoice notes and payment instructions — preference-scoped, not per-invoice
-Two fields in `UserPreference.data` drive invoice defaults:
-- `invoiceNotesDefault` — pre-fills "Notes / payment terms" in the editor. Deep-link: `/settings#invoice-notes-default`.
-- `invoicePaymentNote` — pre-fills "Payment instructions". Deep-link: `/settings#payment-instructions`.
+### Invoice notes vs payment instructions — different storage
+These two editor fields look identical but persist differently:
+- **Notes** — stored per-invoice on `Invoice.notes`; the detail view and PDF render it from the invoice record. `UserPreference.data.invoiceNotesDefault` only pre-fills the editor for *new* invoices and is saved back onBlur. Deep-link: `/settings#invoice-notes-default`.
+- **Payment instructions** — preference-only (`UserPreference.data.invoicePaymentNote`), never stored on the `Invoice` record; the detail view and PDF render the current preference value when non-empty. Deep-link: `/settings#payment-instructions`.
 
-Both are shown read-only on the invoice detail view and in the PDF **only when non-empty** — no fallback text. The editor saves the current value back to preferences on `onBlur`. Neither field is stored on the `Invoice` record. `invoiceDefaults` no longer contains `notes` — that "remember last invoice notes" behaviour has been removed.
+`invoiceDefaults` no longer contains `notes` — the "remember last invoice notes" behaviour has been removed.
+
+### Editable invoice fields must survive three hops — or they silently don't persist
+The invoice PATCH route (`src/app/api/projects/[id]/invoices/[invoiceId]/route.ts`) hand-maintains an explicit allow-list. A new editable field must be added in three places: the client PATCH body in `use-invoice-form.ts` (`handleSave`), the zod `PatchInvoiceSchema`, and the `data` object of `tx.invoice.update`. Miss any one and the edit is silently dropped (this happened twice: `issueDate`, then `currency`). Quotes/estimates avoid this class by spreading `...rest` from the parsed schema into the update — prefer that pattern for new routes. Corollaries: send cleared nullable fields as `|| null`, never `|| undefined` (`undefined` keys are dropped by `JSON.stringify`, so clears never reach the server — this broke clearing invoice notes and un-assigning a job); and call `router.refresh()` after a successful mutation before navigating, or the destination page can render stale data and the save looks lost.
 
 ### WorkOrder — polymorphic context, exactly one FK
 `WorkOrder` links to either a `Job` (CLIENT workspace) or a `MaintenanceRequest` (PROPERTY workspace) — never both, never neither. The `WorkOrderPanel` component receives a `context` prop: `{ type: 'job', jobId }` or `{ type: 'maintenance', maintenanceRequestId }`. Pass the correct one; the API accepts whichever is set.

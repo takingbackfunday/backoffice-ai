@@ -193,7 +193,7 @@ Newly created entities are appended to the component's local state list — no p
 | From-transactions hook (fetch, select, tag-to-project) | `src/components/projects/hooks/use-from-transactions.ts` |
 | Invoice number format | `{INITIALS}_{DDMMYYYY}_{SEQ}` — logic in create + renegotiate routes |
 | Payment methods display | `src/components/projects/payment-summary.tsx` — renders bank/PayPal/Stripe/custom from `UserPreference.data.paymentMethods` |
-| Notes default | `UserPreference.data.invoiceNotesDefault` — pre-fills "Notes / payment terms" in editor; onBlur saves back. Not stored on `Invoice`. Deep-link: `/settings#invoice-notes-default`. |
+| Notes | Stored per-invoice on `Invoice.notes`; detail view + PDF read it from the record. `UserPreference.data.invoiceNotesDefault` pre-fills the editor for new invoices; onBlur saves back. Deep-link: `/settings#invoice-notes-default`. |
 | Payment instructions | `UserPreference.data.invoicePaymentNote` — pre-fills editor + shown in detail view and PDF only when non-empty. onBlur saves back. Not stored on `Invoice`. Deep-link: `/settings#payment-instructions`. |
 | Key type | `src/types/index.ts` → `Invoice`, `PdfInvoice` |
 
