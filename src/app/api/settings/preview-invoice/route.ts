@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
 import { fetchImageAsDataUri } from '@/lib/pdf/fetch-image'
 import { parsePreferences } from '@/types/preferences'
+import { DEFAULT_INVOICE_TEMPLATE, isInvoiceTemplateId } from '@/lib/pdf/invoice-templates'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 
 export async function POST(req: NextRequest) {
@@ -16,6 +17,9 @@ export async function POST(req: NextRequest) {
     yourName?: string
     logoUrl?: string | null
     invoicePaymentNote?: string
+    invoiceTemplate?: string
+    invoiceShowBusinessName?: boolean
+    invoiceNotesDefault?: string | null
     fromEmail?: string
     fromPhone?: string
     fromAddress?: string
@@ -27,8 +31,26 @@ export async function POST(req: NextRequest) {
 
   const prefs = await prisma.userPreference.findUnique({ where: { userId } })
   const prefsData = parsePreferences(prefs?.data)
+
   const logoUrl = body.logoUrl === undefined ? prefsData.logoUrl : body.logoUrl
-  const logoDataUri = logoUrl ? await fetchImageAsDataUri(logoUrl) : null
+  let logoDataUri: string | null = null
+  if (logoUrl) {
+    try {
+      logoDataUri = await fetchImageAsDataUri(logoUrl)
+    } catch {
+      logoDataUri = null
+    }
+  }
+
+  const template = body.invoiceTemplate !== undefined
+    ? (isInvoiceTemplateId(body.invoiceTemplate) ? body.invoiceTemplate : DEFAULT_INVOICE_TEMPLATE)
+    : (isInvoiceTemplateId(prefsData.invoiceTemplate) ? prefsData.invoiceTemplate : DEFAULT_INVOICE_TEMPLATE)
+
+  const showBusinessName = body.invoiceShowBusinessName ?? prefsData.invoiceShowBusinessName ?? true
+
+  const notes = (body.invoiceNotesDefault ?? prefsData.invoiceNotesDefault) || 'Thank you for your business.'
+
+  const currency = prefsData.invoiceDefaults?.currency ?? prefsData.dashboardCurrency ?? 'USD'
 
   const today = new Date()
   const due = new Date(today)
@@ -47,7 +69,7 @@ export async function POST(req: NextRequest) {
       status: 'DRAFT',
       issueDate: today.toISOString(),
       dueDate: due.toISOString(),
-      currency: 'USD',
+      currency,
       fromName,
       fromEmail: body.fromEmail || undefined,
       fromPhone: body.fromPhone || undefined,
@@ -55,13 +77,15 @@ export async function POST(req: NextRequest) {
       fromVatNumber: body.fromVatNumber || undefined,
       fromWebsite: body.fromWebsite || undefined,
       logoUrl: logoDataUri,
+      template,
+      showBusinessName,
       clientName: 'Sample Client',
       clientCompany: 'Sample Co Ltd',
       clientEmail: 'client@example.com',
       clientAddress: '456 Client Ave, New York, NY 10001',
       clientPhone: '+1 555 000 0000',
       jobName: 'Website Redesign',
-      notes: 'Thank you for your business.',
+      notes,
       lineItems: [
         { description: 'Web Design', quantity: 1, unitPrice: 2500, qtyUnit: 'project' },
         { description: 'Development', quantity: 40, unitPrice: 75, qtyUnit: 'hrs' },

@@ -1,4 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
+import type { InvoiceTemplateId } from './invoice-templates'
+import { InvoiceHeader } from './invoice-pdf-headers'
+import { DEFAULT_INVOICE_TEMPLATE } from './invoice-templates'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -38,6 +41,8 @@ export interface PdfInvoice {
   fromVatNumber?: string | null
   fromWebsite?: string | null
   logoUrl?: string | null
+  template?: InvoiceTemplateId | null
+  showBusinessName?: boolean | null
   lineItems: PdfLineItem[]
   totalPaid?: number
   payments?: PdfPayment[]
@@ -76,12 +81,6 @@ function fmtDate(iso: string) {
 
 const S = StyleSheet.create({
   page: { fontFamily: 'Helvetica', fontSize: 9, color: '#111', padding: 48, backgroundColor: '#fff' },
-  // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 22 },
-  fromName: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: '#111' },
-  headerRight: { alignItems: 'flex-end' },
-  invoiceLabel: { fontSize: 20, fontFamily: 'Helvetica-Bold', color: '#111', marginBottom: 4 },
-  invoiceNum: { fontSize: 11, color: '#555' },
   // Meta row
   metaRow: { flexDirection: 'row', gap: 24, marginBottom: 16 },
   metaBlock: { flex: 1 },
@@ -152,8 +151,11 @@ function estLines(text: string, charsPerLine: number): number {
   return text.split('\n').reduce((n, seg) => n + Math.max(1, Math.ceil(seg.length / charsPerLine)), 0)
 }
 
-function estimateFooterHeight(invoice: PdfInvoice, pm: PaymentMethods | undefined, hasPayment: boolean, payNote: string): number {
+function estimateFooterHeight(invoice: PdfInvoice, pm: PaymentMethods | undefined, hasPayment: boolean, payNote: string, template?: string | null): number {
   let h = 17 // page-number row (border + padding + text)
+  if (template === 'footer-logo' && invoice.logoUrl) {
+    h += 56 // logo max-height 48 + 8 margin-bottom
+  }
   if (invoice.notes) {
     h += 20 /* box padding */ + 14 /* label */ + estLines(invoice.notes, 85) * 13.5 + 8 /* margin */
   }
@@ -188,7 +190,7 @@ function estimateFooterHeight(invoice: PdfInvoice, pm: PaymentMethods | undefine
 /*  content) and only the page-number row stays pinned.                 */
 /* ------------------------------------------------------------------ */
 
-function FooterBlocks({ invoice, paymentMethods: pm, payNote }: { invoice: PdfInvoice; paymentMethods?: PaymentMethods; payNote: string }) {
+function FooterBlocks({ invoice, paymentMethods: pm, payNote, template }: { invoice: PdfInvoice; paymentMethods?: PaymentMethods; payNote: string; template?: string | null }) {
   const hasBankTransfer = pm?.bankTransfer && Object.values(pm.bankTransfer).some(v => v)
   const hasPaypal = !!pm?.paypal?.link
   const hasStripe = !!pm?.stripe?.link
@@ -197,6 +199,9 @@ function FooterBlocks({ invoice, paymentMethods: pm, payNote }: { invoice: PdfIn
 
   return (
     <>
+      {template === 'footer-logo' && invoice.logoUrl && (
+        <Image src={invoice.logoUrl} style={{ maxWidth: 120, maxHeight: 48, objectFit: 'contain', marginBottom: 8 }} />
+      )}
       {hasPayment && (
         <View style={S.paySection}>
           <Text style={S.payTitle}>How to pay</Text>
@@ -279,6 +284,8 @@ function FooterRow({ invoice, onTotalPages }: { invoice: PdfInvoice; onTotalPage
 /* ------------------------------------------------------------------ */
 
 function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote, totalPages, onTotalPages }: { invoice: PdfInvoice; paymentMethods?: PaymentMethods; invoicePaymentNote?: string; totalPages?: number; onTotalPages?: (n: number) => void }) {
+  const template = invoice.template ?? DEFAULT_INVOICE_TEMPLATE
+  const hideName = invoice.showBusinessName === false && !!invoice.logoUrl
   const regularItems = invoice.lineItems.filter(i => !i.isTaxLine)
   const taxItems = invoice.lineItems.filter(i => i.isTaxLine)
   const subtotal = regularItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
@@ -303,7 +310,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote, totalPages, o
   // footer height and can push a one-page invoice onto a second page. The probe pass also uses
   // the minimal reserve so it discovers the true minimum page count without the full reserve
   // inflating the layout up front.
-  const fullReserve = 32 + Math.ceil(estimateFooterHeight(invoice, pm, hasPayment, payNote)) + 12
+  const fullReserve = 32 + Math.ceil(estimateFooterHeight(invoice, pm, hasPayment, payNote, template)) + 12
   const minimalReserve = 32 + 17 + 12 // FooterRow only: bottom offset + row height + safety
   const pagePaddingBottom = totalPages === undefined || totalPages === 1 ? minimalReserve : fullReserve
 
@@ -311,25 +318,7 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote, totalPages, o
     <Document>
       <Page size="A4" style={[S.page, { paddingBottom: pagePaddingBottom }]}>
 
-        {/* Header */}
-        <View style={S.header}>
-          <View>
-            {invoice.logoUrl && (
-              // eslint-disable-next-line jsx-a11y/alt-text -- Next.js maps Image components to this rule; react-pdf <Image> has no alt prop and renders into the PDF, not the DOM
-              <Image src={invoice.logoUrl} style={{ maxWidth: 140, maxHeight: 56, objectFit: 'contain', marginBottom: 8 }} />
-            )}
-            <Text style={S.fromName}>{invoice.fromName}</Text>
-            {invoice.fromAddress && <Text style={[S.metaValue, { color: '#555', marginTop: 3 }]}>{invoice.fromAddress}</Text>}
-            {invoice.fromEmail && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.fromEmail}</Text>}
-            {invoice.fromPhone && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.fromPhone}</Text>}
-            {invoice.fromWebsite && <Text style={[S.metaValue, { color: '#555' }]}>{invoice.fromWebsite}</Text>}
-            {invoice.fromVatNumber && <Text style={[S.metaValue, { color: '#888', marginTop: 2 }]}>VAT: {invoice.fromVatNumber}</Text>}
-          </View>
-          <View style={S.headerRight}>
-            <Text style={S.invoiceLabel}>INVOICE</Text>
-            <Text style={S.invoiceNum}>{invoice.invoiceNumber}</Text>
-          </View>
-        </View>
+        <InvoiceHeader invoice={invoice} template={invoice.template} hideName={hideName} />
 
         {/* Meta: bill to / dates */}
         <View style={S.metaRow}>
@@ -420,23 +409,18 @@ function InvoicePDF({ invoice, paymentMethods, invoicePaymentNote, totalPages, o
           )}
         </View>
 
-        {/* Last-page footer: notes / how-to-pay flow right below the totals instead of sitting */}
-        {/* at the bottom of the page. Rendered once the page count is known (generateInvoicePdf). */}
         {totalPages !== undefined && (invoice.notes || hasPayment) && (
           <View style={S.footerInFlow} wrap={false}>
-            <FooterBlocks invoice={invoice} paymentMethods={pm} payNote={payNote} />
+            <FooterBlocks invoice={invoice} paymentMethods={pm} payNote={payNote} template={template} />
           </View>
         )}
 
-        {/* Fixed footer: full blocks pinned at the bottom of pages 1..n-1; on the last page only */}
-        {/* the page-number row stays pinned (the blocks are in-flow above). Space for the pinned */}
-        {/* blocks is reserved via the page's dynamic paddingBottom (see estimateFooterHeight).   */}
         <View style={S.footer} fixed render={({ pageNumber }) =>
           totalPages !== undefined && pageNumber >= totalPages ? (
             <FooterRow invoice={invoice} onTotalPages={onTotalPages} />
           ) : (
             <View>
-              <FooterBlocks invoice={invoice} paymentMethods={pm} payNote={payNote} />
+              <FooterBlocks invoice={invoice} paymentMethods={pm} payNote={payNote} template={template} />
               <FooterRow invoice={invoice} onTotalPages={onTotalPages} />
             </View>
           )

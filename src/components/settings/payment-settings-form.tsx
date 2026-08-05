@@ -3,7 +3,11 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import type { InvoiceTemplateId } from '@/lib/pdf/invoice-templates'
 import { LogoUpload } from '@/components/settings/logo-upload'
+import { InvoiceTemplatePicker } from '@/components/settings/invoice-template-picker'
+import { InvoicePreviewPanel } from '@/components/settings/invoice-preview-panel'
+import { useLiveInvoicePreview } from '@/components/settings/hooks/use-live-invoice-preview'
 
 interface Props {
   initial: PaymentMethods
@@ -17,6 +21,8 @@ interface Props {
   initialAddress?: string
   initialVatNumber?: string
   initialWebsite?: string
+  initialTemplate?: InvoiceTemplateId
+  initialShowBusinessName?: boolean
 }
 
 function F({ label, value, onChange, placeholder, mono = false }: {
@@ -65,6 +71,8 @@ export function PaymentSettingsForm({
   initialAddress = '',
   initialVatNumber = '',
   initialWebsite = '',
+  initialTemplate = 'top-left',
+  initialShowBusinessName = true,
 }: Props) {
   const [businessName, setBusinessName] = useState(initialBusinessName)
   const [yourName, setYourName] = useState(initialYourName)
@@ -74,6 +82,8 @@ export function PaymentSettingsForm({
   const [address, setAddress] = useState(initialAddress)
   const [vatNumber, setVatNumber] = useState(initialVatNumber)
   const [website, setWebsite] = useState(initialWebsite)
+  const [template, setTemplate] = useState<InvoiceTemplateId>(initialTemplate)
+  const [showBusinessName, setShowBusinessName] = useState(initialShowBusinessName)
 
   const bt = initial.bankTransfer ?? {}
   const [accountName, setAccountName] = useState(bt.accountName ?? '')
@@ -92,9 +102,6 @@ export function PaymentSettingsForm({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const [previewing, setPreviewing] = useState(false)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   function buildPayload() {
     const bankTransfer: PaymentMethods['bankTransfer'] = {}
@@ -120,6 +127,8 @@ export function PaymentSettingsForm({
       logoUrl: logoUrl || null,
       invoicePaymentNote: paymentNote || null,
       invoiceNotesDefault: notesDefault || null,
+      invoiceTemplate: template,
+      invoiceShowBusinessName: showBusinessName,
       fromEmail: email || null,
       fromPhone: phone || null,
       fromAddress: address || null,
@@ -127,6 +136,8 @@ export function PaymentSettingsForm({
       fromWebsite: website || null,
     }
   }
+
+  const { previewUrl, updating: previewUpdating, previewError: livePreviewError } = useLiveInvoicePreview(JSON.stringify(buildPayload()))
 
   async function handleSave() {
     setSaving(true)
@@ -146,37 +157,15 @@ export function PaymentSettingsForm({
     }
   }
 
-  async function handlePreview() {
-    setPreviewing(true)
-    setPreviewUrl(null)
-    try {
-      const res = await fetch('/api/settings/preview-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload()),
-      })
-      if (!res.ok) { setError('Failed to generate preview'); return }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      setPreviewUrl(url)
-    } catch {
-      setError('Failed to generate preview')
-    } finally {
-      setPreviewing(false)
-    }
-  }
-
-  function closePreview() {
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
-    setPreviewUrl(null)
-  }
-
   return (
-    <>
-      <div className="space-y-4 max-w-xl">
+    <div className="flex flex-col lg:flex-row gap-8 items-start">
+      <div className="space-y-4 max-w-xl flex-1 min-w-0">
 
         <Section title="Business profile" id="business-profile">
-          <LogoUpload initialLogoUrl={logoUrl ?? undefined} onChange={setLogoUrl} />
+          <LogoUpload initialLogoUrl={logoUrl ?? undefined} onChange={(url) => {
+            setLogoUrl(url)
+            if (!url) setShowBusinessName(true)
+          }} />
           <div className="grid grid-cols-2 gap-2">
             <F label="Business / trading name" value={businessName} onChange={setBusinessName} placeholder="Acme Studio" />
             <F label="Your name" value={yourName} onChange={setYourName} placeholder="Jane Smith" />
@@ -190,6 +179,16 @@ export function PaymentSettingsForm({
             <F label="Website" value={website} onChange={setWebsite} placeholder="acmestudio.com" />
             <F label="VAT / Tax number" value={vatNumber} onChange={setVatNumber} placeholder="GB123456789" mono />
           </div>
+        </Section>
+
+        <Section title="Invoice template" id="invoice-template">
+          <InvoiceTemplatePicker
+            value={template}
+            onChange={setTemplate}
+            showBusinessName={showBusinessName}
+            onShowBusinessNameChange={setShowBusinessName}
+            hasLogo={!!logoUrl}
+          />
         </Section>
 
         <div id="payment-methods" className="space-y-4">
@@ -272,7 +271,7 @@ export function PaymentSettingsForm({
           />
         </Section>
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {(error || livePreviewError) && <p className="text-xs text-destructive">{error || livePreviewError}</p>}
 
         <div className="flex items-center gap-3">
           <button
@@ -283,49 +282,11 @@ export function PaymentSettingsForm({
           >
             {saving ? 'Saving…' : 'Save settings'}
           </button>
-          <button
-            type="button"
-            onClick={handlePreview}
-            disabled={previewing}
-            className="rounded-md border px-4 py-1.5 text-xs font-semibold hover:bg-muted/50 disabled:opacity-50 transition-colors"
-          >
-            {previewing ? 'Generating…' : 'Preview invoice'}
-          </button>
           {saved && <span className="text-xs text-green-600">Saved ✓</span>}
         </div>
       </div>
 
-      {/* PDF Preview Modal */}
-      {previewUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={closePreview}
-        >
-          <div
-            className="relative bg-white rounded-xl shadow-2xl overflow-hidden"
-            style={{ width: 'min(90vw, 860px)', height: 'min(92vh, 1100px)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-2.5 border-b">
-              <span className="text-sm font-semibold">Invoice preview</span>
-              <button
-                type="button"
-                onClick={closePreview}
-                className="text-muted-foreground hover:text-foreground text-lg leading-none px-1"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <iframe
-              src={previewUrl}
-              className="w-full"
-              style={{ height: 'calc(100% - 45px)', border: 'none' }}
-              title="Invoice preview"
-            />
-          </div>
-        </div>
-      )}
-    </>
+      <InvoicePreviewPanel previewUrl={previewUrl} updating={previewUpdating} error={livePreviewError} />
+    </div>
   )
 }

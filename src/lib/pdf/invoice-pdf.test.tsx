@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import zlib from 'node:zlib'
 import { generateInvoicePdf, type PdfInvoice, type PaymentMethods } from './invoice-pdf'
+import { INVOICE_TEMPLATES } from './invoice-templates'
+
+// 1×1 pixel red PNG as a data URI — react-pdf needs a decodable image
+const LOGO_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
 function makeInvoice(overrides: Partial<PdfInvoice> = {}): PdfInvoice {
   return {
@@ -143,6 +147,53 @@ describe('generateInvoicePdf', () => {
     expect(occurrences(text, 'HOW TO PAY')).toBe(1)
     expect(occurrences(text, 'NOTES')).toBe(1)
     expect(occurrences(text, 'Page 1 of 1')).toBe(1)
+  })
+
+  describe('templates', () => {
+    for (const tpl of INVOICE_TEMPLATES) {
+      it(`${tpl.id}: renders a minimal invoice with logo as a valid PDF (1 page)`, async () => {
+        const invoice = makeInvoice({ logoUrl: LOGO_DATA_URI, template: tpl.id })
+        const buffer = await generateInvoicePdf(invoice)
+        expect(buffer.toString('ascii', 0, 4)).toBe('%PDF')
+        expect(countPages(buffer)).toBe(1)
+      })
+    }
+
+    it('default (no template field): business name appears twice (header + footer)', async () => {
+      const invoice = makeInvoice({ logoUrl: LOGO_DATA_URI })
+      const text = extractText(await generateInvoicePdf(invoice))
+      expect(occurrences(text, 'Studio One')).toBe(2)
+    })
+
+    it('showBusinessName: false with logoUrl — name appears once (footer only)', async () => {
+      const invoice = makeInvoice({ logoUrl: LOGO_DATA_URI, showBusinessName: false })
+      const text = extractText(await generateInvoicePdf(invoice))
+      expect(occurrences(text, 'Studio One')).toBe(1)
+    })
+
+    it('showBusinessName: false without logoUrl — guard kicks in, name appears twice', async () => {
+      const invoice = makeInvoice({ showBusinessName: false })
+      const text = extractText(await generateInvoicePdf(invoice))
+      expect(occurrences(text, 'Studio One')).toBe(2)
+    })
+
+    it('footer-logo with 80 line items + notes + payment method — multi-page, no render error', async () => {
+      const lineItems = Array.from({ length: 80 }, (_, i) => ({
+        description: `Line item ${i + 1} — comprehensive design and development work`,
+        quantity: 1,
+        unitPrice: 150,
+      }))
+      const invoice = makeInvoice({
+        logoUrl: LOGO_DATA_URI,
+        template: 'footer-logo',
+        lineItems,
+        notes: 'Thank you for your business. Payment due within 14 days.',
+      })
+      const pm: PaymentMethods = { bankTransfer: { accountName: 'Studio One Ltd', iban: 'GB82WEST12345698765432' } }
+      const buffer = await generateInvoicePdf(invoice, pm, 'Ref: INV-001')
+      expect(buffer.toString('ascii', 0, 4)).toBe('%PDF')
+      expect(countPages(buffer)).toBeGreaterThanOrEqual(2)
+    })
   })
 
   it('multi page: footer blocks appear once per page — pinned on 1..n-1, in-flow on the last', async () => {

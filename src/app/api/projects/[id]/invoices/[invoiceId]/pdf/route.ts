@@ -4,6 +4,7 @@ import { unauthorized, notFound, serverError } from '@/lib/api-response'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
 import { fetchImageAsDataUri } from '@/lib/pdf/fetch-image'
 import { parsePreferences } from '@/types/preferences'
+import { DEFAULT_INVOICE_TEMPLATE, isInvoiceTemplateId } from '@/lib/pdf/invoice-templates'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 import { logger } from '@/lib/log'
 
@@ -39,6 +40,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const paymentMethods = prefsData.paymentMethods ?? {}
     const invoicePaymentNote = prefsData.invoicePaymentNote
     const logoDataUri = prefsData.logoUrl ? await fetchImageAsDataUri(prefsData.logoUrl) : null
+    const template = isInvoiceTemplateId(prefsData.invoiceTemplate) ? prefsData.invoiceTemplate : DEFAULT_INVOICE_TEMPLATE
+    const showBusinessName = prefsData.invoiceShowBusinessName !== false
     const cp = invoice.clientProfile
     const leaseTenant = invoice.lease?.tenant
     const directTenant = invoice.tenant
@@ -69,6 +72,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
       fromVatNumber: prefsData.fromVatNumber,
       fromWebsite: prefsData.fromWebsite,
       logoUrl: logoDataUri,
+      template,
+      showBusinessName,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: toDisplay(i.quantity),

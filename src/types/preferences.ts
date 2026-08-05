@@ -1,4 +1,5 @@
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
+import type { InvoiceTemplateId } from '@/lib/pdf/invoice-templates'
 import type { PivotConfig } from '@/lib/pivot/types'
 
 export interface InvoiceDefaults {
@@ -29,6 +30,8 @@ export interface UserPreferenceData {
   invoicePaymentNote?: string
   invoiceNotesDefault?: string
   invoiceDefaults?: InvoiceDefaults
+  invoiceTemplate?: InvoiceTemplateId
+  invoiceShowBusinessName?: boolean
 
   // Quote settings
   quoteValidityDays?: number

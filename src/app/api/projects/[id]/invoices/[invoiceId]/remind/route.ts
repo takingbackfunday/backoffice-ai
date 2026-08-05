@@ -5,6 +5,7 @@ import { sendReminderEmail } from '@/lib/email'
 import { generateInvoicePdf } from '@/lib/pdf/invoice-pdf'
 import { fetchImageAsDataUri } from '@/lib/pdf/fetch-image'
 import { parsePreferences } from '@/types/preferences'
+import { isInvoiceTemplateId } from '@/lib/pdf/invoice-templates'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 import { logger } from '@/lib/log'
 
@@ -59,6 +60,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     const invoicePaymentNote = prefsData.invoicePaymentNote
     const logoDataUri = prefsData.logoUrl ? await fetchImageAsDataUri(prefsData.logoUrl) : null
     const fromName = prefsData.businessName || prefsData.yourName || cp?.workspace.name || 'Invoice'
+    const template = isInvoiceTemplateId(prefsData.invoiceTemplate) ? prefsData.invoiceTemplate : 'top-left'
+    const showBusinessName = prefsData.invoiceShowBusinessName !== false
 
     const { total, paid: totalPaid } = computeInvoiceTotals(invoice)
     const balance = toDisplay(total) - toDisplay(totalPaid)
@@ -83,6 +86,8 @@ export async function POST(request: Request, { params }: RouteParams) {
       fromVatNumber: prefsData.fromVatNumber,
       fromWebsite: prefsData.fromWebsite,
       logoUrl: logoDataUri,
+      template,
+      showBusinessName,
       lineItems: invoice.lineItems.map(i => ({
         description: i.description,
         quantity: toDisplay(i.quantity),
