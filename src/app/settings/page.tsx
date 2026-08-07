@@ -63,7 +63,7 @@ export default async function SettingsPage() {
 
           <div className="max-w-xl space-y-8 mt-8">
             <Section title="Quote defaults" id="quote-defaults">
-              <QuoteDefaultsForm initialValidityDays={quoteValidityDays} initialTerms={quoteTerms} />
+              <QuoteDefaultsForm />
             </Section>
 
             <Section title="Service library" id="service-library">
