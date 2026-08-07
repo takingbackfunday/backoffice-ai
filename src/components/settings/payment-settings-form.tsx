@@ -46,7 +46,7 @@ function F({ label, value, onChange, placeholder, mono = false }: {
   )
 }
 
-function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
+export function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
     <div id={id} className="rounded-lg border bg-white">
       <div className="px-4 py-2.5 border-b bg-muted/30 rounded-t-lg">
