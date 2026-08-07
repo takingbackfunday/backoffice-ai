@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, Sparkles, Save, Send, Bookmark } from 'lucide-react'
+import { Plus, Trash2, Sparkles, Save, Download, Bookmark } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useQuoteForm, type QuoteFormState, type ItemInput } from './hooks/use-quote-form'
 import { QuoteLineItemsTable } from './quote-line-items-table'
@@ -44,7 +44,7 @@ interface Props {
   clientName?: string
   jobName?: string
   onSave: (payload: Record<string, unknown>) => Promise<void>
-  onSaveAndSend?: (payload: Record<string, unknown>) => Promise<void>
+  onSaveAndDownload?: (payload: Record<string, unknown>) => Promise<void>
 }
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK', 'DKK', 'JPY']
@@ -80,7 +80,7 @@ function buildInitialState(data: Props['initialData']): QuoteFormState {
   }
 }
 
-export function QuoteEditor({ initialData, marginRules, projectSlug, clientName, jobName, onSave, onSaveAndSend }: Props) {
+export function QuoteEditor({ initialData, marginRules, projectSlug, clientName, jobName, onSave, onSaveAndDownload }: Props) {
   const [showCosts, setShowCosts] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('quote-editor-show-costs') === 'true'
@@ -126,18 +126,18 @@ export function QuoteEditor({ initialData, marginRules, projectSlug, clientName,
     }
   }, [onSave, buildPayload])
 
-  const handleSaveAndSend = useCallback(async () => {
-    if (!onSaveAndSend) return
+  const handleSaveAndDownload = useCallback(async () => {
+    if (!onSaveAndDownload) return
     setSaving(true)
     setError(null)
     try {
-      await onSaveAndSend(buildPayload() as unknown as Record<string, unknown>)
+      await onSaveAndDownload(buildPayload() as unknown as Record<string, unknown>)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save and send')
+      setError(e instanceof Error ? e.message : 'Failed to save and download')
     } finally {
       setSaving(false)
     }
-  }, [onSaveAndSend, buildPayload])
+  }, [onSaveAndDownload, buildPayload])
 
   return (
     <div className="space-y-6">
@@ -182,14 +182,14 @@ export function QuoteEditor({ initialData, marginRules, projectSlug, clientName,
           >
             <Bookmark className="w-3.5 h-3.5" /> Save as template
           </button>
-          {onSaveAndSend && (
+          {onSaveAndDownload && (
             <button
-              onClick={handleSaveAndSend}
+              onClick={handleSaveAndDownload}
               disabled={saving}
               className="flex items-center gap-1 text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              <Send className="w-3.5 h-3.5" />
-              {saving ? 'Saving…' : 'Save & Send'}
+              <Download className="w-3.5 h-3.5" />
+              {saving ? 'Saving…' : 'Save & Download'}
             </button>
           )}
           <button

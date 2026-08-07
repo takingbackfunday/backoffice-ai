@@ -44,8 +44,9 @@ export default async function NewQuotePage({ params }: PageParams) {
       project={project}
       slug={slug}
       breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Quotes', href: `/projects/${slug}/quotes` }, { label: 'New' }]}
+      contentWidth="md"
     >
-      <div className="max-w-md">
+      <div>
         <h2 className="text-lg font-semibold mb-6">New Quote</h2>
         <NewQuoteForm
           projectId={project.id}

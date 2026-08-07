@@ -10,7 +10,7 @@ export const capability: PageCapability = {
     'Set item prices, quantities, units, and cost rates',
     'Apply margin rules and tag items for auto-pricing',
     'Review a blended margin percentage',
-    'Save draft or save and send the quote to the client',
+    'Save draft or save and download the quote PDF',
   ],
   deepLinks: {},
   reads: ['Quote', 'QuoteSection', 'QuoteLineItem', 'MarginRule'],

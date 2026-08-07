@@ -33,14 +33,14 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
       </colgroup>
       <thead>
         <tr className="border-b">
-          <th className="text-left px-4 py-1.5 text-xs font-normal text-muted-foreground">Description</th>
-          <th className="px-1 py-1.5 text-xs font-normal text-muted-foreground text-right">Qty</th>
-          <th className="px-1 py-1.5 text-xs font-normal text-muted-foreground text-right">Price</th>
-          {showCosts && <th className="px-1 py-1.5 text-xs font-normal text-muted-foreground text-right">Cost rt</th>}
-          {showCosts && <th className="px-1 py-1.5 text-xs font-normal text-muted-foreground">Tags</th>}
-          {showCosts && <th className="px-1 py-1.5 text-xs font-normal text-muted-foreground">Int. notes</th>}
-          {showCosts && <th className="px-1 py-1.5 text-xs font-normal text-muted-foreground">Risk</th>}
-          {showCosts && <th className="px-1 py-1.5 text-xs font-normal text-muted-foreground text-right">Margin</th>}
+          <th className="text-left px-4 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
+          <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Qty</th>
+          <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Price</th>
+          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Cost rt</th>}
+          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Tags</th>}
+          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Int. notes</th>}
+          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Risk</th>}
+          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Margin</th>}
           <th />
         </tr>
       </thead>
@@ -115,7 +115,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                     value={item.quantity}
                     onChange={e => onUpdateItem(item.id, 'quantity', e.target.value)}
                     placeholder="1"
-                    className="text-sm text-right bg-transparent border-none outline-none w-10"
+                    className="text-sm text-right bg-transparent border-none outline-none w-10 tabular-nums focus:bg-muted/30 rounded"
                     step="1"
                   />
                   <input
@@ -134,7 +134,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                     value={item.unitPrice}
                     onChange={e => onUpdateItem(item.id, 'unitPrice', e.target.value)}
                     placeholder="0"
-                    className="text-sm text-right bg-transparent border-none outline-none w-full"
+                    className="text-sm text-right bg-transparent border-none outline-none w-full tabular-nums focus:bg-muted/30 rounded"
                     step="0.01"
                   />
                   <label className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 cursor-pointer">
@@ -155,7 +155,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                     value={item.costRate}
                     onChange={e => onUpdateItem(item.id, 'costRate', e.target.value)}
                     placeholder="—"
-                    className="text-sm text-right bg-transparent border-none outline-none w-full"
+                    className="text-sm text-right bg-transparent border-none outline-none w-full tabular-nums focus:bg-muted/30 rounded"
                     step="0.01"
                   />
                 </td>

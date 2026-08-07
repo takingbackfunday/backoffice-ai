@@ -1,7 +1,5 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
-import Link from 'next/link'
-import { Plus } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { QuoteList } from '@/components/projects/quote-list'
@@ -55,16 +53,8 @@ export default async function ProjectQuotesPage({ params }: PageParams) {
       contentWidth="lg"
     >
       <div>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold">Quotes</h2>
-          <Link
-            href={`/projects/${slug}/quotes/new`}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Plus className="w-3 h-3" /> New Quote
-          </Link>
-        </div>
-        <QuoteList projectSlug={slug} quotes={quotes} />
+        <h2 className="text-lg font-semibold mb-6">Quotes</h2>
+        <QuoteList projectId={project.id} projectSlug={slug} quotes={quotes} />
       </div>
     </ProjectPageShell>
   )

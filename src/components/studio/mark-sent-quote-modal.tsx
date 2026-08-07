@@ -31,6 +31,8 @@ export function MarkSentQuoteModal({ item, onDone }: Props) {
     try {
       const res = await fetch(`/api/projects/${item.projectId}/quotes/${item.quoteId}/send`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markOnly: true }),
       })
       const json = await res.json()
       if (!res.ok || json.error) {

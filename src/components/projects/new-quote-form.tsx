@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { FilePlus2, LayoutTemplate, Copy } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { JobSelect } from './job-select'
 import { StarterTemplates } from './starter-templates'
 
@@ -25,6 +27,12 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
   const [selectedRecentQuoteId, setSelectedRecentQuoteId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const modes: { value: StartMode; icon: typeof FilePlus2; label: string; blurb: string }[] = [
+    { value: 'blank', icon: FilePlus2, label: 'From scratch', blurb: 'Empty quote' },
+    { value: 'template', icon: LayoutTemplate, label: 'From template', blurb: 'Reuse a saved structure' },
+    { value: 'duplicate', icon: Copy, label: 'Duplicate recent', blurb: 'Copy an existing quote' },
+  ]
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -68,24 +76,29 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Start mode selector */}
+      {/* Start mode selector — card grid */}
       <div>
         <label className="block text-sm font-medium mb-2">Create from</label>
-        <div className="flex gap-2">
-          {(['blank', 'template', 'duplicate'] as StartMode[]).map(mode => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setStartMode(mode)}
-              className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                startMode === mode
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-background text-muted-foreground hover:text-foreground hover:bg-accent'
-              }`}
-            >
-              {mode === 'blank' ? 'From scratch' : mode === 'template' ? 'From template' : 'Duplicate recent'}
-            </button>
-          ))}
+        <div className="grid grid-cols-3 gap-2">
+          {modes.map(m => {
+            const Icon = m.icon
+            const active = startMode === m.value
+            return (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setStartMode(m.value)}
+                className={cn(
+                  'rounded-xl border p-3 text-left transition-colors',
+                  active ? 'border-primary bg-primary/5' : 'text-muted-foreground hover:bg-accent'
+                )}
+              >
+                <Icon className={cn('w-5 h-5 mb-1.5', active ? 'text-primary' : 'text-muted-foreground')} />
+                <p className={cn('text-sm font-medium', active ? 'text-foreground' : '')}>{m.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{m.blurb}</p>
+              </button>
+            )
+          })}
         </div>
       </div>
 

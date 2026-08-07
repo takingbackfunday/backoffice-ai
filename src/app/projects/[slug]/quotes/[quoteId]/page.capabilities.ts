@@ -6,7 +6,7 @@ export const capability: PageCapability = {
   purpose: 'View a client quote — see sections, line items, pricing, status, and manage signatures or amendments.',
   jobsToBeDone: [
     'Review quote sections, items, and total pricing',
-    'Send the quote to the client by email',
+    'Download the quote PDF and mark it sent (optional: send by email)',
     'Mark a quote as accepted or rejected',
     'Create an amendment to a signed quote',
     'Convert an accepted quote to an invoice',

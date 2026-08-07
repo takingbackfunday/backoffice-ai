@@ -7,16 +7,18 @@ import { PipelineBreadcrumb } from '@/components/projects/pipeline-breadcrumb'
 import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; quoteId: string }> }
+interface SearchParams { downloaded?: string }
 
 function fmt(n: number, currency: string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 }
 
-export default async function QuoteDetailPage({ params }: PageParams) {
+export default async function QuoteDetailPage({ params, searchParams }: PageParams & { searchParams: Promise<SearchParams> }) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
   const { slug, quoteId } = await params
+  const { downloaded } = await searchParams
 
   const project = await prisma.workspace.findFirst({
     where: { userId, slug, type: 'CLIENT' },
@@ -105,6 +107,8 @@ export default async function QuoteDetailPage({ params }: PageParams) {
     })),
   }
 
+  const initialShowSentBanner = downloaded === '1' && quote.status === 'DRAFT'
+
   // Build pipeline breadcrumb nodes
   const pipelineNodes: import('@/components/projects/pipeline-breadcrumb').PipelineNode[] = []
   pipelineNodes.push({
@@ -149,6 +153,7 @@ export default async function QuoteDetailPage({ params }: PageParams) {
           projectSlug={slug}
           quote={quoteData}
           fulfillment={fulfillment}
+          initialShowSentBanner={initialShowSentBanner}
         />
       </div>
     </ProjectPageShell>

@@ -55,7 +55,8 @@ export function QuoteEditClient({ initialData, marginRules, projectId, projectSl
     router.refresh()
   }, [projectId, initialData.id, router])
 
-  const handleSaveAndSend = useCallback(async (payload: Record<string, unknown>) => {
+  const handleSaveAndDownload = useCallback(async (payload: Record<string, unknown>) => {
+    // 1. Save
     const res = await fetch(`/api/projects/${projectId}/quotes/${initialData.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -64,13 +65,17 @@ export function QuoteEditClient({ initialData, marginRules, projectId, projectSl
     const json = await res.json()
     if (!res.ok) throw new Error(json.error ?? 'Failed to save')
 
-    const sendRes = await fetch(`/api/projects/${projectId}/quotes/${initialData.id}/send`, {
-      method: 'POST',
-    })
-    const sendJson = await sendRes.json()
-    if (!sendRes.ok) throw new Error(sendJson.error ?? 'Failed to send')
-    router.refresh()
-  }, [projectId, initialData.id, router])
+    // 2. Trigger download
+    const a = document.createElement('a')
+    a.href = `/api/projects/${projectId}/quotes/${initialData.id}/pdf`
+    a.download = `${initialData.quoteNumber ?? 'quote'}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    // 3. Navigate to detail with banner flag
+    router.push(`/projects/${projectSlug}/quotes/${initialData.id}?downloaded=1`)
+  }, [projectId, initialData.id, initialData.quoteNumber, projectSlug, router])
 
   return (
     <QuoteEditor
@@ -80,7 +85,7 @@ export function QuoteEditClient({ initialData, marginRules, projectId, projectSl
       clientName={clientName}
       jobName={jobName}
       onSave={handleSave}
-      onSaveAndSend={handleSaveAndSend}
+      onSaveAndDownload={handleSaveAndDownload}
     />
   )
 }

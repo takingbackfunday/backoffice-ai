@@ -3,17 +3,17 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Send, Check, X, GitBranch, Plus, Download, ChevronRight, Loader2 } from 'lucide-react'
-import { FulfillmentBar } from './fulfillment-bar'
+import { X, GitBranch, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePageContext } from '@/components/chat/page-context-provider'
-import { SaveTemplateModal, sectionsFromQuote } from './save-template-modal'
+import { QUOTE_STATUS_STYLES } from './quote-status'
+import { QuoteDetailActions } from './quote-detail-actions'
+import { QuoteDownloadBanner } from './quote-download-banner'
+import { QuoteDetailTable } from './quote-detail-table'
+import { QuoteCreateInvoicePanel } from './quote-create-invoice-panel'
+import { FulfillmentBar } from './fulfillment-bar'
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                               */
-/* ------------------------------------------------------------------ */
-
-interface QuoteLineItem {
+export interface QuoteLineItem {
   id: string
   description: string
   quantity: number
@@ -27,7 +27,7 @@ interface QuoteLineItem {
   tags: string[]
 }
 
-interface QuoteSection {
+export interface QuoteSection {
   id: string
   name: string
   sortOrder: number
@@ -85,41 +85,25 @@ interface Props {
   projectSlug: string
   quote: QuoteDetailData
   fulfillment: FulfillmentData | null
+  initialShowSentBanner?: boolean
 }
-
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                             */
-/* ------------------------------------------------------------------ */
 
 function fmt(n: number, currency: string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  DRAFT: 'bg-gray-100 text-gray-600',
-  SENT: 'bg-blue-100 text-blue-700',
-  ACCEPTED: 'bg-green-100 text-green-700',
-  REJECTED: 'bg-red-100 text-red-700',
-  SUPERSEDED: 'bg-amber-100 text-amber-700',
-  AMENDED: 'bg-purple-100 text-purple-700',
-}
-
-/* ------------------------------------------------------------------ */
-/*  Component                                                           */
-/* ------------------------------------------------------------------ */
-
-export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }: Props) {
+export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment, initialShowSentBanner = false }: Props) {
   usePageContext({ entityType: 'quote', entityId: quote.id, entityName: quote.quoteNumber })
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showCreateInvoice, setShowCreateInvoice] = useState(false)
-  const [dueDate, setDueDate] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewing, setPreviewing] = useState(false)
-  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [showSentBanner, setShowSentBanner] = useState(initialShowSentBanner)
 
   const currency = quote.currency
+  const invoicesCount = quote._count?.invoices ?? 0
 
   async function action(path: string, method = 'POST', body?: object) {
     setLoading(path)
@@ -141,57 +125,14 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
     }
   }
 
-  async function handleSend() {
-    const result = await action('send')
-    if (result) router.refresh()
-  }
-
-  async function handleMarkSent() {
-    const result = await action('send', 'POST', { markOnly: true })
-    if (result) router.refresh()
-  }
-
-  async function handleAccept() {
-    const result = await action('accept')
-    if (result) router.refresh()
-  }
-
-  async function handleRevise() {
-    const result = await action('revise')
-    if (result) router.push(`/projects/${projectSlug}/quotes/${result.id}/edit`)
-  }
-
-  async function handleCancel() {
-    if (!confirm('Mark this quote as cancelled (client withdrew)? This cannot be undone.')) return
-    const result = await action('cancel')
-    if (result) router.refresh()
-  }
-
-  async function handleDelete() {
-    if (!confirm('Delete this draft quote? This cannot be undone.')) return
-    setLoading('delete')
-    setError(null)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}`, { method: 'DELETE' })
-      if (!res.ok) { const j = await res.json(); setError(j.error ?? 'Delete failed'); return }
-      router.push(`/projects/${projectSlug}/quotes`)
-    } catch {
-      setError('Delete failed')
-    } finally {
-      setLoading(null)
-    }
-  }
-
-  async function handleCreateInvoice() {
-    if (!dueDate) { setError('Due date is required'); return }
+  async function handleCreateInvoice(dueDate: string) {
     const result = await action('create-invoice', 'POST', { dueDate })
     if (result) router.push(`/projects/${projectSlug}/invoices/${result.id}`)
   }
 
-  const subtotal = quote.sections.reduce((sum, s) =>
-    sum + s.items.filter(i => !i.isOptional).reduce((si, i) => si + i.unitPrice * i.quantity, 0),
-    0
-  )
+  function handleDownloaded() {
+    if (quote.status === 'DRAFT') setShowSentBanner(true)
+  }
 
   return (
     <div className="space-y-6">
@@ -205,225 +146,68 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
                 <GitBranch className="w-3.5 h-3.5" /> v{quote.version}
               </span>
             )}
-            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', STATUS_STYLES[quote.status] ?? 'bg-gray-100 text-gray-600')}>
+            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', QUOTE_STATUS_STYLES[quote.status] ?? 'bg-gray-100 text-gray-600')}>
               {quote.status.toLowerCase()}
             </span>
           </div>
           <p className="text-muted-foreground mt-0.5">{quote.title}</p>
           {quote.job && <p className="text-sm text-muted-foreground">Job: {quote.job.name}</p>}
         </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          {quote.status === 'DRAFT' && (
-            <>
-              <button
-                onClick={handleDelete}
-                disabled={loading === 'delete'}
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
-              >
-                {loading === 'delete' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                Delete
-              </button>
-              <Link
-                href={`/projects/${projectSlug}/quotes/${quote.id}/edit`}
-                className="text-sm px-3 py-1.5 rounded border hover:bg-accent"
-              >
-                Edit
-              </Link>
-              <button
-                onClick={handleMarkSent}
-                disabled={loading === 'send'}
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
-              >
-                {loading === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                Mark as sent
-              </button>
-              <button
-                onClick={handleSend}
-                disabled={loading === 'send'}
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {loading === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                Send
-              </button>
-              <button
-                onClick={handleAccept}
-                disabled={loading === 'accept'}
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
-              >
-                {loading === 'accept' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                Mark Accepted
-              </button>
-            </>
-          )}
-          {quote.status === 'SENT' && (
-            <>
-              <button
-                onClick={handleCancel}
-                disabled={loading === 'cancel'}
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
-              >
-                {loading === 'cancel' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                Cancel
-              </button>
-              <button
-                onClick={handleRevise}
-                disabled={loading === 'revise'}
-                className="text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
-              >
-                Revise
-              </button>
-              <button
-                onClick={handleAccept}
-                disabled={loading === 'accept'}
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
-              >
-                {loading === 'accept' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                Mark Accepted
-              </button>
-            </>
-          )}
-          {(quote.status === 'ACCEPTED' || quote.status === 'AMENDED') && (
-            <>
-              {quote._count?.invoices === 0 && (
-                <button
-                  onClick={handleCancel}
-                  disabled={loading === 'cancel'}
-                  className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                >
-                  {loading === 'cancel' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                  Cancel
-                </button>
-              )}
-              <button
-                onClick={() => setShowCreateInvoice(true)}
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Plus className="w-3.5 h-3.5" /> Create Invoice
-              </button>
-              {quote.status === 'ACCEPTED' && (
-                <button
-                  onClick={handleRevise}
-                  disabled={loading === 'revise'}
-                  className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
-                >
-                  {loading === 'revise' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                  Add change order
-                </button>
-              )}
-            </>
-          )}
-          <button
-            type="button"
-            disabled={previewing}
-            onClick={async () => {
-              setPreviewing(true)
-              try {
-                const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}/pdf`)
-                if (!res.ok) return
-                const blob = await res.blob()
-                setPreviewUrl(URL.createObjectURL(blob))
-              } finally {
-                setPreviewing(false)
-              }
-            }}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50 transition-colors"
-          >
-            {previewing ? 'Loading…' : 'Preview PDF'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const a = document.createElement('a')
-              a.href = `/api/projects/${projectId}/quotes/${quote.id}/pdf`
-              a.download = `${quote.quoteNumber}.pdf`
-              document.body.appendChild(a)
-              a.click()
-              document.body.removeChild(a)
-
-              if (quote.status !== 'DRAFT') return
-              try {
-                const key = 'pending-mark-sent-quote'
-                const existing: { quoteId: string; quoteNumber: string; projectId: string; projectSlug: string; downloadedAt: number }[] = JSON.parse(localStorage.getItem(key) ?? '[]')
-                if (existing.some(e => e.quoteId === quote.id)) return
-                existing.push({ quoteId: quote.id, quoteNumber: quote.quoteNumber, projectId, projectSlug, downloadedAt: Date.now() })
-                localStorage.setItem(key, JSON.stringify(existing))
-              } catch {}
-            }}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" /> Download PDF
-          </button>
-          {!quote.isAmendment && (
-            <>
-              <button
-                type="button"
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent transition-colors"
-                onClick={async () => {
-                  setLoading('duplicate')
-                  setError(null)
-                  try {
-                    const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}/duplicate`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-                    const json = await res.json()
-                    if (!res.ok) { setError(json.error ?? 'Duplicate failed'); return }
-                    router.push(`/projects/${projectSlug}/quotes/${json.data.id}/edit`)
-                  } catch { setError('Duplicate failed') }
-                  finally { setLoading(null) }
-                }}
-                disabled={loading === 'duplicate'}
-              >
-                {loading === 'duplicate' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5" />}
-                Duplicate
-              </button>
-              <button
-                type="button"
-                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent transition-colors"
-                onClick={() => setTemplateModalOpen(true)}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Save as template
-              </button>
-            </>
-          )}
-        </div>
+        <button
+          type="button"
+          disabled={previewing}
+          onClick={async () => {
+            setPreviewing(true)
+            try {
+              const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}/pdf`)
+              if (!res.ok) return
+              const blob = await res.blob()
+              setPreviewUrl(URL.createObjectURL(blob))
+            } finally { setPreviewing(false) }
+          }}
+          className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50 transition-colors shrink-0"
+        >
+          {previewing ? 'Loading…' : 'Preview PDF'}
+        </button>
       </div>
 
       {error && (
         <div className="text-sm text-destructive bg-destructive/10 rounded px-3 py-2">{error}</div>
       )}
 
-      {/* Create invoice panel */}
-      {showCreateInvoice && (
-        <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Create Invoice from Quote</p>
-            <button onClick={() => setShowCreateInvoice(false)} className="text-muted-foreground hover:text-foreground">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex items-center gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Due Date</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                className="ml-2 text-sm border rounded px-2 py-1 bg-background"
-              />
-            </div>
-            <button
-              onClick={handleCreateInvoice}
-              disabled={loading === 'create-invoice'}
-              className="text-sm px-4 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {loading === 'create-invoice' ? 'Creating…' : 'Create Invoice'}
-            </button>
-          </div>
-        </div>
+      {showSentBanner && quote.status === 'DRAFT' && (
+        <QuoteDownloadBanner
+          projectId={projectId}
+          quoteId={quote.id}
+          quoteNumber={quote.quoteNumber}
+          clientName={quote.clientProfile.contactName ?? 'your client'}
+          onDone={() => { setShowSentBanner(false); router.refresh() }}
+        />
       )}
 
-      {/* Fulfillment bar (only for accepted quotes) */}
+      <QuoteDetailActions
+        projectId={projectId}
+        projectSlug={projectSlug}
+        quote={{
+          id: quote.id, quoteNumber: quote.quoteNumber, title: quote.title,
+          status: quote.status, version: quote.version, isAmendment: quote.isAmendment,
+          clientEmail: quote.clientProfile.email,
+        }}
+        sections={quote.sections}
+        invoicesCount={invoicesCount}
+        onAction={action}
+        loading={loading}
+        onDownloaded={handleDownloaded}
+      />
+
+      {showCreateInvoice && (
+        <QuoteCreateInvoicePanel
+          onCreate={handleCreateInvoice}
+          onCancel={() => setShowCreateInvoice(false)}
+          loading={loading}
+        />
+      )}
+
       {fulfillment && (quote.status === 'ACCEPTED' || quote.status === 'AMENDED') && (
         <div className="border rounded-lg p-4">
           <h3 className="text-sm font-medium mb-3">Fulfillment</h3>
@@ -436,7 +220,6 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
         </div>
       )}
 
-      {/* Version chain */}
       {(quote.previousVersion || quote.nextVersion) && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {quote.previousVersion && (
@@ -453,7 +236,6 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
         </div>
       )}
 
-      {/* Quote details */}
       <div className="grid grid-cols-3 gap-4 text-sm">
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Client</p>
@@ -475,58 +257,14 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
         )}
       </div>
 
-      {/* Scope notes */}
       {quote.scopeNotes && (
         <div className="bg-muted/30 rounded-lg p-4">
-          <p className="text-sm">{quote.scopeNotes}</p>
+          <p className="text-sm whitespace-pre-wrap">{quote.scopeNotes}</p>
         </div>
       )}
 
-      {/* Line items */}
-      <div className="border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50">
-            <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Description</th>
-              <th className="text-right px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Qty</th>
-              <th className="text-right px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Unit Price</th>
-              <th className="text-right px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Total</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {quote.sections.map(section => (
-              <>
-                {quote.sections.length > 1 && (
-                  <tr key={`section-${section.id}`} className="bg-muted/20">
-                    <td colSpan={4} className="px-4 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {section.name}
-                    </td>
-                  </tr>
-                )}
-                {section.items.map(item => (
-                  <tr key={item.id} className={cn(item.isOptional && 'opacity-60')}>
-                    <td className="px-4 py-2.5">
-                      {item.description}
-                      {item.isOptional && <span className="ml-1 text-xs text-muted-foreground">(optional)</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-muted-foreground">{item.quantity}{item.unit ? ` ${item.unit}` : ''}</td>
-                    <td className="px-4 py-2.5 text-right">{fmt(item.unitPrice, currency)}</td>
-                    <td className="px-4 py-2.5 text-right font-medium">{fmt(item.unitPrice * item.quantity, currency)}</td>
-                  </tr>
-                ))}
-              </>
-            ))}
-          </tbody>
-          <tfoot className="border-t bg-muted/20">
-            <tr>
-              <td colSpan={3} className="px-4 py-3 text-right font-semibold">Total</td>
-              <td className="px-4 py-3 text-right font-semibold">{fmt(subtotal, currency)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      <QuoteDetailTable sections={quote.sections} currency={currency} />
 
-      {/* Payment schedule */}
       {quote.paymentSchedule && quote.paymentSchedule.length > 0 && (
         <div className="border rounded-lg p-4">
           <h3 className="text-sm font-medium mb-3">Payment Schedule</h3>
@@ -534,14 +272,13 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
             {quote.paymentSchedule.map((row, i) => (
               <div key={i} className="flex items-center justify-between text-sm">
                 <span>{row.milestone}</span>
-                <span className="font-medium">{row.percent}% — {fmt(subtotal * row.percent / 100, currency)}</span>
+                <span className="font-medium">{row.percent}%</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Terms */}
       {quote.terms && (
         <div className="border rounded-lg p-4">
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Terms &amp; Conditions</h3>
@@ -549,17 +286,13 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
         </div>
       )}
 
-      {/* Linked invoices */}
       {fulfillment && fulfillment.invoices.length > 0 && (
         <div className="border rounded-lg p-4">
           <h3 className="text-sm font-medium mb-3">Invoices ({fulfillment.invoices.length})</h3>
           <div className="space-y-2">
             {fulfillment.invoices.map(inv => (
-              <Link
-                key={inv.id}
-                href={`/projects/${projectSlug}/invoices/${inv.id}`}
-                className="flex items-center justify-between text-sm hover:bg-accent/20 rounded px-2 py-1.5"
-              >
+              <Link key={inv.id} href={`/projects/${projectSlug}/invoices/${inv.id}`}
+                className="flex items-center justify-between text-sm hover:bg-accent/20 rounded px-2 py-1.5">
                 <span className="font-medium">{inv.invoiceNumber}</span>
                 <div className="flex items-center gap-3">
                   <span className="text-muted-foreground">{fmt(inv.total, currency)}</span>
@@ -572,21 +305,17 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
         </div>
       )}
 
-      {/* Amendments */}
       {quote.amendments.length > 0 && (
         <div className="border rounded-lg p-4">
           <h3 className="text-sm font-medium mb-3">Amendments</h3>
           <div className="space-y-2">
             {quote.amendments.map(a => (
-              <Link
-                key={a.id}
-                href={`/projects/${projectSlug}/quotes/${a.id}`}
-                className="flex items-center justify-between text-sm hover:bg-accent/20 rounded px-2 py-1.5"
-              >
+              <Link key={a.id} href={`/projects/${projectSlug}/quotes/${a.id}`}
+                className="flex items-center justify-between text-sm hover:bg-accent/20 rounded px-2 py-1.5">
                 <span className="font-medium">{a.quoteNumber}</span>
                 <div className="flex items-center gap-3">
                   {a.totalQuoted !== null && <span className="text-muted-foreground">{fmt(a.totalQuoted, currency)}</span>}
-                  <span className={cn('text-xs px-1.5 py-0.5 rounded-full', STATUS_STYLES[a.status] ?? 'bg-gray-100 text-gray-600')}>
+                  <span className={cn('text-xs px-1.5 py-0.5 rounded-full', QUOTE_STATUS_STYLES[a.status] ?? 'bg-gray-100 text-gray-600')}>
                     {a.status.toLowerCase()}
                   </span>
                   <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
@@ -597,39 +326,22 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
         </div>
       )}
 
-      {/* PDF Preview Modal */}
       {previewUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }}
-        >
-          <div
-            className="relative bg-white rounded-xl shadow-2xl overflow-hidden"
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }}>
+          <div className="relative bg-white rounded-xl shadow-2xl overflow-hidden"
             style={{ width: 'min(90vw, 860px)', height: 'min(92vh, 1100px)' }}
-            onClick={e => e.stopPropagation()}
-          >
+            onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-2.5 border-b">
               <span className="text-sm font-semibold">Quote preview — {quote.quoteNumber}</span>
-              <button
-                type="button"
+              <button type="button"
                 onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }}
-                className="text-muted-foreground hover:text-foreground text-lg leading-none px-1"
-                aria-label="Close"
-              >
-                ×
-              </button>
+                className="text-muted-foreground hover:text-foreground text-lg leading-none px-1" aria-label="Close">×</button>
             </div>
-            <iframe
-              src={previewUrl}
-              className="w-full"
-              style={{ height: 'calc(100% - 45px)', border: 'none' }}
-              title="Quote preview"
-            />
+            <iframe src={previewUrl} className="w-full" style={{ height: 'calc(100% - 45px)', border: 'none' }} title="Quote preview" />
           </div>
         </div>
       )}
-
-      <SaveTemplateModal open={templateModalOpen} onOpenChange={setTemplateModalOpen} sections={sectionsFromQuote(quote.sections)} />
     </div>
   )
 }

@@ -648,7 +648,7 @@ const _data: any[] = [
       "Set item prices, quantities, units, and cost rates",
       "Apply margin rules and tag items for auto-pricing",
       "Review a blended margin percentage",
-      "Save draft or save and send the quote to the client"
+      "Save draft or save and download the quote PDF"
     ],
     "deepLinks": {},
     "reads": [
@@ -674,7 +674,7 @@ const _data: any[] = [
     "purpose": "View a client quote — see sections, line items, pricing, status, and manage signatures or amendments.",
     "jobsToBeDone": [
       "Review quote sections, items, and total pricing",
-      "Send the quote to the client by email",
+      "Download the quote PDF and mark it sent (optional: send by email)",
       "Mark a quote as accepted or rejected",
       "Create an amendment to a signed quote",
       "Convert an accepted quote to an invoice",
@@ -718,8 +718,7 @@ const _data: any[] = [
       "Quote"
     ],
     "relatedRoutes": [
-      "/projects/[slug]/quotes",
-      "/projects/[slug]/quotes/[quoteId]/generate"
+      "/projects/[slug]/quotes"
     ]
   },
   {
@@ -730,7 +729,8 @@ const _data: any[] = [
       "See all quotes and their status (draft, sent, accepted, rejected, superseded)",
       "Check which quotes have been signed or accepted",
       "Create a new quote",
-      "Navigate to a quote to view, edit, or send it"
+      "Download quote PDFs to send via your own email",
+      "Navigate to a quote to view, edit, download, or track it"
     ],
     "deepLinks": {},
     "reads": [
@@ -1597,6 +1597,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     5,
     17,
     19,
+    27,
     30
   ],
   "across": [
@@ -2127,7 +2128,6 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     12,
     13,
     20,
-    24,
     25,
     27,
     28,
@@ -2174,7 +2174,10 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "download": [
     11,
-    13
+    13,
+    24,
+    25,
+    27
   ],
   "options": [
     11
@@ -2188,6 +2191,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "sent": [
     11,
     13,
+    25,
     27,
     39
   ],
@@ -2214,6 +2218,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     13,
     22,
     25,
+    27,
     28,
     38
   ],
@@ -2259,7 +2264,6 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     13,
     15,
     22,
-    24,
     25,
     26,
     27,
@@ -2784,6 +2788,9 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "amendments": [
     25
   ],
+  "optional": [
+    25
+  ],
   "rejected": [
     25,
     27
@@ -2817,6 +2824,12 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "been": [
     27,
     33
+  ],
+  "pdfs": [
+    27
+  ],
+  "your": [
+    27
   ],
   "past": [
     28
