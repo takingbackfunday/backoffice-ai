@@ -9,6 +9,7 @@ import { MarginRulesEditor } from '@/components/settings/margin-rules-editor'
 import { ServiceItemsEditor } from '@/components/settings/service-items-editor'
 import { QuoteTemplatesEditor } from '@/components/settings/quote-templates-editor'
 import { QuoteDefaultsForm } from '@/components/settings/quote-defaults-form'
+import { WorkProfileEditor } from '@/components/settings/work-profile-editor'
 import { parsePreferences } from '@/types/preferences'
 
 export default async function SettingsPage() {
@@ -64,6 +65,10 @@ export default async function SettingsPage() {
           <div className="max-w-xl space-y-8 mt-8">
             <Section title="Quote defaults" id="quote-defaults">
               <QuoteDefaultsForm />
+            </Section>
+
+            <Section title="Work profile" id="work-profile">
+              <WorkProfileEditor initialDescription={data.workDescription} />
             </Section>
 
             <Section title="Service library" id="service-library">

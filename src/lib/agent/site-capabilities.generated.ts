@@ -1046,6 +1046,25 @@ const _data: any[] = [
     ]
   },
   {
+    "route": "/setup/work-profile",
+    "title": "Set up work profile",
+    "purpose": "First-time setup where users describe their work in plain English so AI generates quote templates and a service-item library.",
+    "jobsToBeDone": [
+      "Describe your profession and services in a few sentences",
+      "Generate quote templates and a reusable service-item library from the description",
+      "Review generated templates and items before saving",
+      "Skip setup and do it later from Settings"
+    ],
+    "reads": [
+      "UserPreference"
+    ],
+    "writes": [
+      "QuoteTemplate",
+      "ServiceItem"
+    ],
+    "deepLinks": {}
+  },
+  {
     "route": "/studio",
     "title": "Client Hub",
     "purpose": "Overview of all freelance clients — outstanding invoices, overdue amounts, and quick invoice/work-order actions.",
@@ -1192,7 +1211,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     2,
     3,
     7,
-    40
+    41
   ],
   "manually": [
     0,
@@ -1207,8 +1226,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     3,
     36,
     38,
-    40,
-    41
+    41,
+    42
   ],
   "financial": [
     0,
@@ -1279,7 +1298,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     33,
     37,
     38,
-    43
+    44
   ],
   "view": [
     1,
@@ -1299,12 +1318,12 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     32,
     36,
     37,
-    42,
-    43
+    43,
+    44
   ],
   "balances": [
     1,
-    39
+    40
   ],
   "types": [
     1
@@ -1315,7 +1334,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     6,
     7,
     36,
-    40
+    41
   ],
   "counts": [
     1,
@@ -1330,8 +1349,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     23,
     35,
     38,
-    41,
-    43
+    42,
+    44
   ],
   "current": [
     1,
@@ -1358,7 +1377,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "cards": [
     2,
-    39
+    40
   ],
   "sync": [
     2,
@@ -1379,7 +1398,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "trigger": [
     3,
-    41
+    42
   ],
   "connected": [
     3
@@ -1397,9 +1416,9 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     7,
     9,
     37,
-    40,
     41,
-    42
+    42,
+    43
   ],
   "when": [
     3
@@ -1416,7 +1435,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "imported": [
     3,
-    41
+    42
   ],
   "check": [
     3,
@@ -1444,7 +1463,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     29,
     32,
     33,
-    39
+    40
   ],
   "running": [
     3
@@ -1461,7 +1480,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     6,
     7,
     9,
-    40
+    41
   ],
   "groups": [
     4
@@ -1479,7 +1498,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     11,
     25,
     31,
-    39
+    40
   ],
   "deductible": [
     4
@@ -1494,7 +1513,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     30,
     36,
     37,
-    40
+    41
   ],
   "existing": [
     4,
@@ -1510,8 +1529,9 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "from": [
     4,
     16,
-    40,
-    41
+    39,
+    41,
+    42
   ],
   "reports": [
     4
@@ -1542,7 +1562,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     5,
     8,
     22,
-    39
+    40
   ],
   "finances": [
     5
@@ -1587,7 +1607,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     10,
     12,
     36,
-    40
+    41
   ],
   "range": [
     5,
@@ -1604,7 +1624,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     5,
     7,
     8,
-    43
+    44
   ],
   "expense": [
     5,
@@ -1639,8 +1659,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "vendors": [
     6,
-    42,
-    43
+    43,
+    44
   ],
   "merchants": [
     6
@@ -1654,7 +1674,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     27,
     33,
     35,
-    43
+    39,
+    44
   ],
   "change": [
     6,
@@ -1667,11 +1688,11 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "payee": [
     6,
     7,
-    40
+    41
   ],
   "search": [
     6,
-    40
+    41
   ],
   "name": [
     6,
@@ -1718,12 +1739,13 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     33,
     34,
     35,
-    40
+    41
   ],
   "time": [
     7,
     15,
-    30
+    30,
+    39
   ],
   "compare": [
     7
@@ -1830,7 +1852,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     23,
     25,
     30,
-    43
+    44
   ],
   "monthly": [
     8
@@ -1852,8 +1874,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     32,
     33,
     37,
-    39,
-    41
+    40,
+    42
   ],
   "leases": [
     8,
@@ -1900,7 +1922,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     29,
     32,
     35,
-    43
+    44
   ],
   "financials": [
     9,
@@ -1920,7 +1942,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     22,
     28,
     31,
-    42
+    43
   ],
   "receipts": [
     9,
@@ -1929,8 +1951,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "categorisation": [
     9,
     37,
-    40,
-    41
+    41,
+    42
   ],
   "attributed": [
     9
@@ -1948,24 +1970,24 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     30,
     31,
     33,
-    42
+    43
   ],
   "categorise": [
     9,
     37,
-    40
+    41
   ],
   "linked": [
     9,
     14,
-    42
+    43
   ],
   "filter": [
     9,
     13,
     19,
-    39,
-    40
+    40,
+    41
   ],
   "projects": [
     9,
@@ -2037,8 +2059,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     36,
     37,
     38,
-    40,
-    42
+    41,
+    43
   ],
   "invoice": [
     10,
@@ -2049,7 +2071,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     28,
     30,
     38,
-    39
+    40
   ],
   "modify": [
     10,
@@ -2070,7 +2092,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     12,
     23,
     24,
-    25
+    25,
+    39
   ],
   "dates": [
     10,
@@ -2081,7 +2104,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     10,
     12,
     38,
-    40
+    41
   ],
   "payment": [
     10,
@@ -2089,8 +2112,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     12,
     13,
     38,
-    39,
-    43
+    40,
+    44
   ],
   "instructions": [
     10,
@@ -2146,7 +2169,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     22,
     28,
     31,
-    39
+    40
   ],
   "invoiceid": [
     10,
@@ -2162,15 +2185,15 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     29,
     31,
     35,
-    42,
-    43
+    43,
+    44
   ],
   "history": [
     11,
     20,
     28,
     31,
-    43
+    44
   ],
   "download": [
     11,
@@ -2186,21 +2209,22 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     11,
     23,
     24,
-    25
+    25,
+    39
   ],
   "sent": [
     11,
     13,
     25,
     27,
-    39
+    40
   ],
   "paid": [
     11,
     13,
     28,
     31,
-    43
+    44
   ],
   "outstanding": [
     11,
@@ -2208,7 +2232,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     28,
     31,
     33,
-    39
+    40
   ],
   "resend": [
     11
@@ -2233,7 +2257,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     23,
     29,
     35,
-    43
+    44
   ],
   "make": [
     11
@@ -2255,9 +2279,9 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     34,
     35,
     37,
-    39,
     40,
-    42
+    41,
+    43
   ],
   "client": [
     12,
@@ -2271,7 +2295,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     33,
     34,
     35,
-    39
+    40
   ],
   "apply": [
     12,
@@ -2284,7 +2308,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     17,
     24,
     27,
-    39
+    40
   ],
   "immediately": [
     12
@@ -2305,7 +2329,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "overdue": [
     13,
-    39
+    40
   ],
   "summaries": [
     13
@@ -2329,16 +2353,17 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     33,
     35,
     39,
-    42,
-    43
+    40,
+    43,
+    44
   ],
   "orders": [
     14,
     15,
     22,
     33,
-    42,
-    43
+    43,
+    44
   ],
   "cost": [
     14,
@@ -2354,8 +2379,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     14,
     33,
     35,
-    39,
-    43
+    40,
+    44
   ],
   "revenue": [
     14
@@ -2367,15 +2392,15 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     23,
     33,
     35,
-    39,
-    42
+    40,
+    43
   ],
   "bill": [
     14,
     18,
     33,
     35,
-    39
+    40
   ],
   "against": [
     14,
@@ -2431,7 +2456,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     26,
     28,
     31,
-    42
+    43
   ],
   "fixed": [
     15
@@ -2452,7 +2477,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "amounts": [
     16,
-    39
+    40
   ],
   "tenant": [
     16,
@@ -2540,7 +2565,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     17,
     18,
     34,
-    40
+    39,
+    41
   ],
   "photos": [
     17
@@ -2554,7 +2580,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "bills": [
     18,
-    42
+    43
   ],
   "full": [
     18,
@@ -2569,8 +2595,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     19,
     33,
     36,
-    42,
-    43
+    43,
+    44
   ],
   "once": [
     18
@@ -2599,7 +2625,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "assigned": [
     19,
     29,
-    42
+    43
   ],
   "conversation": [
     20,
@@ -2671,8 +2697,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     29,
     31,
     38,
-    42,
-    43
+    43,
+    44
   ],
   "upcoming": [
     22
@@ -2684,8 +2710,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     22,
     28,
     29,
-    42,
-    43
+    43,
+    44
   ],
   "phone": [
     22,
@@ -2701,7 +2727,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     25,
     26,
     27,
-    38
+    38,
+    39
   ],
   "amendment": [
     23,
@@ -2732,7 +2759,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     24
   ],
   "before": [
-    23
+    23,
+    39
   ],
   "submitting": [
     23
@@ -2767,13 +2795,14 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     24
   ],
   "item": [
-    24
+    24,
+    39
   ],
   "rules": [
     24,
     37,
     38,
-    41
+    42
   ],
   "auto": [
     24,
@@ -2829,7 +2858,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     27
   ],
   "your": [
-    27
+    27,
+    39
   ],
   "past": [
     28
@@ -2903,7 +2933,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "freelance": [
     34,
     35,
-    39
+    40
   ],
   "general": [
     34
@@ -2922,12 +2952,12 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "intake": [
     35,
-    39
+    40
   ],
   "upload": [
     36,
-    41,
-    42
+    42,
+    43
   ],
   "automatically": [
     36
@@ -2964,7 +2994,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "import": [
     37,
-    41
+    42
   ],
   "accept": [
     37
@@ -2973,14 +3003,16 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     37
   ],
   "generate": [
-    37
+    37,
+    39
   ],
   "suggestions": [
     37,
-    41
+    42
   ],
   "settings": [
-    38
+    38,
+    39
   ],
   "user": [
     38
@@ -2992,14 +3024,15 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     38
   ],
   "templates": [
-    38
+    38,
+    39
   ],
   "live": [
     38
   ],
   "preview": [
     38,
-    41
+    42
   ],
   "address": [
     38
@@ -3040,107 +3073,164 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "generation": [
     38
   ],
-  "clients": [
+  "profile": [
     39
+  ],
+  "first": [
+    39
+  ],
+  "setup": [
+    39
+  ],
+  "where": [
+    39
+  ],
+  "users": [
+    39
+  ],
+  "describe": [
+    39
+  ],
+  "plain": [
+    39
+  ],
+  "english": [
+    39
+  ],
+  "generates": [
+    39
+  ],
+  "service": [
+    39
+  ],
+  "library": [
+    39
+  ],
+  "profession": [
+    39
+  ],
+  "services": [
+    39
+  ],
+  "sentences": [
+    39
+  ],
+  "reusable": [
+    39
+  ],
+  "generated": [
+    39
+  ],
+  "saving": [
+    39
+  ],
+  "skip": [
+    39
+  ],
+  "later": [
+    39
+  ],
+  "clients": [
+    40
   ],
   "quick": [
-    39
+    40
   ],
   "actions": [
-    39
+    40
   ],
   "money": [
-    39
+    40
   ],
   "unsent": [
-    39
+    40
   ],
   "collected": [
-    39
+    40
   ],
   "studio": [
-    39
+    40
   ],
   "browse": [
-    40
+    41
   ],
   "bulk": [
-    40
+    41
   ],
   "duplicate": [
-    40
+    41
   ],
   "unwanted": [
-    40
+    41
   ],
   "rule": [
-    40
+    41
   ],
   "edited": [
-    40
+    41
   ],
   "file": [
-    41
+    42
   ],
   "statement": [
-    41
+    42
   ],
   "assisted": [
-    41
+    42
   ],
   "column": [
-    41
+    42
   ],
   "mapping": [
-    41
+    42
   ],
   "drop": [
-    41
+    42
   ],
   "extract": [
-    41
+    42
   ],
   "columns": [
-    41
+    42
   ],
   "right": [
-    41
+    42
   ],
   "fields": [
-    41
+    42
   ],
   "will": [
-    41
+    42
   ],
   "duplicates": [
-    41
+    42
   ],
   "automatic": [
-    41
+    42
   ],
   "after": [
-    41
+    42
   ],
   "uploaded": [
-    42
+    43
   ],
   "documents": [
-    42,
-    43
+    43,
+    44
   ],
   "payments": [
-    42
+    43
   ],
   "contracts": [
-    42
+    43
   ],
   "insurance": [
-    42
+    43
   ],
   "vendorid": [
-    42
+    43
   ],
   "subcontractors": [
-    43
+    44
   ]
 }

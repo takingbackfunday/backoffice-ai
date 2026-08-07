@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     }
 
     const redirectTo =
-      businessType === 'freelance' ? '/studio?onboarding=1' :
+      businessType === 'freelance' ? '/setup/work-profile' :
       businessType === 'property'  ? '/portfolio?onboarding=1' :
       '/bank-accounts?onboarding=1'
 

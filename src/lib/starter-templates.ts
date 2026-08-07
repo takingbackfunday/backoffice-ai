@@ -8,6 +8,7 @@ export const TemplateItemSchema = z.object({
   costRate: z.number().nonnegative().nullable().optional(),
   tags: z.array(z.string()).default([]),
   isOptional: z.boolean().default(false),
+  serviceItemId: z.string().optional(),
 })
 
 export const TemplateSectionSchema = z.object({

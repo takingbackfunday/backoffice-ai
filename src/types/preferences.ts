@@ -44,6 +44,9 @@ export interface UserPreferenceData {
   aiRuleSuggestions?: boolean
   aiSuggestionsNudgeDismissed?: boolean
 
+  // Work profile
+  workDescription?: string
+
   // Internal / system
   lastRulesAgentRun?: number
   onboardingStep?: string

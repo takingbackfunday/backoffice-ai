@@ -1032,6 +1032,8 @@ model ServiceItem {
   defaultRate     Decimal  @db.Decimal(10, 2)
   defaultCostRate Decimal? @db.Decimal(10, 2)
   tags            String[]
+  groupName       String?  // template name this item was generated from
+  generationId    String?  // groups items from one work-profile generation
   usageCount      Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
+import { parsePreferences } from '@/types/preferences'
 import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { NewQuoteForm } from '@/components/projects/new-quote-form'
 
@@ -18,7 +19,7 @@ export default async function NewQuotePage({ params }: PageParams) {
   })
   if (!project || !project.clientProfile) notFound()
 
-  const [jobs, templates, recentQuotes] = await Promise.all([
+  const [jobs, templates, recentQuotes, prefs] = await Promise.all([
     prisma.job.findMany({
       where: { clientProfile: { workspaceId: project.id }, status: 'ACTIVE' },
       select: { id: true, name: true },
@@ -35,7 +36,9 @@ export default async function NewQuotePage({ params }: PageParams) {
       orderBy: { createdAt: 'desc' },
       take: 10,
     }),
+    prisma.userPreference.findUnique({ where: { userId } }),
   ])
+  const prefData = parsePreferences(prefs?.data)
 
   const hub = getHubRoute(project.type)
 
@@ -54,6 +57,7 @@ export default async function NewQuotePage({ params }: PageParams) {
           jobs={jobs}
           templates={templates}
           recentQuotes={recentQuotes}
+          workDescription={prefData.workDescription}
         />
       </div>
     </ProjectPageShell>

@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { FilePlus2, LayoutTemplate, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { JobSelect } from './job-select'
-import { StarterTemplates } from './starter-templates'
+import { WorkProfileSetup } from '@/components/setup/work-profile-setup'
 
 interface Props {
   projectId: string
@@ -14,11 +14,12 @@ interface Props {
   jobs: { id: string; name: string }[]
   templates: { id: string; name: string }[]
   recentQuotes: { id: string; quoteNumber: string; title: string }[]
+  workDescription?: string
 }
 
 type StartMode = 'blank' | 'template' | 'duplicate'
 
-export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQuotes }: Props) {
+export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQuotes, workDescription }: Props) {
   const router = useRouter()
   const [startMode, setStartMode] = useState<StartMode>('blank')
   const [title, setTitle] = useState('')
@@ -27,6 +28,11 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
   const [selectedRecentQuoteId, setSelectedRecentQuoteId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const handleProfileComplete = useCallback(() => {
+    router.refresh()
+    setStartMode('template')
+  }, [router])
 
   const modes: { value: StartMode; icon: typeof FilePlus2; label: string; blurb: string }[] = [
     { value: 'blank', icon: FilePlus2, label: 'From scratch', blurb: 'Empty quote' },
@@ -153,11 +159,27 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
         </div>
       )}
 
-      {/* Empty state for template mode */}
+      {/* Empty state for template mode — use work profile or inline setup */}
       {startMode === 'template' && templates.length === 0 && (
-        <div className="border rounded-lg p-3 space-y-2">
-          <p className="text-sm text-muted-foreground">No templates yet.</p>
-          <StarterTemplates onCreated={() => router.refresh()} />
+        <div className="border rounded-lg p-3">
+          {workDescription ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">No templates yet, but you have a work profile saved.</p>
+              <Link
+                href="/settings#work-profile"
+                className="text-xs text-primary hover:underline inline-block"
+              >
+                Create templates from your work profile in Settings →
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                No templates yet. Describe your work and we&rsquo;ll generate templates and a service library.
+              </p>
+              <WorkProfileSetup mode="inline" onComplete={handleProfileComplete} />
+            </div>
+          )}
         </div>
       )}
 
