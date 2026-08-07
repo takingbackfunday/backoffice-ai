@@ -31,7 +31,6 @@ export default async function SettingsPage() {
   const invoiceShowBusinessName = data.invoiceShowBusinessName ?? true
 
   const marginRules = await prisma.marginRule.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } })
-  const serviceItems = await prisma.serviceItem.findMany({ where: { userId }, orderBy: { usageCount: 'desc' } })
   const quoteValidityDays = data.quoteValidityDays ?? 30
   const quoteTerms = data.quoteTerms ?? ''
 
@@ -67,14 +66,7 @@ export default async function SettingsPage() {
             </Section>
 
             <Section title="Service library" id="service-library">
-              <ServiceItemsEditor initialItems={serviceItems.map(i => ({
-                id: i.id,
-                description: i.description,
-                unit: i.unit ?? '',
-                defaultRate: Number(i.defaultRate),
-                defaultCostRate: i.defaultCostRate ? Number(i.defaultCostRate) : null,
-                tags: i.tags,
-              }))} />
+              <ServiceItemsEditor />
             </Section>
 
             <Section title="Margin rules" id="margin-rules">
