@@ -201,6 +201,9 @@ All entity picker `<select>` elements in the modals (`NewWorkOrderModal`, `Intak
 
 Maintenance request creation is intentionally absent from the modals — the API requires `unitId`, unavailable in modal context.
 
+### Never nest `<form>` — JobSelect inline adder uses div + type="button"
+`JobSelect` (`src/components/projects/job-select.tsx`) renders inside parent `<form>`s in at least five places (`new-quote-form`, `client-quick-actions`, `time-tracker`, `invoice-form-fields`, `estimate-editor`). Its inline "Add job" row must stay a `<div>` with a `type="button"` submit and Enter handled via `onKeyDown` (`e.preventDefault()` + add) — it was previously a `<form>`, and the nested submit bubbled to the outer form's `onSubmit`, creating a quote against the wrong job and navigating away before the new job appeared. Apply the same rule to any inline-creation UI: no `<form>` inside a component that may sit within another form.
+
 ### Job detail — margin is server-computed
 The Costs and Margin summary cards on the job detail page (`/projects/[slug]/jobs/[jobId]`) are calculated at server render time. `WorkOrderPanel` mutates its own local state after creating work orders/bills, but the summary cards don't update until the page is hard-reloaded. If you add live margin tracking, move the calculation into a client-side derived value from the panel's state.
 

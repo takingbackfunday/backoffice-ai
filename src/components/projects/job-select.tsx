@@ -55,8 +55,7 @@ export function JobSelect({
 
   const selected = jobs.find(j => j.id === value)
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleAdd() {
     if (!newName.trim() || saving) return
     setSaving(true)
     setError(null)
@@ -129,19 +128,21 @@ export function JobSelect({
 
           <div className="border-t">
             {adding ? (
-              <form onSubmit={handleAdd} className="flex items-center gap-1 p-2">
+              <div className="flex items-center gap-1 p-2">
                 <input
                   ref={inputRef}
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
                   onKeyDown={e => {
                     if (e.key === 'Escape') { setAdding(false); setNewName('') }
+                    if (e.key === 'Enter') { e.preventDefault(); handleAdd() }
                   }}
                   placeholder="Job name…"
                   className="flex-1 min-w-0 border rounded px-2 py-1 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
                 />
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleAdd}
                   disabled={!newName.trim() || saving}
                   className="shrink-0 rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50 flex items-center"
                 >
@@ -154,7 +155,7 @@ export function JobSelect({
                 >
                   ✕
                 </button>
-              </form>
+              </div>
             ) : (
               <button
                 type="button"
