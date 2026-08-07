@@ -7,6 +7,7 @@ import { Send, Check, X, GitBranch, Plus, Download, ChevronRight, Loader2 } from
 import { FulfillmentBar } from './fulfillment-bar'
 import { cn } from '@/lib/utils'
 import { usePageContext } from '@/components/chat/page-context-provider'
+import { SaveTemplateModal, sectionsFromQuote } from './save-template-modal'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -22,6 +23,8 @@ interface QuoteLineItem {
   hasEstimateLink: boolean
   costBasis: number | null
   marginPercent: number | null
+  costRate: number | null
+  tags: string[]
 }
 
 interface QuoteSection {
@@ -114,6 +117,7 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
   const [dueDate, setDueDate] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewing, setPreviewing] = useState(false)
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
 
   const currency = quote.currency
 
@@ -375,20 +379,9 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
               <button
                 type="button"
                 className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent transition-colors"
-                onClick={async () => {
-                  setLoading('save-template')
-                  setError(null)
-                  try {
-                    const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}/save-template`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-                    const json = await res.json()
-                    if (!res.ok) { setError(json.error ?? 'Failed to save as template'); return }
-                    router.refresh()
-                  } catch { setError('Failed to save as template') }
-                  finally { setLoading(null) }
-                }}
-                disabled={loading === 'save-template'}
+                onClick={() => setTemplateModalOpen(true)}
               >
-                {loading === 'save-template' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                <Plus className="w-3.5 h-3.5" />
                 Save as template
               </button>
             </>
@@ -635,6 +628,8 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
           </div>
         </div>
       )}
+
+      <SaveTemplateModal open={templateModalOpen} onOpenChange={setTemplateModalOpen} sections={sectionsFromQuote(quote.sections)} />
     </div>
   )
 }

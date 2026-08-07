@@ -7,6 +7,7 @@ import { PaymentSettingsForm, Section } from '@/components/settings/payment-sett
 import { AiFeaturesForm } from '@/components/settings/ai-features-form'
 import { MarginRulesEditor } from '@/components/settings/margin-rules-editor'
 import { ServiceItemsEditor } from '@/components/settings/service-items-editor'
+import { QuoteTemplatesEditor } from '@/components/settings/quote-templates-editor'
 import { QuoteDefaultsForm } from '@/components/settings/quote-defaults-form'
 import { parsePreferences } from '@/types/preferences'
 
@@ -67,6 +68,10 @@ export default async function SettingsPage() {
 
             <Section title="Service library" id="service-library">
               <ServiceItemsEditor />
+            </Section>
+
+            <Section title="Quote templates" id="quote-templates">
+              <QuoteTemplatesEditor />
             </Section>
 
             <Section title="Margin rules" id="margin-rules">

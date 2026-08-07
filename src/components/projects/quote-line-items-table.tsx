@@ -1,13 +1,15 @@
 'use client'
 
-import { Trash2, Bookmark } from 'lucide-react'
+import { Trash2, Bookmark, Check } from 'lucide-react'
 import type { ItemInput } from './hooks/use-quote-form'
+import type { LibraryStatus } from './hooks/use-save-to-library'
 import { itemMarginPercent } from '@/lib/quote-pricing'
 
 interface Props {
   section: { id: string; name: string; items: ItemInput[] }
   marginRules: { tag: string; marginPct: number }[]
   showCosts: boolean
+  libraryStatus?: Record<string, LibraryStatus>
   onUpdateItem: (itemId: string, field: string, value: unknown) => void
   onRemoveItem: (itemId: string) => void
   onSaveToLibrary: (item: ItemInput) => void
@@ -15,7 +17,7 @@ interface Props {
 
 const RISK_LEVELS = ['low', 'medium', 'high']
 
-export function QuoteLineItemsTable({ section, marginRules, showCosts, onUpdateItem, onRemoveItem, onSaveToLibrary }: Props) {
+export function QuoteLineItemsTable({ section, marginRules, showCosts, libraryStatus, onUpdateItem, onRemoveItem, onSaveToLibrary }: Props) {
   return (
     <table className="w-full text-sm border-collapse">
       <colgroup>
@@ -59,15 +61,51 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, onUpdateI
                     placeholder="Item description"
                     className="text-sm bg-transparent border-none outline-none w-full"
                   />
-                  {item.description.trim() && (
-                    <button
-                      onClick={() => onSaveToLibrary(item)}
-                      className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-opacity"
-                      title="Save to library"
-                    >
-                      <Bookmark className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  {item.description.trim() && (() => {
+                    const status = libraryStatus?.[item.id]
+                    if (status === 'saved') {
+                      return (
+                        <button
+                          onClick={() => onSaveToLibrary(item)}
+                          className="shrink-0 text-emerald-600"
+                          title="Saved to library"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                      )
+                    }
+                    if (status === 'duplicate') {
+                      return (
+                        <button
+                          onClick={() => onSaveToLibrary(item)}
+                          className="shrink-0 text-amber-500"
+                          title="Already in library"
+                        >
+                          <Bookmark className="w-3.5 h-3.5" />
+                        </button>
+                      )
+                    }
+                    if (status === 'error') {
+                      return (
+                        <button
+                          onClick={() => onSaveToLibrary(item)}
+                          className="shrink-0 text-destructive"
+                          title="Couldn't save (rate must be > 0)"
+                        >
+                          <Bookmark className="w-3.5 h-3.5" />
+                        </button>
+                      )
+                    }
+                    return (
+                      <button
+                        onClick={() => onSaveToLibrary(item)}
+                        className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-opacity"
+                        title="Save to library"
+                      >
+                        <Bookmark className="w-3.5 h-3.5" />
+                      </button>
+                    )
+                  })()}
                 </div>
               </td>
               <td className="px-1 py-1.5">

@@ -10,6 +10,41 @@ interface Props {
   sections: SectionInput[]
 }
 
+export function sectionsFromQuote(
+  sections: {
+    id: string
+    name: string
+    items: {
+      id: string
+      description: string
+      quantity: number
+      unit: string | null
+      unitPrice: number
+      costRate: number | null
+      tags: string[]
+      isOptional: boolean
+    }[]
+  }[],
+): SectionInput[] {
+  return sections.map(s => ({
+    id: s.id,
+    name: s.name,
+    items: s.items.map(i => ({
+      id: i.id,
+      description: i.description,
+      quantity: String(i.quantity),
+      unit: i.unit ?? 'x',
+      unitPrice: String(i.unitPrice),
+      costRate: i.costRate != null ? String(i.costRate) : '',
+      tags: i.tags.join(', '),
+      internalNotes: '',
+      riskLevel: 'low',
+      priceManual: true,
+      isOptional: i.isOptional,
+    })),
+  }))
+}
+
 export function SaveTemplateModal({ open, onOpenChange, sections }: Props) {
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)

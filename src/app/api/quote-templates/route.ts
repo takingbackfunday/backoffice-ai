@@ -2,29 +2,18 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created } from '@/lib/api-response'
 import { authedRoute } from '@/lib/api-handler'
+import { TemplateSectionSchema } from '@/lib/starter-templates'
 
 const CreateTemplateSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  sections: z.array(z.object({
-    name: z.string().min(1),
-    items: z.array(z.object({
-      description: z.string().min(1),
-      unit: z.string().nullable().optional(),
-      quantity: z.number().positive().default(1),
-      rate: z.number().nonnegative().nullable().optional(),
-      costRate: z.number().nonnegative().nullable().optional(),
-      tags: z.array(z.string()).default([]),
-      isOptional: z.boolean().default(false),
-    })),
-    sortOrder: z.number().int().nonnegative().optional(),
-  })),
+  sections: z.array(TemplateSectionSchema),
 })
 
 export const GET = authedRoute({
   handler: async ({ userId }) => {
     const templates = await prisma.quoteTemplate.findMany({
       where: { userId },
-      select: { id: true, name: true, usageCount: true },
+      select: { id: true, name: true, sections: true, usageCount: true },
       orderBy: [{ usageCount: 'desc' }, { name: 'asc' }],
     })
     return ok(templates, { count: templates.length })

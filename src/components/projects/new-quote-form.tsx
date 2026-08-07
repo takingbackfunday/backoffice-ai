@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { JobSelect } from './job-select'
+import { StarterTemplates } from './starter-templates'
 
 interface Props {
   projectId: string
@@ -39,6 +41,7 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
         })
       } else {
         if (!jobId) { setError('Select a job'); return }
+        if (startMode === 'template' && !templateId) { setError('Select a template'); return }
         const body: Record<string, unknown> = {
           jobId,
           title: title.trim() || undefined,
@@ -128,6 +131,20 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
+          <Link
+            href="/settings#quote-templates"
+            className="text-xs text-primary hover:underline mt-1 inline-block"
+          >
+            Manage templates →
+          </Link>
+        </div>
+      )}
+
+      {/* Empty state for template mode */}
+      {startMode === 'template' && templates.length === 0 && (
+        <div className="border rounded-lg p-3 space-y-2">
+          <p className="text-sm text-muted-foreground">No templates yet.</p>
+          <StarterTemplates onCreated={() => router.refresh()} />
         </div>
       )}
 

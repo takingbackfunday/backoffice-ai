@@ -1,12 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, Sparkles, Save, Send } from 'lucide-react'
+import { Plus, Trash2, Sparkles, Save, Send, Bookmark } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useQuoteForm, type QuoteFormState, type ItemInput } from './hooks/use-quote-form'
 import { QuoteLineItemsTable } from './quote-line-items-table'
 import { AiConfirmBanner } from '@/components/projects/ai-confirm-banner'
 import { useChatStore } from '@/stores/chat-store'
+import { SaveTemplateModal } from './save-template-modal'
+import { ServiceItemPicker } from './service-item-picker'
+import { useSaveToLibrary } from './hooks/use-save-to-library'
 
 interface Props {
   initialData: {
@@ -108,6 +111,8 @@ export function QuoteEditor({ initialData, marginRules, projectSlug, clientName,
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const { save: saveToLibrary, statuses: libraryStatuses } = useSaveToLibrary()
 
   const handleSave = useCallback(async () => {
     setSaving(true)
@@ -171,6 +176,12 @@ export function QuoteEditor({ initialData, marginRules, projectSlug, clientName,
             <Sparkles className="w-3.5 h-3.5" />
             Ask AI
           </button>
+          <button
+            onClick={() => setTemplateModalOpen(true)}
+            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent"
+          >
+            <Bookmark className="w-3.5 h-3.5" /> Save as template
+          </button>
           {onSaveAndSend && (
             <button
               onClick={handleSaveAndSend}
@@ -202,6 +213,8 @@ export function QuoteEditor({ initialData, marginRules, projectSlug, clientName,
       {error && (
         <div className="text-sm text-destructive bg-destructive/10 rounded px-3 py-2">{error}</div>
       )}
+
+      <SaveTemplateModal open={templateModalOpen} onOpenChange={setTemplateModalOpen} sections={state.sections} />
 
       {/* AI confirm banner */}
       {hasPendingChanges && (
@@ -245,23 +258,35 @@ export function QuoteEditor({ initialData, marginRules, projectSlug, clientName,
               section={section}
               marginRules={marginRules}
               showCosts={showCosts}
+              libraryStatus={libraryStatuses}
               onUpdateItem={(itemId, field, value) =>
                 dispatch({ type: 'UPDATE_ITEM', sectionId: section.id, itemId, field: field as keyof ItemInput, value: value as string | boolean })
               }
               onRemoveItem={(itemId) =>
                 dispatch({ type: 'REMOVE_ITEM', sectionId: section.id, itemId })
               }
-              onSaveToLibrary={() => {
-                /* Save to service item library — wired by parent */
-              }}
+              onSaveToLibrary={saveToLibrary}
             />
             <div className="px-4 py-2 border-t">
-              <button
-                onClick={() => dispatch({ type: 'ADD_ITEM', sectionId: section.id })}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <Plus className="w-3 h-3" /> Add item
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => dispatch({ type: 'ADD_ITEM', sectionId: section.id })}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="w-3 h-3" /> Add item
+                </button>
+                <ServiceItemPicker onSelect={(item) => dispatch({
+                  type: 'ADD_ITEM', sectionId: section.id,
+                  payload: {
+                    description: item.description,
+                    unit: item.unit ?? 'x',
+                    unitPrice: String(item.defaultRate),
+                    costRate: item.defaultCostRate != null ? String(item.defaultCostRate) : '',
+                    tags: item.tags.join(', '),
+                    priceManual: true,
+                  },
+                })} />
+              </div>
             </div>
           </div>
         ))}

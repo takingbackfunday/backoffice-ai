@@ -106,7 +106,7 @@ export const POST = authedRoute<{ id: string }, z.infer<typeof CreateQuoteSchema
           jobId,
           clientProfileId: project.clientProfile.id,
           quoteNumber,
-          title: title ?? (sections as unknown as { name: string }[])[0]?.name ?? 'Untitled Quote',
+          title: title ?? template.name,
           currency: project.clientProfile.currency ?? 'USD',
           validUntil,
           terms: defaultTerms,

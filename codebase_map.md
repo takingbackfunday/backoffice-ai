@@ -208,6 +208,16 @@ Newly created entities are appended to the component's local state list — no p
 | Send quote by email | `src/components/projects/send-quote-modal.tsx` |
 | Margin rules (settings) | `src/components/settings/margin-rules-editor.tsx` → `GET/POST /api/margin-rules`, `DELETE /api/margin-rules/[id]` |
 | Fulfillment bar | `src/components/projects/fulfillment-bar.tsx` → `GET …/fulfillment` (computed at query time) |
+| Quote templates — schema + starter data | `src/lib/starter-templates.ts` → `TemplateItemSchema`, `TemplateSectionSchema`, `StarterTemplateSchema`, `STARTER_TRADES` (10 curated trades) |
+| Quote templates — starter test | `src/lib/starter-templates.test.ts` |
+| Quote templates — list + create | `GET/POST /api/quote-templates` → `src/app/api/quote-templates/route.ts` |
+| Quote templates — delete | `DELETE /api/quote-templates/[templateId]` → `src/app/api/quote-templates/[templateId]/route.ts` |
+| Quote templates — starter (trade or LLM) | `POST /api/quote-templates/starter` → `src/app/api/quote-templates/starter/route.ts` |
+| Quote templates — settings editor | `src/components/settings/quote-templates-editor.tsx` |
+| Quote templates — starter picker (shared) | `src/components/projects/starter-templates.tsx` — used by new-quote empty state + settings editor |
+| Save as template modal | `src/components/projects/save-template-modal.tsx` — wired from `quote-editor.tsx` + `quote-detail-client.tsx`; `sectionsFromQuote()` mapper for detail page |
+| Service item picker (library insert) | `src/components/projects/service-item-picker.tsx` — wired from `quote-editor.tsx` section footer |
+| Save-to-library hook | `src/components/projects/hooks/use-save-to-library.ts` → bookmark button in `quote-line-items-table.tsx` |
 
 ### Receipts / OCR
 
