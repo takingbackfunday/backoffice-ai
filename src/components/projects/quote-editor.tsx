@@ -142,65 +142,63 @@ export function QuoteEditor({ initialData, marginRules, projectSlug, clientName,
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div className={cn('flex-1', pendingFields.has('title') && 'ai-changed p-1 rounded-lg')}>
+      <div className={cn(pendingFields.has('title') && 'ai-changed p-1 rounded-lg')}>
+        <input
+          type="text"
+          value={state.title}
+          onChange={e => dispatch({ type: 'SET_TITLE', value: e.target.value })}
+          placeholder="Quote title"
+          className="text-2xl font-semibold bg-transparent border-none outline-none w-full placeholder:text-muted-foreground"
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2 flex-wrap">
+        <select
+          value={state.currency}
+          onChange={e => dispatch({ type: 'SET_CURRENCY', value: e.target.value })}
+          className={cn('text-sm border rounded px-2 py-1 bg-background', pendingFields.has('currency') && 'ai-changed')}
+        >
+          {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
           <input
-            type="text"
-            value={state.title}
-            onChange={e => dispatch({ type: 'SET_TITLE', value: e.target.value })}
-            placeholder="Quote title"
-            className="text-2xl font-semibold bg-transparent border-none outline-none w-full placeholder:text-muted-foreground"
+            type="checkbox"
+            checked={showCosts}
+            onChange={e => setShowCosts(e.target.checked)}
+            className="rounded"
           />
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <select
-            value={state.currency}
-            onChange={e => dispatch({ type: 'SET_CURRENCY', value: e.target.value })}
-            className={cn('text-sm border rounded px-2 py-1 bg-background', pendingFields.has('currency') && 'ai-changed')}
-          >
-            {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showCosts}
-              onChange={e => setShowCosts(e.target.checked)}
-              className="rounded"
-            />
-            Show costs
-          </label>
+          Show costs
+        </label>
+        <button
+          onClick={() => useChatStore.getState().toggle()}
+          className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          Ask AI
+        </button>
+        <button
+          onClick={() => setTemplateModalOpen(true)}
+          className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent"
+        >
+          <Bookmark className="w-3.5 h-3.5" /> Save as template
+        </button>
+        {onSaveAndDownload && (
           <button
-            onClick={() => useChatStore.getState().toggle()}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Ask AI
-          </button>
-          <button
-            onClick={() => setTemplateModalOpen(true)}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent"
-          >
-            <Bookmark className="w-3.5 h-3.5" /> Save as template
-          </button>
-          {onSaveAndDownload && (
-            <button
-              onClick={handleSaveAndDownload}
-              disabled={saving}
-              className="flex items-center gap-1 text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              <Download className="w-3.5 h-3.5" />
-              {saving ? 'Saving…' : 'Save & Download'}
-            </button>
-          )}
-          <button
-            onClick={handleSave}
+            onClick={handleSaveAndDownload}
             disabled={saving}
-            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
+            className="flex items-center gap-1 text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            <Save className="w-3.5 h-3.5" />
-            {saving ? 'Saving…' : 'Save'}
+            <Download className="w-3.5 h-3.5" />
+            {saving ? 'Saving…' : 'Save & Download'}
           </button>
-        </div>
+        )}
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
+        >
+          <Save className="w-3.5 h-3.5" />
+          {saving ? 'Saving…' : 'Save'}
+        </button>
       </div>
 
       {(clientName || jobName) && (
