@@ -107,17 +107,6 @@ export default async function QuoteDetailPage({ params }: PageParams) {
 
   // Build pipeline breadcrumb nodes
   const pipelineNodes: import('@/components/projects/pipeline-breadcrumb').PipelineNode[] = []
-  if (quote.estimate) {
-    const est = quote.estimate
-    const estLabel = est.version > 1 ? `Estimate ${est.title} (v${est.version})` : `Estimate ${est.title}`
-    pipelineNodes.push({
-      type: 'estimate',
-      id: est.id,
-      label: estLabel,
-      status: 'FINAL',
-      href: `/projects/${slug}/estimates/${est.id}`,
-    })
-  }
   pipelineNodes.push({
     type: 'quote',
     id: quote.id,
