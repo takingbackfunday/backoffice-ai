@@ -50,7 +50,6 @@ export default async function ProjectQuotesPage({ params }: PageParams) {
       project={project}
       slug={slug}
       breadcrumb={[hub, { label: project.name, href: `/projects/${slug}` }, { label: 'Quotes' }]}
-      contentWidth="lg"
     >
       <div>
         <h2 className="text-lg font-semibold mb-6">Quotes</h2>

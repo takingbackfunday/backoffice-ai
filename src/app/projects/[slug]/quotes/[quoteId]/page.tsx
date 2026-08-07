@@ -142,7 +142,7 @@ export default async function QuoteDetailPage({ params, searchParams }: PagePara
         { label: 'Quotes', href: `/projects/${slug}/quotes` },
         { label: quote.quoteNumber },
       ]}
-      contentWidth="lg"
+      contentWidth="md"
     >
       <div className="space-y-4">
         <div className="mb-1">

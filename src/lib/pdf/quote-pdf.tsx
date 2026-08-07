@@ -174,8 +174,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
           </View>
         ) : null}
 
-        {/* Line items table */}
-        {/* Deliberately not `fixed`: react-pdf fixed elements overlap our mid-page header on page 2+. */}
+        {/* Line items table — items rendered within their sections */}
         <View style={S.tableHeader} minPresenceAhead={60}>
           <Text style={[S.thText, S.colDesc]}>Description</Text>
           <Text style={[S.thText, S.colQty]}>Qty</Text>
@@ -188,37 +187,31 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
             {quote.sections.length > 1 ? (
               <Text style={S.sectionHeader} minPresenceAhead={24}>{section.name}</Text>
             ) : null}
-            {section.items.filter(i => !i.isOptional).map((item, ii) => (
-              <View key={ii} style={S.tableRow} wrap={false}>
-                <View style={S.colDesc}>
-                  <Text style={S.tdText}>{item.description}</Text>
-                  {item.unit ? <Text style={S.tdMuted}>{item.unit}</Text> : null}
+            {section.items.map((item, ii) =>
+              item.isOptional ? (
+                <View key={ii} style={S.tableRowOptional} wrap={false}>
+                  <View style={S.colDesc}>
+                    <Text style={S.tdText}>{item.description}</Text>
+                    <Text style={S.optionalBadge}>(Optional)</Text>
+                  </View>
+                  <Text style={[S.tdMuted, S.colQty]}>{item.quantity}</Text>
+                  <Text style={[S.tdMuted, S.colRate]}>{fmt(item.unitPrice, currency)}</Text>
+                  <Text style={[S.tdMuted, S.colTotal]}>{fmt(item.quantity * item.unitPrice, currency)}</Text>
                 </View>
-                <Text style={[S.tdText, S.colQty]}>{item.quantity}</Text>
-                <Text style={[S.tdText, S.colRate]}>{fmt(item.unitPrice, currency)}</Text>
-                <Text style={[S.tdText, S.colTotal]}>{fmt(item.quantity * item.unitPrice, currency)}</Text>
-              </View>
-            ))}
+              ) : (
+                <View key={ii} style={S.tableRow} wrap={false}>
+                  <View style={S.colDesc}>
+                    <Text style={S.tdText}>{item.description}</Text>
+                    {item.unit ? <Text style={S.tdMuted}>{item.unit}</Text> : null}
+                  </View>
+                  <Text style={[S.tdText, S.colQty]}>{item.quantity}</Text>
+                  <Text style={[S.tdText, S.colRate]}>{fmt(item.unitPrice, currency)}</Text>
+                  <Text style={[S.tdText, S.colTotal]}>{fmt(item.quantity * item.unitPrice, currency)}</Text>
+                </View>
+              )
+            )}
           </View>
         ))}
-
-        {/* Optional items */}
-        {optionalItems.length > 0 ? (
-          <View>
-            <Text style={[S.sectionHeader, { marginTop: 16 }]} minPresenceAhead={24}>Optional Add-ons</Text>
-            {optionalItems.map((item, ii) => (
-              <View key={ii} style={S.tableRowOptional} wrap={false}>
-                <View style={S.colDesc}>
-                  <Text style={S.tdText}>{item.description}</Text>
-                  <Text style={S.optionalBadge}>(Optional)</Text>
-                </View>
-                <Text style={[S.tdMuted, S.colQty]}>{item.quantity}</Text>
-                <Text style={[S.tdMuted, S.colRate]}>{fmt(item.unitPrice, currency)}</Text>
-                <Text style={[S.tdMuted, S.colTotal]}>{fmt(item.quantity * item.unitPrice, currency)}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
 
         {/* Totals */}
         <View style={S.totalsSection} wrap={false}>

@@ -76,6 +76,7 @@ export default async function QuoteEditPage({ params }: PageParams) {
 
   return (
     <ProjectPageShell
+      contentWidth="md"
       project={project}
       slug={slug}
       breadcrumb={[
