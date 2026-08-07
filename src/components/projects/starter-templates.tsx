@@ -14,7 +14,7 @@ export function StarterTemplates({ onCreated }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault()
     setBusy(true)
     setError(null)
@@ -48,7 +48,7 @@ export function StarterTemplates({ onCreated }: Props) {
       <p className="text-sm text-muted-foreground">
         Get started with ready-made templates — pick your trade, or describe your work and we&rsquo;ll generate them.
       </p>
-      <form onSubmit={handleSubmit} className="space-y-2">
+      <div className="space-y-2">
         <select
           value={trade}
           onChange={e => setTrade(e.target.value)}
@@ -67,6 +67,12 @@ export function StarterTemplates({ onCreated }: Props) {
             rows={3}
             value={description}
             onChange={e => setDescription(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !busy && description.trim().length >= 10) {
+                e.preventDefault()
+                handleSubmit(e)
+              }
+            }}
             placeholder="e.g. I shoot weddings and edit highlight films…"
             disabled={busy}
             className="w-full border rounded px-3 py-2 text-sm bg-background resize-none"
@@ -76,14 +82,15 @@ export function StarterTemplates({ onCreated }: Props) {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <button
-          type="submit"
+          type="button"
+          onClick={handleSubmit}
           disabled={busy || trade === '' || (trade === 'describe' && description.trim().length < 10)}
           className="flex items-center gap-1.5 text-sm px-4 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           {trade === 'describe' ? 'Generate my templates' : 'Add starter templates'}
         </button>
-      </form>
+      </div>
     </div>
   )
 }
