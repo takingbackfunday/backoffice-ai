@@ -24,6 +24,10 @@ interface Props {
 export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, acceptedQuotes, hasTransactions = true }: Props) {
   const router = useRouter()
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
+  const [quoteDueDate, setQuoteDueDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 30)
+    return d.toISOString().slice(0, 10)
+  })
   const [creatingFromQuote, setCreatingFromQuote] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showFromTransactions, setShowFromTransactions] = useState(false)
@@ -39,6 +43,7 @@ export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, accept
       const res = await fetch(`/api/projects/${projectId}/quotes/${selectedQuoteId}/create-invoice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dueDate: quoteDueDate || undefined }),
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? 'Failed to create invoice'); return }
@@ -116,13 +121,22 @@ export function NewInvoiceShortcuts({ projectId, projectSlug, clientName, accept
                 ))}
               </select>
               {selectedQuoteId && (
-                <button
-                  onClick={handleFromQuote}
-                  disabled={creatingFromQuote}
-                  className="text-xs px-2.5 py-1.5 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
-                >
-                  {creatingFromQuote ? '…' : 'Create'}
-                </button>
+                <>
+                  <input
+                    type="date"
+                    value={quoteDueDate}
+                    onChange={e => setQuoteDueDate(e.target.value)}
+                    className="text-xs border border-green-200 bg-green-50 text-green-800 rounded-lg px-2 py-1.5 focus:outline-none"
+                    title="Due date"
+                  />
+                  <button
+                    onClick={handleFromQuote}
+                    disabled={creatingFromQuote}
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+                  >
+                    {creatingFromQuote ? '…' : 'Create'}
+                  </button>
+                </>
               )}
             </div>
           ) : (

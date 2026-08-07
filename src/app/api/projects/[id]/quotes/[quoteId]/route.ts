@@ -4,21 +4,23 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest } from '@/lib/api-response'
 import { authedRoute } from '@/lib/api-handler'
 import { requireQuote } from '@/lib/authz'
+import { itemMarginPercent, quoteTotals } from '@/lib/quote-pricing'
 
 const ParamsSchema = z.object({ id: z.string(), quoteId: z.string() })
 
 const QuoteLineItemUpdateSchema = z.object({
   id: z.string().optional(),
   description: z.string().min(1),
-  quantity: z.number().positive(),
+  quantity: z.number().positive().default(1),
   unit: z.string().optional().nullable(),
   unitPrice: z.number().min(0),
+  costRate: z.number().min(0).optional().nullable(),
+  tags: z.array(z.string()).default([]),
+  internalNotes: z.string().optional().nullable(),
+  riskLevel: z.string().optional().nullable(),
+  priceManual: z.boolean().default(false),
   isOptional: z.boolean().default(false),
-  hasEstimateLink: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
-  costBasis: z.number().optional().nullable(),
-  marginPercent: z.number().optional().nullable(),
-  sourceItemIds: z.array(z.string()).default([]),
 })
 
 const QuoteSectionUpdateSchema = z.object({
@@ -43,7 +45,6 @@ const UpdateQuoteSchema = z.object({
 
 const quoteInclude = {
   sections: { include: { items: { orderBy: { sortOrder: 'asc' as const } } }, orderBy: { sortOrder: 'asc' as const } },
-  estimate: { select: { id: true, title: true, version: true } },
   job: { select: { id: true, name: true } },
   clientProfile: { select: { id: true, contactName: true, email: true, company: true } },
   previousVersion: { select: { id: true, quoteNumber: true, version: true } },
@@ -85,10 +86,17 @@ export const PATCH = authedRoute<{ id: string; quoteId: string }, z.infer<typeof
     const updated = await prisma.$transaction(async (tx) => {
       if (sections !== undefined) {
         await tx.quoteSection.deleteMany({ where: { quoteId: params.quoteId } })
-        const totalCost = sections.reduce((sum, s) =>
-          sum + s.items.reduce((si, i) => si + (i.costBasis ?? 0), 0), 0)
-        const totalQuoted = sections.reduce((sum, s) =>
-          sum + s.items.reduce((si, i) => si + i.unitPrice * i.quantity, 0), 0)
+
+        const allItems = sections.flatMap(s => s.items.map(i => ({
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          costRate: i.costRate ?? null,
+          isOptional: i.isOptional,
+        })))
+        const totals = quoteTotals(allItems.map(i => ({
+          ...i,
+          costRate: i.costRate ? Number(i.costRate) : null,
+        })))
 
         await tx.quote.update({
           where: { id: params.quoteId },
@@ -97,8 +105,8 @@ export const PATCH = authedRoute<{ id: string; quoteId: string }, z.infer<typeof
             paymentSchedule: paymentScheduleValue,
             overrides: overridesValue,
             validUntil: validUntil ? new Date(validUntil) : undefined,
-            totalCost,
-            totalQuoted,
+            totalCost: totals.totalCost || null,
+            totalQuoted: totals.totalQuoted || null,
             sections: {
               create: sections.map((s, si) => ({
                 name: s.name,
@@ -109,12 +117,16 @@ export const PATCH = authedRoute<{ id: string; quoteId: string }, z.infer<typeof
                     quantity: item.quantity,
                     unit: item.unit,
                     unitPrice: item.unitPrice,
+                    costRate: item.costRate,
+                    tags: item.tags,
+                    internalNotes: item.internalNotes,
+                    riskLevel: item.riskLevel,
+                    priceManual: item.priceManual,
                     isOptional: item.isOptional,
-                    hasEstimateLink: item.hasEstimateLink,
                     sortOrder: item.sortOrder ?? ii,
-                    costBasis: item.costBasis,
-                    marginPercent: item.marginPercent,
-                    sourceItemIds: item.sourceItemIds,
+                    marginPercent: item.costRate != null && item.costRate > 0
+                      ? itemMarginPercent(Number(item.costRate), item.unitPrice)
+                      : null,
                   })),
                 },
               })),

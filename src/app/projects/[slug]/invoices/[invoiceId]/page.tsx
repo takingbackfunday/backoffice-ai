@@ -119,7 +119,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
       lease: { select: { id: true, unit: { select: { unitLabel: true } }, tenant: { select: { name: true, email: true } } } },
       replacesInvoice: { select: { id: true, invoiceNumber: true } },
       replacedBy: { select: { id: true, invoiceNumber: true } },
-      quote: { select: { id: true, quoteNumber: true, estimateId: true } },
+      quote: { select: { id: true, quoteNumber: true } },
     },
   })
   if (!invoice) notFound()
@@ -203,20 +203,6 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
   // Build pipeline breadcrumb nodes
   const pipelineNodes: import('@/components/projects/pipeline-breadcrumb').PipelineNode[] = []
   if (invoice.quote) {
-    const estimate = await prisma.estimate.findUnique({
-      where: { id: invoice.quote.estimateId },
-      select: { id: true, title: true, version: true, status: true },
-    })
-    if (estimate) {
-      const estLabel = estimate.version > 1 ? `Estimate ${estimate.title} (v${estimate.version})` : `Estimate ${estimate.title}`
-      pipelineNodes.push({
-        type: 'estimate',
-        id: estimate.id,
-        label: estLabel,
-        status: estimate.status,
-        href: `/projects/${slug}/estimates/${estimate.id}`,
-      })
-    }
     pipelineNodes.push({
       type: 'quote',
       id: invoice.quote.id,

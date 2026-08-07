@@ -154,7 +154,7 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
 
   async function handleRevise() {
     const result = await action('revise')
-    if (result) router.push(`/projects/${projectSlug}/quotes/${result.id}/generate`)
+    if (result) router.push(`/projects/${projectSlug}/quotes/${result.id}/edit`)
   }
 
   async function handleCancel() {
@@ -222,7 +222,7 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
                 Delete
               </button>
               <Link
-                href={`/projects/${projectSlug}/quotes/${quote.id}/generate`}
+                href={`/projects/${projectSlug}/quotes/${quote.id}/edit`}
                 className="text-sm px-3 py-1.5 rounded border hover:bg-accent"
               >
                 Edit
@@ -298,6 +298,16 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
               >
                 <Plus className="w-3.5 h-3.5" /> Create Invoice
               </button>
+              {quote.status === 'ACCEPTED' && (
+                <button
+                  onClick={handleRevise}
+                  disabled={loading === 'revise'}
+                  className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent disabled:opacity-50"
+                >
+                  {loading === 'revise' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  Add change order
+                </button>
+              )}
             </>
           )}
           <button
@@ -341,6 +351,48 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment }
           >
             <Download className="w-3.5 h-3.5" /> Download PDF
           </button>
+          {!quote.isAmendment && (
+            <>
+              <button
+                type="button"
+                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent transition-colors"
+                onClick={async () => {
+                  setLoading('duplicate')
+                  setError(null)
+                  try {
+                    const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}/duplicate`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                    const json = await res.json()
+                    if (!res.ok) { setError(json.error ?? 'Duplicate failed'); return }
+                    router.push(`/projects/${projectSlug}/quotes/${json.data.id}/edit`)
+                  } catch { setError('Duplicate failed') }
+                  finally { setLoading(null) }
+                }}
+                disabled={loading === 'duplicate'}
+              >
+                {loading === 'duplicate' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5" />}
+                Duplicate
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent transition-colors"
+                onClick={async () => {
+                  setLoading('save-template')
+                  setError(null)
+                  try {
+                    const res = await fetch(`/api/projects/${projectId}/quotes/${quote.id}/save-template`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                    const json = await res.json()
+                    if (!res.ok) { setError(json.error ?? 'Failed to save as template'); return }
+                    router.refresh()
+                  } catch { setError('Failed to save as template') }
+                  finally { setLoading(null) }
+                }}
+                disabled={loading === 'save-template'}
+              >
+                {loading === 'save-template' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                Save as template
+              </button>
+            </>
+          )}
         </div>
       </div>
 

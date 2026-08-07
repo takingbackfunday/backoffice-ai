@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
+import { quoteTotals } from '@/lib/quote-pricing'
 import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
@@ -18,8 +19,6 @@ const AmendSchema = z.object({
       unitPrice: z.number().min(0),
       isOptional: z.boolean().default(false),
       sortOrder: z.number().int().default(0),
-      costBasis: z.number().optional().nullable(),
-      marginPercent: z.number().optional().nullable(),
     })).default([]),
   })).default([]),
 })
@@ -47,18 +46,21 @@ export async function POST(request: Request, { params }: RouteParams) {
     })
     const quoteNumber = `QTE-${String(quoteCount + 1).padStart(4, '0')}`
 
-    const totalQuoted = parsed.data.sections.reduce((sum, s) =>
-      sum + s.items.reduce((si, i) => si + i.unitPrice * i.quantity, 0), 0)
-    const totalCost = parsed.data.sections.reduce((sum, s) =>
-      sum + s.items.reduce((si, i) => si + (i.costBasis ?? 0), 0), 0)
+    const allItems = parsed.data.sections.flatMap(s => s.items.map(i => ({
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      costRate: null,
+      isOptional: i.isOptional,
+    })))
+    const totals = quoteTotals(allItems)
+
+    const rootQuoteId = quote.rootQuoteId ?? quote.id
 
     const amendment = await prisma.$transaction(async (tx) => {
-      // Mark original as AMENDED
       await tx.quote.update({ where: { id: quoteId }, data: { status: 'AMENDED' } })
 
       return tx.quote.create({
         data: {
-          estimateId: quote.estimateId,
           jobId: quote.jobId,
           clientProfileId: quote.clientProfileId,
           quoteNumber,
@@ -66,8 +68,9 @@ export async function POST(request: Request, { params }: RouteParams) {
           currency: quote.currency,
           isAmendment: true,
           parentQuoteId: quoteId,
-          totalCost,
-          totalQuoted,
+          rootQuoteId,
+          totalCost: totals.totalCost || null,
+          totalQuoted: totals.totalQuoted || null,
           sections: {
             create: parsed.data.sections.map((s, si) => ({
               name: s.name,
@@ -80,10 +83,6 @@ export async function POST(request: Request, { params }: RouteParams) {
                   unitPrice: item.unitPrice,
                   isOptional: item.isOptional,
                   sortOrder: item.sortOrder ?? ii,
-                  costBasis: item.costBasis,
-                  marginPercent: item.marginPercent,
-                  hasEstimateLink: false,
-                  sourceItemIds: [],
                 })),
               },
             })),

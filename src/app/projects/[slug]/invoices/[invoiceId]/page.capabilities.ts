@@ -14,7 +14,7 @@ export const capability: PageCapability = {
     'Navigate to the edit page to make changes',
   ],
   deepLinks: {
-    'pipeline-breadcrumb': 'Pipeline breadcrumb showing estimate → quote → invoice chain',
+    'pipeline-breadcrumb': 'Pipeline breadcrumb showing quote → invoice chain',
     'history': 'Renegotiation history panel (collapsed)',
     'payments': 'Payments section with record payment form',
   },

@@ -13,15 +13,14 @@ export const capability: PageCapability = {
     'See previous and next versions of this quote',
   ],
   deepLinks: {
-    'pipeline-breadcrumb': 'Pipeline breadcrumb showing estimate → quote → invoices chain',
+    'pipeline-breadcrumb': 'Pipeline breadcrumb showing quote → invoices chain',
     'fulfillment': 'Fulfillment bar for accepted quotes (invoicing progress)',
     'amendments': 'Amendments list for this quote',
   },
-  reads: ['Quote', 'QuoteSection', 'QuoteItem', 'Estimate', 'Job', 'ClientProfile'],
+  reads: ['Quote', 'QuoteSection', 'QuoteItem', 'Job', 'ClientProfile'],
   writes: ['Quote'],
   relatedRoutes: [
-    '/projects/[slug]/quotes/[quoteId]/generate',
-    '/projects/[slug]/invoices/new',
     '/projects/[slug]/quotes',
+    '/projects/[slug]/invoices/new',
   ],
 }

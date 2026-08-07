@@ -6,7 +6,7 @@ export interface PageCapability {
   deepLinks: Record<string, string>      // { 'business-address': '#business-address' }
   reads: string[]                        // Prisma model names this page reads
   writes: string[]                       // Prisma model names this page writes
-  editorContext?: 'invoice' | 'estimate' | 'quote' // if set, omni can drive the editor via apply_*_edits
+  editorContext?: 'invoice' | 'quote' // if set, omni can drive the editor via apply_*_edits
   relatedRoutes?: string[]               // other routes worth suggesting after this one
   hidden?: boolean                       // exclude from omni (e.g. public apply/sign pages)
 }

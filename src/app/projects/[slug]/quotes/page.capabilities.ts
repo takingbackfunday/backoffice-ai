@@ -15,7 +15,6 @@ export const capability: PageCapability = {
   writes: ['Quote'],
   relatedRoutes: [
     '/projects/[slug]/quotes/new',
-    '/projects/[slug]/estimates',
     '/settings',
   ],
 }

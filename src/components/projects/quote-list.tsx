@@ -41,7 +41,7 @@ export function QuoteList({ projectSlug, quotes }: Props) {
       <div className="text-center py-12 border border-dashed rounded-lg">
         <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
         <p className="text-sm text-muted-foreground">No quotes yet.</p>
-        <p className="text-xs text-muted-foreground mt-1">Generate a quote from a finalized estimate on a job.</p>
+        <p className="text-xs text-muted-foreground mt-1">Create a quote from a template, a recent quote, or from scratch.</p>
       </div>
     )
   }

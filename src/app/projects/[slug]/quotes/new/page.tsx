@@ -18,16 +18,22 @@ export default async function NewQuotePage({ params }: PageParams) {
   })
   if (!project || !project.clientProfile) notFound()
 
-  const [jobs, estimates] = await Promise.all([
+  const [jobs, templates, recentQuotes] = await Promise.all([
     prisma.job.findMany({
       where: { clientProfile: { workspaceId: project.id }, status: 'ACTIVE' },
       select: { id: true, name: true },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.estimate.findMany({
-      where: { workspaceId: project.id },
-      select: { id: true, title: true, status: true },
+    prisma.quoteTemplate.findMany({
+      where: { userId },
+      select: { id: true, name: true },
       orderBy: { createdAt: 'desc' },
+    }),
+    prisma.quote.findMany({
+      where: { clientProfile: { workspaceId: project.id } },
+      select: { id: true, quoteNumber: true, title: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
     }),
   ])
 
@@ -45,7 +51,8 @@ export default async function NewQuotePage({ params }: PageParams) {
           projectId={project.id}
           projectSlug={slug}
           jobs={jobs}
-          estimates={estimates}
+          templates={templates}
+          recentQuotes={recentQuotes}
         />
       </div>
     </ProjectPageShell>

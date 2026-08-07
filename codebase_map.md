@@ -25,9 +25,6 @@ Keep this updated when feature areas are added or moved.
 | `/projects/[slug]/invoices/new` | `src/app/projects/[slug]/invoices/new/page.tsx` | `src/components/projects/invoice-editor.tsx` |
 | `/projects/[slug]/invoices/[id]` | `src/app/projects/[slug]/invoices/[invoiceId]/page.tsx` | `src/components/projects/invoice-detail-client.tsx` |
 | `/projects/[slug]/invoices/[id]/edit` | `src/app/projects/[slug]/invoices/[invoiceId]/edit/page.tsx` | `src/components/projects/invoice-editor.tsx` |
-| `/projects/[slug]/estimates` | `src/app/projects/[slug]/estimates/page.tsx` | `src/components/projects/estimate-list.tsx` |
-| `/projects/[slug]/estimates/new` | `src/app/projects/[slug]/estimates/new/page.tsx` | `src/components/projects/estimate-editor.tsx` |
-| `/projects/[slug]/estimates/[estId]` | `src/app/projects/[slug]/estimates/[estId]/page.tsx` | `src/components/projects/estimate-editor.tsx` |
 | `/projects/[slug]/quotes` | `src/app/projects/[slug]/quotes/page.tsx` | `src/components/projects/quote-list.tsx` |
 | `/projects/[slug]/quotes/[quoteId]` | `src/app/projects/[slug]/quotes/[quoteId]/page.tsx` | `src/components/projects/quote-detail-client.tsx` |
 | `/projects/[slug]/quotes/[quoteId]/generate` | `src/app/projects/[slug]/quotes/[quoteId]/generate/page.tsx` | `src/components/projects/quote-generator.tsx` |
@@ -198,19 +195,15 @@ Newly created entities are appended to the component's local state list — no p
 | Payment instructions | `UserPreference.data.invoicePaymentNote` — pre-fills editor + shown in detail view and PDF only when non-empty. onBlur saves back. Not stored on `Invoice`. Deep-link: `/settings#payment-instructions`. |
 | Key type | `src/types/index.ts` → `Invoice`, `PdfInvoice` |
 
-### Estimate → Quote pipeline
+### Quote pipeline (single-document)
 
 | Task | File |
 |---|---|
-| Estimate editor | `src/components/projects/estimate-editor.tsx` |
-| Estimate list (+ job picker for quote gen) | `src/components/projects/estimate-list.tsx` |
-| Estimate CRUD | `GET/POST /api/projects/[id]/estimates` |
-| Finalize / revise / duplicate | `POST …/finalize`, `…/revise`, `…/duplicate` |
-| Quote generator (side-by-side) | `src/components/projects/quote-generator.tsx` + `src/stores/quote-generator-store.ts` |
-| Quote generator — inline estimate build mode | When `estimate.status === 'DRAFT'` (shell, no-estimate path), `QuoteGenerator` renders an editable stripped estimate editor on the left (Description/Qty+Unit/Rate; no Tags/Risk columns). "Generate Quote →" button calls `POST …/regenerate`, finalizes the estimate, rebuilds quote sections, then `router.refresh()` to switch into review mode. After refresh, `sections` state is synced from the updated props via a `useEffect` that detects the `estimateIsShell` true→false transition. |
+| Quote generator (sections with margins) | `src/components/projects/quote-generator.tsx` + `src/stores/quote-generator-store.ts` |
+| Quote generator — inline item editing | The generate page has two modes controlled by `quoteStatus`: when `DRAFT`, it shows inline editable sections (description/quantity/unit/costRate/unitPrice/tags/isOptional); when SENT/ACCEPTED, it switches to read-only review. "Generate Quote →" / "Regenerate" calls `POST …/regenerate` which saves the current items, rebuilds quote sections, and refreshes to the next mode. |
 | Quote detail | `src/components/projects/quote-detail-client.tsx` |
 | Quote CRUD | `GET/POST /api/projects/[id]/quotes` |
-| Quote actions | `send` (emails PDF; accepts `{ markOnly: true }` to skip email and just flip status to SENT), `accept`, `revise`, `amend`, `create-invoice`, `fulfillment`, `pdf`, `cancel` (SENT/ACCEPTED→REJECTED, blocked if invoices exist), `delete` (DRAFT only), `regenerate` (DRAFT only, shell-estimate path) — all under `…/quotes/[quoteId]/` |
+| Quote actions | `send` (emails PDF; accepts `{ markOnly: true }` to skip email and just flip status to SENT), `accept`, `revise`, `amend`, `create-invoice`, `fulfillment`, `pdf`, `cancel` (SENT/ACCEPTED→REJECTED, blocked if invoices exist), `delete` (DRAFT only), `regenerate` (DRAFT only) — all under `…/quotes/[quoteId]/` |
 | Quote PDF | `GET /api/projects/[id]/quotes/[quoteId]/pdf` → `src/lib/pdf/quote-pdf.tsx` |
 | Send quote by email | `src/components/projects/send-quote-modal.tsx` |
 | Margin rules (settings) | `src/components/settings/margin-rules-editor.tsx` → `GET/POST /api/margin-rules`, `DELETE /api/margin-rules/[id]` |
@@ -286,7 +279,7 @@ Single agent at `POST /api/agent/omni` replaces the old multi-agent stack. No do
 |---|---|
 | Zustand store | `src/stores/page-context-store.ts` → `usePageContextStore`, `setContext()` |
 | Hook (page registers itself) | `src/components/chat/page-context-provider.tsx` → `usePageContext(partial)` |
-| Editor pages register | call `usePageContext({ entityType, entityId, entityName, snapshot, dispatch })` inside the editor component; `dispatch` stays client-only, never serialized. Registered editors: `invoice-editor.tsx` (editorContext `invoice`), `estimate-editor.tsx` (editorContext `estimate`), `quote-generator.tsx` (editorContext `quote`) |
+| Editor pages register | call `usePageContext({ entityType, entityId, entityName, snapshot, dispatch })` inside the editor component; `dispatch` stays client-only, never serialized. Registered editors: `invoice-editor.tsx` (editorContext `invoice`), `quote-generator.tsx` (editorContext `quote`) |
 | HITL confirm hook | `src/hooks/use-pending-ai-changes.ts` → `usePendingAiChanges<T>()` — all editor write paths must use this. Returns `pendingFields`, `hasPendingChanges`, `markPending(field, snapshot)`, `confirm()`, `undo(apply)`. See CLAUDE.md for the full pattern. |
 
 **Rules agent** (separate, subordinate to omni)
@@ -319,7 +312,7 @@ All SSE routes emit over `text/event-stream`. The `agent/omni` route emits all e
 | `answer` | `{ answer }` | Final complete text |
 | `done` | `{}` | Stream end |
 | `error` | `{ error }` | Show error |
-| `action` | `{ target, action }` | **Omni only** — editor action dispatched client-side via `pageContext.dispatch`. `target`: `invoice` (set_line_items, set_tax, set_due_date, set_notes, set_currency), `estimate` (set_sections, set_title, set_notes, set_currency), `quote` (set_item_prices, set_notes, set_quote_terms, set_valid_until) |
+| `action` | `{ target, action }` | **Omni only** — editor action dispatched client-side via `pageContext.dispatch`. `target`: `invoice` (set_line_items, set_tax, set_due_date, set_notes, set_currency), `quote` (set_sections, set_title, set_item_prices, set_notes, set_currency, set_quote_terms, set_valid_until) |
 | `link` | `{ route, anchor?, label, reason }` | **Omni only** — deep-link card rendered inline in chat |
 
 Routes: `POST /api/agent/omni` (all events), `GET /api/agent/rules` (status/token/answer/done/error only)
@@ -658,10 +651,8 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 | `Project` | `WorkspaceType` (DB: `ProjectType`): `CLIENT\|PROPERTY\|OTHER` |
 | `Job` | Sub-unit of CLIENT project; `status` enum `ACTIVE\|COMPLETED\|CANCELLED` (no `isActive`); `billingType`/`defaultRate` override `ClientProfile` |
 | `ClientProfile` | Contact linked to project; `email`, `contactName` |
-| `Estimate` | Internal costing; `workspaceId` scoped; `status` `DRAFT\|FINAL\|SUPERSEDED`; `parentId` for version chain |
-| `EstimateSection` / `EstimateItem` | `costRate`=cost/unit (never shown to client), `quantity`=effort/count, `unit` label (e.g. "hrs", "days"), `tags` for margin matching. `hours` field is legacy — always saved as `null` for new items; existing rows with `hours` still compute correctly via `hours × costRate × quantity`. |
 | `Quote` | Client-facing; `status` `DRAFT\|SENT\|ACCEPTED\|REJECTED\|SUPERSEDED\|AMENDED`; `overrides` JSON preserves human decisions; `quoteNumber` = `QTE-XXXX` |
-| `QuoteSection` / `QuoteLineItem` | `sourceItemIds` tracks collapsed estimate items; `costBasis`/`marginPercent` internal-only |
+| `QuoteSection` / `QuoteLineItem` | Sections hold line items with `costRate`, `unitPrice`, `quantity`, `qtyUnit`, `tags`, `isOptional`. `costRate` and `tags` are internal-only (never client-visible). `sourceItemIds` tracks collapsed items; `costBasis`/`marginPercent` internal-only. |
 | `MarginRule` | Default margin per tag; `@@unique([userId,tag])` |
 | `Invoice` | `status` `DRAFT\|SENT\|PARTIAL\|OVERDUE\|PAID\|VOID`; `replacesInvoiceId` for renegotiation chain; `quoteId` optional |
 | `InvoiceLineItem` | `isTaxLine: true` marks tax lines |
@@ -684,9 +675,8 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 
 ## Key Design Constraints
 
-- `costRate` and `internalNotes` on `EstimateItem` are **never** included in quote or invoice output
-- Estimate `jobId` is optional/legacy — job binding happens at Quote creation time, not estimate time
-- `POST /api/projects/[id]/quotes` requires `jobId`; `estimateId` is optional. When omitted, a shell `DRAFT` estimate is auto-created and linked. The `/generate` page detects `estimate.status === 'DRAFT'` and shows the inline build mode instead of the read-only estimate panel. After the user clicks "Generate Quote →", `POST …/regenerate` saves items to the estimate, sets it `FINAL`, and rebuilds quote sections — all in one transaction.
+- `costRate` and `tags` on quote line items are **internal-only** — never included in client-facing quote output or PDF
+- The `/generate` page is the single quote-editing surface. It has two modes: when quote `status === 'DRAFT'`, it shows an inline editor for sections/items (description, quantity, unit, costRate, unitPrice, tags, isOptional). After "Generate Quote →", items are saved and the quote advances to SENT review mode.
 - Fulfillment (`GET …/fulfillment`) is computed at query time — nothing extra stored
 - Invoice number format: `{INITIALS}_{DDMMYYYY}_{SEQ}` — initials from `businessName` or `yourName`, fallback `INV`
 - Invoice `businessName` falls back to `yourName` via `||`; only works if the field is absent (not empty string). `POST /api/preferences` strips `null` keys from the merged object so clearing a field actually removes it from the DB rather than storing `""`.

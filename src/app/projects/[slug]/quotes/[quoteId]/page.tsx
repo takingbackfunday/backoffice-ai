@@ -28,7 +28,6 @@ export default async function QuoteDetailPage({ params }: PageParams) {
     where: { id: quoteId, clientProfileId: project.clientProfile.id },
     include: {
       sections: { include: { items: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
-      estimate: { select: { id: true, title: true, version: true } },
       job: { select: { id: true, name: true } },
       clientProfile: { select: { id: true, contactName: true, email: true, company: true } },
       previousVersion: { select: { id: true, quoteNumber: true, version: true } },
@@ -44,8 +43,9 @@ export default async function QuoteDetailPage({ params }: PageParams) {
   // Load fulfillment for accepted quotes
   let fulfillment = null
   if (quote.status === 'ACCEPTED' || quote.status === 'AMENDED') {
+    const rootQuoteId = quote.rootQuoteId ?? quote.id
     const acceptedAmendments = await prisma.quote.findMany({
-      where: { parentQuoteId: quoteId, status: 'ACCEPTED' },
+      where: { rootQuoteId, isAmendment: true, status: 'ACCEPTED' },
       include: { sections: { include: { items: true } } },
     })
     const invoices = await prisma.invoice.findMany({

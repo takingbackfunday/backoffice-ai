@@ -22,5 +22,5 @@ export const capability: PageCapability = {
   },
   reads: ['UserPreference', 'MarginRule'],
   writes: ['UserPreference', 'MarginRule'],
-  relatedRoutes: ['/projects/[slug]/invoices/new', '/projects/[slug]/estimates/new'],
+  relatedRoutes: ['/projects/[slug]/invoices/new'],
 }

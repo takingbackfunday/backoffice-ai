@@ -25,7 +25,7 @@ export interface SseEvent {
   sessionId?: string
   turnCount?: number
   // action events
-  target?: 'invoice' | 'estimate' | 'quote'
+  target?: 'invoice' | 'quote'
   action?: import('./page-context').EditorAction
   // link events
   route?: string

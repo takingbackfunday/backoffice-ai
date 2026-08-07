@@ -22,20 +22,16 @@ export async function POST(_request: Request, { params }: RouteParams) {
       return badRequest('Cannot revise an accepted or superseded quote')
     }
 
-    // Generate the next quote number
     const quoteCount = await prisma.quote.count({
       where: { clientProfile: { workspace: { userId } } },
     })
     const quoteNumber = `QTE-${String(quoteCount + 1).padStart(4, '0')}`
 
     const revision = await prisma.$transaction(async (tx) => {
-      // Mark original as SUPERSEDED
       await tx.quote.update({ where: { id: quoteId }, data: { status: 'SUPERSEDED' } })
 
-      // Create new version as a copy
       return tx.quote.create({
         data: {
-          estimateId: quote.estimateId,
           jobId: quote.jobId,
           clientProfileId: quote.clientProfileId,
           quoteNumber,
@@ -61,12 +57,14 @@ export async function POST(_request: Request, { params }: RouteParams) {
                   quantity: item.quantity,
                   unit: item.unit,
                   unitPrice: item.unitPrice,
+                  costRate: item.costRate,
+                  tags: item.tags,
+                  internalNotes: item.internalNotes,
+                  riskLevel: item.riskLevel,
+                  priceManual: item.priceManual,
                   isOptional: item.isOptional,
-                  hasEstimateLink: item.hasEstimateLink,
                   sortOrder: item.sortOrder ?? ii,
-                  costBasis: item.costBasis,
                   marginPercent: item.marginPercent,
-                  sourceItemIds: item.sourceItemIds,
                 })),
               },
             })),

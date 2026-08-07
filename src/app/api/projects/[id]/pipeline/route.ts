@@ -7,12 +7,12 @@ import { computeInvoiceTotals, toDisplay } from '@/lib/money'
 
 const ParamsSchema = z.object({ id: z.string() })
 
-const VALID_ENTITIES = ['estimate', 'quote', 'invoice'] as const
+const VALID_ENTITIES = ['quote', 'invoice'] as const
 
 export type PipelineEntity = (typeof VALID_ENTITIES)[number]
 
 export type PipelineNode = {
-  type: 'estimate' | 'quote' | 'invoice' | 'invoices'
+  type: 'quote' | 'invoice' | 'invoices'
   id: string
   label: string
   status?: string
@@ -31,7 +31,7 @@ export const GET = authedRoute<{ id: string }>({
     const entityId = url.searchParams.get('entityId') ?? ''
 
     if (!entity || !VALID_ENTITIES.includes(entity)) {
-      return badRequest('entity must be one of estimate, quote, invoice')
+      return badRequest('entity must be one of quote, invoice')
     }
     if (!entityId) {
       return badRequest('entityId is required')
@@ -43,9 +43,6 @@ export const GET = authedRoute<{ id: string }>({
       const quote = await prisma.quote.findFirst({
         where: { id: entityId, clientProfile: { workspaceId: projectId } },
         include: {
-          estimate: {
-            include: { parent: true, revisions: { select: { id: true, version: true } } },
-          },
           job: { select: { id: true } },
           invoices: {
             where: { status: { not: 'VOID' } },
@@ -54,17 +51,6 @@ export const GET = authedRoute<{ id: string }>({
         },
       })
       if (!quote) return badRequest('Quote not found')
-
-      const est = quote.estimate
-      const estVersion = est.version
-      const estLabel = estVersion > 1 ? `Estimate ${est.title} (v${estVersion})` : `Estimate ${est.title}`
-      nodes.push({
-        type: 'estimate',
-        id: est.id,
-        label: estLabel,
-        status: est.status,
-        href: `/projects/${projectId}/estimates/${est.id}`,
-      })
 
       nodes.push({
         type: 'quote',
@@ -111,9 +97,6 @@ export const GET = authedRoute<{ id: string }>({
         include: {
           quote: {
             include: {
-              estimate: {
-                include: { parent: true, revisions: { select: { id: true, version: true } } },
-              },
               job: { select: { id: true } },
             },
           },
@@ -124,17 +107,6 @@ export const GET = authedRoute<{ id: string }>({
       if (!invoice) return badRequest('Invoice not found')
 
       if (invoice.quote) {
-        const est = invoice.quote.estimate
-        const estVersion = est.version
-        const estLabel = estVersion > 1 ? `Estimate ${est.title} (v${estVersion})` : `Estimate ${est.title}`
-        nodes.push({
-          type: 'estimate',
-          id: est.id,
-          label: estLabel,
-          status: est.status,
-          href: `/projects/${projectId}/estimates/${est.id}`,
-        })
-
         nodes.push({
           type: 'quote',
           id: invoice.quote.id,
@@ -153,42 +125,6 @@ export const GET = authedRoute<{ id: string }>({
         href: `/projects/${projectId}/invoices/${invoice.id}`,
         meta: `${fmt(toDisplay(paid), invoice.currency)} / ${fmt(toDisplay(total), invoice.currency)}`,
       })
-    }
-
-    if (entity === 'estimate') {
-      const estimate = await prisma.estimate.findFirst({
-        where: { id: entityId, workspaceId: projectId },
-        include: {
-          quotes: {
-            select: { id: true, quoteNumber: true, status: true, totalQuoted: true, currency: true },
-          },
-          parent: { select: { id: true, title: true, version: true, status: true } },
-          revisions: { select: { id: true, title: true, version: true, status: true } },
-        },
-      })
-      if (!estimate) return badRequest('Estimate not found')
-
-      const estVersion = estimate.version
-      const estLabel = estVersion > 1 ? `Estimate ${estimate.title} (v${estVersion})` : `Estimate ${estimate.title}`
-      nodes.push({
-        type: 'estimate',
-        id: estimate.id,
-        label: estLabel,
-        status: estimate.status,
-        href: `/projects/${projectId}/estimates/${estimate.id}`,
-      })
-
-      const quoteCount = estimate.quotes.length
-      if (quoteCount > 0) {
-        const meta = estimate.quotes.map(q => `Quote ${q.quoteNumber} (${q.status.toLowerCase()})`).join(', ')
-        nodes.push({
-          type: 'invoices',
-          id: 'quotes',
-          label: `${quoteCount} quote${quoteCount !== 1 ? 's' : ''}`,
-          href: `/projects/${projectId}/quotes`,
-          meta,
-        })
-      }
     }
 
     return ok({ nodes })

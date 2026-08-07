@@ -42,18 +42,6 @@ const QUOTE_STATUS_LABELS: Record<string, string> = {
   AMENDED:    'Amended',
 }
 
-const ESTIMATE_STATUS_COLORS: Record<string, string> = {
-  DRAFT:      'bg-gray-100 text-gray-700',
-  FINAL:      'bg-green-100 text-green-800',
-  SUPERSEDED: 'bg-gray-100 text-gray-400',
-}
-
-const ESTIMATE_STATUS_LABELS: Record<string, string> = {
-  DRAFT:      'Draft',
-  FINAL:      'Final',
-  SUPERSEDED: 'Superseded',
-}
-
 const fmt = (n: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 
@@ -108,9 +96,6 @@ export default async function JobDetailPage({ params }: PageParams) {
         orderBy: { issueDate: 'desc' },
       },
       quotes: {
-        orderBy: { createdAt: 'desc' },
-      },
-      estimates: {
         orderBy: { createdAt: 'desc' },
       },
       timeEntries: {
@@ -300,46 +285,6 @@ export default async function JobDetailPage({ params }: PageParams) {
             </table>
           </div>
         </section>
-
-        {/* ── Estimates ────────────────────────────────────────────── */}
-        {job.estimates.length > 0 && (
-          <section className="mb-8">
-            <SectionHeader title="Estimates" count={job.estimates.length} />
-            <div className="rounded-lg border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
-                    <th className="text-left px-3 py-2 font-medium">Title</th>
-                    <th className="text-left px-3 py-2 font-medium">Status</th>
-                    <th className="text-right px-3 py-2 font-medium">Version</th>
-                    <th className="text-right px-3 py-2 font-medium">Created</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {job.estimates.map(est => (
-                    <tr key={est.id} className="hover:bg-muted/20">
-                      <td className="px-3 py-2">
-                        <Link
-                          href={`/projects/${slug}/estimates/${est.id}`}
-                          className="font-medium hover:underline"
-                        >
-                          {est.title}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={cn('text-xs px-2 py-0.5 rounded-full', ESTIMATE_STATUS_COLORS[est.status] ?? 'bg-gray-100 text-gray-700')}>
-                          {ESTIMATE_STATUS_LABELS[est.status] ?? est.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right text-muted-foreground">v{est.version}</td>
-                      <td className="px-3 py-2 text-right text-muted-foreground">{fmtDate(est.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
 
         {/* ── Work Orders (Costs) ──────────────────────────────────── */}
         <WorkOrderPanel

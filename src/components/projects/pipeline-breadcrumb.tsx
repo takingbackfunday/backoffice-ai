@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 
 export type PipelineNode = {
-  type: 'estimate' | 'quote' | 'invoice' | 'invoices'
+  type: 'quote' | 'invoice' | 'invoices'
   id: string
   label: string
   status?: string

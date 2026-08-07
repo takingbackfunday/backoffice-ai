@@ -29,11 +29,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     })
     if (!job) return notFound('Job not found')
 
-    const [estimates, quotes, invoices] = await Promise.all([
-      prisma.estimate.findMany({
-        where: { jobId },
-        orderBy: { createdAt: 'asc' },
-      }),
+    const [quotes, invoices] = await Promise.all([
       prisma.quote.findMany({
         where: { jobId },
         orderBy: { createdAt: 'asc' },
@@ -46,27 +42,6 @@ export async function GET(_request: Request, { params }: RouteParams) {
     ])
 
     const events: TimelineEvent[] = []
-
-    for (const est of estimates) {
-      events.push({
-        type: 'estimate_created',
-        date: est.createdAt.toISOString(),
-        entityId: est.id,
-        entityNumber: `EST-v${est.version}`,
-        description: `Estimate "${est.title}" created`,
-        metadata: { version: est.version, status: est.status },
-      })
-      if (est.status === 'FINAL' || est.status === 'SUPERSEDED') {
-        events.push({
-          type: 'estimate_finalized',
-          date: est.updatedAt.toISOString(),
-          entityId: est.id,
-          entityNumber: `EST-v${est.version}`,
-          description: `Estimate "${est.title}" finalized`,
-          metadata: { version: est.version },
-        })
-      }
-    }
 
     for (const q of quotes) {
       events.push({

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Briefcase, FileText, FileCheck, Receipt, Clock, Plus, X, Loader2 } from 'lucide-react'
+import { Briefcase, FileCheck, Receipt, Clock, Plus, X, Loader2 } from 'lucide-react'
 import { JobSelect } from './job-select'
 
 interface Job { id: string; name: string }
@@ -104,9 +104,6 @@ export function ClientQuickActions({ projectId, projectSlug, jobs, defaultRate, 
         <button onClick={() => setModal('job')} className={btnAction}>
           <Briefcase className="w-3 h-3" /> New job
         </button>
-        <Link href={`${base}/estimates/new`} className={btnLink}>
-          <FileText className="w-3 h-3" /> New estimate
-        </Link>
         <Link href={`${base}/quotes/new`} className={btnLink}>
           <FileCheck className="w-3 h-3" /> New quote
         </Link>

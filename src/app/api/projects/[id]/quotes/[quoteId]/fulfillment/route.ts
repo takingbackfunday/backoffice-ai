@@ -17,12 +17,20 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (!userId) return unauthorized()
     const { id, quoteId } = await params
 
+    const rootQuote = await prisma.quote.findFirst({
+      where: { id: quoteId, clientProfile: { workspace: { id, userId } } },
+      select: { rootQuoteId: true, id: true },
+    })
+    if (!rootQuote) return notFound('Quote not found')
+
+    const rootQuoteId = rootQuote.rootQuoteId ?? rootQuote.id
+
     const quote = await prisma.quote.findFirst({
       where: { id: quoteId, clientProfile: { workspace: { id, userId } } },
       include: {
         sections: { include: { items: true } },
         amendments: {
-          where: { status: 'ACCEPTED' },
+          where: { rootQuoteId, isAmendment: true, status: 'ACCEPTED' },
           include: { sections: { include: { items: true } } },
         },
         invoices: {

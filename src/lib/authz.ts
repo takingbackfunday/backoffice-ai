@@ -48,14 +48,6 @@ export async function requireQuote(userId: string, quoteId: string, projectId: s
   return quote
 }
 
-export async function requireEstimate(userId: string, estimateId: string, workspaceId: string) {
-  const estimate = await prisma.estimate.findFirst({
-    where: { id: estimateId, workspaceId, workspace: { userId } },
-  })
-  if (!estimate) throw new NotFoundError('Estimate not found')
-  return estimate
-}
-
 export async function requireVendor(userId: string, vendorId: string) {
   const vendor = await prisma.vendor.findFirst({
     where: { id: vendorId, userId },

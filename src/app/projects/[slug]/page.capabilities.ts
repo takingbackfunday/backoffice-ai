@@ -8,7 +8,7 @@ export const capability: PageCapability = {
     'See a summary of active jobs and outstanding invoices for a client project',
     'See unit occupancy, rent status, and upcoming lease renewals for a property',
     'Edit client contact details (name, email, phone, company)',
-    'Navigate to invoices, estimates, quotes, jobs, or work orders for a client project',
+    'Navigate to invoices, quotes, jobs, or work orders for a client project',
     'Navigate to units, leases, tenants, maintenance, or financials for a property',
   ],
   deepLinks: {},

@@ -7,20 +7,19 @@ export interface SerializableLineItem {
   isTaxLine: boolean
 }
 
-export interface SerializableEstimateItem {
+export interface SerializableSectionItem {
   description: string
   quantity: string
   qtyUnit: string
-  costRate: string
+  unitPrice?: string
+  costRate?: string
   tags?: string
   isOptional?: boolean
-  riskLevel?: string
-  internalNotes?: string
 }
 
-export interface SerializableEstimateSection {
+export interface SerializableSection {
   name: string
-  items: SerializableEstimateItem[]
+  items: SerializableSectionItem[]
 }
 
 export interface SerializableQuoteItemPrice {
@@ -34,10 +33,9 @@ export type EditorAction =
   | { type: 'set_due_date'; value: string }
   | { type: 'set_notes'; value: string }
   | { type: 'set_currency'; value: string }
-  // estimate-specific
-  | { type: 'set_sections'; sections: SerializableEstimateSection[] }
+  // quote-specific (includes sections/scope editing)
+  | { type: 'set_sections'; sections: SerializableSection[] }
   | { type: 'set_title'; value: string }
-  // quote-specific
   | { type: 'set_item_prices'; items: SerializableQuoteItemPrice[] }
   | { type: 'set_quote_terms'; value: string }
   | { type: 'set_valid_until'; value: string }
@@ -47,7 +45,7 @@ export type EditorActionDispatcher = (action: EditorAction) => void
 export interface PageContext {
   pathname: string
   routeTemplate: string | null
-  entityType?: 'invoice' | 'estimate' | 'quote' | 'transaction' | 'project' | 'tenant' | 'vendor' | 'applicant' | 'unit'
+  entityType?: 'invoice' | 'quote' | 'transaction' | 'project' | 'tenant' | 'vendor' | 'applicant' | 'unit'
   entityId?: string
   entityName?: string
   snapshot?: Record<string, unknown>
