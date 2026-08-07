@@ -45,6 +45,12 @@ export function QuoteDetailTable({ sections, currency }: Props) {
   return (
     <div className="border rounded-lg overflow-hidden">
       <table className="w-full text-sm">
+        <colgroup>
+          <col />
+          <col className="w-24" />
+          <col className="w-28" />
+          <col className="w-28" />
+        </colgroup>
         <thead className="bg-muted/50">
           <tr>
             <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
@@ -55,49 +61,43 @@ export function QuoteDetailTable({ sections, currency }: Props) {
         </thead>
         <tbody className="divide-y">
           {sections.map(section => (
-            <tr key={`section-row-${section.id}`}>
-              <td colSpan={4} className="p-0">
-                <table className="w-full">
-                  {sections.length > 1 && (
-                    <thead>
-                      <tr className="bg-muted/20">
-                        <th colSpan={4} className="px-4 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide text-left">
-                          {section.name}
-                        </th>
-                      </tr>
-                    </thead>
-                  )}
-                  <tbody>
-                    {section.items.map(item => (
-                      <tr key={item.id} className={cn(item.isOptional && 'opacity-60')}>
-                        <td className="px-4 py-2.5">
-                          {item.description}
-                          {item.isOptional && <span className="ml-1 text-xs text-muted-foreground">(optional)</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">
-                          {item.quantity}{item.unit ? ` ${item.unit}` : ''}
-                        </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">{fmt(item.unitPrice, currency)}</td>
-                        <td className="px-4 py-2.5 text-right font-medium tabular-nums">
-                          {fmt(item.unitPrice * item.quantity, currency)}
-                        </td>
-                      </tr>
-                    ))}
-                    {/* Section subtotal when > 1 section */}
-                    {sections.length > 1 && (
-                      <tr className="bg-muted/10">
-                        <td colSpan={3} className="px-4 py-1 text-right text-xs font-medium text-muted-foreground">
-                          Section subtotal
-                        </td>
-                        <td className="px-4 py-1 text-right text-xs font-medium text-muted-foreground tabular-nums">
-                          {fmt(sectionSubtotal(section.items), currency)}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </td>
-            </tr>
+            <>
+              {/* Section header row when > 1 section */}
+              {sections.length > 1 && (
+                <tr className="bg-muted/20">
+                  <td colSpan={4} className="px-4 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    {section.name}
+                  </td>
+                </tr>
+              )}
+              {/* Item rows */}
+              {section.items.map(item => (
+                <tr key={item.id} className={cn(item.isOptional && 'opacity-60')}>
+                  <td className="px-4 py-2.5">
+                    {item.description}
+                    {item.isOptional && <span className="ml-1 text-xs text-muted-foreground">(optional)</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">
+                    {item.quantity}{item.unit ? ` ${item.unit}` : ''}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{fmt(item.unitPrice, currency)}</td>
+                  <td className="px-4 py-2.5 text-right font-medium tabular-nums">
+                    {fmt(item.unitPrice * item.quantity, currency)}
+                  </td>
+                </tr>
+              ))}
+              {/* Section subtotal row when > 1 section */}
+              {sections.length > 1 && (
+                <tr className="bg-muted/10">
+                  <td colSpan={3} className="px-4 py-1 text-right text-xs font-medium text-muted-foreground">
+                    Section subtotal
+                  </td>
+                  <td className="px-4 py-1 text-right text-xs font-medium text-muted-foreground tabular-nums">
+                    {fmt(sectionSubtotal(section.items), currency)}
+                  </td>
+                </tr>
+              )}
+            </>
           ))}
         </tbody>
         <tfoot className="border-t bg-muted/20">
