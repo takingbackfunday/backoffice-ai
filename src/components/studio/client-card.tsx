@@ -39,20 +39,41 @@ export function ClientCard({
           <div
             onClick={onExpand}
             style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr auto' : '1fr auto auto auto auto auto auto', alignItems: 'center', gap: 12, padding: '4px 14px', cursor: 'pointer', transition: 'background 0.15s' }}
-            onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+              onMouseEnter={e => {
+                if (!isExpanded) {
+                  (e.currentTarget as HTMLDivElement).style.background = '#fafaf8'
+                  const chevron = (e.currentTarget as HTMLDivElement).querySelector('[data-chevron]') as HTMLElement | null
+                  if (chevron) chevron.style.color = '#888'
+                }
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLDivElement).style.background = 'transparent'
+                const chevron = (e.currentTarget as HTMLDivElement).querySelector('[data-chevron]') as HTMLElement | null
+                if (chevron) chevron.style.color = '#bbb'
+              }}
           >
             {/* Identity — click to navigate to client page */}
             <div
               onClick={e => { e.stopPropagation(); onNavigate(`/projects/${client.slug}`) }}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: 280, cursor: 'pointer' }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLDivElement).style.background = '#f5f3ff'
+                const ps = (e.currentTarget as HTMLDivElement).querySelectorAll('p')
+                ps.forEach(p => p.style.color = '#534AB7')
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLDivElement).style.background = 'transparent'
+                const ps = (e.currentTarget as HTMLDivElement).querySelectorAll('p')
+                ps.forEach(p => p.style.color = '')
+                ;(e.currentTarget as HTMLDivElement).style.borderRadius = ''
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: 280, cursor: 'pointer', borderRadius: 6, paddingLeft: 4, transition: 'background 0.15s' }}
             >
-              <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#534AB7', flexShrink: 0 }}>
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#534AB7', flexShrink: 0, transition: 'background 0.15s' }}>
                 {client.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
               </div>
               <div style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <p style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{client.name}</p>
-                {client.company && <p style={{ fontSize: 10, color: '#aaa', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{client.company}</p>}
+                <p style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', transition: 'color 0.15s' }}>{client.name}</p>
+                {client.company && <p style={{ fontSize: 10, color: '#aaa', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', transition: 'color 0.15s' }}>{client.company}</p>}
               </div>
             </div>
 
@@ -99,7 +120,7 @@ export function ClientCard({
             </>}
 
             {/* Chevron */}
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#bbb', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
+            <svg data-chevron width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#bbb', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s, color 0.15s', flexShrink: 0 }}>
               <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
