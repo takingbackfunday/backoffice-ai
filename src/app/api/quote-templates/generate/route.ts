@@ -48,7 +48,7 @@ export const POST = authedRoute<void, z.infer<typeof BodySchema>>({
 Now generate the JSON template for this specific project. Remember — valid JSON only, no markdown, no prose.` },
         ],
         'mistralai/mistral-small-2603',
-        8192,
+        12000,
       )
     } catch (err) {
       logger.error('quote-templates-generate', 'LLM call failed', {
@@ -67,9 +67,25 @@ Now generate the JSON template for this specific project. Remember — valid JSO
     try {
       parsed = JSON.parse(jsonStr)
     } catch {
-      const snippet = jsonStr.slice(0, 300)
-      logger.error('quote-templates-generate', 'JSON parse failed', { raw: raw.slice(0, 500) })
-      return badRequest(`The AI returned invalid JSON. Try rephrasing your description.\n\nRaw output:\n${snippet}`)
+      const tryRepair = (s: string): string | null => {
+        const firstBrace = s.indexOf('{')
+        const lastBrace = s.lastIndexOf('}')
+        if (firstBrace === -1 || lastBrace === -1) return null
+        s = s.slice(firstBrace, lastBrace + 1)
+        s = s.replace(/,(\s*[}\]])/g, '$1')
+        s = s.replace(/(["\d])\s*\n\s*(?=["\d{])/g, '$1,')
+        s = s.replace(/}\s*{/g, '},{')
+        return s
+      }
+      const repaired = tryRepair(jsonStr)
+      if (repaired) {
+        try { parsed = JSON.parse(repaired) } catch { /* fall through */ }
+      }
+      if (parsed === undefined) {
+        const snippet = jsonStr.slice(0, 500)
+        logger.error('quote-templates-generate', 'JSON parse failed', { raw: raw.slice(0, 500) })
+        return badRequest(`The AI returned invalid JSON. Try rephrasing your description.\n${snippet}`)
+      }
     }
 
     const SingleTemplateSchema = z.object({
