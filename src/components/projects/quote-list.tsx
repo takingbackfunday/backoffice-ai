@@ -216,12 +216,12 @@ export function QuoteList({ projectId, projectSlug, quotes }: Props) {
             <div
               key={q.id}
               className={cn(
-                'grid grid-cols-[minmax(130px,auto)_1fr_110px_110px_100px_70px] border-t px-4 py-3 items-center hover:bg-muted/10 cursor-pointer transition-colors',
+                'grid grid-cols-[minmax(130px,auto)_1fr_110px_110px_100px_70px] border-t px-4 py-2 items-center hover:bg-muted/10 cursor-pointer transition-colors',
                 idx % 2 === 0 ? '' : 'bg-muted/5'
               )}
               onClick={() => router.push(`/projects/${projectSlug}/quotes/${q.id}`)}
             >
-              <span className="text-sm font-medium text-primary whitespace-nowrap">
+              <span className="text-sm font-medium text-primary">
                 {q.quoteNumber}
                 {q.version > 1 && (
                   <span className="ml-1 text-xs text-muted-foreground">v{q.version}</span>
@@ -230,7 +230,7 @@ export function QuoteList({ projectId, projectSlug, quotes }: Props) {
                   <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">amendment</span>
                 )}
               </span>
-              <span className="text-sm text-muted-foreground truncate min-w-0 pr-2">
+              <span className="text-sm text-muted-foreground min-w-0 pr-2">
                 {q.title}
                 {q.job ? <span className="text-xs"> · {q.job.name}</span> : ''}
               </span>

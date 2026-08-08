@@ -33,14 +33,14 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
       </colgroup>
       <thead>
         <tr className="border-b">
-          <th className="text-left px-4 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
-          <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Qty</th>
-          <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Price</th>
-          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Cost rt</th>}
-          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Tags</th>}
-          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Int. notes</th>}
-          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Risk</th>}
-          {showCosts && <th className="px-1 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Margin</th>}
+          <th className="text-left px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
+          <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Qty</th>
+          <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Price</th>
+          {showCosts && <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Cost rt</th>}
+          {showCosts && <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Tags</th>}
+          {showCosts && <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Int. notes</th>}
+          {showCosts && <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Risk</th>}
+          {showCosts && <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Margin</th>}
           <th />
         </tr>
       </thead>
@@ -52,14 +52,18 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
 
           return (
             <tr key={item.id} className="border-b last:border-b-0 hover:bg-muted/20 group">
-              <td className="px-4 py-1.5">
-                <div className="flex items-center gap-1">
-                  <input
-                    type="text"
+              <td className="px-4 py-1">
+                <div className="flex items-start gap-1">
+                  <textarea
                     value={item.description}
-                    onChange={e => onUpdateItem(item.id, 'description', e.target.value)}
+                    onChange={e => {
+                      onUpdateItem(item.id, 'description', e.target.value)
+                      e.target.style.height = 'auto'
+                      e.target.style.height = e.target.scrollHeight + 'px'
+                    }}
                     placeholder="Item description"
-                    className="text-sm bg-transparent border-none outline-none w-full"
+                    className="text-sm focus:outline-none bg-transparent placeholder:text-muted-foreground/50 min-w-0 w-full resize-none overflow-hidden leading-snug py-0.5"
+                    rows={1}
                   />
                   {item.description.trim() && (() => {
                     const status = libraryStatus?.[item.id]
@@ -108,7 +112,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                   })()}
                 </div>
               </td>
-              <td className="px-1 py-1.5">
+              <td className="px-1 py-1">
                 <div className="flex items-center gap-1 justify-end">
                   <input
                     type="number"
@@ -127,7 +131,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                   />
                 </div>
               </td>
-              <td className="px-1 py-1.5">
+              <td className="px-1 py-1">
                 <div className="flex items-center gap-1 justify-end">
                   <input
                     type="number"
@@ -149,7 +153,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                 </div>
               </td>
               {showCosts && (
-                <td className="px-1 py-1.5">
+                <td className="px-1 py-1">
                   <input
                     type="number"
                     value={item.costRate}
@@ -161,7 +165,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                 </td>
               )}
               {showCosts && (
-                <td className="px-1 py-1.5">
+                <td className="px-1 py-1">
                   <input
                     type="text"
                     value={item.tags}
@@ -173,7 +177,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                 </td>
               )}
               {showCosts && (
-                <td className="px-1 py-1.5">
+                <td className="px-1 py-1">
                   <input
                     type="text"
                     value={item.internalNotes}
@@ -184,7 +188,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                 </td>
               )}
               {showCosts && (
-                <td className="px-1 py-1.5">
+                <td className="px-1 py-1">
                   <select
                     value={item.riskLevel}
                     onChange={e => onUpdateItem(item.id, 'riskLevel', e.target.value)}
@@ -197,13 +201,13 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                 </td>
               )}
               {showCosts && (
-                <td className="px-1 py-1.5 text-right">
+                <td className="px-1 py-1 text-right">
                   <span className="text-sm text-muted-foreground">
                     {marginPct !== null ? `${marginPct.toFixed(1)}%` : '—'}
                   </span>
                 </td>
               )}
-              <td className="px-1 py-1.5">
+              <td className="px-1 py-1">
                 <button
                   onClick={() => onRemoveItem(item.id)}
                   className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"

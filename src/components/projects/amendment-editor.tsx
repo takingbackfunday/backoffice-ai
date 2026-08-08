@@ -160,25 +160,29 @@ export function AmendmentEditor({ projectId, projectSlug, quoteId, currency, ori
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b">
-              <th className="text-left px-4 py-1.5 text-xs font-normal text-muted-foreground">Description</th>
-              <th className="px-1 py-1.5 text-xs font-normal text-muted-foreground text-right">Qty</th>
-              <th className="px-1 py-1.5 text-xs font-normal text-muted-foreground text-right">Price</th>
+              <th className="text-left px-4 py-1 text-xs font-normal text-muted-foreground">Description</th>
+              <th className="px-1 py-1 text-xs font-normal text-muted-foreground text-right">Qty</th>
+              <th className="px-1 py-1 text-xs font-normal text-muted-foreground text-right">Price</th>
               <th className="w-10" />
             </tr>
           </thead>
           <tbody>
             {section.items.map(item => (
               <tr key={item.id} className="border-b last:border-b-0 hover:bg-muted/20 group">
-                <td className="px-4 py-1.5">
-                  <input
-                    type="text"
+                <td className="px-4 py-1">
+                  <textarea
                     value={item.description}
-                    onChange={e => dispatch({ type: 'UPDATE_ITEM', sectionId: section.id, itemId: item.id, field: 'description', value: e.target.value })}
+                    onChange={e => {
+                      dispatch({ type: 'UPDATE_ITEM', sectionId: section.id, itemId: item.id, field: 'description', value: e.target.value })
+                      e.target.style.height = 'auto'
+                      e.target.style.height = e.target.scrollHeight + 'px'
+                    }}
                     placeholder="Change description"
-                    className="text-sm bg-transparent border-none outline-none w-full"
+                    className="text-sm focus:outline-none bg-transparent placeholder:text-muted-foreground/50 min-w-0 w-full resize-none overflow-hidden leading-snug py-0.5"
+                    rows={1}
                   />
                 </td>
-                <td className="px-1 py-1.5">
+                <td className="px-1 py-1">
                   <div className="flex items-center gap-1 justify-end">
                     <input
                       type="number"
@@ -197,7 +201,7 @@ export function AmendmentEditor({ projectId, projectSlug, quoteId, currency, ori
                     />
                   </div>
                 </td>
-                <td className="px-1 py-1.5">
+                <td className="px-1 py-1">
                   <input
                     type="number"
                     value={item.unitPrice}
@@ -207,7 +211,7 @@ export function AmendmentEditor({ projectId, projectSlug, quoteId, currency, ori
                     step="0.01"
                   />
                 </td>
-                <td className="px-1 py-1.5">
+                <td className="px-1 py-1">
                   <button
                     type="button"
                     onClick={() => section.items.length > 1 && dispatch({ type: 'REMOVE_ITEM', sectionId: section.id, itemId: item.id })}

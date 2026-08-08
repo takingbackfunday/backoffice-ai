@@ -42,8 +42,11 @@ export function ClientCard({
             onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = '#fafaf8' }}
             onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
           >
-            {/* Identity */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            {/* Identity — click to navigate to client page */}
+            <div
+              onClick={e => { e.stopPropagation(); onNavigate(`/projects/${client.slug}`) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, cursor: 'pointer' }}
+            >
               <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#534AB7', flexShrink: 0 }}>
                 {client.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
               </div>
