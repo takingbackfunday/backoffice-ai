@@ -38,6 +38,7 @@ interface Props {
   onAction: (path: string, method?: string, body?: object) => Promise<Record<string, unknown> | null>
   loading: string | null
   onDownloaded: () => void
+  onCreateInvoice?: () => void
 }
 
 /* ------------------------------------------------------------------ */
@@ -77,7 +78,7 @@ function StatusStepper({ status }: { status: string }) {
 /*  Main component                                                      */
 /* ------------------------------------------------------------------ */
 
-export function QuoteDetailActions({ projectId, projectSlug, quote, sections, invoicesCount, onAction, loading, onDownloaded }: Props) {
+export function QuoteDetailActions({ projectId, projectSlug, quote, sections, invoicesCount, onAction, loading, onDownloaded, onCreateInvoice }: Props) {
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const [sendModalOpen, setSendModalOpen] = useState(false)
@@ -175,7 +176,7 @@ export function QuoteDetailActions({ projectId, projectSlug, quote, sections, in
 
         {isAccepted && (
           <>
-            <button onClick={() => onDownloaded()}
+            <button onClick={() => onCreateInvoice?.()}
               className="flex items-center gap-1 text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90">
               <Plus className="w-3.5 h-3.5" /> Create Invoice
             </button>

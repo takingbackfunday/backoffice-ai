@@ -198,6 +198,7 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment, 
         onAction={action}
         loading={loading}
         onDownloaded={handleDownloaded}
+        onCreateInvoice={() => setShowCreateInvoice(true)}
       />
 
       {showCreateInvoice && (
