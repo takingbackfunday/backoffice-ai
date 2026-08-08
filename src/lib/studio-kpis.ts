@@ -363,6 +363,7 @@ export interface ClientDetail {
   invoices: ClientDetailInvoice[]
   acceptedQuotes: ClientDetailQuote[]
   sentQuotes: ClientDetailQuote[]
+  draftQuotes: ClientDetailQuote[]
   jobs: ClientDetailJob[]
   receiptCount: number
 }
@@ -378,7 +379,7 @@ export async function fetchClientDetail(userId: string, clientProfileId: string)
       jobs: { where: { status: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { createdAt: 'desc' } },
     },
   })
-  if (!profile) return { invoices: [], acceptedQuotes: [], sentQuotes: [], jobs: [], receiptCount: 0 }
+  if (!profile) return { invoices: [], acceptedQuotes: [], sentQuotes: [], draftQuotes: [], jobs: [], receiptCount: 0 }
 
   const now = new Date()
   const nowStr = now.toISOString().slice(0, 10)
@@ -445,7 +446,7 @@ export async function fetchClientDetail(userId: string, clientProfileId: string)
   })
 
   const quotes = await prisma.quote.findMany({
-    where: { clientProfileId: clientProfileId, status: { in: ['ACCEPTED', 'SENT'] } },
+    where: { clientProfileId: clientProfileId, status: { in: ['ACCEPTED', 'SENT', 'DRAFT'] } },
     select: {
       id: true,
       quoteNumber: true,
@@ -488,6 +489,20 @@ export async function fetchClientDetail(userId: string, clientProfileId: string)
       status: q.status,
     }))
 
+  const draftQuotes = quotes
+    .filter(q => q.status === 'DRAFT')
+    .map(q => ({
+      id: q.id,
+      quoteNumber: q.quoteNumber,
+      title: q.title,
+      totalQuoted: q.totalQuoted ? Number(q.totalQuoted) : null,
+      currency: q.currency,
+      hasInvoice: q._count.invoices > 0,
+      sentAt: q.sentAt?.toISOString() ?? null,
+      jobName: q.job?.name ?? null,
+      status: q.status,
+    }))
+
   const workspaceId = profile.workspaceId
   const receiptRows = await prisma.receipt.groupBy({
     by: ['workspaceId'],
@@ -500,6 +515,7 @@ export async function fetchClientDetail(userId: string, clientProfileId: string)
     invoices: derivedInvoices,
     acceptedQuotes,
     sentQuotes,
+    draftQuotes,
     jobs: profile.jobs,
     receiptCount,
   }

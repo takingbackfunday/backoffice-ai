@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { DraftInvoicePickerModal } from '@/components/studio/draft-invoice-picker-modal'
 import { NewClientModal, NewJobModal, NewEstimateModal, NewQuoteModal, LogTimeModal } from '@/components/studio/studio-action-modals'
 import { MarkSentModal } from '@/components/studio/mark-sent-modal'
-import { MarkSentQuoteModal } from '@/components/studio/mark-sent-quote-modal'
 import { NewWorkOrderModal } from '@/components/work-orders/new-work-order-modal'
 import { IntakeBillModal } from '@/components/work-orders/intake-bill-modal'
 import { ActionBanner } from '@/components/ui/action-banner'
@@ -52,7 +51,6 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
   const [markSentTarget, setMarkSentTarget] = useState<PendingMarkSentItem | null>(null)
   const [pendingMarkSentQuote, setPendingMarkSentQuote] = useState<PendingMarkSentQuoteItem[]>([])
   const [activityOpen, setActivityOpen] = useState(false)
-  const [markSentQuoteTarget, setMarkSentQuoteTarget] = useState<PendingMarkSentQuoteItem | null>(null)
   // Lazy-loaded card details
   const [cardDetails, setCardDetails] = useState<Record<string, ClientDetail>>({})
   const [cardLoading, setCardLoading] = useState<Record<string, boolean>>({})
@@ -195,12 +193,23 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
       })
     }
 
-    for (const item of pendingMarkSentQuote) {
+    if (pendingMarkSentQuote.length > 0) {
+      const uniqueClients = new Set(pendingMarkSentQuote.map(item => item.projectId))
       items.push({
         dot: '#a78bfa',
-        label: `${item.quoteNumber} — downloaded but not marked sent`,
-        detail: 'Click to review and mark as sent',
-        onClick: () => setMarkSentQuoteTarget(item),
+        label: `Quote — ${pendingMarkSentQuote.length} downloaded but not marked sent`,
+        detail: pendingMarkSentQuote.length === 1
+          ? `${pendingMarkSentQuote[0].quoteNumber}`
+          : `Across ${uniqueClients.size} client${uniqueClients.size !== 1 ? 's' : ''}`,
+        onClick: () => {
+          const next: ClientFilter = clientFilter === 'downloaded-quotes' ? null : 'downloaded-quotes'
+          setClientFilter(next)
+          if (next) {
+            const first = clients.find(c => clientMatchesFilter(c, 'downloaded-quotes', flat, flatQuotes, pendingMarkSentQuote))
+            if (first) setExpandedClient(first.id)
+          } else setExpandedClient(null)
+          setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+        },
       })
     }
 
@@ -297,6 +306,7 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
         cardDetails={cardDetails}
         cardLoading={cardLoading}
         cardsRef={cardsRef}
+        pendingMarkSentQuote={pendingMarkSentQuote}
         onNavigate={path => router.push(path)}
         onDraftInvoice={clientId => { const c = clients.find(x => x.id === clientId); if (c) router.push(`/projects/${c.slug}/invoices/new`) }}
         onLogTime={clientId => { setPreselectedClientId(clientId); setShowLogTimeModal(true) }}
@@ -355,16 +365,6 @@ export function StudioClient({ clients, flatInvoices, flatQuotes, kpis: initialK
           onDone={() => {
             setPendingMarkSent(prev => prev.filter(i => i.invoiceId !== markSentTarget.invoiceId))
             setMarkSentTarget(null)
-            router.refresh()
-          }}
-        />
-      )}
-      {markSentQuoteTarget && (
-        <MarkSentQuoteModal
-          item={markSentQuoteTarget}
-          onDone={() => {
-            setPendingMarkSentQuote(prev => prev.filter(i => i.quoteId !== markSentQuoteTarget.quoteId))
-            setMarkSentQuoteTarget(null)
             router.refresh()
           }}
         />

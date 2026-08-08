@@ -189,6 +189,38 @@ export function ClientCard({
                 ) : null
               })()}
 
+              {/* Draft quotes (downloaded but not sent) */}
+              {(() => {
+                if (clientFilter !== 'downloaded-quotes') return null
+                const visibleDraftQuotes = detail?.draftQuotes ?? []
+                return visibleDraftQuotes.length > 0 ? (
+                  <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {visibleDraftQuotes.map(q => (
+                        <Link
+                          key={q.id}
+                          href={`/projects/${client.slug}/quotes/${q.id}`}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: '#fff', border: '1px solid #e8e6df', textDecoration: 'none', transition: 'border-color 0.15s' }}
+                          onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8'}
+                          onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df'}
+                        >
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#eeedfe', color: '#534AB7', letterSpacing: 0.4, flexShrink: 0, textTransform: 'uppercase' }}>Quote</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', flexShrink: 0 }}>{q.quoteNumber}</span>
+                          {q.jobName && <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', flexShrink: 0, whiteSpace: 'nowrap' }}>{q.jobName}</span>}
+                          <span style={{ fontSize: 12, color: '#555', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{q.title}</span>
+                          {q.totalQuoted != null && (
+                            <span style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: '#1a1a1a', flexShrink: 0 }}>{fmt(q.totalQuoted, q.currency)}</span>
+                          )}
+                          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: '#fef3c7', color: '#92400e', flexShrink: 0 }}>Draft</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No draft quotes found</p>
+                )
+              })()}
+
               {/* Sent quotes (awaiting acceptance) */}
               {(() => {
                 if (clientFilter && clientFilter !== 'awaiting-quotes') return null

@@ -12,6 +12,7 @@ import { PortalDropdown } from '@/components/ui/portal-dropdown'
 import { useOutsideClick } from '@/hooks/use-outside-click'
 import { SaveTemplateModal, sectionsFromQuote } from './save-template-modal'
 import { QuoteSendEmailModal } from './quote-send-email-modal'
+import { removePendingMarkSentQuote } from '@/lib/pending-mark-sent'
 import type { QuoteSection } from './quote-detail-client'
 
 /* ------------------------------------------------------------------ */
@@ -140,6 +141,20 @@ export function QuoteDetailActions({ projectId, projectSlug, quote, sections, in
               className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border hover:bg-accent">
               <Edit className="w-3.5 h-3.5" /> Edit
             </Link>
+            <button
+              onClick={async () => {
+                const res = await onAction('send', 'POST', { markOnly: true })
+                if (res) {
+                  removePendingMarkSentQuote(quote.id)
+                  router.refresh()
+                }
+              }}
+              disabled={loading === 'send'}
+              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              {loading === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              Mark as sent
+            </button>
           </>
         )}
 

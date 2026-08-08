@@ -1,6 +1,6 @@
 import { ClientCard } from '@/components/studio/client-card'
 import { clientMatchesFilter } from '@/components/studio/studio-shared'
-import type { Client, ClientDetail, FlatInvoice, FlatQuote, ClientFilter } from '@/components/studio/studio-shared'
+import type { Client, ClientDetail, FlatInvoice, FlatQuote, ClientFilter, PendingMarkSentQuoteItem } from '@/components/studio/studio-shared'
 
 interface Props {
   clients: Client[]
@@ -16,6 +16,7 @@ interface Props {
   cardDetails: Record<string, ClientDetail>
   cardLoading: Record<string, boolean>
   cardsRef: React.RefObject<HTMLDivElement | null>
+  pendingMarkSentQuote: PendingMarkSentQuoteItem[]
   onNavigate: (path: string) => void
   onDraftInvoice: (clientId: string) => void
   onLogTime: (clientId: string) => void
@@ -24,7 +25,7 @@ interface Props {
 export function ClientCardsSection({
   clients, flat, flatQuotes, clientFilter, setClientFilter, clientSearch, setClientSearch,
   expandedClient, setExpandedClient, fetchCardDetail, cardDetails, cardLoading,
-  cardsRef, onNavigate, onDraftInvoice, onLogTime,
+  cardsRef, pendingMarkSentQuote, onNavigate, onDraftInvoice, onLogTime,
 }: Props) {
   return (
     <div ref={cardsRef}>
@@ -60,7 +61,7 @@ export function ClientCardsSection({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {clients.filter(client => {
           // KPI / notice filter — shared predicate
-          if (clientFilter && !clientMatchesFilter(client, clientFilter, flat, flatQuotes)) return false
+          if (clientFilter && !clientMatchesFilter(client, clientFilter, flat, flatQuotes, pendingMarkSentQuote)) return false
           // Omni search
           if (!clientSearch.trim()) return true
           const q = clientSearch.toLowerCase()

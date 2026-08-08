@@ -70,13 +70,14 @@ export interface ClientDetail {
   invoices: Invoice[]
   acceptedQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; hasInvoice: boolean; jobName: string | null }[]
   sentQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; sentAt: string | null; jobName: string | null }[]
+  draftQuotes: { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; hasInvoice: boolean; jobName: string | null }[]
   jobs: { id: string; name: string }[]
   receiptCount: number
 }
 
 export type FlatInvoice = Invoice & { clientId: string; clientProfileId: string; clientName: string; clientSlug: string; clientCompany: string | null }
 
-export type ClientFilter = 'outstanding' | 'overdue' | 'unsent' | 'collected' | 'awaiting-quotes' | 'uninvoiced-quotes' | null
+export type ClientFilter = 'outstanding' | 'overdue' | 'unsent' | 'collected' | 'awaiting-quotes' | 'uninvoiced-quotes' | 'downloaded-quotes' | null
 
 export interface PendingMarkSentItem {
   invoiceId: string
@@ -103,6 +104,7 @@ export function clientMatchesFilter(
   filter: Exclude<ClientFilter, null>,
   flat: FlatInvoice[],
   flatQuotes: FlatQuote[],
+  pendingMarkSentQuote?: PendingMarkSentQuoteItem[],
 ): boolean {
   const now = new Date()
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
@@ -120,6 +122,8 @@ export function clientMatchesFilter(
       return flatQuotes.some(q => q.clientProfileId === client.clientProfileId && q.status === 'SENT')
     case 'uninvoiced-quotes':
       return flatQuotes.some(q => q.clientProfileId === client.clientProfileId && q.status === 'ACCEPTED' && !q.hasInvoice)
+    case 'downloaded-quotes':
+      return !!pendingMarkSentQuote?.some(item => item.projectId === client.id)
   }
 }
 
