@@ -152,6 +152,10 @@ export function ClientCard({
           ) : (() => {
             if (!detail) return <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No details available</p>
             const hl = highlightConfig(clientFilter)
+            const invoiceHl = clientFilter && ['overdue', 'unsent', 'outstanding', 'collected'].includes(clientFilter) ? hl : null
+            const draftQuoteHl = clientFilter === 'downloaded-quotes' ? hl : null
+            const sentQuoteHl = clientFilter === 'awaiting-quotes' ? hl : null
+            const acceptedQuoteHl = clientFilter === 'uninvoiced-quotes' ? hl : null
             return (
             <div style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr' : '1fr 260px', gap: 20 }}>
 
@@ -181,9 +185,9 @@ export function ClientCard({
                         <div
                           key={inv.id}
                           onClick={() => onNavigate(`/projects/${client.slug}/invoices/${inv.id}`)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: hl?.bg ?? '#fff', border: `1.5px solid ${hl?.border ?? '#e8e6df'}`, cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }}
-                          onMouseEnter={e => { if (!hl) (e.currentTarget as HTMLDivElement).style.borderColor = '#c7c4e8' }}
-                          onMouseLeave={e => { if (!hl) (e.currentTarget as HTMLDivElement).style.borderColor = '#e8e6df' }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: invoiceHl?.bg ?? '#fff', border: `1.5px solid ${invoiceHl?.border ?? '#e8e6df'}`, cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }}
+                          onMouseEnter={e => { if (!invoiceHl) (e.currentTarget as HTMLDivElement).style.borderColor = '#c7c4e8' }}
+                          onMouseLeave={e => { if (!invoiceHl) (e.currentTarget as HTMLDivElement).style.borderColor = '#e8e6df' }}
                         >
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#f3f4f6', color: '#6b7280', letterSpacing: 0.4, flexShrink: 0, textTransform: 'uppercase' }}>Invoice</span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{inv.invoiceNumber}</span>
@@ -215,9 +219,9 @@ export function ClientCard({
                         <Link
                           key={q.id}
                           href={`/projects/${client.slug}/quotes/${q.id}`}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: hl?.bg ?? '#fff', border: `1.5px solid ${hl?.border ?? '#e8e6df'}`, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
-                          onMouseEnter={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8' }}
-                          onMouseLeave={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df' }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: draftQuoteHl?.bg ?? '#fff', border: `1.5px solid ${draftQuoteHl?.border ?? '#e8e6df'}`, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
+                          onMouseEnter={e => { if (!draftQuoteHl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8' }}
+                          onMouseLeave={e => { if (!draftQuoteHl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df' }}
                         >
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#eeedfe', color: '#534AB7', letterSpacing: 0.4, flexShrink: 0, textTransform: 'uppercase' }}>Quote</span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', flexShrink: 0 }}>{q.quoteNumber}</span>
@@ -247,9 +251,9 @@ export function ClientCard({
                         <Link
                           key={q.id}
                           href={`/projects/${client.slug}/quotes/${q.id}`}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: hl?.bg ?? '#fff', border: `1.5px solid ${hl?.border ?? '#e8e6df'}`, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
-                          onMouseEnter={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8' }}
-                          onMouseLeave={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df' }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: sentQuoteHl?.bg ?? '#fff', border: `1.5px solid ${sentQuoteHl?.border ?? '#e8e6df'}`, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
+                          onMouseEnter={e => { if (!sentQuoteHl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8' }}
+                          onMouseLeave={e => { if (!sentQuoteHl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df' }}
                         >
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#eeedfe', color: '#534AB7', letterSpacing: 0.4, flexShrink: 0, textTransform: 'uppercase' }}>Quote</span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', flexShrink: 0 }}>{q.quoteNumber}</span>
@@ -281,9 +285,9 @@ export function ClientCard({
                       <Link
                         key={q.id}
                         href={`/projects/${client.slug}/quotes/${q.id}`}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: hl?.bg ?? '#fff', border: `1.5px solid ${hl?.border ?? '#e8e6df'}`, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
-                        onMouseEnter={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8' }}
-                        onMouseLeave={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: acceptedQuoteHl?.bg ?? '#fff', border: `1.5px solid ${acceptedQuoteHl?.border ?? '#e8e6df'}`, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
+                        onMouseEnter={e => { if (!acceptedQuoteHl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8' }}
+                        onMouseLeave={e => { if (!acceptedQuoteHl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df' }}
                       >
                         <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#eeedfe', color: '#534AB7', letterSpacing: 0.4, flexShrink: 0, textTransform: 'uppercase' }}>Quote</span>
                         <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', flexShrink: 0 }}>{q.quoteNumber}</span>
