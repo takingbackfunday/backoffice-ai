@@ -36,6 +36,11 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
     setStartMode('template')
   }, [router])
 
+  const handleGenerateClick = useCallback(() => {
+    setStartMode('template')
+    setShowGenerate(true)
+  }, [])
+
   const handleGeneratedTemplate = useCallback((templateId: string) => {
     setTemplateId(templateId)
     setShowGenerate(false)
@@ -191,15 +196,15 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
         </div>
       )}
 
-      {/* Generate-from-description section (template mode) */}
-      {startMode === 'template' && (
+      {/* Generate-from-description section (blank + template modes) */}
+      {startMode !== 'duplicate' && (
         <div>
           {showGenerate ? (
             <GenerateTemplateForm onCreated={handleGeneratedTemplate} workDescription={workDescription} />
           ) : (
             <button
               type="button"
-              onClick={() => setShowGenerate(true)}
+              onClick={handleGenerateClick}
               className="flex items-center gap-1.5 text-xs text-primary hover:underline"
             >
               <Sparkles className="w-3 h-3" />
