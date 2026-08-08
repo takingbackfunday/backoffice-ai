@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { removePendingMarkSentInvoice } from '@/lib/pending-mark-sent'
 
 interface PendingItem {
   invoiceId: string
@@ -55,11 +56,7 @@ export function MarkSentModal({ item, onDone }: Props) {
   }
 
   function removePending() {
-    try {
-      const key = 'pending-mark-sent'
-      const existing: PendingItem[] = JSON.parse(localStorage.getItem(key) ?? '[]')
-      localStorage.setItem(key, JSON.stringify(existing.filter(e => e.invoiceId !== item.invoiceId)))
-    } catch {}
+    removePendingMarkSentInvoice(item.invoiceId)
   }
 
   return (

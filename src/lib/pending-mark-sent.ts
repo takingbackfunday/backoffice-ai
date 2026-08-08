@@ -35,3 +35,41 @@ export function removePendingMarkSentQuote(quoteId: string): void {
   const items = readAll().filter(e => e.quoteId !== quoteId)
   writeAll(items)
 }
+
+export interface PendingMarkSentInvoice {
+  invoiceId: string
+  invoiceNumber: string
+  projectId: string
+  projectSlug: string
+  downloadedAt: number
+}
+
+const INVOICE_KEY = 'pending-mark-sent'
+
+function readAllInvoices(): PendingMarkSentInvoice[] {
+  try {
+    return JSON.parse(localStorage.getItem(INVOICE_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
+
+function writeAllInvoices(items: PendingMarkSentInvoice[]): void {
+  try {
+    localStorage.setItem(INVOICE_KEY, JSON.stringify(items))
+  } catch {
+    // localStorage full or unavailable — silently ignore
+  }
+}
+
+export function stashPendingMarkSentInvoice(entry: PendingMarkSentInvoice): void {
+  const items = readAllInvoices()
+  if (items.some(e => e.invoiceId === entry.invoiceId)) return
+  items.push(entry)
+  writeAllInvoices(items)
+}
+
+export function removePendingMarkSentInvoice(invoiceId: string): void {
+  const items = readAllInvoices().filter(e => e.invoiceId !== invoiceId)
+  writeAllInvoices(items)
+}

@@ -11,6 +11,8 @@ import { PaymentSummary } from '@/components/projects/payment-summary'
 import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { usePageContext } from '@/components/chat/page-context-provider'
 import { toDisplay, computeInvoiceTotals } from '@/lib/money'
+import { InvoiceDownloadBanner } from '@/components/projects/invoice-download-banner'
+import { stashPendingMarkSentInvoice, removePendingMarkSentInvoice } from '@/lib/pending-mark-sent'
 
 interface Suggestion {
   id: string
@@ -126,6 +128,11 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
   const [showRenegotiateConfirm, setShowRenegotiateConfirm] = useState(false)
   const [renegotiating, setRenegotiating] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showSentBanner, setShowSentBanner] = useState(false)
+
+  function handleDownloaded() {
+    if (invoice.status === 'DRAFT') setShowSentBanner(true)
+  }
 
   // ── Payment actions (refund / move) ──────────────────────────────
   const [paymentMenuOpen, setPaymentMenuOpen] = useState<string | null>(null)
@@ -464,6 +471,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                 onClick={async () => {
                   if (!confirm('Mark this invoice as sent? This moves it into your Outstanding balance.')) return
                   await updateStatus('SENT')
+                  removePendingMarkSentInvoice(invoice.id)
                 }}
                 className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
@@ -505,14 +513,10 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                 a.click()
                 document.body.removeChild(a)
 
-                if (invoice.status !== 'DRAFT') return
-                try {
-                  const key = 'pending-mark-sent'
-                  const existing: { invoiceId: string; invoiceNumber: string; projectId: string; projectSlug: string; downloadedAt: number }[] = JSON.parse(localStorage.getItem(key) ?? '[]')
-                  if (existing.some(e => e.invoiceId === invoice.id)) return
-                  existing.push({ invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, projectId, projectSlug, downloadedAt: Date.now() })
-                  localStorage.setItem(key, JSON.stringify(existing))
-                } catch {}
+                if (invoice.status === 'DRAFT') {
+                  stashPendingMarkSentInvoice({ invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, projectId, projectSlug, downloadedAt: Date.now() })
+                  handleDownloaded()
+                }
               }}
               className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
             >
@@ -547,6 +551,17 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           <span className="font-medium">{invoice.currency}</span>
         </div>
       </div>
+
+      {showSentBanner && invoice.status === 'DRAFT' && (
+        <InvoiceDownloadBanner
+          projectId={projectId}
+          projectSlug={projectSlug}
+          invoiceId={invoice.id}
+          invoiceNumber={invoice.invoiceNumber}
+          clientName={invoice.clientName}
+          onDone={() => { setShowSentBanner(false); router.refresh() }}
+        />
+      )}
 
       {/* Line items */}
       <div>
@@ -967,14 +982,10 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
                   a.click()
                   document.body.removeChild(a)
 
-                  if (invoice.status !== 'DRAFT') return
-                  try {
-                    const key = 'pending-mark-sent'
-                    const existing: { invoiceId: string; invoiceNumber: string; projectId: string; projectSlug: string; downloadedAt: number }[] = JSON.parse(localStorage.getItem(key) ?? '[]')
-                    if (existing.some(e => e.invoiceId === invoice.id)) return
-                    existing.push({ invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, projectId, projectSlug, downloadedAt: Date.now() })
-                    localStorage.setItem(key, JSON.stringify(existing))
-                  } catch {}
+                  if (invoice.status === 'DRAFT') {
+                    stashPendingMarkSentInvoice({ invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, projectId, projectSlug, downloadedAt: Date.now() })
+                    handleDownloaded()
+                  }
                 }}
                 className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted transition-colors"
               >
