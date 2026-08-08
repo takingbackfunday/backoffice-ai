@@ -10,13 +10,13 @@ const BodySchema = z.object({
   description: z.string().trim().min(10).max(2000),
 })
 
-const SYSTEM_PROMPT = `You generate exactly one detailed quote template for a specific job a freelancer is about to quote.
+const SYSTEM_PROMPT = `You generate exactly one detailed quote template for a specific project or job someone is pricing up.
 
-Return ONLY JSON (no markdown, no prose):
+Return ONLY valid JSON — no markdown, no code fences, no prose before or after:
 {"template": {"name": "...", "sections": [...]}}
 
 Rules:
-- "name" is a concise, client-facing title for this job (e.g. "Wedding Highlight Reel — June 2025")
+- "name" is a concise, client-facing title for this project
 - "sections" contains 2-4 sections, each with {"name", "items": [...]}
 - Each item: {"description", "unit", "quantity", "rate", "costRate", "tags", "isOptional"}
 - "unit" is 'hr', 'day', or 'x'
@@ -24,7 +24,7 @@ Rules:
 - "costRate" is the internal cost (0 if unknown)
 - "tags" are short keywords for margin-rule matching
 - "isOptional" should be true for add-ons or upgrades
-- Make items specific to the described job — use realistic quantities and rates`
+- Make items specific to the described project — use realistic quantities and rates`
 
 export const POST = authedRoute<void, z.infer<typeof BodySchema>>({
   bodySchema: BodySchema,
@@ -56,8 +56,9 @@ export const POST = authedRoute<void, z.infer<typeof BodySchema>>({
     try {
       parsed = JSON.parse(jsonStr)
     } catch {
+      const snippet = jsonStr.slice(0, 300)
       logger.error('quote-templates-generate', 'JSON parse failed', { raw: raw.slice(0, 500) })
-      return badRequest('We couldn\u2019t parse the generated output \u2014 please try again.')
+      return badRequest(`The AI returned invalid JSON. Try rephrasing your description.\n\nRaw output:\n${snippet}`)
     }
 
     const SingleTemplateSchema = z.object({
@@ -66,10 +67,11 @@ export const POST = authedRoute<void, z.infer<typeof BodySchema>>({
 
     const result = SingleTemplateSchema.safeParse(parsed)
     if (!result.success) {
+      const issues = result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
       logger.error('quote-templates-generate', 'Schema validation failed', {
         errors: result.error.issues.map(i => i.message),
       })
-      return badRequest('The generated output didn\u2019t match the expected format \u2014 please try again.')
+      return badRequest(`The AI output didn\u2019t match the expected format (${issues}). Try rephrasing your description.`)
     }
 
     const createdTemplate = await prisma.quoteTemplate.create({
