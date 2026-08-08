@@ -11,9 +11,40 @@ interface GeneratedTemplate {
 
 interface Props {
   onCreated: (templateId: string) => void
+  workDescription?: string
 }
 
-export function GenerateTemplateForm({ onCreated }: Props) {
+function placeholderFromWorkDescription(desc?: string): string {
+  if (!desc) return "e.g. I need to shoot a 3-minute brand video for a local coffee shop — 1 shoot day, interview setup, b-roll, and a 30-second social cut..."
+  const lower = desc.toLowerCase()
+  if (lower.includes('video') || lower.includes('film') || lower.includes('produc') || lower.includes('document')) {
+    return "e.g. I need to produce a 3-part documentary series — pre-production research, location interviews, 4 shoot days, post-production editing, color grading, and original score..."
+  }
+  if (lower.includes('design') || lower.includes('brand') || lower.includes('graphic')) {
+    return "e.g. Full brand identity for a new organic skincare line — logo, packaging, web assets, and brand guidelines with 2 rounds of revisions..."
+  }
+  if (lower.includes('web') || lower.includes('develop') || lower.includes('site')) {
+    return "e.g. E-commerce site rebuild for a boutique — 10 product pages, cart integration, CMS setup, responsive design, and SEO optimization..."
+  }
+  if (lower.includes('photo') || lower.includes('shoot')) {
+    return "e.g. Product photography for a new fashion collection — 30 looks, 3 angles each, retouching, and e-commerce delivery..."
+  }
+  if (lower.includes('market') || lower.includes('social') || lower.includes('content')) {
+    return "e.g. Q4 social media campaign for a tech startup — 12 posts, 3 short-form videos, community management, and monthly analytics report..."
+  }
+  if (lower.includes('consult') || lower.includes('coach') || lower.includes('advisor')) {
+    return "e.g. 3-month strategy engagement for a SaaS company — discovery, competitive analysis, roadmap, and bi-weekly advisory calls..."
+  }
+  if (lower.includes('event') || lower.includes('wedding') || lower.includes('plan')) {
+    return "e.g. Full-service event planning for a 150-person corporate gala — venue sourcing, vendor coordination, day-of management, and teardown..."
+  }
+  if (lower.includes('write') || lower.includes('copy') || lower.includes('editorial')) {
+    return "e.g. Website copy rewrite for a law firm — homepage, 5 practice area pages, about, and blog launch package with SEO keywords..."
+  }
+  return "e.g. I need to produce a 3-part documentary series — pre-production research, location interviews, 4 shoot days, post-production editing, color grading, and original score..."
+}
+
+export function GenerateTemplateForm({ onCreated, workDescription }: Props) {
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [step, setStep] = useState<'input' | 'generating' | 'done'>('input')
@@ -127,7 +158,7 @@ export function GenerateTemplateForm({ onCreated }: Props) {
             handleGenerate()
           }
         }}
-        placeholder="e.g. I need to shoot a 3-minute brand video for a local coffee shop — 1 shoot day, interview setup, b-roll, and a 30-second social cut..."
+        placeholder={placeholderFromWorkDescription(workDescription)}
         disabled={busy}
         className="w-full border rounded px-3 py-2 text-sm bg-background resize-none"
       />

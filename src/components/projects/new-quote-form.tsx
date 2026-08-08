@@ -195,7 +195,7 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
       {startMode === 'template' && (
         <div>
           {showGenerate ? (
-            <GenerateTemplateForm onCreated={handleGeneratedTemplate} />
+            <GenerateTemplateForm onCreated={handleGeneratedTemplate} workDescription={workDescription} />
           ) : (
             <button
               type="button"
