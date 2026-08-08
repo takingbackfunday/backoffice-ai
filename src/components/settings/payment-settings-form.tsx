@@ -46,11 +46,12 @@ function F({ label, value, onChange, placeholder, mono = false }: {
   )
 }
 
-export function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
+export function Section({ title, description, children, id }: { title: string; description?: string; children: React.ReactNode; id?: string }) {
   return (
     <div id={id} className="rounded-lg border bg-white">
       <div className="px-4 py-2.5 border-b bg-muted/30 rounded-t-lg">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-800">{title}</p>
+        {description && <p className="text-[10px] text-muted-foreground mt-0.5">{description}</p>}
       </div>
       <div className="px-4 py-3 space-y-2">
         {children}
@@ -161,7 +162,7 @@ export function PaymentSettingsForm({
     <div className="flex flex-col lg:flex-row gap-8 items-start">
       <div className="space-y-4 max-w-xl flex-1 min-w-0">
 
-        <Section title="Business profile" id="business-profile">
+        <Section title="Business profile" description="Your name, business info, and contact details that appear on invoices." id="business-profile">
           <LogoUpload initialLogoUrl={logoUrl ?? undefined} onChange={(url) => {
             setLogoUrl(url)
             if (!url) setShowBusinessName(true)
@@ -181,7 +182,7 @@ export function PaymentSettingsForm({
           </div>
         </Section>
 
-        <Section title="Invoice template" id="invoice-template">
+        <Section title="Invoice template" description="Choose a layout and toggle your logo or business name on invoice headers." id="invoice-template">
           <InvoiceTemplatePicker
             value={template}
             onChange={setTemplate}
@@ -192,7 +193,7 @@ export function PaymentSettingsForm({
         </Section>
 
         <div id="payment-methods" className="space-y-4">
-        <Section title="Bank transfer">
+        <Section title="Bank transfer" description="Bank account details shown on invoices for wire transfers.">
           <div className="grid grid-cols-2 gap-2">
             <F label="Account name" value={accountName} onChange={setAccountName} placeholder="Your Name or Business" />
             <F label="Bank name" value={bankName} onChange={setBankName} placeholder="Barclays, Chase…" />
@@ -208,7 +209,7 @@ export function PaymentSettingsForm({
           </div>
         </Section>
 
-        <Section title="Online payments">
+        <Section title="Online payments" description="PayPal, Stripe, or custom payment links displayed on invoices.">
           <div className="grid grid-cols-2 gap-2">
             <F label="PayPal link or email" value={paypalLink} onChange={setPaypalLink} placeholder="paypal.me/yourname" />
             <F label="Stripe payment link" value={stripeLink} onChange={setStripeLink} placeholder="buy.stripe.com/…" />
@@ -251,7 +252,7 @@ export function PaymentSettingsForm({
         </Section>
         </div>
 
-        <Section title="Notes / payment terms default" id="invoice-notes-default">
+        <Section title="Default invoice notes" description="Pre-filled notes on every new invoice. Edit per-invoice as needed." id="invoice-notes-default">
           <textarea
             value={notesDefault}
             onChange={e => setNotesDefault(e.target.value)}
@@ -261,7 +262,7 @@ export function PaymentSettingsForm({
           />
         </Section>
 
-        <Section title="Payment instructions" id="payment-instructions">
+        <Section title="Payment instructions" description="Extra instructions shown below the payment methods on invoices." id="payment-instructions">
           <textarea
             value={paymentNote}
             onChange={e => setPaymentNote(e.target.value)}

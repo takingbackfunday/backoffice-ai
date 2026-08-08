@@ -10,6 +10,7 @@ import { ServiceItemsEditor } from '@/components/settings/service-items-editor'
 import { QuoteTemplatesEditor } from '@/components/settings/quote-templates-editor'
 import { QuoteDefaultsForm } from '@/components/settings/quote-defaults-form'
 import { WorkProfileEditor } from '@/components/settings/work-profile-editor'
+import { SettingsNav } from '@/components/settings/settings-nav'
 import { parsePreferences } from '@/types/preferences'
 
 export default async function SettingsPage() {
@@ -43,9 +44,7 @@ export default async function SettingsPage() {
         <Header title="Settings" />
         <main className="flex-1 p-6" role="main">
           <h2 className="text-lg font-semibold mb-1">Settings</h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            Your business profile and payment details appear on every invoice you send.
-          </p>
+          <SettingsNav />
           <PaymentSettingsForm
             initial={paymentMethods}
             initialBusinessName={businessName}
@@ -63,23 +62,23 @@ export default async function SettingsPage() {
           />
 
           <div className="max-w-xl space-y-8 mt-8">
-            <Section title="Quote defaults" id="quote-defaults">
+            <Section title="Quote defaults" description="Default validity period and terms applied to every new quote." id="quote-defaults">
               <QuoteDefaultsForm />
             </Section>
 
-            <Section title="Work profile" id="work-profile">
+            <Section title="Work profile" description="Your work description used by AI to generate quotes and estimates." id="work-profile">
               <WorkProfileEditor initialDescription={data.workDescription} />
             </Section>
 
-            <Section title="Service library" id="service-library">
+            <Section title="Service library" description="Reusable line items you can quickly add to quotes and estimates." id="service-library">
               <ServiceItemsEditor />
             </Section>
 
-            <Section title="Quote templates" id="quote-templates">
+            <Section title="Quote templates" description="Saved quote structures you can reuse as a starting point." id="quote-templates">
               <QuoteTemplatesEditor />
             </Section>
 
-            <Section title="Margin rules" id="margin-rules">
+            <Section title="Margin rules" description="Default margin percentages applied per tag when auto-pricing quote items." id="margin-rules">
               <MarginRulesEditor initialRules={marginRules.map(r => ({
                 id: r.id,
                 tag: r.tag,
