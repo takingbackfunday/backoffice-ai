@@ -45,7 +45,7 @@ export function ClientCard({
             {/* Identity — click to navigate to client page */}
             <div
               onClick={e => { e.stopPropagation(); onNavigate(`/projects/${client.slug}`) }}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: 280, cursor: 'pointer' }}
             >
               <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f0eef9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#534AB7', flexShrink: 0 }}>
                 {client.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
