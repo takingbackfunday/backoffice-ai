@@ -3,6 +3,20 @@ import { StatusBadge } from '@/components/studio/studio-badges'
 import { fmt, getDisplayStatus, daysUntil, daysAgo } from '@/components/studio/studio-shared'
 import type { Client, ClientDetail, FlatInvoice, ClientFilter } from '@/components/studio/studio-shared'
 
+const HIGHLIGHT: Record<string, { border: string; bg: string }> = {
+  overdue: { border: '#ef4444', bg: '#fef2f2' },
+  unsent: { border: '#3b82f6', bg: '#eff6ff' },
+  outstanding: { border: '#a16207', bg: '#fffbeb' },
+  collected: { border: '#16a34a', bg: '#f0fdf4' },
+  'awaiting-quotes': { border: '#a78bfa', bg: '#f5f3ff' },
+  'uninvoiced-quotes': { border: '#10b981', bg: '#ecfdf5' },
+  'downloaded-quotes': { border: '#6366f1', bg: '#eef2ff' },
+}
+
+function highlightConfig(filter: ClientFilter): { border: string; bg: string } | null {
+  return filter ? HIGHLIGHT[filter] ?? null : null
+}
+
 interface Props {
   client: Client
   isExpanded: boolean
@@ -137,6 +151,7 @@ export function ClientCard({
             </div>
           ) : (() => {
             if (!detail) return <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No details available</p>
+            const hl = highlightConfig(clientFilter)
             return (
             <div style={{ display: 'grid', gridTemplateColumns: clientFilter ? '1fr' : '1fr 260px', gap: 20 }}>
 
@@ -166,9 +181,9 @@ export function ClientCard({
                         <div
                           key={inv.id}
                           onClick={() => onNavigate(`/projects/${client.slug}/invoices/${inv.id}`)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: '#fff', border: '1px solid #e8e6df', cursor: 'pointer', transition: 'border-color 0.15s' }}
-                          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#c7c4e8'}
-                          onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#e8e6df'}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: hl?.bg ?? '#fff', border: `1.5px solid ${hl?.border ?? '#e8e6df'}`, cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }}
+                          onMouseEnter={e => { if (!hl) (e.currentTarget as HTMLDivElement).style.borderColor = '#c7c4e8' }}
+                          onMouseLeave={e => { if (!hl) (e.currentTarget as HTMLDivElement).style.borderColor = '#e8e6df' }}
                         >
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#f3f4f6', color: '#6b7280', letterSpacing: 0.4, flexShrink: 0, textTransform: 'uppercase' }}>Invoice</span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{inv.invoiceNumber}</span>
@@ -200,9 +215,9 @@ export function ClientCard({
                         <Link
                           key={q.id}
                           href={`/projects/${client.slug}/quotes/${q.id}`}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: '#fff', border: '1px solid #e8e6df', textDecoration: 'none', transition: 'border-color 0.15s' }}
-                          onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8'}
-                          onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df'}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: hl?.bg ?? '#fff', border: `1.5px solid ${hl?.border ?? '#e8e6df'}`, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
+                          onMouseEnter={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8' }}
+                          onMouseLeave={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df' }}
                         >
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#eeedfe', color: '#534AB7', letterSpacing: 0.4, flexShrink: 0, textTransform: 'uppercase' }}>Quote</span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', flexShrink: 0 }}>{q.quoteNumber}</span>
@@ -232,9 +247,9 @@ export function ClientCard({
                         <Link
                           key={q.id}
                           href={`/projects/${client.slug}/quotes/${q.id}`}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: '#fff', border: '1px solid #e8e6df', textDecoration: 'none', transition: 'border-color 0.15s' }}
-                          onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8'}
-                          onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df'}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: hl?.bg ?? '#fff', border: `1.5px solid ${hl?.border ?? '#e8e6df'}`, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
+                          onMouseEnter={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8' }}
+                          onMouseLeave={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df' }}
                         >
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#eeedfe', color: '#534AB7', letterSpacing: 0.4, flexShrink: 0, textTransform: 'uppercase' }}>Quote</span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', flexShrink: 0 }}>{q.quoteNumber}</span>
@@ -266,9 +281,9 @@ export function ClientCard({
                       <Link
                         key={q.id}
                         href={`/projects/${client.slug}/quotes/${q.id}`}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: '#fff', border: '1px solid #e8e6df', textDecoration: 'none', transition: 'border-color 0.15s' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8'}
-                        onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df'}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: hl?.bg ?? '#fff', border: `1.5px solid ${hl?.border ?? '#e8e6df'}`, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
+                        onMouseEnter={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#c7c4e8' }}
+                        onMouseLeave={e => { if (!hl) (e.currentTarget as HTMLAnchorElement).style.borderColor = '#e8e6df' }}
                       >
                         <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#eeedfe', color: '#534AB7', letterSpacing: 0.4, flexShrink: 0, textTransform: 'uppercase' }}>Quote</span>
                         <span style={{ fontSize: 12, fontWeight: 600, color: '#534AB7', flexShrink: 0 }}>{q.quoteNumber}</span>

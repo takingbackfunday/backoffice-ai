@@ -41,25 +41,53 @@ export default async function StudioPage({ searchParams }: PageProps) {
     }),
   ])
 
+  // Group flatQuotes by clientProfileId to populate accepted/sent arrays
+  const flatQuotesByClient = new Map<string, typeof flatQuotes>()
+  for (const q of flatQuotes) {
+    if (!flatQuotesByClient.has(q.clientProfileId)) {
+      flatQuotesByClient.set(q.clientProfileId, [])
+    }
+    flatQuotesByClient.get(q.clientProfileId)!.push(q)
+  }
+
   // Build client cards from SQL summaries
-  const clients = cardSummaries.map(cs => ({
-    id: cs.workspaceId,
-    name: cs.workspaceName,
-    slug: cs.workspaceSlug,
-    company: cs.company,
-    outstanding: cs.outstanding,
-    currency: cs.currency,
-    clientProfileId: cs.clientProfileId,
-    contactName: cs.contactName,
-    email: cs.email,
-    paymentTermDays: cs.paymentTermDays,
-    billingType: cs.billingType,
-    jobs: [] as { id: string; name: string }[],
-    acceptedQuotes: [] as { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; hasInvoice: boolean; jobName: string | null }[],
-    sentQuotes: [] as { id: string; quoteNumber: string; title: string; totalQuoted: number | null; currency: string; sentAt: string | null; jobName: string | null }[],
-    invoices: [] as { id: string; invoiceNumber: string; status: string; issueDate: string; dueDate: string; currency: string; total: number; paid: number; jobName: string | null }[],
-    receiptCount: 0,
-  }))
+  const clients = cardSummaries.map(cs => {
+    const clientQuotes = flatQuotesByClient.get(cs.clientProfileId) ?? []
+    return {
+      id: cs.workspaceId,
+      name: cs.workspaceName,
+      slug: cs.workspaceSlug,
+      company: cs.company,
+      outstanding: cs.outstanding,
+      currency: cs.currency,
+      clientProfileId: cs.clientProfileId,
+      contactName: cs.contactName,
+      email: cs.email,
+      paymentTermDays: cs.paymentTermDays,
+      billingType: cs.billingType,
+      jobs: [] as { id: string; name: string }[],
+      acceptedQuotes: clientQuotes.filter(q => q.status === 'ACCEPTED').map(q => ({
+        id: q.id,
+        quoteNumber: q.quoteNumber,
+        title: q.title,
+        totalQuoted: q.totalQuoted,
+        currency: q.currency,
+        hasInvoice: q.hasInvoice,
+        jobName: q.jobName,
+      })),
+      sentQuotes: clientQuotes.filter(q => q.status === 'SENT').map(q => ({
+        id: q.id,
+        quoteNumber: q.quoteNumber,
+        title: q.title,
+        totalQuoted: q.totalQuoted,
+        currency: q.currency,
+        sentAt: q.sentAt,
+        jobName: q.jobName,
+      })),
+      invoices: [] as { id: string; invoiceNumber: string; status: string; issueDate: string; dueDate: string; currency: string; total: number; paid: number; jobName: string | null }[],
+      receiptCount: 0,
+    }
+  })
 
   return (
     <div className="flex min-h-screen">
