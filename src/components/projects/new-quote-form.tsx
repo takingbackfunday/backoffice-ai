@@ -191,6 +191,24 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
         </div>
       )}
 
+      {/* Generate-from-description section (template mode) */}
+      {startMode === 'template' && (
+        <div>
+          {showGenerate ? (
+            <GenerateTemplateForm onCreated={handleGeneratedTemplate} />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowGenerate(true)}
+              className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+            >
+              <Sparkles className="w-3 h-3" />
+              Generate a template from a job description
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Recent quote select (duplicate mode) */}
       {startMode === 'duplicate' && (
         <div>
