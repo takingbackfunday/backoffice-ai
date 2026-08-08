@@ -129,7 +129,7 @@ export function PivotTable({ result, config, symbol = '$' }: PivotTableProps) {
   if (viewMode === 'tabular' || rows.length <= 1) {
     return (
       <div className="overflow-x-auto">
-        <table ref={tableRef} className="w-full text-sm border-collapse">
+        <table ref={tableRef} className="w-max text-sm border-collapse">
           <thead className="bg-muted/50">{renderHeaderCells()}</thead>
           <tbody>
             {flatRows.map((fr, idx) => {
@@ -170,7 +170,7 @@ export function PivotTable({ result, config, symbol = '$' }: PivotTableProps) {
   // Outline mode (rows.length >= 2)
   return (
     <div className="overflow-x-auto">
-      <table ref={tableRef} className="w-full text-sm border-collapse">
+      <table ref={tableRef} className="w-max text-sm border-collapse">
         <thead className="bg-muted/50">{renderHeaderCells()}</thead>
         <tbody>
           {groups.map(group => {
