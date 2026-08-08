@@ -4,13 +4,19 @@ import { created, badRequest } from '@/lib/api-response'
 import { authedRoute } from '@/lib/api-handler'
 import { openrouterChat } from '@/lib/llm/openrouter'
 import { StarterTemplateSchema } from '@/lib/quote-template-schemas'
+import { parsePreferences } from '@/types/preferences'
 import { logger } from '@/lib/log'
 
 const BodySchema = z.object({
   description: z.string().trim().min(10).max(2000),
 })
 
-const SYSTEM_PROMPT = `You generate exactly one detailed quote template for a specific project or job someone is pricing up.
+const SYSTEM_PROMPT = (workDescription: string | null) =>
+  `You generate exactly one detailed quote template for a specific project or job.
+
+The person's general line of work: ${workDescription ?? '(not specified)'}
+
+Context from their work profile: use this to understand their industry and the kind of rates, units, and sections that make sense for them.
 
 Return ONLY valid JSON — no markdown, no code fences, no prose before or after:
 {"template": {"name": "...", "sections": [...]}}
@@ -29,12 +35,17 @@ Rules:
 export const POST = authedRoute<void, z.infer<typeof BodySchema>>({
   bodySchema: BodySchema,
   handler: async ({ userId, body }) => {
+    const pref = await prisma.userPreference.findUnique({ where: { userId } })
+    const workDescription = pref ? parsePreferences(pref.data).workDescription ?? null : null
+
     let raw: string
     try {
       raw = await openrouterChat(
         [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: body.description },
+          { role: 'system', content: SYSTEM_PROMPT(workDescription) },
+          { role: 'user', content: `${body.description}
+
+Now generate the JSON template for this specific project. Remember — valid JSON only, no markdown, no prose.` },
         ],
         'mistralai/mistral-small-2603',
         8192,
