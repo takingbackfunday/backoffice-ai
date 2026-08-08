@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, created } from '@/lib/api-response'
 import { authedRoute } from '@/lib/api-handler'
-import { TemplateSectionSchema } from '@/lib/starter-templates'
+import { TemplateSectionSchema } from '@/lib/quote-template-schemas'
 
 const CreateTemplateSchema = z.object({
   name: z.string().min(1, 'Name is required'),

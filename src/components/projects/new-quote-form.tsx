@@ -3,10 +3,11 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FilePlus2, LayoutTemplate, Copy } from 'lucide-react'
+import { FilePlus2, LayoutTemplate, Copy, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { JobSelect } from './job-select'
 import { WorkProfileSetup } from '@/components/setup/work-profile-setup'
+import { GenerateTemplateForm } from './generate-template-form'
 
 interface Props {
   projectId: string
@@ -26,12 +27,19 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
   const [jobId, setJobId] = useState(jobs[0]?.id ?? '')
   const [templateId, setTemplateId] = useState('')
   const [selectedRecentQuoteId, setSelectedRecentQuoteId] = useState('')
+  const [showGenerate, setShowGenerate] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleProfileComplete = useCallback(() => {
     router.refresh()
     setStartMode('template')
+  }, [router])
+
+  const handleGeneratedTemplate = useCallback((templateId: string) => {
+    setTemplateId(templateId)
+    setShowGenerate(false)
+    router.refresh()
   }, [router])
 
   const modes: { value: StartMode; icon: typeof FilePlus2; label: string; blurb: string }[] = [
