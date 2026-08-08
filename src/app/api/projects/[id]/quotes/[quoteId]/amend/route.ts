@@ -33,7 +33,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       where: { id: quoteId, clientProfile: { workspace: { id, userId } } },
     })
     if (!quote) return notFound('Quote not found')
-    if (quote.status !== 'ACCEPTED') {
+    if (quote.status !== 'ACCEPTED' && quote.status !== 'INVOICED') {
       return badRequest('Amendments can only be created for accepted quotes')
     }
 

@@ -67,7 +67,7 @@ export const PATCH = authedRoute<{ id: string; quoteId: string }, z.infer<typeof
   bodySchema: UpdateQuoteSchema,
   handler: async ({ userId, params, body }) => {
     const quote = await requireQuote(userId, params.quoteId, params.id)
-    if (quote.status === 'ACCEPTED') {
+    if (quote.status === 'ACCEPTED' || quote.status === 'INVOICED') {
       return badRequest('Accepted quotes cannot be edited. Create an amendment instead.')
     }
 

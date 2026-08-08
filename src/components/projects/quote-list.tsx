@@ -45,7 +45,7 @@ export function QuoteList({ projectId, projectSlug, quotes }: Props) {
   const [search, setSearch] = useState('')
 
   const openQuotes = useMemo(() => quotes.filter(q => q.status === 'DRAFT' || q.status === 'SENT'), [quotes])
-  const acceptedQuotes = useMemo(() => quotes.filter(q => q.status === 'ACCEPTED' || q.status === 'AMENDED'), [quotes])
+  const acceptedQuotes = useMemo(() => quotes.filter(q => q.status === 'ACCEPTED' || q.status === 'AMENDED' || q.status === 'INVOICED'), [quotes])
 
   const filtered = useMemo(() => {
     let list = quotes

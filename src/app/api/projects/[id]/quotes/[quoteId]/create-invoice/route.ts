@@ -71,20 +71,35 @@ export const POST = authedRoute<{ id: string; quoteId: string }, z.infer<typeof 
       return badRequest('No line items to invoice')
     }
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        clientProfileId: full.clientProfileId,
-        jobId: full.jobId,
-        quoteId: full.id,
-        invoiceNumber,
-        dueDate: new Date(dueDate),
-        currency: full.currency,
-        notes: notes ?? `Invoice for ${full.quoteNumber} — ${full.title}`,
-        lineItems: {
-          create: lineItems,
+    // Partial milestone invoices keep the quote ACCEPTED so the remaining
+    // balance can still be invoiced; anything else fully converts the quote.
+    const isPartialMilestone = milestonePercent !== undefined && milestonePercent < 100
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      const newInvoice = await tx.invoice.create({
+        data: {
+          clientProfileId: full.clientProfileId,
+          jobId: full.jobId,
+          quoteId: full.id,
+          invoiceNumber,
+          dueDate: new Date(dueDate),
+          currency: full.currency,
+          notes: notes ?? `Invoice for ${full.quoteNumber} — ${full.title}`,
+          lineItems: {
+            create: lineItems,
+          },
         },
-      },
-      include: { lineItems: true },
+        include: { lineItems: true },
+      })
+
+      if (!isPartialMilestone) {
+        await tx.quote.update({
+          where: { id: full.id },
+          data: { status: 'INVOICED' },
+        })
+      }
+
+      return newInvoice
     })
 
     return created(JSON.parse(JSON.stringify(invoice)))

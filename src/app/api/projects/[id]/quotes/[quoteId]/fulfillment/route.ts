@@ -30,7 +30,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       include: {
         sections: { include: { items: true } },
         amendments: {
-          where: { rootQuoteId, isAmendment: true, status: 'ACCEPTED' },
+          where: { rootQuoteId, isAmendment: true, status: { in: ['ACCEPTED', 'INVOICED'] } },
           include: { sections: { include: { items: true } } },
         },
         invoices: {

@@ -221,7 +221,7 @@ export async function fetchClientCardSummaries(userId: string): Promise<ClientCa
       COALESCE(SUM(CASE WHEN di.derived_status = 'PAID' AND di."issueDate" >= ${thirtyDaysAgoStr}::date THEN di.paid ELSE 0 END), 0) AS collected_past_30,
       COALESCE(SUM(CASE WHEN di.derived_status = 'PAID' AND di."issueDate" >= ${yearStartStr}::date THEN di.paid ELSE 0 END), 0) AS collected_ytd,
       COUNT(DISTINCT di."id") AS invoice_count,
-      (SELECT COUNT(*) FROM "Quote" q WHERE q."clientProfileId" = cd.cp_id AND q."status" = 'ACCEPTED') AS accepted_quote_count,
+      (SELECT COUNT(*) FROM "Quote" q WHERE q."clientProfileId" = cd.cp_id AND q."status" IN ('ACCEPTED', 'INVOICED')) AS accepted_quote_count,
       (SELECT COUNT(*) FROM "Quote" q WHERE q."clientProfileId" = cd.cp_id AND q."status" = 'SENT') AS sent_quote_count
     FROM client_data cd
     LEFT JOIN derived_invoices di ON di."clientProfileId" = cd.cp_id

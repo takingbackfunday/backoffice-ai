@@ -973,6 +973,7 @@ enum QuoteStatus {
   REJECTED
   SUPERSEDED
   AMENDED
+  INVOICED
 }
 
 model QuoteSection {

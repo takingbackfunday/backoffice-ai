@@ -42,12 +42,12 @@ export default async function QuoteDetailPage({ params, searchParams }: PagePara
   })
   if (!quote) notFound()
 
-  // Load fulfillment for accepted quotes
+  // Load fulfillment for accepted/invoiced quotes
   let fulfillment = null
-  if (quote.status === 'ACCEPTED' || quote.status === 'AMENDED') {
+  if (quote.status === 'ACCEPTED' || quote.status === 'AMENDED' || quote.status === 'INVOICED') {
     const rootQuoteId = quote.rootQuoteId ?? quote.id
     const acceptedAmendments = await prisma.quote.findMany({
-      where: { rootQuoteId, isAmendment: true, status: 'ACCEPTED' },
+      where: { rootQuoteId, isAmendment: true, status: { in: ['ACCEPTED', 'INVOICED'] } },
       include: { sections: { include: { items: true } } },
     })
     const invoices = await prisma.invoice.findMany({

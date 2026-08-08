@@ -30,8 +30,8 @@ export default async function QuoteAmendPage({ params }: PageParams) {
   })
   if (!quote) notFound()
 
-  // ACCEPTED-only guard — only accepted quotes can be amended
-  if (quote.status !== 'ACCEPTED') {
+  // ACCEPTED/INVOICED-only guard — only accepted quotes can be amended
+  if (quote.status !== 'ACCEPTED' && quote.status !== 'INVOICED') {
     redirect(`/projects/${slug}/quotes/${quoteId}`)
   }
 

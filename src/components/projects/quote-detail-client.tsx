@@ -209,7 +209,7 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment, 
         />
       )}
 
-      {fulfillment && (quote.status === 'ACCEPTED' || quote.status === 'AMENDED') && (
+      {fulfillment && (quote.status === 'ACCEPTED' || quote.status === 'AMENDED' || quote.status === 'INVOICED') && (
         <div className="border rounded-lg p-4">
           <h3 className="text-sm font-medium mb-3">Fulfillment</h3>
           <FulfillmentBar

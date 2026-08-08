@@ -5,4 +5,5 @@ export const QUOTE_STATUS_STYLES: Record<string, string> = {
   REJECTED: 'bg-red-100 text-red-700',
   SUPERSEDED: 'bg-amber-100 text-amber-700',
   AMENDED: 'bg-purple-100 text-purple-700',
+  INVOICED: 'bg-teal-100 text-teal-700',
 }

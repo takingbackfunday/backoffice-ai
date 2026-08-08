@@ -46,7 +46,7 @@ interface Props {
 /* ------------------------------------------------------------------ */
 
 function StatusStepper({ status }: { status: string }) {
-  const steps = ['DRAFT', 'SENT', 'ACCEPTED'] as const
+  const steps = ['DRAFT', 'SENT', 'ACCEPTED', 'INVOICED'] as const
   const currentIdx = steps.indexOf(status as typeof steps[number])
   if (currentIdx === -1) return null
 
@@ -65,9 +65,9 @@ function StatusStepper({ status }: { status: string }) {
             'text-xs font-medium',
             i <= currentIdx ? 'text-green-600' : i === currentIdx + 1 ? 'text-primary' : 'text-muted-foreground'
           )}>
-            {s === 'DRAFT' ? 'Draft' : s === 'SENT' ? 'Sent' : 'Accepted'}
+            {s === 'DRAFT' ? 'Draft' : s === 'SENT' ? 'Sent' : s === 'ACCEPTED' ? 'Accepted' : 'Invoiced'}
           </span>
-          {i < 2 && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+          {i < steps.length - 1 && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
         </div>
       ))}
     </div>
@@ -95,6 +95,7 @@ export function QuoteDetailActions({ projectId, projectSlug, quote, sections, in
   const isDraft = quote.status === 'DRAFT'
   const isSent = quote.status === 'SENT'
   const isAccepted = quote.status === 'ACCEPTED' || quote.status === 'AMENDED'
+  const isInvoiced = quote.status === 'INVOICED'
 
   async function handleDownload() {
     const a = document.createElement('a')
@@ -129,7 +130,7 @@ export function QuoteDetailActions({ projectId, projectSlug, quote, sections, in
 
   return (
     <div className="space-y-3">
-      {(isDraft || isSent || isAccepted) && <StatusStepper status={quote.status} />}
+      {(isDraft || isSent || isAccepted || isInvoiced) && <StatusStepper status={quote.status} />}
 
       <div className="flex items-center gap-2 flex-wrap">
         {isDraft && (

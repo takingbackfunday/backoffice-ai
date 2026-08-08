@@ -62,7 +62,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
           metadata: { sentTo: q.sentTo },
         })
       }
-      if (q.status === 'ACCEPTED' && q.signedAt) {
+      if ((q.status === 'ACCEPTED' || q.status === 'INVOICED') && q.signedAt) {
         events.push({
           type: 'quote_accepted',
           date: q.signedAt.toISOString(),
