@@ -10,7 +10,7 @@ export const capability: PageCapability = {
     'Apply tax (VAT, sales tax, etc.)',
     'Set the invoice currency',
     'Add notes and payment instructions',
-    'Save a draft or send the invoice immediately',
+    'Save a draft, or create & download the PDF to send via your own email',
     'Link the invoice to a specific job',
   ],
   deepLinks: {},

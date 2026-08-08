@@ -8,6 +8,7 @@ import { parsePreferences } from '@/types/preferences'
 import { toDisplay, computeInvoiceTotals } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string; invoiceId: string }> }
+interface SearchParams { downloaded?: string }
 
 async function loadRenegotiationChain(invoiceId: string) {
   type ChainItem = {
@@ -79,11 +80,12 @@ async function loadRenegotiationChain(invoiceId: string) {
   return all
 }
 
-export default async function InvoiceDetailPage({ params }: PageParams) {
+export default async function InvoiceDetailPage({ params, searchParams }: PageParams & { searchParams: Promise<SearchParams> }) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
   const { slug, invoiceId } = await params
+  const { downloaded } = await searchParams
 
   const project = await prisma.workspace.findFirst({
     where: { userId, slug },
@@ -225,13 +227,15 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
     issueDate: item.issueDate.toISOString(),
   }))
 
+  const initialShowSentBanner = downloaded === '1' && invoice.status === 'DRAFT'
+
   const hub = getHubRoute(project.type)
 
   return (
     <ProjectPageShell
       project={project}
       slug={slug}
-      contentWidth="lg"
+      contentWidth="md"
       breadcrumb={[
         hub,
         { label: project.name, href: `/projects/${slug}` },
@@ -239,8 +243,8 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
         { label: invoice.invoiceNumber },
       ]}
     >
-      <div style={{ width: '65%' }}>
-        <div className="mb-4">
+      <div className="space-y-4">
+        <div className="mb-1">
           <PipelineBreadcrumb nodes={pipelineNodes} projectSlug={slug} currentId={invoice.id} />
         </div>
         <InvoiceDetailClient
@@ -253,6 +257,7 @@ export default async function InvoiceDetailPage({ params }: PageParams) {
           replacesInvoice={serialized.replacesInvoice}
           replacedBy={serialized.replacedBy}
           historyChain={serializedHistory}
+          initialShowSentBanner={initialShowSentBanner}
         />
       </div>
     </ProjectPageShell>

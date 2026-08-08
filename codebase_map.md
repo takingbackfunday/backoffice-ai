@@ -174,8 +174,13 @@ Newly created entities are appended to the component's local state list — no p
 | Meta fields — top (quote badge, warnings, job selector) | `src/components/projects/invoice-form-fields.tsx` → `InvoiceFormFieldsTop` |
 | Meta fields — bottom (tax, totals, dates/currency, notes, payment instructions) | `src/components/projects/invoice-form-fields.tsx` → `InvoiceFormFieldsBottom` |
 | AI confirm/undo banner | `src/components/projects/ai-confirm-banner.tsx` |
-| Invoice detail view | `src/components/projects/invoice-detail-client.tsx` |
-| Invoice list | `src/components/projects/invoice-list.tsx` |
+| Invoice detail view (orchestrator) | `src/components/projects/invoice-detail-client.tsx` — download-first layout: hero Download PDF, Draft→Sent→Paid stepper, overflow menu (preview/send/renegotiate/void/delete), `?downloaded=1` → mark-as-sent banner |
+| Invoice detail — actions row + stepper + overflow menu | `src/components/projects/invoice-detail-actions.tsx` |
+| Invoice detail — line items + payments footer | `src/components/projects/invoice-detail-table.tsx` |
+| Invoice detail — payments (record form, link transaction, suggestions, payment info) | `src/components/projects/invoice-payments-section.tsx` |
+| Invoice detail — payments table (refund / move) | `src/components/projects/invoice-payments-table.tsx` |
+| Invoice detail — renegotiation banners + history | `src/components/projects/invoice-renegotiation-banners.tsx` |
+| Invoice list | `src/components/projects/invoice-list.tsx` — row click navigates to detail; inline download stashes pending-mark-sent for drafts |
 | CRUD | `GET/POST /api/projects/[id]/invoices` → `route.ts` |
 | Single invoice | `GET/PATCH/DELETE /api/projects/[id]/invoices/[invoiceId]` → `route.ts` |
 | AI finalize (JSON) | `POST /api/projects/[id]/invoices/ai-finalize` → `route.ts` |

@@ -3,14 +3,14 @@ import type { PageCapability } from '@/lib/agent/site-capabilities-types'
 export const capability: PageCapability = {
   route: '/projects/[slug]/invoices/[invoiceId]',
   title: 'Invoice detail',
-  purpose: 'View a single invoice — see line items, payment history, status, and download or send options.',
+  purpose: 'View a single invoice — see line items, payment history, and status. Download the PDF to send via your own email (primary flow), or send by email from the overflow menu.',
   jobsToBeDone: [
     'Review a sent or paid invoice',
     'See the payment history and outstanding balance',
-    'Download the invoice as a PDF',
-    'Send or resend the invoice by email',
-    'Mark an invoice as sent or paid manually',
-    'Void an invoice',
+    'Download the invoice PDF and mark it sent (optional: send by email from the overflow menu)',
+    'Track status via the Draft → Sent → Paid stepper',
+    'Record a payment or link a bank transaction',
+    'Void or renegotiate an invoice',
     'Navigate to the edit page to make changes',
   ],
   deepLinks: {

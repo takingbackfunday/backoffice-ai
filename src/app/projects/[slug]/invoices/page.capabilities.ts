@@ -7,10 +7,10 @@ export const capability: PageCapability = {
   jobsToBeDone: [
     'See all invoices for a client or property project',
     'Filter invoices by status (draft, sent, paid, overdue, void)',
-    'See invoice totals and payment summaries',
+    'See invoice totals, balances, and AR aging',
     'Create a new invoice for this project',
-    'Navigate to an invoice detail or edit page',
-    'Download or send an invoice by email',
+    'Download an invoice PDF inline (marks it pending-sent for drafts)',
+    'Navigate to an invoice detail page',
   ],
   deepLinks: {},
   reads: ['Invoice', 'InvoiceLineItem', 'Payment', 'Job', 'UserPreference'],

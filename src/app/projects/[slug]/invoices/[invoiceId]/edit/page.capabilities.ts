@@ -10,7 +10,7 @@ export const capability: PageCapability = {
     'Add or change tax (VAT, sales tax)',
     'Change the invoice currency',
     'Update notes or payment terms',
-    'Save changes or send the updated invoice',
+    'Save changes, or save & download the updated PDF',
   ],
   deepLinks: {},
   reads: ['Invoice', 'InvoiceLineItem', 'UserPreference'],

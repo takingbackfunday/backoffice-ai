@@ -253,7 +253,7 @@ const _data: any[] = [
       "Add or change tax (VAT, sales tax)",
       "Change the invoice currency",
       "Update notes or payment terms",
-      "Save changes or send the updated invoice"
+      "Save changes, or save & download the updated PDF"
     ],
     "deepLinks": {},
     "reads": [
@@ -275,14 +275,14 @@ const _data: any[] = [
   {
     "route": "/projects/[slug]/invoices/[invoiceId]",
     "title": "Invoice detail",
-    "purpose": "View a single invoice — see line items, payment history, status, and download or send options.",
+    "purpose": "View a single invoice — see line items, payment history, and status. Download the PDF to send via your own email (primary flow), or send by email from the overflow menu.",
     "jobsToBeDone": [
       "Review a sent or paid invoice",
       "See the payment history and outstanding balance",
-      "Download the invoice as a PDF",
-      "Send or resend the invoice by email",
-      "Mark an invoice as sent or paid manually",
-      "Void an invoice",
+      "Download the invoice PDF and mark it sent (optional: send by email from the overflow menu)",
+      "Track status via the Draft → Sent → Paid stepper",
+      "Record a payment or link a bank transaction",
+      "Void or renegotiate an invoice",
       "Navigate to the edit page to make changes"
     ],
     "deepLinks": {
@@ -315,7 +315,7 @@ const _data: any[] = [
       "Apply tax (VAT, sales tax, etc.)",
       "Set the invoice currency",
       "Add notes and payment instructions",
-      "Save a draft or send the invoice immediately",
+      "Save a draft, or create & download the PDF to send via your own email",
       "Link the invoice to a specific job"
     ],
     "deepLinks": {},
@@ -347,10 +347,10 @@ const _data: any[] = [
     "jobsToBeDone": [
       "See all invoices for a client or property project",
       "Filter invoices by status (draft, sent, paid, overdue, void)",
-      "See invoice totals and payment summaries",
+      "See invoice totals, balances, and AR aging",
       "Create a new invoice for this project",
-      "Navigate to an invoice detail or edit page",
-      "Download or send an invoice by email"
+      "Download an invoice PDF inline (marks it pending-sent for drafts)",
+      "Navigate to an invoice detail page"
     ],
     "deepLinks": {},
     "reads": [
@@ -1216,14 +1216,14 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "manually": [
     0,
     2,
-    3,
-    11
+    3
   ],
   "bank": [
     0,
     1,
     2,
     3,
+    11,
     36,
     38,
     41,
@@ -1323,6 +1323,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "balances": [
     1,
+    13,
     40
   ],
   "types": [
@@ -1333,6 +1334,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     4,
     6,
     7,
+    11,
     36,
     41
   ],
@@ -1528,6 +1530,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "from": [
     4,
+    11,
     16,
     39,
     41,
@@ -1615,6 +1618,7 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "track": [
     5,
+    11,
     17,
     19,
     27,
@@ -2048,7 +2052,6 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "edit": [
     10,
     11,
-    13,
     17,
     22,
     24,
@@ -2110,7 +2113,6 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     10,
     11,
     12,
-    13,
     38,
     40,
     44
@@ -2145,16 +2147,14 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     10,
     11
   ],
-  "send": [
+  "download": [
     10,
     11,
     12,
     13,
-    20,
+    24,
     25,
-    27,
-    28,
-    29
+    27
   ],
   "updated": [
     10
@@ -2195,14 +2195,40 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     31,
     44
   ],
-  "download": [
+  "send": [
     11,
-    13,
-    24,
+    12,
+    20,
     25,
-    27
+    27,
+    28,
+    29
   ],
-  "options": [
+  "your": [
+    11,
+    12,
+    27,
+    39
+  ],
+  "email": [
+    11,
+    12,
+    22,
+    25,
+    27,
+    28,
+    38
+  ],
+  "primary": [
+    11
+  ],
+  "flow": [
+    11
+  ],
+  "overflow": [
+    11
+  ],
+  "menu": [
     11
   ],
   "review": [
@@ -2234,21 +2260,39 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     33,
     40
   ],
-  "resend": [
+  "optional": [
+    11,
+    25
+  ],
+  "draft": [
+    11,
+    12,
+    13,
+    15,
+    17,
+    24,
+    27,
+    40
+  ],
+  "stepper": [
     11
   ],
-  "email": [
+  "record": [
     11,
-    13,
-    22,
-    25,
-    27,
-    28,
-    38
+    16
+  ],
+  "link": [
+    11,
+    12,
+    26,
+    36
   ],
   "void": [
     11,
     13
+  ],
+  "renegotiate": [
+    11
   ],
   "page": [
     11,
@@ -2301,23 +2345,6 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     12,
     24
   ],
-  "draft": [
-    12,
-    13,
-    15,
-    17,
-    24,
-    27,
-    40
-  ],
-  "immediately": [
-    12
-  ],
-  "link": [
-    12,
-    26,
-    36
-  ],
   "list": [
     13,
     15,
@@ -2331,7 +2358,19 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     13,
     40
   ],
-  "summaries": [
+  "aging": [
+    13
+  ],
+  "inline": [
+    13
+  ],
+  "marks": [
+    13
+  ],
+  "pending": [
+    13
+  ],
+  "drafts": [
     13
   ],
   "quotes": [
@@ -2524,9 +2563,6 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     29,
     31,
     32
-  ],
-  "record": [
-    16
   ],
   "listings": [
     17
@@ -2817,9 +2853,6 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "amendments": [
     25
   ],
-  "optional": [
-    25
-  ],
   "rejected": [
     25,
     27
@@ -2856,10 +2889,6 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   ],
   "pdfs": [
     27
-  ],
-  "your": [
-    27,
-    39
   ],
   "past": [
     28

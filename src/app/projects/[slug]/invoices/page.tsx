@@ -3,7 +3,6 @@ import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { ProjectPageShell, getHubRoute } from '@/components/layout/project-page-shell'
 import { InvoiceList } from '@/components/projects/invoice-list'
-import { parsePreferences } from '@/types/preferences'
 import { toDisplay } from '@/lib/money'
 
 interface PageParams { params: Promise<{ slug: string }> }
@@ -19,7 +18,6 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
     include: {
       clientProfile: {
         include: {
-          jobs: { orderBy: { createdAt: 'desc' } },
           invoices: {
             include: {
               job: { select: { id: true, name: true } },
@@ -40,8 +38,6 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
 
   if (!project) notFound()
 
-  const prefs = await prisma.userPreference.findUnique({ where: { userId } })
-  const paymentMethods = parsePreferences(prefs?.data).paymentMethods ?? {}
   const hub = getHubRoute(project.type)
 
   /* ── CLIENT project ─────────────────────────────────────────────── */
@@ -71,11 +67,6 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
       })),
     }))
 
-    const serializedJobs = project.clientProfile.jobs.map(j => ({
-      id: j.id,
-      name: j.name,
-    }))
-
     return (
       <ProjectPageShell
         project={project}
@@ -85,11 +76,7 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
         <InvoiceList
           projectId={project.id}
           projectSlug={slug}
-          jobs={serializedJobs}
           invoices={serializedInvoices}
-          paymentMethods={paymentMethods}
-          clientEmail={project.clientProfile.email ?? ''}
-          clientName={project.clientProfile.contactName ?? project.name}
         />
       </ProjectPageShell>
     )
@@ -147,12 +134,6 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
       })),
     }))
 
-    // Use first tenant/applicant as the default email recipient for the invoice modal
-    const firstTenant = propertyInvoices.find(inv => inv.tenant)?.tenant
-    const firstApplicant = propertyInvoices.find(inv => inv.applicant)?.applicant
-    const clientEmail = firstTenant?.email ?? firstApplicant?.email ?? ''
-    const clientName = firstTenant?.name ?? firstApplicant?.name ?? project.name
-
     return (
       <ProjectPageShell
         project={project}
@@ -162,11 +143,7 @@ export default async function ProjectInvoicesPage({ params }: PageParams) {
         <InvoiceList
           projectId={project.id}
           projectSlug={slug}
-          jobs={[]}
           invoices={serializedInvoices}
-          paymentMethods={paymentMethods}
-          clientEmail={clientEmail}
-          clientName={clientName}
         />
       </ProjectPageShell>
     )

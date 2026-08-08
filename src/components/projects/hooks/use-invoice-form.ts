@@ -489,7 +489,7 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
     return regular
   }
 
-  async function handleSave(sendAfter: boolean, mode: 'create' | 'edit', existingInvoiceId?: string) {
+  async function handleSave(mode: 'create' | 'edit', existingInvoiceId?: string): Promise<{ id: string; invoiceNumber: string } | undefined> {
     if (!state.dueDate) { setSaveError('Due date is required'); return }
     const lineItemsPayload = buildLineItemsPayload()
     if (lineItemsPayload.filter(i => !i.isTaxLine).length === 0) {
@@ -504,7 +504,7 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
     setSaving(true)
     setSaveError(null)
     try {
-      let invoiceId: string
+      let result: { id: string; invoiceNumber: string }
       if (mode === 'create') {
         const res = await fetch(`/api/projects/${projectId}/invoices`, {
           method: 'POST',
@@ -513,7 +513,7 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
         })
         const json = await res.json()
         if (!res.ok || json.error) { setSaveError(json.error ?? 'Failed to create invoice'); return }
-        invoiceId = json.data.id
+        result = { id: json.data.id, invoiceNumber: json.data.invoiceNumber }
         fetch('/api/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoiceDefaults: { taxEnabled: state.taxEnabled, taxLabel: state.taxLabel, taxMode: state.taxMode, taxRate: state.taxRate, currency: state.currency } }) }).catch(() => {})
       } else {
         const res = await fetch(`/api/projects/${projectId}/invoices/${existingInvoiceId}`, {
@@ -523,10 +523,10 @@ export function useInvoiceForm(props: InvoiceEditorProps) {
         })
         const json = await res.json()
         if (!res.ok || json.error) { setSaveError(json.error ?? 'Failed to update invoice'); return }
-        invoiceId = existingInvoiceId!
+        result = { id: existingInvoiceId!, invoiceNumber: existingInvoice?.invoiceNumber ?? json.data?.invoiceNumber ?? 'invoice' }
       }
       setDirty(false)
-      return invoiceId
+      return result
     } finally {
       setSaving(false)
     }

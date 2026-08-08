@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Search, X, Send, Bell, Eye, Pencil } from 'lucide-react'
+import { Plus, Search, X, Download, Eye, FileText } from 'lucide-react'
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/types'
 import { cn } from '@/lib/utils'
-import { SendInvoiceModal } from '@/components/projects/send-invoice-modal'
-import type { PaymentMethods } from '@/lib/pdf/invoice-pdf'
 import { toDisplay } from '@/lib/money'
+import { stashPendingMarkSentInvoice } from '@/lib/pending-mark-sent'
 
 interface LineItem {
   id: string
@@ -40,11 +39,7 @@ interface Invoice {
 interface Props {
   projectId: string
   projectSlug: string
-  jobs: { id: string; name: string }[]
   invoices: Invoice[]
-  paymentMethods: PaymentMethods
-  clientEmail?: string
-  clientName?: string
 }
 
 const fmt = (n: number, currency = 'USD') =>
@@ -112,140 +107,13 @@ function AgingBar({ invoices }: { invoices: Invoice[] }) {
   )
 }
 
-/* ── Preview modal ─────────────────────────────────────────────────── */
-function InvoicePreviewModal({
-  inv,
-  projectId,
-  projectSlug,
-  onClose,
-  onUpdate,
-  onOpenSend,
-}: {
-  inv: Invoice
-  projectId: string
-  projectSlug: string
-  onClose: () => void
-  onUpdate: (updated: Invoice) => void
-  onOpenSend: (inv: Invoice, isReminder: boolean) => void
-}) {
-  const [emailStatus, setEmailStatus] = useState<string | null>(null)
-
-  const total = invoiceTotal(inv.lineItems)
-  const paid = invoicePaid(inv.payments)
-  const balance = total - paid
-  const displayStatus = getDisplayStatus(inv)
-  const isOverdue = displayStatus === 'OVERDUE'
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-xl bg-background rounded-2xl shadow-2xl border overflow-hidden" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b bg-muted/20">
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-lg">{inv.invoiceNumber}</span>
-            <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', INVOICE_STATUS_COLORS[displayStatus] ?? 'bg-muted text-muted-foreground')}>
-              {INVOICE_STATUS_LABELS[displayStatus] ?? displayStatus}
-            </span>
-          </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-          {inv.job && <p className="text-sm text-muted-foreground">Job: {inv.job.name}</p>}
-
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div><p className="text-xs text-muted-foreground mb-0.5">Issue date</p>
-              <p>{new Date(inv.issueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-            </div>
-            <div><p className="text-xs text-muted-foreground mb-0.5">Due date</p>
-              <p className={isOverdue ? 'text-red-600 font-medium' : ''}>
-                {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </p>
-            </div>
-          </div>
-
-          {/* Line items */}
-          <div className="rounded-lg border overflow-hidden text-sm">
-            <div className="grid grid-cols-[1fr_60px_90px_90px] bg-muted/40 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">
-              <span>Description</span><span className="text-right">Qty</span><span className="text-right">Rate</span><span className="text-right">Total</span>
-            </div>
-            {inv.lineItems.map(item => (
-              <div key={item.id} className="grid grid-cols-[1fr_60px_90px_90px] border-t px-3 py-2 items-center">
-                <span className={cn('text-sm', (item as LineItem & {isTaxLine?: boolean}).isTaxLine ? 'text-muted-foreground italic' : '')}>
-                  {item.description}
-                </span>
-                <span className="text-right text-sm tabular-nums text-muted-foreground">{toDisplay(item.quantity)}</span>
-                <span className="text-right text-sm tabular-nums text-muted-foreground">{fmt(toDisplay(item.unitPrice), inv.currency)}</span>
-                <span className="text-right text-sm tabular-nums font-medium">{fmt(toDisplay(item.quantity) * toDisplay(item.unitPrice), inv.currency)}</span>
-              </div>
-            ))}
-            <div className="border-t px-3 py-2 flex justify-between">
-              <span className="text-sm font-bold">Balance due</span>
-              <span className="text-sm font-bold tabular-nums">{fmt(balance, inv.currency)}</span>
-            </div>
-          </div>
-
-          {inv.notes && (
-            <div className="rounded-lg bg-muted/30 px-4 py-3 text-xs text-muted-foreground whitespace-pre-wrap">{inv.notes}</div>
-          )}
-        </div>
-
-        {/* Footer actions */}
-        <div className="flex items-center gap-2 px-5 py-3 border-t bg-muted/10">
-          {emailStatus && <span className="text-xs text-green-600 flex-1">{emailStatus}</span>}
-          {!emailStatus && <div className="flex-1" />}
-          {inv.status === 'DRAFT' && (
-            <Link
-              href={`/projects/${projectSlug}/invoices/${inv.id}/edit`}
-              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
-              onClick={onClose}
-            >
-              <Pencil className="h-3 w-3" /> Edit
-            </Link>
-          )}
-          {(inv.status === 'SENT' || inv.status === 'PARTIAL') && (
-            <button
-              onClick={() => onOpenSend(inv, true)}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 transition-colors"
-            >
-              <Bell className="h-3 w-3" /> Nudge
-            </button>
-          )}
-          {inv.status === 'DRAFT' && (
-            <button
-              onClick={() => onOpenSend(inv, false)}
-              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
-            >
-              <Send className="h-3 w-3" /> Send
-            </button>
-          )}
-          <Link
-            href={`/projects/${projectSlug}/invoices/${inv.id}`}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-            onClick={onClose}
-          >
-            <Eye className="h-3 w-3" /> Open
-          </Link>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 /* ── Main component ────────────────────────────────────────────────── */
 type Tab = 'open' | 'paid' | 'all'
 
-export function InvoiceList({ projectId, projectSlug, invoices: initial, paymentMethods, clientEmail = '', clientName = 'Client' }: Props) {
+export function InvoiceList({ projectId, projectSlug, invoices }: Props) {
   const router = useRouter()
-  const [invoices, setInvoices] = useState<Invoice[]>(initial)
   const [tab, setTab] = useState<Tab>('open')
-  const [tabLoading, setTabLoading] = useState(false)
   const [search, setSearch] = useState('')
-  const [preview, setPreview] = useState<Invoice | null>(null)
-  const [sendModal, setSendModal] = useState<{ inv: Invoice; isReminder: boolean } | null>(null)
 
   const filtered = useMemo(() => {
     let list = invoices
@@ -264,9 +132,55 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
   const openCount = invoices.filter(i => !['PAID', 'VOID'].includes(i.status)).length
   const paidCount = invoices.filter(i => i.status === 'PAID').length
 
-  function handleUpdate(updated: Invoice) {
-    setInvoices(prev => prev.map(i => i.id === updated.id ? { ...i, ...updated } : i))
-    if (preview?.id === updated.id) setPreview({ ...preview, ...updated })
+  const handleDownload = useCallback((inv: Invoice) => {
+    const a = document.createElement('a')
+    a.href = `/api/projects/${projectId}/invoices/${inv.id}/pdf`
+    a.download = `${inv.invoiceNumber}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    if (inv.status === 'DRAFT') {
+      stashPendingMarkSentInvoice({
+        invoiceId: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        projectId,
+        projectSlug,
+        downloadedAt: Date.now(),
+      })
+    }
+  }, [projectId, projectSlug])
+
+  // Empty state
+  if (invoices.length === 0) {
+    return (
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1" />
+          <Link
+            href={`/projects/${projectSlug}/invoices/new`}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New invoice
+          </Link>
+        </div>
+        <div className="rounded-xl border border-dashed p-10 text-center">
+          <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">No invoices yet.</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Create one, download the PDF, and send it with your own email.
+          </p>
+          <Link
+            href={`/projects/${projectSlug}/invoices/new`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors mt-4"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Create your first invoice
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -281,13 +195,13 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
           {([['open', `Open (${openCount})`], ['paid', `Paid (${paidCount})`], ['all', 'All']] as [Tab, string][]).map(([t, label]) => (
             <button
               key={t}
-              onClick={() => { if (tab !== t) { setTabLoading(true); setTab(t); setTimeout(() => setTabLoading(false), 300) } }}
+              onClick={() => setTab(t)}
               className={cn(
                 'px-3 py-1 rounded-md text-xs font-medium transition-colors',
                 tab === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              {tabLoading && tab === t ? <span className="inline-block w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" /> : label}
+              {label}
             </button>
           ))}
         </div>
@@ -311,26 +225,25 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
 
         <div className="flex-1" />
 
-        <button
-          type="button"
-          onClick={() => router.push(`/projects/${projectSlug}/invoices/new`)}
+        <Link
+          href={`/projects/${projectSlug}/invoices/new`}
           className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           New invoice
-        </button>
+        </Link>
       </div>
 
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <p className="text-sm text-muted-foreground">
-            {search ? 'No invoices match your search.' : tab === 'open' ? 'No open invoices. Create your first invoice above.' : 'No invoices yet.'}
+            {search ? 'No invoices match your search.' : 'No invoices in this view.'}
           </p>
         </div>
       ) : (
         <div className="rounded-xl border overflow-hidden">
-          <div className="grid grid-cols-[minmax(140px,auto)_1fr_110px_110px_130px_90px_80px] bg-muted/40 px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="grid grid-cols-[minmax(140px,auto)_1fr_110px_110px_130px_90px_70px] bg-muted/40 px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
             <span>Invoice</span>
             <span>Job</span>
             <span className="text-right">Total</span>
@@ -346,17 +259,15 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
             const displayStatus = getDisplayStatus(inv)
             const days = daysUntil(inv.dueDate)
             const isOverdue = displayStatus === 'OVERDUE'
-            const canSend = inv.status === 'DRAFT'
-            const canNudge = inv.status === 'SENT' || inv.status === 'PARTIAL'
 
             return (
               <div
                 key={inv.id}
                 className={cn(
-                  'grid grid-cols-[minmax(140px,auto)_1fr_110px_110px_130px_90px_80px] border-t px-4 py-3 items-center hover:bg-muted/10 cursor-pointer transition-colors',
+                  'grid grid-cols-[minmax(140px,auto)_1fr_110px_110px_130px_90px_70px] border-t px-4 py-2 items-center hover:bg-muted/10 cursor-pointer transition-colors',
                   idx % 2 === 0 ? '' : 'bg-muted/5'
                 )}
-                onClick={() => setPreview(inv)}
+                onClick={() => router.push(`/projects/${projectSlug}/invoices/${inv.id}`)}
               >
                 <span className="text-sm font-medium text-primary whitespace-nowrap">{inv.invoiceNumber}</span>
                 <span className="text-sm text-muted-foreground truncate min-w-0 pr-2">{inv.job?.name ?? '—'}</span>
@@ -377,24 +288,13 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
                     : new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
                 <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-                  {canSend && (
-                    <button
-                      title="Send invoice"
-                      onClick={() => setSendModal({ inv, isReminder: false })}
-                      className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                  {canNudge && (
-                    <button
-                      title="Send reminder"
-                      onClick={() => setSendModal({ inv, isReminder: true })}
-                      className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors"
-                    >
-                      <Bell className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <button
+                    title="Download PDF"
+                    onClick={() => handleDownload(inv)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
                   <Link
                     href={`/projects/${projectSlug}/invoices/${inv.id}`}
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -407,40 +307,6 @@ export function InvoiceList({ projectId, projectSlug, invoices: initial, payment
             )
           })}
         </div>
-      )}
-
-      {/* Preview modal */}
-      {preview && (
-        <InvoicePreviewModal
-          inv={preview}
-          projectId={projectId}
-          projectSlug={projectSlug}
-          onClose={() => setPreview(null)}
-          onUpdate={handleUpdate}
-          onOpenSend={(inv, isReminder) => { setPreview(null); setSendModal({ inv, isReminder }) }}
-        />
-      )}
-
-      {/* Send modal */}
-      {sendModal && (
-        <SendInvoiceModal
-          projectId={projectId}
-          projectSlug={projectSlug}
-          invoiceId={sendModal.inv.id}
-          invoiceNumber={sendModal.inv.invoiceNumber}
-          clientName={clientName}
-          clientEmail={clientEmail}
-          total={invoiceTotal(sendModal.inv.lineItems)}
-          currency={sendModal.inv.currency}
-          dueDate={sendModal.inv.dueDate}
-          paymentMethods={paymentMethods}
-          isReminder={sendModal.isReminder}
-          onClose={() => setSendModal(null)}
-          onSent={(newStatus) => {
-            handleUpdate({ ...sendModal.inv, status: newStatus })
-            setSendModal(null)
-          }}
-        />
       )}
     </div>
   )

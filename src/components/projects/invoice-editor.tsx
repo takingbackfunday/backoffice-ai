@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Sparkles, Eye } from 'lucide-react'
+import { Sparkles, Download } from 'lucide-react'
 import { useChatStore } from '@/stores/chat-store'
 import { LineItemsTable } from './line-items-table'
 import { InvoiceFormFieldsTop, InvoiceFormFieldsBottom } from './invoice-form-fields'
@@ -22,11 +22,19 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
   const [unitSuggestions, setUnitSuggestions] = useState<Record<string, string>>({})
   const [paymentInstructions, setPaymentInstructions] = useState(props.invoicePaymentNote ?? '')
 
-  async function handleSave(sendAfter: boolean) {
-    const invoiceId = await form.handleSave(sendAfter, mode, props.existingInvoice?.id)
-    if (invoiceId) {
+  async function handleSave(downloadAfter: boolean) {
+    const result = await form.handleSave(mode, props.existingInvoice?.id)
+    if (result) {
+      if (downloadAfter) {
+        const a = document.createElement('a')
+        a.href = `/api/projects/${projectId}/invoices/${result.id}/pdf`
+        a.download = `${result.invoiceNumber}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      }
       router.refresh()
-      router.push(`/projects/${projectSlug}/invoices/${invoiceId}${sendAfter ? '?send=1' : ''}`)
+      router.push(`/projects/${projectSlug}/invoices/${result.id}${downloadAfter ? '?downloaded=1' : ''}`)
     }
   }
 
@@ -154,11 +162,10 @@ export function InvoiceEditor(props: InvoiceEditorProps) {
                 type="button"
                 onClick={() => handleSave(true)}
                 disabled={form.saving}
-                title={undefined}
                 className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
-                <Eye className="h-3.5 w-3.5" />
-                {form.saving ? 'Saving…' : 'Create & review'}
+                <Download className="h-3.5 w-3.5" />
+                {form.saving ? 'Saving…' : mode === 'create' ? 'Create & download' : 'Save & download'}
               </button>
             )}
           </div>
