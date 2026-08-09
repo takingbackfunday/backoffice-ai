@@ -10,7 +10,7 @@ import { QUOTE_STATUS_STYLES } from './quote-status'
 import { QuoteDetailActions } from './quote-detail-actions'
 import { QuoteDownloadBanner } from './quote-download-banner'
 import { QuoteDetailTable } from './quote-detail-table'
-import { QuoteCreateInvoicePanel } from './quote-create-invoice-panel'
+import { CreateInvoicePanel } from './create-invoice-panel'
 import { FulfillmentBar } from './fulfillment-bar'
 
 export interface QuoteLineItem {
@@ -125,11 +125,6 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment, 
     }
   }
 
-  async function handleCreateInvoice(dueDate: string) {
-    const result = await action('create-invoice', 'POST', { dueDate })
-    if (result) router.push(`/projects/${projectSlug}/invoices/${result.id}`)
-  }
-
   function handleDownloaded() {
     if (quote.status === 'DRAFT') setShowSentBanner(true)
   }
@@ -202,10 +197,12 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment, 
       />
 
       {showCreateInvoice && (
-        <QuoteCreateInvoicePanel
-          onCreate={handleCreateInvoice}
-          onCancel={() => setShowCreateInvoice(false)}
-          loading={loading}
+        <CreateInvoicePanel
+          quoteId={quote.id}
+          projectSlug={projectSlug}
+          sections={quote.sections}
+          currency={currency}
+          onClose={() => setShowCreateInvoice(false)}
         />
       )}
 
