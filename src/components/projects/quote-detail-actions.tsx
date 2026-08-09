@@ -92,7 +92,6 @@ export function QuoteDetailActions({ projectId, projectSlug, quote, sections, in
     { enabled: menuOpen, ignoreSelector: '[data-portal-dropdown]' }
   )
 
-  const hasOptional = sections.some(s => s.items.some(i => i.isOptional))
   const isDraft = quote.status === 'DRAFT'
   const isSent = quote.status === 'SENT'
   const isAccepted = quote.status === 'ACCEPTED' || quote.status === 'AMENDED'
@@ -230,17 +229,7 @@ export function QuoteDetailActions({ projectId, projectSlug, quote, sections, in
                 Revise
               </button>
             )}
-            {isSent && hasOptional && (
-              <button type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
-                onClick={async () => {
-                  setMenuOpen(false)
-                  const r = await onAction('strip-optional')
-                  if (r) router.push(`/projects/${projectSlug}/quotes/${r.id}/edit`)
-                }}>
-                Revise without optional items
-              </button>
-            )}
+            
             {quote.status === 'ACCEPTED' && (
               <button type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
