@@ -28,7 +28,7 @@ function fmt(n: number, currency: string) {
 }
 
 function sectionSubtotal(items: LineItem[]): number {
-  return items.filter(i => !i.isOptional).reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  return items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
 }
 
 function optionalTotal(items: LineItem[]): number {
