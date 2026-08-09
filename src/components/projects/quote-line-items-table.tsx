@@ -22,8 +22,16 @@ function fmt(n: number, currency: string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
 }
 
-const BASE_COLS = 'minmax(120px,1fr) 140px 110px 100px 32px'
-const COSTS_COLS = 'minmax(120px,1fr) 140px 110px 100px 80px 112px 80px 64px 64px 32px'
+// Fixed pixel tracks for every non-description column so header, rows and
+// subtotal align exactly — and every section table on the page shares the
+// same geometry. Description is the only flexible column.
+//   desc | qty | price | total | actions
+const BASE_COLS = 'minmax(200px,1fr) 72px 96px 96px 32px'
+//   desc | qty | price | total | cost | tags | notes | risk | margin | actions
+const COSTS_COLS = 'minmax(200px,1fr) 72px 96px 96px 84px 112px 128px 76px 72px 32px'
+
+const HEADER_CELL = 'px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap'
+const CELL = 'px-2 py-1 min-w-0'
 
 export function QuoteLineItemsTable({ section, marginRules, showCosts, currency, libraryStatus, onUpdateItem, onRemoveItem, onSaveToLibrary }: Props) {
   const sectionSubtotal = section.items.reduce((sum, i) => {
@@ -35,41 +43,47 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, currency,
   const cols = showCosts ? COSTS_COLS : BASE_COLS
 
   return (
-    <>
-      <div className="grid" style={{ gridTemplateColumns: cols }}>
-        <div className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Description</div>
-        <div className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Qty</div>
-        <div className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Price</div>
-        <div className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Total</div>
-        {showCosts && <div className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Cost rt</div>}
-        {showCosts && <div className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Tags</div>}
-        {showCosts && <div className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Int. notes</div>}
-        {showCosts && <div className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Risk</div>}
-        {showCosts && <div className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Margin</div>}
-        <div />
-      </div>
+    <div className="overflow-x-auto">
+      <div className="min-w-max">
+        {/* Header */}
+        <div className="grid divide-x divide-border/60 bg-muted/20" style={{ gridTemplateColumns: cols }}>
+          <div className={HEADER_CELL}>Description</div>
+          <div className={`${HEADER_CELL} text-right`}>Qty</div>
+          <div className={`${HEADER_CELL} text-right`}>Price</div>
+          <div className={`${HEADER_CELL} text-right`}>Total</div>
+          {showCosts && <div className={`${HEADER_CELL} text-right`}>Cost rt</div>}
+          {showCosts && <div className={HEADER_CELL}>Tags</div>}
+          {showCosts && <div className={HEADER_CELL}>Int. notes</div>}
+          {showCosts && <div className={HEADER_CELL}>Risk</div>}
+          {showCosts && <div className={`${HEADER_CELL} text-right`}>Margin</div>}
+          <div />
+        </div>
 
-      {section.items.map((item) => {
-        const costRate = parseFloat(item.costRate) || 0
-        const unitPrice = parseFloat(item.unitPrice) || 0
-        const quantity = parseFloat(item.quantity) || 1
-        const lineTotal = quantity * unitPrice
-        const marginPct = itemMarginPercent(costRate || null, unitPrice)
+        {section.items.map((item) => {
+          const costRate = parseFloat(item.costRate) || 0
+          const unitPrice = parseFloat(item.unitPrice) || 0
+          const quantity = parseFloat(item.quantity) || 1
+          const lineTotal = quantity * unitPrice
+          const marginPct = itemMarginPercent(costRate || null, unitPrice)
 
-        return (
-          <div
-            key={item.id}
-            className="grid border-t hover:bg-muted/20 group"
-            style={{ gridTemplateColumns: cols }}
-          >
-            <div className="px-4 py-1">
+          return (
+            <div
+              key={item.id}
+              className="grid divide-x divide-border/60 border-t hover:bg-muted/20 group"
+              style={{ gridTemplateColumns: cols }}
+            >
+            <div className={`${CELL} pl-4`}>
               <div className="flex items-start gap-1">
                 <textarea
                   value={item.description}
+                  ref={el => {
+                    if (el) {
+                      el.style.height = 'auto'
+                      el.style.height = el.scrollHeight + 'px'
+                    }
+                  }}
                   onChange={e => {
                     onUpdateItem(item.id, 'description', e.target.value)
-                    e.target.style.height = 'auto'
-                    e.target.style.height = e.target.scrollHeight + 'px'
                   }}
                   placeholder="Item description"
                   className="text-sm focus:outline-none bg-transparent placeholder:text-muted-foreground/50 min-w-0 w-full resize-none overflow-hidden leading-snug py-0.5"
@@ -122,51 +136,49 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, currency,
                 })()}
               </div>
             </div>
-            <div className="px-1 py-1">
-              <div className="flex items-center gap-1 justify-end">
-                <input
-                  type="number"
-                  value={item.quantity}
-                  onChange={e => onUpdateItem(item.id, 'quantity', e.target.value)}
-                  placeholder="1"
-                  className="text-sm text-right bg-transparent border-none outline-none w-10 tabular-nums focus:bg-muted/30 rounded"
-                  step="1"
-                />
-                <input
-                  type="text"
-                  value={item.unit}
-                  onChange={e => onUpdateItem(item.id, 'unit', e.target.value)}
-                  placeholder="x"
-                  className="text-sm bg-transparent border-none outline-none w-8 text-muted-foreground"
-                />
-              </div>
+            {/* Qty: number on top, unit below — both right-aligned */}
+            <div className={`${CELL} flex flex-col items-end gap-0.5`}>
+              <input
+                type="number"
+                value={item.quantity}
+                onChange={e => onUpdateItem(item.id, 'quantity', e.target.value)}
+                placeholder="1"
+                className="text-sm text-right bg-transparent border-none outline-none w-full tabular-nums focus:bg-muted/30 rounded"
+                step="1"
+              />
+              <input
+                type="text"
+                value={item.unit}
+                onChange={e => onUpdateItem(item.id, 'unit', e.target.value)}
+                placeholder="x"
+                className="text-xs text-right bg-transparent border-none outline-none w-full text-muted-foreground"
+              />
             </div>
-            <div className="px-1 py-1 text-right">
-              <div className="flex items-center gap-1 justify-end">
+            {/* Price: amount on top, optional toggle below */}
+            <div className={`${CELL} flex flex-col items-end gap-0.5`}>
+              <input
+                type="number"
+                value={item.unitPrice}
+                onChange={e => onUpdateItem(item.id, 'unitPrice', e.target.value)}
+                placeholder="0"
+                className="text-sm text-right bg-transparent border-none outline-none w-full tabular-nums focus:bg-muted/30 rounded"
+                step="0.01"
+              />
+              <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
                 <input
-                  type="number"
-                  value={item.unitPrice}
-                  onChange={e => onUpdateItem(item.id, 'unitPrice', e.target.value)}
-                  placeholder="0"
-                  className="text-sm text-right bg-transparent border-none outline-none w-full tabular-nums focus:bg-muted/30 rounded"
-                  step="0.01"
+                  type="checkbox"
+                  checked={item.isOptional}
+                  onChange={e => onUpdateItem(item.id, 'isOptional', e.target.checked)}
+                  className="rounded"
                 />
-                <label className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={item.isOptional}
-                    onChange={e => onUpdateItem(item.id, 'isOptional', e.target.checked)}
-                    className="rounded"
-                  />
-                  opt
-                </label>
-              </div>
+                opt
+              </label>
             </div>
-            <div className="px-1 py-1 text-right font-medium tabular-nums text-muted-foreground">
+            <div className={`${CELL} text-right font-medium tabular-nums text-muted-foreground`}>
               {fmt(lineTotal, currency)}
             </div>
             {showCosts && (
-              <div className="px-1 py-1 text-right">
+              <div className={`${CELL} text-right`}>
                 <input
                   type="number"
                   value={item.costRate}
@@ -178,7 +190,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, currency,
               </div>
             )}
             {showCosts && (
-              <div className="px-1 py-1">
+              <div className={CELL}>
                 <input
                   type="text"
                   value={item.tags}
@@ -190,7 +202,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, currency,
               </div>
             )}
             {showCosts && (
-              <div className="px-1 py-1">
+              <div className={CELL}>
                 <input
                   type="text"
                   value={item.internalNotes}
@@ -201,7 +213,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, currency,
               </div>
             )}
             {showCosts && (
-              <div className="px-1 py-1">
+              <div className={CELL}>
                 <select
                   value={item.riskLevel}
                   onChange={e => onUpdateItem(item.id, 'riskLevel', e.target.value)}
@@ -214,13 +226,13 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, currency,
               </div>
             )}
             {showCosts && (
-              <div className="px-1 py-1 text-right">
+              <div className={`${CELL} text-right`}>
                 <span className="text-sm text-muted-foreground">
                   {marginPct !== null ? `${marginPct.toFixed(1)}%` : '—'}
                 </span>
               </div>
             )}
-            <div className="px-1 py-1">
+            <div className={`${CELL} flex items-start justify-center`}>
               <button
                 onClick={() => onRemoveItem(item.id)}
                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
@@ -229,15 +241,17 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, currency,
               </button>
             </div>
           </div>
-        )
-      })}
+          )
+        })}
 
-      <div className="grid border-t bg-muted/10" style={{ gridTemplateColumns: cols }}>
-        <div className="px-4 py-0.5 text-right text-xs font-medium text-muted-foreground" style={{ gridColumn: '1 / 4' }}>
-          Section subtotal
-        </div>
-        <div className="px-1 py-0.5 text-right text-xs font-medium text-muted-foreground tabular-nums">
-          {fmt(sectionSubtotal, currency)}
+        {/* Section subtotal */}
+        <div className="grid divide-x divide-border/60 border-t bg-muted/10" style={{ gridTemplateColumns: cols }}>
+          <div className="px-4 py-1 text-right text-xs font-medium text-muted-foreground" style={{ gridColumn: '1 / 4' }}>
+            Section subtotal
+          </div>
+          <div className="px-2 py-1 text-right text-xs font-medium text-muted-foreground tabular-nums">
+            {fmt(sectionSubtotal, currency)}
+          </div>
         </div>
       </div>
 
@@ -246,6 +260,6 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, currency,
           <option key={r.tag} value={r.tag} />
         ))}
       </datalist>
-    </>
+    </div>
   )
 }
