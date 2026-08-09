@@ -30,10 +30,10 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, currency,
   }, 0)
 
   return (
-    <table className="w-full text-sm border-collapse">
+    <table className="w-full text-sm border-collapse table-fixed">
       <colgroup>
         <col />
-        <col className="w-20" />
+        <col className="w-24" />
         <col className="w-28" />
         <col className="w-28" />
         {showCosts && <col className="w-20" />}
