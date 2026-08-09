@@ -239,7 +239,7 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          disabled={submitting || (startMode !== 'duplicate' && jobs.length === 0)}
+          disabled={submitting || (startMode !== 'duplicate' && !jobId)}
           className="px-4 py-2 rounded bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50"
         >
           {submitting ? 'Creating…' : 'Create Quote'}
