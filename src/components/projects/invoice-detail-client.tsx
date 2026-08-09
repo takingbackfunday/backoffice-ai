@@ -206,6 +206,7 @@ export function InvoiceDetailClient({ projectId, projectSlug, invoice: initial, 
           invoiceId={invoice.id}
           invoiceNumber={invoice.invoiceNumber}
           clientName={invoice.clientName}
+          onMarkSent={handleMarkSent}
           onDone={() => { setShowSentBanner(false); router.refresh() }}
         />
       )}

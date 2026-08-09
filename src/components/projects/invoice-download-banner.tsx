@@ -11,9 +11,10 @@ interface Props {
   invoiceNumber: string
   clientName: string
   onDone: () => void
+  onMarkSent: () => Promise<void>
 }
 
-export function InvoiceDownloadBanner({ projectId, projectSlug, invoiceId, invoiceNumber, clientName, onDone }: Props) {
+export function InvoiceDownloadBanner({ projectId, projectSlug, invoiceId, invoiceNumber, clientName, onDone, onMarkSent }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -21,16 +22,7 @@ export function InvoiceDownloadBanner({ projectId, projectSlug, invoiceId, invoi
     setSaving(true)
     setError(null)
     try {
-      const res = await fetch(`/api/projects/${projectId}/invoices/${invoiceId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'SENT' }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.error) {
-        setError(json.error ?? 'Failed to mark as sent')
-        return
-      }
+      await onMarkSent()
       removePendingMarkSentInvoice(invoiceId)
       onDone()
     } catch {
