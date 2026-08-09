@@ -9,6 +9,7 @@ interface Props {
   section: { id: string; name: string; items: ItemInput[] }
   marginRules: { tag: string; marginPct: number }[]
   showCosts: boolean
+  currency: string
   libraryStatus?: Record<string, LibraryStatus>
   onUpdateItem: (itemId: string, field: string, value: unknown) => void
   onRemoveItem: (itemId: string) => void
@@ -17,12 +18,23 @@ interface Props {
 
 const RISK_LEVELS = ['low', 'medium', 'high']
 
-export function QuoteLineItemsTable({ section, marginRules, showCosts, libraryStatus, onUpdateItem, onRemoveItem, onSaveToLibrary }: Props) {
+function fmt(n: number, currency: string) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n)
+}
+
+export function QuoteLineItemsTable({ section, marginRules, showCosts, currency, libraryStatus, onUpdateItem, onRemoveItem, onSaveToLibrary }: Props) {
+  const sectionSubtotal = section.items.reduce((sum, i) => {
+    const qty = parseFloat(i.quantity) || 1
+    const price = parseFloat(i.unitPrice) || 0
+    return sum + qty * price
+  }, 0)
+
   return (
     <table className="w-full text-sm border-collapse">
       <colgroup>
         <col />
-        <col className="w-24" />
+        <col className="w-20" />
+        <col className="w-28" />
         <col className="w-28" />
         {showCosts && <col className="w-20" />}
         {showCosts && <col className="w-28" />}
@@ -36,6 +48,7 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
           <th className="text-left px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
           <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Qty</th>
           <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Price</th>
+          <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Total</th>
           {showCosts && <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Cost rt</th>}
           {showCosts && <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Tags</th>}
           {showCosts && <th className="px-1 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Int. notes</th>}
@@ -45,9 +58,11 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
         </tr>
       </thead>
       <tbody>
-        {section.items.map((item) => {
+          {section.items.map((item) => {
           const costRate = parseFloat(item.costRate) || 0
           const unitPrice = parseFloat(item.unitPrice) || 0
+          const quantity = parseFloat(item.quantity) || 1
+          const lineTotal = quantity * unitPrice
           const marginPct = itemMarginPercent(costRate || null, unitPrice)
 
           return (
@@ -152,6 +167,9 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
                   </label>
                 </div>
               </td>
+              <td className="px-1 py-1 text-right font-medium tabular-nums text-muted-foreground">
+                {fmt(lineTotal, currency)}
+              </td>
               {showCosts && (
                 <td className="px-1 py-1">
                   <input
@@ -219,6 +237,17 @@ export function QuoteLineItemsTable({ section, marginRules, showCosts, librarySt
           )
         })}
       </tbody>
+      <tfoot>
+        <tr className="bg-muted/10">
+          <td colSpan={3} className="px-4 py-0.5 text-right text-xs font-medium text-muted-foreground">
+            Section subtotal
+          </td>
+          <td className="px-1 py-0.5 text-right text-xs font-medium text-muted-foreground tabular-nums">
+            {fmt(sectionSubtotal, currency)}
+          </td>
+          {showCosts ? <td colSpan={6} /> : <td colSpan={1} />}
+        </tr>
+      </tfoot>
       <datalist id="margin-tags">
         {marginRules.map(r => (
           <option key={r.tag} value={r.tag} />

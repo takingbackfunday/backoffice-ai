@@ -257,6 +257,7 @@ export function QuoteEditor({ initialData, marginRules, projectSlug, clientName,
               section={section}
               marginRules={marginRules}
               showCosts={showCosts}
+              currency={state.currency}
               libraryStatus={libraryStatuses}
               onUpdateItem={(itemId, field, value) =>
                 dispatch({ type: 'UPDATE_ITEM', sectionId: section.id, itemId, field: field as keyof ItemInput, value: value as string | boolean })
