@@ -5,7 +5,7 @@ import { authedRoute } from '@/lib/api-handler'
 import { requireQuote } from '@/lib/authz'
 import { toDisplay } from '@/lib/money'
 
-const ParamsSchema = z.object({ id: z.string().uuid(), quoteId: z.string() })
+const ParamsSchema = z.object({ id: z.string(), quoteId: z.string() })
 
 const CreateInvoiceFromQuoteSchema = z.object({
   dueDate: z.string().min(1, 'Due date is required'),
