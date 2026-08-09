@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { maxTagMargin, autoPrice, itemMarginPercent, quoteTotals } from './quote-pricing'
+import { maxTagMargin, autoPrice, itemMarginPercent, quoteTotals, requiredQuotedTotal, optionalQuotedTotal } from './quote-pricing'
 
 describe('maxTagMargin', () => {
   it('returns the max matching margin', () => {
@@ -58,14 +58,14 @@ describe('quoteTotals', () => {
     expect(result.totalQuoted).toBe(600)
   })
 
-  it('excludes optional items', () => {
+  it('includes optional items in totals', () => {
     const items = [
       { quantity: 2, unitPrice: 150, costRate: 100, isOptional: false },
       { quantity: 1, unitPrice: 50, costRate: 30, isOptional: true },
     ]
     const result = quoteTotals(items)
-    expect(result.totalCost).toBe(200)
-    expect(result.totalQuoted).toBe(300)
+    expect(result.totalCost).toBe(230)
+    expect(result.totalQuoted).toBe(350)
   })
 
   it('handles null costRate (contributes 0 to cost)', () => {
@@ -75,5 +75,25 @@ describe('quoteTotals', () => {
     const result = quoteTotals(items)
     expect(result.totalCost).toBe(0)
     expect(result.totalQuoted).toBe(100)
+  })
+})
+
+describe('requiredQuotedTotal', () => {
+  it('sums only non-optional items', () => {
+    const items = [
+      { quantity: 2, unitPrice: 150, isOptional: false },
+      { quantity: 1, unitPrice: 50, isOptional: true },
+    ]
+    expect(requiredQuotedTotal(items)).toBe(300)
+  })
+})
+
+describe('optionalQuotedTotal', () => {
+  it('sums only optional items', () => {
+    const items = [
+      { quantity: 2, unitPrice: 150, isOptional: false },
+      { quantity: 1, unitPrice: 50, isOptional: true },
+    ]
+    expect(optionalQuotedTotal(items)).toBe(50)
   })
 })

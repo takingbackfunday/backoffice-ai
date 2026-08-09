@@ -5,6 +5,7 @@ import { Plus, Trash2, Sparkles, Save, Download, Bookmark } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useQuoteForm, type QuoteFormState, type ItemInput } from './hooks/use-quote-form'
 import { QuoteLineItemsTable } from './quote-line-items-table'
+import { requiredQuotedTotal, optionalQuotedTotal } from '@/lib/quote-pricing'
 import { AiConfirmBanner } from '@/components/projects/ai-confirm-banner'
 import { useChatStore } from '@/stores/chat-store'
 import { SaveTemplateModal } from './save-template-modal'
@@ -346,9 +347,35 @@ export function QuoteEditor({ initialData, marginRules, projectSlug, clientName,
               </div>
             )}
           </div>
-          <div className="text-right">
-            <div className="text-xs text-muted-foreground">Total quoted</div>
-            <div className="text-xl font-semibold">{fmt(totals.totalQuoted, state.currency)}</div>
+          <div className="text-right space-y-0.5">
+            {(() => {
+              const flat = state.sections.flatMap(s => s.items.map(i => ({
+                quantity: parseFloat(i.quantity) || 1,
+                unitPrice: parseFloat(i.unitPrice) || 0,
+                isOptional: i.isOptional,
+              })))
+              const req = requiredQuotedTotal(flat)
+              const opt = optionalQuotedTotal(flat)
+              if (opt > 0) {
+                return (
+                  <>
+                    <div className="text-xs text-muted-foreground">
+                      Required <span className="font-medium">{fmt(req, state.currency)}</span>
+                      <span className="mx-1">+</span>
+                      Optional <span className="font-medium">{fmt(opt, state.currency)}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Total quoted</div>
+                    <div className="text-xl font-semibold">{fmt(totals.totalQuoted, state.currency)}</div>
+                  </>
+                )
+              }
+              return (
+                <>
+                  <div className="text-xs text-muted-foreground">Total quoted</div>
+                  <div className="text-xl font-semibold">{fmt(totals.totalQuoted, state.currency)}</div>
+                </>
+              )
+            })()}
           </div>
         </div>
       </div>

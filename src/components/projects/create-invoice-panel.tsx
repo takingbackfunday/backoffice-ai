@@ -38,13 +38,26 @@ export function CreateInvoicePanel({ quoteId, projectSlug, sections, currency, o
   const [milestoneMode, setMilestoneMode] = useState(false)
   const [milestoneLabel, setMilestoneLabel] = useState('')
   const [milestonePercent, setMilestonePercent] = useState('')
-  const [checkedOptional, setCheckedOptional] = useState<Set<string>>(new Set())
+  const [checkedOptional, setCheckedOptional] = useState<Set<string>>(() =>
+    new Set(sections.flatMap(s => s.items.filter(i => i.isOptional).map(i => i.id)))
+  )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const allItems = useMemo(() => sections.flatMap(s => s.items), [sections])
   const nonOptionalIds = useMemo(() => allItems.filter(i => !i.isOptional).map(i => i.id), [allItems])
   const optionalItems = useMemo(() => allItems.filter(i => i.isOptional), [allItems])
+
+  const invoiceTotal = useMemo(() => {
+    const selected = allItems.filter(i => !i.isOptional || checkedOptional.has(i.id))
+    return selected.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  }, [allItems, checkedOptional])
+
+  const optionalSelectedTotal = useMemo(() => {
+    return optionalItems
+      .filter(i => checkedOptional.has(i.id))
+      .reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  }, [optionalItems, checkedOptional])
 
   function toggleOptional(id: string) {
     setCheckedOptional(prev => {
@@ -159,6 +172,28 @@ export function CreateInvoicePanel({ quoteId, projectSlug, sections, currency, o
           </div>
         </div>
       )}
+
+      {/* Total preview */}
+      <div className="border-t pt-3">
+        <div className="flex items-center justify-between text-sm">
+          <div className="space-y-0.5">
+            {optionalItems.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                Optional included: <span className="font-medium">{new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(optionalSelectedTotal, currency)}</span>
+                {optionalItems.length > 0 && optionalSelectedTotal < optionalItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) && (
+                  <span className="text-muted-foreground/60"> (deselected: {new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(optionalItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) - optionalSelectedTotal, currency)})</span>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-muted-foreground">Invoice total</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(invoiceTotal)}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Milestone mode */}
       <div className="border-t pt-3">

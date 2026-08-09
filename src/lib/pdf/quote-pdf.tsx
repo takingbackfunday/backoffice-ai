@@ -229,7 +229,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
           ) : null}
           <View style={S.totalRow}>
             <Text style={S.grandTotalLabel}>Total</Text>
-            <Text style={S.grandTotalValue}>{fmt(subtotal, currency)}</Text>
+            <Text style={S.grandTotalValue}>{fmt(subtotal + optionalTotal, currency)}</Text>
           </View>
         </View>
 
@@ -240,7 +240,7 @@ function QuoteDocument({ quote }: { quote: PdfQuote }) {
             {quote.paymentSchedule.map((row, i) => (
               <View key={i} style={S.scheduleRow}>
                 <Text style={S.scheduleLabel}>{row.milestone}</Text>
-                <Text style={S.scheduleValue}>{row.percent}% — {fmt(subtotal * row.percent / 100, currency)}</Text>
+                <Text style={S.scheduleValue}>{row.percent}% — {fmt((subtotal + optionalTotal) * row.percent / 100, currency)}</Text>
               </View>
             ))}
           </View>

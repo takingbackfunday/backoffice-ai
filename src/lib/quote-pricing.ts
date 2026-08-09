@@ -29,13 +29,34 @@ export function quoteTotals(
   let totalCost = 0
   let totalQuoted = 0
   for (const item of items) {
-    if (item.isOptional) continue
     totalQuoted = add(totalQuoted, mul(item.quantity, item.unitPrice)).toNumber()
     if (item.costRate != null && item.costRate > 0) {
       totalCost = add(totalCost, mul(item.quantity, item.costRate)).toNumber()
     }
   }
   return { totalCost: round2(totalCost), totalQuoted: round2(totalQuoted) }
+}
+
+export function requiredQuotedTotal(
+  items: { quantity: number; unitPrice: number; isOptional: boolean }[],
+): number {
+  let total = 0
+  for (const item of items) {
+    if (item.isOptional) continue
+    total = add(total, mul(item.quantity, item.unitPrice)).toNumber()
+  }
+  return round2(total)
+}
+
+export function optionalQuotedTotal(
+  items: { quantity: number; unitPrice: number; isOptional: boolean }[],
+): number {
+  let total = 0
+  for (const item of items) {
+    if (!item.isOptional) continue
+    total = add(total, mul(item.quantity, item.unitPrice)).toNumber()
+  }
+  return round2(total)
 }
 
 function round2(v: number): number {

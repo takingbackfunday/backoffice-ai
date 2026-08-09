@@ -7,8 +7,8 @@ import { logger } from '@/lib/log'
 
 interface RouteParams { params: Promise<{ id: string; quoteId: string }> }
 
-function sumItems(items: { unitPrice: Decimal.Value; quantity: Decimal.Value; isOptional: boolean }[]) {
-  return items.filter(i => !i.isOptional).reduce((sum, i) => sum + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0)
+function sumItems(items: { unitPrice: Decimal.Value; quantity: Decimal.Value }[]) {
+  return items.reduce((sum, i) => sum + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0)
 }
 
 export async function GET(_request: Request, { params }: RouteParams) {

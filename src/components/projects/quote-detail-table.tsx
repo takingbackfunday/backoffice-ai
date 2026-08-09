@@ -1,7 +1,5 @@
 'use client'
 
-import { cn } from '@/lib/utils'
-
 interface LineItem {
   id: string
   description: string
@@ -72,7 +70,7 @@ export function QuoteDetailTable({ sections, currency }: Props) {
               )}
               {/* Item rows */}
               {section.items.map(item => (
-                <tr key={item.id} className={cn(item.isOptional && 'opacity-60')}>
+                <tr key={item.id}>
                   <td className="px-4 py-1 whitespace-normal break-words">
                     {item.description}
                     {item.isOptional && <span className="ml-1 text-xs text-muted-foreground">(optional)</span>}
@@ -102,18 +100,28 @@ export function QuoteDetailTable({ sections, currency }: Props) {
         </tbody>
         <tfoot className="border-t bg-muted/20">
           {hasOptional && (
-            <tr>
-              <td colSpan={3} className="px-4 py-1 text-right text-xs text-muted-foreground">
-                Optional items (excluded)
-              </td>
-              <td className="px-4 py-1 text-right text-xs text-muted-foreground tabular-nums">
-                {fmt(optTotal, currency)}
-              </td>
-            </tr>
+            <>
+              <tr>
+                <td colSpan={3} className="px-4 py-1 text-right text-xs text-muted-foreground">
+                  Required subtotal
+                </td>
+                <td className="px-4 py-1 text-right text-xs text-muted-foreground tabular-nums">
+                  {fmt(subtotal, currency)}
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={3} className="px-4 py-1 text-right text-xs text-muted-foreground">
+                  Optional add-ons
+                </td>
+                <td className="px-4 py-1 text-right text-xs text-muted-foreground tabular-nums">
+                  {fmt(optTotal, currency)}
+                </td>
+              </tr>
+            </>
           )}
           <tr>
             <td colSpan={3} className="px-4 py-1.5 text-right font-semibold">Total</td>
-            <td className="px-4 py-1.5 text-right font-semibold tabular-nums">{fmt(subtotal, currency)}</td>
+            <td className="px-4 py-1.5 text-right font-semibold tabular-nums">{fmt(subtotal + optTotal, currency)}</td>
           </tr>
         </tfoot>
       </table>
