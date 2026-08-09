@@ -59,9 +59,9 @@ export default async function QuoteDetailPage({ params, searchParams }: PagePara
     })
 
     const totalAgreed = quote.sections.reduce((sum, s) =>
-      sum + s.items.filter(i => !i.isOptional).reduce((si, i) => si + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0), 0)
+      sum + s.items.reduce((si, i) => si + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0), 0)
     const amendmentTotal = acceptedAmendments.reduce(
-      (sum, a) => sum + a.sections.reduce((ss, s) => ss + s.items.filter(i => !i.isOptional).reduce((si, i) => si + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0), 0), 0
+      (sum, a) => sum + a.sections.reduce((ss, s) => ss + s.items.reduce((si, i) => si + toDisplay(i.unitPrice) * toDisplay(i.quantity), 0), 0), 0
     )
     const effectiveTotal = totalAgreed + amendmentTotal
     const totalInvoiced = invoices.reduce(
