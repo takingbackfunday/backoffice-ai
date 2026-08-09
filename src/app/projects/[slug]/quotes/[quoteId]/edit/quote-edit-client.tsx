@@ -57,8 +57,8 @@ export function QuoteEditClient({ initialData, marginRules, projectId, projectSl
     })
     const json = await res.json()
     if (!res.ok) throw new Error(json.error ?? 'Failed to save')
-    router.refresh()
-  }, [projectId, initialData.id, router])
+    router.push(`/projects/${projectSlug}/quotes/${initialData.id}`)
+  }, [projectId, initialData.id, projectSlug, router])
 
   const handleSaveAndDownload = useCallback(async (payload: Record<string, unknown>) => {
     setSaving(true)
