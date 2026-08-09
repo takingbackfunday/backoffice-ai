@@ -199,6 +199,7 @@ export function QuoteDetailClient({ projectId, projectSlug, quote, fulfillment, 
       {showCreateInvoice && (
         <CreateInvoicePanel
           quoteId={quote.id}
+          projectId={projectId}
           projectSlug={projectSlug}
           sections={quote.sections}
           currency={currency}

@@ -21,13 +21,14 @@ interface QuoteSection {
 
 interface Props {
   quoteId: string
+  projectId: string
   projectSlug: string
   sections: QuoteSection[]
   currency: string
   onClose?: () => void
 }
 
-export function CreateInvoicePanel({ quoteId, projectSlug, sections, currency, onClose }: Props) {
+export function CreateInvoicePanel({ quoteId, projectId, projectSlug, sections, currency, onClose }: Props) {
   const router = useRouter()
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date()
@@ -94,7 +95,7 @@ export function CreateInvoicePanel({ quoteId, projectSlug, sections, currency, o
         body.milestonePercent = parseInt(milestonePercent, 10)
       }
 
-      const res = await fetch(`/api/projects/${projectSlug}/quotes/${quoteId}/create-invoice`, {
+      const res = await fetch(`/api/projects/${projectId}/quotes/${quoteId}/create-invoice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
