@@ -179,9 +179,9 @@ export function CreateInvoicePanel({ quoteId, projectSlug, sections, currency, o
           <div className="space-y-0.5">
             {optionalItems.length > 0 && (
               <div className="text-xs text-muted-foreground">
-                Optional included: <span className="font-medium">{new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(optionalSelectedTotal, currency)}</span>
+                Optional included: <span className="font-medium">{new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(optionalSelectedTotal)}</span>
                 {optionalItems.length > 0 && optionalSelectedTotal < optionalItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) && (
-                  <span className="text-muted-foreground/60"> (deselected: {new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(optionalItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) - optionalSelectedTotal, currency)})</span>
+                  <span className="text-muted-foreground/60"> (deselected: {new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(optionalItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) - optionalSelectedTotal)})</span>
                 )}
               </div>
             )}
