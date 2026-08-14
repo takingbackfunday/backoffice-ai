@@ -90,6 +90,7 @@ Required in `.env.local`:
 - `RESEND_FROM` — sender address (defaults to `Backoffice <noreply@backoffice.cv>`)
 - `NEXT_PUBLIC_APP_URL` — public base URL for email links (defaults to `https://backoffice.cv`)
 - `AGENT_DAILY_TOKEN_CAP` — per-user daily AI token budget (default: 500,000). Tracked via `AgentUsage` model; agents return a friendly 429-style error when exceeded.
+- `TAVILY_API_KEY` — web search for the audacious quote generator and omni agent. Get one at https://tavily.com (free tier: 1000 req/mo).
 - `INTERNAL_CRON_SECRET` — shared secret for internal sweep/drain endpoints (e.g. `POST /api/internal/sweep-overdue`, `POST /api/internal/drain-jobs`). Must match the `x-cron-secret` header sent by the GitHub Actions cron workflow.
 
 ## Known Gotchas

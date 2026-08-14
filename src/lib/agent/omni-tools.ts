@@ -4,6 +4,7 @@ import { PROPERTY_TOOLS, dispatchPropertyTool } from './property-tools'
 import { STUDIO_TOOLS, dispatchStudioTool } from './studio-tools'
 import { runRulesAgent } from './run-rules-agent'
 import { searchCapabilities, findCapability } from './site-capabilities-loader'
+import { tavilySearch, formatSearchResultsForLlm, TavilyError } from '@/lib/llm/tavily'
 import type { SerializablePageContext, EditorAction } from './page-context'
 
 export interface LinkPayload {
@@ -49,6 +50,21 @@ const SITE_TOOLS: ToolDefinition[] = [
     },
   },
 ]
+
+const WEB_SEARCH_TOOL: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'web_search',
+    description: 'Search the web for information. Use this for: market rates, pricing benchmarks, industry standards, current events, or any factual question that goes beyond the user\'s financial data. Returns summarized results with source URLs.',
+    parameters: {
+      type: 'object',
+      required: ['query'],
+      properties: {
+        query: { type: 'string', description: 'Search query' },
+      },
+    },
+  },
+}
 
 const CONSULT_RULES_TOOL: ToolDefinition = {
   type: 'function',
@@ -174,7 +190,7 @@ const APPLY_QUOTE_EDITS_TOOL: ToolDefinition = {
 }
 
 export function getOmniTools(pageContext?: SerializablePageContext): ToolDefinition[] {
-  const base: ToolDefinition[] = [...FINANCE_TOOLS, ...PROPERTY_TOOLS, ...STUDIO_TOOLS, ...SITE_TOOLS, CONSULT_RULES_TOOL]
+  const base: ToolDefinition[] = [...FINANCE_TOOLS, ...PROPERTY_TOOLS, ...STUDIO_TOOLS, ...SITE_TOOLS, CONSULT_RULES_TOOL, WEB_SEARCH_TOOL]
 
   if (!pageContext) return base
 
@@ -205,6 +221,19 @@ export async function dispatchOmniTool(opts: {
     const link = args as LinkPayload
     onLink(link)
     return `Linked user to ${link.route}${link.anchor ?? ''}.`
+  }
+
+  if (name === 'web_search') {
+    const query = (args as { query: string }).query ?? ''
+    try {
+      const result = await tavilySearch(query, { maxResults: 5, includeAnswer: true })
+      return formatSearchResultsForLlm(result)
+    } catch (err) {
+      if (err instanceof TavilyError) {
+        return `Web search unavailable: ${err.message}`
+      }
+      return `Web search failed: ${err instanceof Error ? err.message : String(err)}`
+    }
   }
 
   if (name === 'consult_rules_agent') {
