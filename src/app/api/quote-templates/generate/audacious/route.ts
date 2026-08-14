@@ -2,13 +2,33 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { runAudaciousQuotePipeline, type PipelineEvent } from '@/lib/quote-generator/audacious-pipeline'
+import { StarterTemplateSchema } from '@/lib/quote-template-schemas'
 import { parsePreferences } from '@/types/preferences'
 import { logger } from '@/lib/log'
 import { checkDailyBudget, recordAgentUsage } from '@/lib/agent/usage'
 
+const ExistingTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  sections: z.array(z.object({
+    name: z.string(),
+    items: z.array(z.object({
+      description: z.string(),
+      unit: z.string().nullable().optional(),
+      quantity: z.number(),
+      rate: z.number().nullable().optional(),
+      costRate: z.number().nullable().optional(),
+      tags: z.array(z.string()).optional(),
+      isOptional: z.boolean().optional(),
+    })),
+  })),
+})
+
 const BodySchema = z.object({
   description: z.string().trim().min(10, 'Description must be at least 10 characters').max(2000),
   clarificationAnswers: z.array(z.string()).optional(),
+  existingTemplate: ExistingTemplateSchema.optional(),
+  currency: z.string().optional(),
 })
 
 function encode(event: PipelineEvent): Uint8Array {
@@ -69,19 +89,34 @@ export async function POST(request: Request) {
           description: body.description,
           clarificationAnswers: body.clarificationAnswers,
           workDescription,
+          existingTemplate: body.existingTemplate ?? null,
+          currency: body.currency,
         })
 
         for await (const event of pipeline) {
-          // Template events are deferred until DB save (see below)
           if (event.type === 'template') {
+            const isRevision = !!body.existingTemplate
             try {
-              const createdTemplate = await prisma.quoteTemplate.create({
-                data: {
-                  userId,
-                  name: event.data.template.name,
-                  sections: event.data.template.sections,
-                },
-              })
+              let templateId: string
+              if (isRevision) {
+                await prisma.quoteTemplate.update({
+                  where: { id: body.existingTemplate!.id },
+                  data: {
+                    name: event.data.template.name,
+                    sections: event.data.template.sections,
+                  },
+                })
+                templateId = body.existingTemplate!.id
+              } else {
+                const created = await prisma.quoteTemplate.create({
+                  data: {
+                    userId,
+                    name: event.data.template.name,
+                    sections: event.data.template.sections,
+                  },
+                })
+                templateId = created.id
+              }
 
               send({
                 type: 'template',
@@ -89,7 +124,7 @@ export async function POST(request: Request) {
                   ...event.data,
                   template: {
                     ...event.data.template,
-                    id: createdTemplate.id,
+                    id: templateId,
                   },
                 } as typeof event.data & { template: typeof event.data.template & { id: string } },
               })

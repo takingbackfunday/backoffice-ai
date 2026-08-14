@@ -58,6 +58,7 @@ export default async function NewQuotePage({ params }: PageParams) {
           templates={templates}
           recentQuotes={recentQuotes}
           workDescription={prefData.workDescription}
+          currency={project.clientProfile.currency ?? 'USD'}
         />
       </div>
     </ProjectPageShell>

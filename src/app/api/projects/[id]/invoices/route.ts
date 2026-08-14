@@ -130,7 +130,7 @@ export const POST = authedRoute<{ id: string }, z.infer<typeof CreateInvoiceSche
           invoiceNumber,
           dueDate: new Date(body.dueDate),
           issueDate: body.issueDate ? new Date(body.issueDate) : undefined,
-          currency: body.currency,
+          currency: body.currency || project.clientProfile.currency || 'USD',
           notes: body.notes,
           lineItems: {
             create: body.lineItems.map(item => ({

@@ -56,6 +56,7 @@ interface ErrorState {
 interface Props {
   onCreated: (templateId: string) => void
   workDescription?: string
+  currency?: string
 }
 
 function placeholderFromWorkDescription(desc?: string): string {
@@ -88,7 +89,7 @@ function placeholderFromWorkDescription(desc?: string): string {
   return "e.g. I need to produce a 3-part documentary series — pre-production research, location interviews, 4 shoot days, post-production editing, color grading, and original score..."
 }
 
-export function GenerateTemplateForm({ onCreated, workDescription }: Props) {
+export function GenerateTemplateForm({ onCreated, workDescription, currency }: Props) {
   const [description, setDescription] = useState('')
   const [step, setStep] = useState<Step>('input')
   const stepRef = useRef<Step>('input')
@@ -118,7 +119,7 @@ export function GenerateTemplateForm({ onCreated, workDescription }: Props) {
     setStatusMessage('')
   }, [setStepSynced])
 
-  const handleGenerate = useCallback(async (clarificationAnswers?: string[]) => {
+  const handleGenerate = useCallback(async (clarificationAnswers?: string[], existingTemplateArg?: PipelineResult['template'] | null) => {
     if (description.trim().length < 10) return
 
     // Cancel any in-flight request
@@ -132,13 +133,19 @@ export function GenerateTemplateForm({ onCreated, workDescription }: Props) {
     setStatusMessage('Analyzing project description...')
 
     try {
+      const body: Record<string, unknown> = {
+        description: description.trim(),
+        clarificationAnswers,
+        currency,
+      }
+      if (existingTemplateArg) {
+        body.existingTemplate = existingTemplateArg
+      }
+
       const res = await fetch('/api/quote-templates/generate/audacious', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: description.trim(),
-          clarificationAnswers,
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       })
 
@@ -240,7 +247,7 @@ export function GenerateTemplateForm({ onCreated, workDescription }: Props) {
       })
       setStepSynced('error')
     }
-  }, [description])
+  }, [description, currency])
 
   const handleClarificationSubmit = useCallback(() => {
     const filledAnswers = answers.filter(a => a.trim().length > 0)
@@ -546,7 +553,7 @@ export function GenerateTemplateForm({ onCreated, workDescription }: Props) {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => handleGenerate([refinementText.trim()])}
+                onClick={() => handleGenerate([refinementText.trim()], result.template)}
                 disabled={!refinementText.trim()}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
               >

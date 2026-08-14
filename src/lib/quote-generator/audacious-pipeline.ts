@@ -25,17 +25,19 @@ export type PipelineEvent =
   | { type: 'error'; step: string; message: string; detail?: string }
   | { type: 'done' }
 
-// ── System prompt ───────────────────────────────────────────────────
+// ── System prompts ──────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are an aggressive pricing strategist for freelance professionals. Your job is to generate the most audacious, comprehensive quote template possible for the described project.
+function buildSystemPrompt(currency: string): string {
+  return `You are an aggressive pricing strategist for freelance professionals. Your job is to generate the most audacious, comprehensive quote template possible for the described project.
 
-CONTEXT: The freelancers using this system routinely undercharge and under-scope their work. Your job is to push them toward what their work is actually worth.
+CONTEXT: The freelancers using this system routinely undercharge and under-scope their work. Your job is to push them toward what their work is actually worth. All prices must be in ${currency}.
 
 PRICING RULES:
 - Price at the TOP of the market range for the freelancer's discipline and experience level
 - Use value-based pricing (what is this worth to the client's business?) not just hourly rates
 - Every line item should have a premium rate — not "competitive", PREMIUM
 - Include quantity and unit that make sense (hr/day/x)
+- All rates must be in ${currency}
 
 SCOPE RULES:
 - Break the project into 3-6 logical phases/sections
@@ -72,7 +74,7 @@ Respond with ONLY valid JSON:
             "description": "Specific deliverable or activity",
             "unit": "hr|day|x",
             "quantity": <number>,
-            "rate": <premium rate in dollars>,
+            "rate": <premium rate in ${currency}>,
             "costRate": <internal cost, 0 if unknown>,
             "tags": ["keyword1", "keyword2"],
             "isOptional": false
@@ -89,6 +91,36 @@ WEB SEARCH:
 You have access to a web_search tool. Use it to verify that your proposed rates are within market range for this type of work. Search for typical freelance rates, project costs, or industry pricing benchmarks relevant to the project description. Do at least 1 search, at most 3.
 
 Return ONLY valid JSON — no markdown, no code fences, no prose before or after.`
+}
+
+function buildRevisionPrompt(currency: string): string {
+  return `You are a precision editor for freelance quote templates. Your job is to apply specific user-requested changes to an existing template while keeping everything else exactly as-is.
+
+CONTEXT: The freelancer already has a generated quote template they're mostly happy with. They want targeted revisions, not a full regeneration. All prices must be in ${currency}.
+
+RULES:
+- Keep ALL section names, item descriptions, quantities, units, rates, costRates, tags, and isOptional flags EXACTLY as they are — unless the user explicitly asked to change them
+- Only add, remove, or modify items/sections that the user specifically mentioned
+- If the user asks to lower a rate, only change that rate — don't adjust anything else
+- If the user asks to add a new item, add it to the most appropriate existing section
+- If the user asks to remove something, remove only that item
+- If the user asks to convert optional to required (or vice versa), only flip that flag
+- Preserve the original template's structure, pricing philosophy, and level of detail
+- Update assumptions and pricing_rationale only if the changes warrant it
+
+WEB SEARCH:
+You have access to a web_search tool. If the user requested rate changes, use it to verify the new rates are market-appropriate.
+
+OUTPUT FORMAT:
+Respond with ONLY valid JSON in the same structure as the original template:
+{
+  "template": { ... same structure as original ... },
+  "assumptions": [...],
+  "pricing_rationale": "..."
+}
+
+Return ONLY valid JSON — no markdown, no code fences, no prose before or after.`
+}
 
 // ── Tools ───────────────────────────────────────────────────────────
 
@@ -119,29 +151,54 @@ export async function* runAudaciousQuotePipeline(opts: {
   description: string
   clarificationAnswers?: string[]
   workDescription?: string | null
+  existingTemplate?: StarterTemplate | null
+  currency?: string
 }): AsyncGenerator<PipelineEvent> {
-  const { description, clarificationAnswers, workDescription } = opts
+  const { description, clarificationAnswers, workDescription, existingTemplate, currency = 'USD' } = opts
+
+  const isRevision = !!existingTemplate
 
   // ── Step 0: Build messages ────────────────────────────────────────
-  yield { type: 'status', step: 'analyzing', message: 'Analyzing project description...' }
+  yield { type: 'status', step: 'analyzing', message: isRevision ? 'Applying your requested changes...' : 'Analyzing project description...' }
 
-  const userParts: string[] = [description]
+  const systemPrompt = isRevision ? buildRevisionPrompt(currency) : buildSystemPrompt(currency)
+  const userParts: string[] = []
 
-  if (workDescription) {
-    userParts.push(`\nFreelancer's general line of work: ${workDescription}`)
-  }
-
-  if (clarificationAnswers && clarificationAnswers.length > 0) {
-    userParts.push(`\nAdditional context from clarification:`)
-    for (const answer of clarificationAnswers) {
-      userParts.push(`- ${answer}`)
+  if (isRevision) {
+    userParts.push('Here is the existing quote template. Apply the user\'s requested changes to it.')
+    userParts.push('')
+    userParts.push('EXISTING TEMPLATE:')
+    userParts.push(JSON.stringify(existingTemplate, null, 2))
+    userParts.push('')
+    userParts.push('The client\'s currency is ' + currency + '.')
+    if (clarificationAnswers && clarificationAnswers.length > 0) {
+      userParts.push('')
+      userParts.push('USER\'S REQUESTED CHANGES:')
+      for (const answer of clarificationAnswers) {
+        userParts.push('- ' + answer)
+      }
     }
-  }
+    userParts.push('')
+    userParts.push('Apply ONLY the changes listed above. Do not modify anything else.')
+  } else {
+    userParts.push(description)
 
-  userParts.push('\nGenerate the most audacious, comprehensive quote template for this project. Price aggressively. Include everything the freelancer should be charging for but probably isn\'t.')
+    if (workDescription) {
+      userParts.push(`\nFreelancer's general line of work: ${workDescription}`)
+    }
+
+    if (clarificationAnswers && clarificationAnswers.length > 0) {
+      userParts.push(`\nAdditional context from clarification:`)
+      for (const answer of clarificationAnswers) {
+        userParts.push(`- ${answer}`)
+      }
+    }
+
+    userParts.push('\nGenerate the most audacious, comprehensive quote template for this project. Price aggressively. Include everything the freelancer should be charging for but probably isn\'t.')
+  }
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
     { role: 'user', content: userParts.join('\n') },
   ]
 

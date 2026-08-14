@@ -16,11 +16,12 @@ interface Props {
   templates: { id: string; name: string }[]
   recentQuotes: { id: string; quoteNumber: string; title: string }[]
   workDescription?: string
+  currency?: string
 }
 
 type StartMode = 'blank' | 'template' | 'duplicate'
 
-export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQuotes, workDescription }: Props) {
+export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQuotes, workDescription, currency }: Props) {
   const router = useRouter()
   const [startMode, setStartMode] = useState<StartMode>('blank')
   const [title, setTitle] = useState('')
@@ -200,7 +201,7 @@ export function NewQuoteForm({ projectId, projectSlug, jobs, templates, recentQu
       {startMode !== 'duplicate' && (
         <div>
           {showGenerate ? (
-            <GenerateTemplateForm onCreated={handleGeneratedTemplate} workDescription={workDescription} />
+            <GenerateTemplateForm onCreated={handleGeneratedTemplate} workDescription={workDescription} currency={currency} />
           ) : (
             <button
               type="button"
