@@ -84,12 +84,30 @@ export async function POST(request: Request) {
         controller.enqueue(new TextEncoder().encode(': ping\n\n'))
       }, 5000)
 
+      const existingTemplate = body.existingTemplate
+        ? {
+            name: body.existingTemplate.name,
+            sections: body.existingTemplate.sections.map(s => ({
+              name: s.name,
+              items: s.items.map(i => ({
+                description: i.description,
+                unit: i.unit ?? null,
+                quantity: i.quantity,
+                rate: i.rate ?? null,
+                costRate: i.costRate ?? null,
+                tags: i.tags ?? [],
+                isOptional: i.isOptional ?? false,
+              })),
+            })),
+          }
+        : null
+
       try {
         const pipeline = runAudaciousQuotePipeline({
           description: body.description,
           clarificationAnswers: body.clarificationAnswers,
           workDescription,
-          existingTemplate: body.existingTemplate ?? null,
+          existingTemplate,
           currency: body.currency,
         })
 
