@@ -80,6 +80,31 @@ export function ClientProfileForm({ data, onChange }: Props) {
           placeholder="123 Main St, City, State"
         />
       </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Currency</label>
+          <select
+            value={data.currency}
+            onChange={e => set('currency', e.target.value)}
+            className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+          >
+            {['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'CHF', 'SEK', 'NOK', 'DKK', 'JPY', 'SGD', 'HKD'].map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Payment terms (days)</label>
+          <input
+            type="number"
+            value={data.paymentTermDays}
+            onChange={e => set('paymentTermDays', e.target.value)}
+            className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="30"
+          />
+        </div>
+      </div>
     </div>
   )
 }

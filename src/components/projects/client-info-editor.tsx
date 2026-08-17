@@ -62,6 +62,8 @@ export function ClientInfoEditor({ projectId, isDefault = false, profile }: Prop
           email: data.email || null,
           phone: data.phone || null,
           address: data.address || null,
+          currency: data.currency,
+          paymentTermDays: parseInt(data.paymentTermDays) || 30,
         },
       }),
     })
