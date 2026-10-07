@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import Papa from 'papaparse'
 import { useUploadStore } from '@/stores/upload-store'
 import { headerSignature } from '@/lib/import-signature'
+import { analyzeCsv } from '@/lib/csv-structure'
 import type { UploadFile } from '@/types'
 
 export function CsvDropzone() {
@@ -18,8 +18,15 @@ export function CsvDropzone() {
       const reader = new FileReader()
       reader.onload = (e) => {
         const csvText = e.target?.result as string
-        const result = Papa.parse<Record<string, string>>(csvText, { header: true, preview: 1 })
-        const headers = result.meta.fields ?? []
+        // Structure-aware header extraction: skips statement preambles and
+        // detects the real header row (see csv-structure.ts).
+        const { headers: detected } = analyzeCsv(csvText)
+        const seen = new Set<string>()
+        const headers = detected.map((h) => h.trim()).filter((h) => {
+          if (!h || seen.has(h)) return false
+          seen.add(h)
+          return true
+        })
         if (headers.length === 0) {
           reject(new Error('Could not read CSV headers. Make sure the file has a header row.'))
           return

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { processCSV, parseAmount, type CsvMapping } from '@/lib/csv-processor'
+
+const fixture = (name: string) => readFileSync(join(__dirname, '__fixtures__', name), 'utf8')
 
 const baseMapping: CsvMapping = {
   dateCol: 'Date',
@@ -177,5 +181,99 @@ describe('processCSV — automatic date format detection (no dateFormat in mappi
     expect(result.rows).toHaveLength(0)
     expect(result.skippedCount).toBe(2)
     expect(result.errors.some((e) => e.includes('not a recognisable date'))).toBe(true)
+  })
+})
+
+describe('processCSV — statement preamble + row repair', () => {
+  const chaseMapping: CsvMapping = {
+    dateCol: 'Date',
+    amountCol: 'Amount',
+    descCol: 'Description',
+    amountSign: 'normal',
+  }
+
+  it('skips the summary preamble, real header detected, repairs unquoted-comma memos', () => {
+    const result = processCSV(fixture('chase-statement-preamble.csv'), chaseMapping, 'acct-1')
+    // 4 real transactions; the beginning-balance marker row (empty amount) is skipped
+    expect(result.totalParsed).toBe(5)
+    expect(result.rows).toHaveLength(4)
+    expect(result.skippedCount).toBe(1)
+    expect(result.rows.map((r) => r.amount)).toEqual([2000, -300, -155, -100])
+    expect(result.rows.map((r) => r.date.toISOString().slice(0, 10))).toEqual([
+      '2026-01-02',
+      '2026-01-03',
+      '2026-01-04',
+      '2026-01-05',
+    ])
+    // Memo text re-joined across the unquoted comma
+    expect(result.rows[1].description).toContain('yard work')
+    expect(result.rows[1].description).toContain('Conf# DEF456')
+    expect(result.rows[2].description).toContain('clean air handler')
+    expect(result.rows[2].description).toContain('Conf# GHI789')
+  })
+
+  it('reconciles parsed totals against the statement summary', () => {
+    const result = processCSV(fixture('chase-statement-preamble.csv'), chaseMapping, 'acct-1')
+    expect(result.reconciliation).toBeDefined()
+    expect(result.reconciliation!.expectedCredits).toBe(2000)
+    expect(result.reconciliation!.expectedDebits).toBe(-555)
+    expect(result.reconciliation!.actualCredits).toBe(2000)
+    expect(result.reconciliation!.actualDebits).toBe(-555)
+    expect(result.reconciliation!.matched).toBe(true)
+  })
+
+  it('handles a German semicolon statement with a preamble', () => {
+    const mapping: CsvMapping = {
+      dateCol: 'Buchungstag',
+      amountCol: 'Betrag (EUR)',
+      descCol: 'Verwendungszweck',
+      amountSign: 'normal',
+    }
+    const result = processCSV(fixture('n26-semicolon-preamble.csv'), mapping, 'acct-1')
+    expect(result.skippedCount).toBe(0)
+    expect(result.rows).toHaveLength(2)
+    expect(result.rows[0].amount).toBe(-45.5)
+    expect(result.rows[1].amount).toBe(3200)
+    expect(result.rows[0].date.toISOString().slice(0, 10)).toBe('2026-01-23')
+    expect(result.reconciliation).toBeUndefined() // no declared totals in this statement
+  })
+})
+
+describe('processCSV — prose rows fail loudly once a format is established', () => {
+  it('does not let the native Date parser invent dates from summary prose', () => {
+    const autoMapping: CsvMapping = {
+      dateCol: 'Date',
+      amountCol: 'Amount',
+      descCol: 'Description',
+      amountSign: 'normal',
+    }
+    const csv = [
+      'Date,Description,Amount',
+      '01/05/2026,A,1.00',
+      '01/06/2026,B,2.00',
+      '01/07/2026,C,3.00',
+      '01/08/2026,D,4.00',
+      'Beginning balance as of 01/09/2026,E,5.00',
+    ].join('\n')
+    const result = processCSV(csv, autoMapping, 'acct-1')
+    expect(result.rows).toHaveLength(4)
+    expect(result.skippedCount).toBe(1)
+    expect(result.errors.some((e) => e.includes('not a recognisable date'))).toBe(true)
+  })
+})
+
+describe('processCSV — error reporting', () => {
+  it('caps the error list and notes the overflow', () => {
+    const autoMapping: CsvMapping = {
+      dateCol: 'Date',
+      amountCol: 'Amount',
+      descCol: 'Description',
+      amountSign: 'normal',
+    }
+    const rows = Array.from({ length: 25 }, (_, i) => `junk-${i},Row ${i},1.00`)
+    const csv = ['Date,Description,Amount', ...rows].join('\n')
+    const result = processCSV(csv, autoMapping, 'acct-1')
+    expect(result.skippedCount).toBe(25)
+    expect(result.errors.some((e) => e.includes('and 5 more row(s) failed to parse'))).toBe(true)
   })
 })

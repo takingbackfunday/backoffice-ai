@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     const perFile: { filename: string; rowCount: number }[] = []
     const allRows: ({ filename: string } & ReturnType<typeof processCSV>['rows'][number])[] = []
     const allErrors: string[] = []
+    const reconciliations: ({ filename: string } & NonNullable<ReturnType<typeof processCSV>['reconciliation']>)[] = []
     let totalParsed = 0
     let totalSkipped = 0
 
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
       perFile.push({ filename: file.filename, rowCount: result.totalParsed })
       allRows.push(...result.rows.map((r) => ({ ...r, filename: file.filename })))
       allErrors.push(...result.errors)
+      if (result.reconciliation) reconciliations.push({ filename: file.filename, ...result.reconciliation })
       totalParsed += result.totalParsed
       totalSkipped += result.skippedCount
     }
@@ -123,6 +125,7 @@ export async function POST(request: Request) {
       skippedCount: totalSkipped,
       errors: allErrors,
       perFile,
+      reconciliations,
     })
   } catch (err) {
     logger.error('upload', 'POST error', { message: err instanceof Error ? err.message : String(err) })

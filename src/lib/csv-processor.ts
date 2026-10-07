@@ -1,6 +1,9 @@
-import Papa from 'papaparse'
 import { buildDuplicateHash } from './dedup'
-import { detectDateFormat, parseDateWithFormat, parseDateFallback, isKnownDateFormat } from './date-format'
+import { detectDateFormat, parseDateWithFormat, parseDateFallback, parseDateStructured, isKnownDateFormat } from './date-format'
+import { analyzeCsv, repairRow, findStatementTotals, type RepairContext } from './csv-structure'
+import { parseAmount } from './amount'
+
+export { parseAmount } from './amount'
 
 export interface CsvMapping {
   dateCol: string
@@ -21,103 +24,65 @@ export interface NormalizedRow {
   duplicateHash: string
 }
 
+/** Cross-check of parsed sums against totals declared in a statement preamble. */
+export interface Reconciliation {
+  expectedCredits: number | null
+  expectedDebits: number | null
+  actualCredits: number
+  actualDebits: number
+  /** null when the statement declared no corresponding total. */
+  creditsMatch: boolean | null
+  debitsMatch: boolean | null
+  matched: boolean
+}
+
 export interface ProcessResult {
   rows: NormalizedRow[]
   errors: string[]
   skippedCount: number
   totalParsed: number
+  reconciliation?: Reconciliation
 }
+
+/** Cap on per-row error messages returned to the client (an overflow note is appended). */
+const MAX_ERRORS = 20
 
 /**
  * Resolve the format to parse with: the explicit mapping format when given,
  * otherwise auto-detected from the column's values. Returns null when neither
  * is available (every row will then fail with an "unrecognised date" error).
  */
-function resolveDateFormat(data: Record<string, string>[], mapping: CsvMapping): string | null {
+function resolveDateFormat(colValues: (string | undefined)[], mapping: CsvMapping): string | null {
   if (mapping.dateFormat) return mapping.dateFormat
   const samples: string[] = []
-  for (const row of data) {
-    const v = row[mapping.dateCol]?.trim()
-    if (v) samples.push(v)
+  for (const v of colValues) {
+    const t = v?.trim()
+    if (t) samples.push(t)
     if (samples.length >= 200) break
   }
   return detectDateFormat(samples).format
 }
 
+/**
+ * Per-row date parse.
+ *
+ *  - Explicit known format: strict — the row must match it.
+ *  - Auto mode (no explicit format): the detected/detectable structured formats
+ *    only. Never the native Date parser — V8 scrapes month-name substrings out
+ *    of prose ("junk-0" → Jun 2000, "Row 0" → Jan 2000) and would silently
+ *    invent dates. With a detected format, the structured fallback still
+ *    rescues a stray row in another known format (e.g. one ISO datetime among
+ *    DD.MM.YYYY rows); without one, the row fails loudly for the user to review.
+ *  - Legacy unrecognised format id (e.g. an old profile's 'MM/dd/yyyy'): full
+ *    leniency, including the native Date parser, as before.
+ */
 function parseRowDate(rawDate: string, format: string | null, autoMode: boolean): Date | null {
   let date: Date | null = null
   if (format) date = parseDateWithFormat(rawDate, format)
-  // Per-row fallback: in auto mode a stray value may differ from the file's main
-  // format (e.g. one ISO datetime among DD.MM.YYYY rows). Legacy profiles with
-  // unrecognised format ids (e.g. 'MM/dd/yyyy') also fall through here, matching
-  // the old new Date() else-branch. An explicit known format stays strict.
-  if (!date && (autoMode || !format || !isKnownDateFormat(format))) {
-    date = parseDateFallback(rawDate)
-  }
-  return date
-}
-
-/**
- * Parse an amount string supporting both US (1,234.56) and European
- * (1.234,56 / 1234,56) number formats. When both separators are present the
- * rightmost one is the decimal separator and the other is thousands grouping.
- * A lone comma is a decimal comma unless it groups exactly 3 digits (1,234).
- * Handles (parenthesised), leading +/-, and trailing-minus negatives, and
- * strips $ € £, whitespace, and apostrophe grouping.
- */
-export function parseAmount(raw: string, inverted: boolean): number | null {
-  let clean = raw?.trim()
-  if (!clean) return null
-
-  let negative = false
-  const parenMatch = clean.match(/^\((.+)\)$/)
-  if (parenMatch) {
-    negative = true
-    clean = parenMatch[1].trim()
-  }
-
-  // Strip currency symbols, whitespace, and apostrophe thousands groups
-  clean = clean.replace(/[$€£\s']/g, '')
-
-  if (clean.startsWith('-') || clean.startsWith('+')) {
-    if (clean.startsWith('-')) negative = true
-    clean = clean.slice(1)
-  }
-  // Trailing minus (German "Soll" style): 12,50-
-  if (clean.endsWith('-')) {
-    negative = true
-    clean = clean.slice(0, -1)
-  }
-  if (!clean) return null
-
-  const lastComma = clean.lastIndexOf(',')
-  const lastDot = clean.lastIndexOf('.')
-
-  let normalized: string
-  if (lastComma > -1 && lastDot > -1) {
-    // Both present: the rightmost is the decimal separator
-    normalized =
-      lastComma > lastDot
-        ? clean.replace(/\./g, '').replace(',', '.') // European: 1.234,56
-        : clean.replace(/,/g, '') // US: 1,234.56
-  } else if (lastComma > -1) {
-    const commaCount = clean.split(',').length - 1
-    const digitsAfterLast = clean.length - lastComma - 1
-    normalized =
-      commaCount === 1 && digitsAfterLast !== 3
-        ? clean.replace(',', '.') // decimal comma: 12,50
-        : clean.replace(/,/g, '') // thousands grouping: 1,234 / 1,234,567
-  } else if ((clean.match(/\./g) ?? []).length > 1) {
-    normalized = clean.replace(/\./g, '') // European thousands: 1.234.567
-  } else {
-    normalized = clean // single dot (US decimal) or plain integer
-  }
-
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null
-  const n = parseFloat(normalized)
-  if (isNaN(n)) return null
-  const signed = negative ? -n : n
-  return inverted ? -signed : signed
+  if (date) return date
+  if (autoMode) return parseDateStructured(rawDate)
+  if (!format || !isKnownDateFormat(format)) return parseDateFallback(rawDate)
+  return null // explicit known format: strict
 }
 
 export function processCSV(
@@ -125,91 +90,153 @@ export function processCSV(
   mapping: CsvMapping,
   accountId: string
 ): ProcessResult {
-  const result = Papa.parse<Record<string, string>>(csvText, {
-    header: true,
-    skipEmptyLines: true,
-    transformHeader: (h) => h.trim(),
-  })
-
-  const availableColumns = result.meta.fields ?? []
-  const rows: NormalizedRow[] = []
-  const errors: string[] = []
-  let skippedCount = 0
-  const totalParsed = result.data.length
+  const structure = analyzeCsv(csvText)
+  const availableColumns = structure.headers
 
   // Validate that mapped columns actually exist in the CSV
+  const dateIdx = availableColumns.indexOf(mapping.dateCol)
+  const amountIdx = availableColumns.indexOf(mapping.amountCol)
+  const descIdx = availableColumns.indexOf(mapping.descCol)
+  const notesIdx = mapping.notesCol ? availableColumns.indexOf(mapping.notesCol) : -1
+
   const missingCols: string[] = []
-  for (const col of [mapping.dateCol, mapping.amountCol, mapping.descCol]) {
-    if (!availableColumns.includes(col)) missingCols.push(col)
-  }
+  if (dateIdx === -1) missingCols.push(mapping.dateCol)
+  if (amountIdx === -1) missingCols.push(mapping.amountCol)
+  if (descIdx === -1) missingCols.push(mapping.descCol)
   if (missingCols.length > 0) {
     return {
       rows: [],
       errors: [`Column(s) not found in CSV: ${missingCols.map((c) => `"${c}"`).join(', ')}. Available columns: ${availableColumns.join(', ')}`],
-      skippedCount: totalParsed,
-      totalParsed,
+      skippedCount: structure.rows.length,
+      totalParsed: structure.rows.length,
     }
   }
 
-  const autoFormat = !mapping.dateFormat
-  const dateFormat = resolveDateFormat(result.data, mapping)
+  const headerCount = availableColumns.length
+  const autoMode = !mapping.dateFormat
+  const dateFormat = resolveDateFormat(structure.rows.map((r) => r[dateIdx]), mapping)
 
-  for (let i = 0; i < result.data.length; i++) {
-    const row = result.data[i]
-    const rowNum = i + 2 // 1-based + header row
+  const repairCtx: RepairContext = {
+    headerCount,
+    dateIdx,
+    amountIdx,
+    descIdx,
+    notesIdx: notesIdx >= 0 ? notesIdx : undefined,
+    delimiter: structure.delimiter,
+    isDate: (v) => parseRowDate(v, dateFormat, autoMode) !== null,
+  }
 
-    const rawDate = row[mapping.dateCol]
-    const rawAmount = row[mapping.amountCol]
-    const description = row[mapping.descCol]?.trim() ?? ''
+  const rows: NormalizedRow[] = []
+  const allErrors: string[] = []
+  let skippedCount = 0
+  const totalParsed = structure.rows.length
+
+  /** Validate one field array and build the normalized row, or return an error message. */
+  const tryRow = (
+    fields: string[],
+    rowNum: number
+  ): { ok: true; row: NormalizedRow } | { ok: false; error: string } => {
+    const rawDate = fields[dateIdx]
+    const rawAmount = fields[amountIdx]
+    const description = fields[descIdx]?.trim() ?? ''
 
     if (!rawDate?.trim()) {
-      if (errors.length < 5) errors.push(`Row ${rowNum}: date column "${mapping.dateCol}" is empty`)
-      skippedCount++
-      continue
+      return { ok: false, error: `Row ${rowNum}: date column "${mapping.dateCol}" is empty` }
     }
-
     if (!rawAmount?.trim()) {
-      if (errors.length < 5) errors.push(`Row ${rowNum}: amount column "${mapping.amountCol}" is empty`)
-      skippedCount++
-      continue
+      return { ok: false, error: `Row ${rowNum}: amount column "${mapping.amountCol}" is empty` }
     }
 
-    const date = parseRowDate(rawDate, dateFormat, autoFormat)
+    const date = parseRowDate(rawDate, dateFormat, autoMode)
     if (!date) {
-      if (errors.length < 5) {
-        errors.push(autoFormat
-          ? `Row ${rowNum}: "${rawDate}" is not a recognisable date — is the date column correct?`
-          : `Row ${rowNum}: "${rawDate}" doesn't match format ${mapping.dateFormat} — is the date column correct?`)
+      return {
+        ok: false,
+        error: mapping.dateFormat
+          ? `Row ${rowNum}: "${rawDate}" doesn't match format ${mapping.dateFormat} — is the date column correct?`
+          : `Row ${rowNum}: "${rawDate}" is not a recognisable date — is the date column correct?`,
       }
-      skippedCount++
-      continue
     }
 
     const amount = parseAmount(rawAmount, mapping.amountSign === 'inverted')
     if (amount === null) {
-      if (errors.length < 5) errors.push(`Row ${rowNum}: "${rawAmount}" is not a valid number — is the amount column correct?`)
-      skippedCount++
-      continue
+      return { ok: false, error: `Row ${rowNum}: "${rawAmount}" is not a valid number — is the amount column correct?` }
     }
 
-    const duplicateHash = buildDuplicateHash({ accountId, date, amount, description })
-
-    rows.push({
-      date,
-      amount,
-      description,
-      notes: mapping.notesCol ? row[mapping.notesCol]?.trim() || undefined : undefined,
-      rawData: row,
-      duplicateHash,
+    const rawData: Record<string, string> = {}
+    availableColumns.forEach((h, i) => {
+      if (h && !(h in rawData)) rawData[h] = fields[i] ?? ''
     })
+
+    return {
+      ok: true,
+      row: {
+        date,
+        amount,
+        description,
+        notes: notesIdx >= 0 ? fields[notesIdx]?.trim() || undefined : undefined,
+        rawData,
+        duplicateHash: buildDuplicateHash({ accountId, date, amount, description }),
+      },
+    }
+  }
+
+  for (let i = 0; i < structure.rows.length; i++) {
+    const fields = structure.rows[i]
+    const rowNum = i + 1 // 1-based index within the data rows (after the header)
+
+    // Pad short rows (exporter omitted trailing empty columns)
+    const padded = fields.length < headerCount
+      ? [...fields, ...Array(headerCount - fields.length).fill('')]
+      : fields
+
+    let result = tryRow(padded, rowNum)
+    if (!result.ok) {
+      // The row may be structurally shifted (unquoted delimiter in a memo,
+      // split thousands separator…). Repair only when unambiguous.
+      const repaired = repairRow(fields, repairCtx)
+      if (repaired) result = tryRow(repaired, rowNum)
+    }
+
+    if (result.ok) rows.push(result.row)
+    else {
+      skippedCount++
+      allErrors.push(result.error)
+    }
+  }
+
+  // Surface all failures up to a cap, with an explicit overflow note
+  const errors = allErrors.slice(0, MAX_ERRORS)
+  if (allErrors.length > MAX_ERRORS) {
+    errors.push(`…and ${allErrors.length - MAX_ERRORS} more row(s) failed to parse.`)
   }
 
   // If we skipped everything or nearly everything, add a summary hint
-  if (skippedCount > 0 && skippedCount === totalParsed && errors.length > 0) {
+  if (skippedCount > 0 && skippedCount === totalParsed && allErrors.length > 0) {
     errors.unshift(`All ${totalParsed} rows failed to parse. Check that your column selections match the CSV.`)
-  } else if (skippedCount > totalParsed * 0.5 && errors.length > 0) {
+  } else if (skippedCount > totalParsed * 0.5 && allErrors.length > 0) {
     errors.unshift(`${skippedCount} of ${totalParsed} rows were skipped due to parse errors.`)
   }
 
-  return { rows, errors, skippedCount, totalParsed }
+  // Cross-check against the statement's own declared totals when present
+  let reconciliation: Reconciliation | undefined
+  const totals = findStatementTotals(structure.preamble)
+  if (totals.credits != null || totals.debits != null) {
+    const actualCredits = rows.reduce((s, r) => (r.amount > 0 ? s + r.amount : s), 0)
+    const actualDebits = rows.reduce((s, r) => (r.amount < 0 ? s + r.amount : s), 0)
+    const creditsMatch =
+      totals.credits == null ? null : Math.abs(actualCredits - totals.credits) < 0.01
+    const debitsMatch =
+      totals.debits == null ? null : Math.abs(Math.abs(actualDebits) - Math.abs(totals.debits)) < 0.01
+    reconciliation = {
+      expectedCredits: totals.credits ?? null,
+      expectedDebits: totals.debits ?? null,
+      actualCredits: Math.round(actualCredits * 100) / 100,
+      actualDebits: Math.round(actualDebits * 100) / 100,
+      creditsMatch,
+      debitsMatch,
+      matched: (creditsMatch ?? true) && (debitsMatch ?? true),
+    }
+  }
+
+  return { rows, errors, skippedCount, totalParsed, ...(reconciliation ? { reconciliation } : {}) }
 }

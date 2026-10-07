@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { connectBank } from '@/lib/bank-agent/worker'
 import { encrypt } from '@/lib/bank-agent/crypto'
 import { processCSV } from '@/lib/csv-processor'
+import { analyzeCsv } from '@/lib/csv-structure'
 import { categorizeRows } from '@/lib/rules/categorize-batch'
 import { loadUserRules } from '@/lib/rules/user-rules'
 import { logger } from '@/lib/log'
@@ -167,9 +168,10 @@ export async function POST(request: Request) {
           dateCol: 'Date', // Default assumptions - banks typically use these
           amountCol: 'Amount',
           descCol: 'Description',
-          dateFormat: 'YYYY-MM-DD',
           amountSign: 'normal' as const,
           notesCol: 'Notes',
+          // No dateFormat: statement exports vary (MM/DD/YYYY, DD/MM/YYYY…).
+          // Let the pipeline auto-detect from the column values.
         }
 
         // Try to process with default mapping first
@@ -177,8 +179,8 @@ export async function POST(request: Request) {
 
         // If that fails, try common alternatives
         if (processed.errors.length > 0 && processed.rows.length === 0) {
-          const lines = result.csvText.split('\n')
-          const headers = lines[0]?.split(',').map(h => h.trim().replace(/"/g, '')) || []
+          // Structure-aware header lookup — skips any statement preamble block
+          const headers = analyzeCsv(result.csvText).headers.filter(Boolean)
 
           // Try to find columns by common patterns
           const dateCol = headers.find(h => /date/i.test(h)) || headers[0]

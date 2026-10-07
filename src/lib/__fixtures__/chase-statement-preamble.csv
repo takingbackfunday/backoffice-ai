@@ -1,0 +1,12 @@
+Description,,Summary Amt.,,,
+Beginning balance as of 01/01/2026,,"1,000.00",,,
+Total credits,,"2,000.00",,,
+Total debits,,"-555.00",,,
+Ending balance as of 01/31/2026,,"2,445.00",,,
+,,,,,
+Date,Description,Amount,Running Bal.,,
+1/1/2026,Beginning balance as of 01/01/2026,,"1,000.00",,
+1/2/2026,"Zelle payment from JANE DOE for JANUARY""; Conf# ABC123""","2,000.00","3,000.00",,
+1/3/2026,Zelle payment to John Smith for yard work," extra cleanup""; Conf# DEF456""",-300,"2,700.00",,
+1/4/2026,Zelle payment to Bob Jones for Clogged drain, clean air handler,; Conf# GHI789,-155,"2,545.00"
+1/5/2026,Online Banking transfer to SAV 9999 Confirmation# 123456,-100,"2,445.00",,

@@ -6,6 +6,7 @@ Financial management tool for freelancers, consultants, and small property manag
 
 ### Transactions & Categorisation
 - Import bank transactions via CSV upload or automated bank sync (Open Banking APIs)
+- Robust CSV ingestion: detects the real header row past statement summary preambles, sniffs the delimiter, repairs rows shifted by unquoted commas in memo text or split thousands separators, and reconciles parsed totals against the statement's declared summary when present
 - Duplicate detection via SHA-256 hash over `(account, date, amount, description)`
 - Auto-categorise at import using a priority-ordered rules engine (regex, amount ranges, payee match, etc.)
 - AI rules agent suggests new rules based on transaction edits; runs automatically in the background after every CSV import (suggestions appear in the rules UI); can also be triggered manually via the transactions toolbar

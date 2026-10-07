@@ -72,8 +72,9 @@ Every page listed above has a sibling `page.capabilities.ts` file in the same di
 | Edit single | `PATCH /api/transactions/[id]` → `src/app/api/transactions/[id]/route.ts` |
 | CSV upload step 1 (parse) | `src/components/upload/csv-dropzone.tsx` (also accepts PDF → `POST /api/upload/pdf`) |
 | PDF statement → CSV | `POST /api/upload/pdf` → `src/lib/ocr/mistral.ts` (`mistralOcrPdf`) + `src/lib/ocr/extract-statement.ts` (`parseStatementRows` — throws `StatementParseError` on malformed LLM output) |
-| CSV row normalization (dates/amounts) | `src/lib/csv-processor.ts` → `processCSV()`, `parseAmount()` (exported, format-aware US/EU — also used by PDF extraction) |
-| Date format auto-detection | `src/lib/date-format.ts` → `detectDateFormat()` (column-wide, flags MM/DD-vs-DD/MM ambiguity), `parseDateWithFormat()`, `parseDateFallback()` — `CsvMapping.dateFormat` is optional; no UI picker |
+| CSV structure detection | `src/lib/csv-structure.ts` → `analyzeCsv()` (delimiter sniffing, header-region detection past summary preambles, headerless fallback), `repairRow()` (re-joins rows shifted by unquoted commas / split thousands), `findStatementTotals()` — used by dropzone, mapper, and processCSV |
+| CSV row normalization (dates/amounts) | `src/lib/csv-processor.ts` → `processCSV()` (consumes `analyzeCsv`), `parseAmount()` (re-exported from `src/lib/amount.ts`, format-aware US/EU — also used by PDF extraction) |
+| Date format auto-detection | `src/lib/date-format.ts` → `detectDateFormat()` (column-wide, flags MM/DD-vs-DD/MM ambiguity), `parseDateWithFormat()`, `parseDateStructured()`, `parseDateFallback()` — `CsvMapping.dateFormat` is optional; no UI picker. Auto mode never uses the native `Date` parser (it invents dates from prose); it's reserved for legacy unrecognised explicit format ids |
 | CSV upload step 2 (column map + LLM) | `src/components/upload/column-mapper.tsx` → `POST /api/llm/validate-mapping` |
 | CSV upload step 3 (preview) | `src/components/upload/import-preview.tsx` |
 | CSV final import | `POST /api/transactions/import` → `src/app/api/transactions/import/route.ts` |

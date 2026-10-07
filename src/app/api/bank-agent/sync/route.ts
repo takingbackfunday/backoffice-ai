@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { syncBank } from '@/lib/bank-agent/worker'
 import { decrypt } from '@/lib/bank-agent/crypto'
 import { processCSV } from '@/lib/csv-processor'
+import { analyzeCsv } from '@/lib/csv-structure'
 import { categorizeRows } from '@/lib/rules/categorize-batch'
 import { loadUserRules } from '@/lib/rules/user-rules'
 import type { SyncJobEvent, PlaybookStep } from '@/types/bank-agent'
@@ -158,17 +159,18 @@ export async function POST(request: Request) {
           dateCol: 'Date', // Default assumptions
           amountCol: 'Amount',
           descCol: 'Description',
-          dateFormat: 'YYYY-MM-DD',
           amountSign: 'normal' as const,
           notesCol: 'Notes',
+          // No dateFormat: statement exports vary (MM/DD/YYYY, DD/MM/YYYY…).
+          // Let the pipeline auto-detect from the column values.
         }
 
         let processed = processCSV(result.csvText, mapping, accountId)
 
         // If that fails, try common alternatives (same logic as connect)
         if (processed.errors.length > 0 && processed.rows.length === 0) {
-          const lines = result.csvText.split('\n')
-          const headers = lines[0]?.split(',').map(h => h.trim().replace(/"/g, '')) || []
+          // Structure-aware header lookup — skips any statement preamble block
+          const headers = analyzeCsv(result.csvText).headers.filter(Boolean)
 
           const dateCol = headers.find(h => /date/i.test(h)) || headers[0]
           const amountCol = headers.find(h => /amount|total|debit|credit/i.test(h)) || headers[1]

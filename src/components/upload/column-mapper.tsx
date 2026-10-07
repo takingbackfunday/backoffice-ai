@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Papa from 'papaparse'
 import { useUploadStore } from '@/stores/upload-store'
+import { analyzeCsv } from '@/lib/csv-structure'
 import type { CsvMapping } from '@/lib/csv-processor'
 import type { PreviewRow, FilePreviewMeta } from '@/types'
 import { guessMapping, scoreCandidates, type MappedField } from '@/lib/guess-mapping'
@@ -11,6 +11,17 @@ import { ColSelect, type MappingValidation } from './col-select'
 import { AccountRail } from './account-rail'
 import type { Account } from './new-account-form'
 import { PreviewTable, previewNewCount } from './preview-table'
+
+interface ReconciliationMeta {
+  filename: string
+  expectedCredits: number | null
+  expectedDebits: number | null
+  actualCredits: number
+  actualDebits: number
+  creditsMatch: boolean | null
+  debitsMatch: boolean | null
+  matched: boolean
+}
 
 export function ColumnMapper({
   accounts: initialAccounts = [],
@@ -42,6 +53,7 @@ export function ColumnMapper({
   const [duplicateCount, setDuplicateCount] = useState(0)
   const [perFile, setPerFile] = useState<FilePreviewMeta[]>([])
   const [parseErrors, setParseErrors] = useState<string[]>([])
+  const [reconciliations, setReconciliations] = useState<ReconciliationMeta[]>([])
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
 
@@ -89,9 +101,11 @@ export function ColumnMapper({
 
     const samples: string[] = []
     for (const f of files) {
-      const parsed = Papa.parse<Record<string, string>>(f.csvText, { header: true, skipEmptyLines: true, preview: 250 })
-      for (const row of parsed.data) {
-        const v = row[mapping.dateCol]?.trim()
+      const structure = analyzeCsv(f.csvText)
+      const colIdx = structure.headers.indexOf(mapping.dateCol)
+      if (colIdx === -1) continue
+      for (const row of structure.rows.slice(0, 250)) {
+        const v = row[colIdx]?.trim()
         if (v) samples.push(v)
       }
     }
@@ -119,8 +133,14 @@ export function ColumnMapper({
     if (source === 'pdf') return
     const firstFile = files[0]
     if (!firstFile?.csvText) return
-    const parsed = Papa.parse<Record<string, string>>(firstFile.csvText, { header: true, skipEmptyLines: true })
-    const first20 = parsed.data.slice(0, 20)
+    const structure = analyzeCsv(firstFile.csvText)
+    const first20 = structure.rows.slice(0, 20).map((fields) => {
+      const obj: Record<string, string> = {}
+      structure.headers.forEach((h, i) => {
+        if (h && !(h in obj)) obj[h] = fields[i] ?? ''
+      })
+      return obj
+    })
     setValidating(true)
     fetch('/api/llm/validate-mapping', {
       method: 'POST',
@@ -180,6 +200,7 @@ export function ColumnMapper({
         setDuplicateCount(json.meta?.duplicateCount ?? 0)
         setPerFile(json.meta?.perFile ?? [])
         setParseErrors(json.meta?.errors ?? [])
+        setReconciliations(json.meta?.reconciliations ?? [])
       } catch {
         setPreviewError('Network error while loading preview.')
       } finally {
@@ -405,6 +426,23 @@ export function ColumnMapper({
               </span>
             )}
             {previewError && <span className="text-red-600">{previewError}</span>}
+            {!previewLoading && reconciliations.map((r) =>
+              r.matched ? (
+                <span key={r.filename} className="text-green-600" data-testid="reconciliation-ok">
+                  ✓ Totals match the statement summary
+                </span>
+              ) : (
+                <span key={r.filename} className="text-amber-600" data-testid="reconciliation-mismatch">
+                  ⚠ Parsed totals differ from the statement summary
+                  {r.expectedCredits != null && r.creditsMatch === false && (
+                    <> (credits: expected {r.expectedCredits.toLocaleString()}, got {r.actualCredits.toLocaleString()})</>
+                  )}
+                  {r.expectedDebits != null && r.debitsMatch === false && (
+                    <> (debits: expected {Math.abs(r.expectedDebits).toLocaleString()}, got {Math.abs(r.actualDebits).toLocaleString()})</>
+                  )}
+                </span>
+              )
+            )}
           </div>
 
           {/* Per-file row count strip */}

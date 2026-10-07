@@ -99,6 +99,8 @@ function normalizeWords(raw: string): string {
     .replace(/[.,/]+/g, ' ')
     .replace(/-+/g, ' ')
     .replace(/\s+/g, ' ')
+    // Strip a leading English weekday prefix ("Thu Jun 01 2000", "Thu, Jun 01 2000")
+    .replace(/^\s*(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\s+/, '')
     .trim()
 }
 
@@ -241,11 +243,13 @@ export function parseDateWithFormat(raw: string, formatId: string): Date | null 
 }
 
 /**
- * Last-resort parse: try every known format in priority order, then fall back
- * to the native Date parser for oddball inputs. Only used per-row when the
- * primary format fails (auto mode) or for legacy unrecognised format ids.
+ * Structured-only fallback: try every known format in priority order. No
+ * native-Date leniency — prose containing an embedded date ("Beginning balance
+ * as of 01/01/2026") returns null instead of inventing a date. Used per-row
+ * when the file has an established format: a row that doesn't match it is junk
+ * to flag, not a date to guess.
  */
-export function parseDateFallback(raw: string): Date | null {
+export function parseDateStructured(raw: string): Date | null {
   const clean = stripTime((raw ?? '').trim())
   if (!clean) return null
   for (const parser of PARSERS) {
@@ -255,8 +259,24 @@ export function parseDateFallback(raw: string): Date | null {
       if (date) return date
     }
   }
+  return null
+}
+
+/**
+ * Last-resort parse: structured formats first, then the native Date parser for
+ * oddball inputs. Native parsing happens at *local* midnight, so the result is
+ * normalised to UTC-midnight of its local date components — keeping it on the
+ * same UTC-midnight convention as every other parser here.
+ * Only reached when the file has no established date format at all.
+ */
+export function parseDateFallback(raw: string): Date | null {
+  const clean = stripTime((raw ?? '').trim())
+  if (!clean) return null
+  const structured = parseDateStructured(clean)
+  if (structured) return structured
   const d = new Date(clean)
-  return isNaN(d.getTime()) ? null : d
+  if (isNaN(d.getTime())) return null
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
 }
 
 /** Render how a raw value would be read under a format — for the ambiguity confirmation UI. */

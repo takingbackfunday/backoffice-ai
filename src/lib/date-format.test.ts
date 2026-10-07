@@ -64,6 +64,12 @@ describe('detectDateFormat — unambiguous formats', () => {
     expect(det.format).toBe('DD MMM YYYY')
     expect(det.ambiguous).toBe(false)
   })
+
+  it('ignores a leading English weekday prefix', () => {
+    const det = detectDateFormat(['Thu Jun 01 2000', 'Fri, Jul 02 2000'])
+    expect(det.format).toBe('MMM DD YYYY')
+    expect(iso(parseDateWithFormat('Thu Jun 01 2000', 'MMM DD YYYY')!)).toBe('2000-06-01')
+  })
 })
 
 describe('detectDateFormat — ambiguity handling', () => {
