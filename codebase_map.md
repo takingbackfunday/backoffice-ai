@@ -70,7 +70,8 @@ Every page listed above has a sibling `page.capabilities.ts` file in the same di
 | Row components | `src/components/transactions/rows/{transaction-row,new-row}.tsx` |
 | Fetch list | `GET /api/transactions` → `src/app/api/transactions/route.ts` |
 | Edit single | `PATCH /api/transactions/[id]` → `src/app/api/transactions/[id]/route.ts` |
-| CSV upload step 1 (parse) | `src/components/upload/csv-dropzone.tsx` (also accepts PDF → `POST /api/upload/pdf`) |
+| CSV upload step 1 (parse) | `src/components/upload/csv-dropzone.tsx` (also accepts Excel → sheet picker, and PDF → `POST /api/upload/pdf`) |
+| Excel workbook → CSV | `src/lib/excel.ts` → `listExcelSheets()` + `excelSheetToCsv()` (SheetJS, dynamic-imported client-side; formatted cell text, not raw serials). Multi-sheet workbooks pause in the dropzone until the user picks a sheet; the chosen sheet becomes CSV text and flows through the normal CSV pipeline |
 | PDF statement → CSV | `POST /api/upload/pdf` → `src/lib/ocr/mistral.ts` (`mistralOcrPdf`) + `src/lib/ocr/extract-statement.ts` (`parseStatementRows` — throws `StatementParseError` on malformed LLM output) |
 | CSV structure detection | `src/lib/csv-structure.ts` → `analyzeCsv()` (delimiter sniffing, header-region detection past summary preambles, headerless fallback), `repairRow()` (re-joins rows shifted by unquoted commas / split thousands), `findStatementTotals()` — used by dropzone, mapper, and processCSV |
 | CSV row normalization (dates/amounts) | `src/lib/csv-processor.ts` → `processCSV()` (consumes `analyzeCsv`), `parseAmount()` (re-exported from `src/lib/amount.ts`, format-aware US/EU — also used by PDF extraction) |

@@ -41,7 +41,7 @@ export interface UploadFile {
   filename: string
   headers: string[]
   csvText: string
-  source: 'csv' | 'pdf'
+  source: 'csv' | 'pdf' | 'excel'
 }
 
 // Per-file preview metadata returned by the preview API

@@ -29,7 +29,7 @@ const ImportFileSchema = z.object({
 const ProfileSchema = z.object({
   headers: z.array(z.string()),
   mapping: z.record(z.string()),
-  source: z.enum(['csv', 'pdf']).default('csv'),
+  source: z.enum(['csv', 'pdf', 'excel']).default('csv'),
 })
 
 const ImportBodySchema = z.object({
