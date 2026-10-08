@@ -262,7 +262,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
         ) : processing === 'file' ? (
           <p className="font-medium text-sm animate-pulse">Reading file…</p>
         ) : compact ? (
-          <p className="text-sm">+ Add files with the same columns</p>
+          <p className="text-sm">+ Add more statements from this bank</p>
         ) : (
           <>
             <p className="font-medium text-sm">Drop your CSV, Excel or PDF files here</p>

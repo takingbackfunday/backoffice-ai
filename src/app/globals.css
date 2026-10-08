@@ -140,6 +140,26 @@
   background-color: color-mix(in oklch, var(--primary) 8%, transparent);
 }
 
+.upload-mapper-rail {
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--muted-foreground) var(--muted);
+}
+
+.upload-mapper-rail::-webkit-scrollbar {
+  width: 10px;
+}
+
+.upload-mapper-rail::-webkit-scrollbar-track {
+  border-radius: 9999px;
+  background: var(--muted);
+}
+
+.upload-mapper-rail::-webkit-scrollbar-thumb {
+  border: 2px solid var(--muted);
+  border-radius: 9999px;
+  background: var(--muted-foreground);
+}
+
 @keyframes account-throb {
   0%, 100% { box-shadow: 0 0 0 0 rgb(99 102 241 / 0); border-color: hsl(var(--border)); }
   50%       { box-shadow: 0 0 0 4px rgb(99 102 241 / 0.25); border-color: rgb(99 102 241); }
