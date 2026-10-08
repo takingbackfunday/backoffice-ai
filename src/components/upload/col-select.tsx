@@ -17,6 +17,9 @@ export function ColSelect({
   validation,
   candidates,
   required,
+  samples,
+  aiChanged = false,
+  onUserChange,
 }: {
   id: string
   label: string
@@ -26,6 +29,9 @@ export function ColSelect({
   validation?: ColValidation
   candidates?: { col: string; score: number }[]
   required?: boolean
+  samples?: Record<string, string>
+  aiChanged?: boolean
+  onUserChange?: () => void
 }) {
   const suggestions = useMemo(() => {
     const map = new Map<string, number>()
@@ -43,14 +49,16 @@ export function ColSelect({
   const suggestedKeys = new Set(suggestions.map((s) => s.col))
   const otherHeaders = headers.filter((h) => !suggestedKeys.has(h))
   const needsThrob = required && !value
+  const optionLabel = (header: string, pct?: number) =>
+    `${header}${pct != null ? ` — ${pct}%` : ''}${samples?.[header] ? ` · e.g. ${samples[header]}` : ''}`
 
   return (
-    <div>
+    <div className={aiChanged ? 'ai-changed rounded-lg p-1 -m-1' : undefined}>
       <label htmlFor={id} className="block text-xs font-medium mb-1">{label}</label>
       <select
         id={id}
         value={value ?? ''}
-        onChange={(e) => onChange(e.target.value || undefined)}
+         onChange={(e) => { onUserChange?.(); onChange(e.target.value || undefined) }}
         className={`w-full rounded-md border px-3 py-1.5 text-sm${needsThrob ? ' col-throb' : ''}`}
         data-testid={id}
       >
@@ -59,20 +67,20 @@ export function ColSelect({
           <>
             <optgroup label="Suggested">
               {suggestions.map((s) => (
-                <option key={s.col} value={s.col}>{s.col} — {s.pct}%</option>
+                <option key={s.col} value={s.col}>{optionLabel(s.col, s.pct)}</option>
               ))}
             </optgroup>
             {otherHeaders.length > 0 && (
               <optgroup label="All columns">
                 {otherHeaders.map((h) => (
-                  <option key={h} value={h}>{h}</option>
+                  <option key={h} value={h}>{optionLabel(h)}</option>
                 ))}
               </optgroup>
             )}
           </>
         ) : (
           headers.map((h) => (
-            <option key={h} value={h}>{h}</option>
+            <option key={h} value={h}>{optionLabel(h)}</option>
           ))
         )}
       </select>

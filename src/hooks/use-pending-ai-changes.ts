@@ -14,6 +14,16 @@ export function usePendingAiChanges<T>() {
     snapshotRef.current = null
   }, [])
 
+  const clearField = useCallback((field: string) => {
+    setPendingFields((prev) => {
+      if (!prev.has(field)) return prev
+      const next = new Set(prev)
+      next.delete(field)
+      if (next.size === 0) snapshotRef.current = null
+      return next
+    })
+  }, [])
+
   const undo = useCallback((apply: (snapshot: T) => void) => {
     if (snapshotRef.current) apply(snapshotRef.current)
     setPendingFields(new Set())
@@ -25,6 +35,7 @@ export function usePendingAiChanges<T>() {
     hasPendingChanges: pendingFields.size > 0,
     markPending,
     confirm,
+    clearField,
     undo,
   }
 }

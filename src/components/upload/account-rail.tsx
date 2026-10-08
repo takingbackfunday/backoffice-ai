@@ -1,22 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NewAccountForm, type Account } from './new-account-form'
 
 export function AccountRail({
   accounts,
   loadingAccounts,
   accountId,
+  preselectedFromProfile,
   onAccountIdChange,
   onAccountCreated,
 }: {
   accounts: Account[]
   loadingAccounts: boolean
   accountId: string | null
+  preselectedFromProfile: boolean
   onAccountIdChange: (id: string) => void
   onAccountCreated?: (account: Account) => void
 }) {
   const [showNewAccount, setShowNewAccount] = useState(false)
+
+  useEffect(() => {
+    if (!loadingAccounts && accounts.length === 1 && !accountId) onAccountIdChange(accounts[0].id)
+  }, [accounts, loadingAccounts, accountId, onAccountIdChange])
 
   return (
     <div>
@@ -56,6 +62,7 @@ export function AccountRail({
           </button>
         </div>
       ) : (
+        <>
         <select
           value={accountId ?? ''}
           onChange={(e) => onAccountIdChange(e.target.value || '')}
@@ -69,6 +76,10 @@ export function AccountRail({
             </option>
           ))}
         </select>
+        {preselectedFromProfile && (
+          <p className="mt-1 text-[10px] text-muted-foreground">Pre-selected from your last import of this file format.</p>
+        )}
+        </>
       )}
 
       {!accountId && !showNewAccount && (

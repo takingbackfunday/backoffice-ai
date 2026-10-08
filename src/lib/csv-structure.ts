@@ -22,7 +22,7 @@
  */
 
 import Papa from 'papaparse'
-import { parseAmount } from './amount'
+import { parseAmount, resolveSplitAmount } from './amount'
 import { parseDateStructured } from './date-format'
 
 export interface CsvStructure {
@@ -248,6 +248,8 @@ export interface RepairContext {
   headerCount: number
   dateIdx: number
   amountIdx: number
+  /** Split mode only: index of the credit column. `amountIdx` then holds the debit column. */
+  creditIdx?: number
   descIdx: number
   notesIdx?: number
   delimiter: string
@@ -276,12 +278,13 @@ const MAX_MERGE_WIDTH = 4
  */
 export function repairRow(fields: string[], ctx: RepairContext): string[] | null {
   const { headerCount: H, dateIdx, amountIdx, descIdx, notesIdx, delimiter, isDate } = ctx
+  const split = ctx.creditIdx != null && ctx.creditIdx >= 0
   if (fields.length === 0) return null
 
   // Short row: exporter omitted trailing columns — padding is the canonical
   // fix, as long as the typed columns physically exist.
   if (fields.length < H) {
-    if (dateIdx < fields.length && amountIdx < fields.length && descIdx < fields.length) {
+    if (dateIdx < fields.length && amountIdx < fields.length && descIdx < fields.length && (!split || ctx.creditIdx! < fields.length)) {
       return [...fields, ...Array(H - fields.length).fill('')]
     }
     return null
@@ -289,8 +292,9 @@ export function repairRow(fields: string[], ctx: RepairContext): string[] | null
 
   // From here fields.length >= H. A genuinely empty typed column is not a
   // structural defect (e.g. a beginning-balance marker row) — don't repair.
-  const typedIdx = [dateIdx, amountIdx, descIdx, notesIdx].filter((i): i is number => i != null && i >= 0)
+  const typedIdx = [dateIdx, ...(split ? [] : [amountIdx]), descIdx, notesIdx].filter((i): i is number => i != null && i >= 0)
   if (typedIdx.some((i) => !fields[i]?.trim())) return null
+  if (split && !fields[amountIdx]?.trim() && !fields[ctx.creditIdx!]?.trim()) return null
 
   interface Candidate {
     row: string[]
@@ -300,9 +304,9 @@ export function repairRow(fields: string[], ctx: RepairContext): string[] | null
   const candidates: Candidate[] = []
 
   const validate = (row: string[]): boolean => {
-    if (dateIdx >= row.length || amountIdx >= row.length || descIdx >= row.length) return false
+    if (dateIdx >= row.length || amountIdx >= row.length || descIdx >= row.length || (split && ctx.creditIdx! >= row.length)) return false
     if (!isDate(row[dateIdx])) return false
-    if (parseAmount(row[amountIdx], false) === null) return false
+    if (split ? !resolveSplitAmount(row[amountIdx], row[ctx.creditIdx!]).ok : parseAmount(row[amountIdx], false) === null) return false
     if (!row[descIdx]?.trim()) return false
     return true
   }

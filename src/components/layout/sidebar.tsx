@@ -20,7 +20,7 @@ const MORE_ITEMS = [
 ]
 
 const IMPORT_ITEMS = [
-  { href: '/upload', label: 'Upload CSV', icon: '⬆' },
+  { href: '/upload', label: 'Import transactions', icon: '⬆' },
   { href: '/bank-accounts', label: 'Bank Accounts', icon: '🏦' },
 ]
 

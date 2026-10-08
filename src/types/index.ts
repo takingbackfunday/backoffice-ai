@@ -9,10 +9,19 @@ export type WorkspaceType = 'CLIENT' | 'PROPERTY' | 'OTHER'
 export type ProjectType = WorkspaceType  // backward compat alias
 
 // CSV column mapping stored in InstitutionSchema.csvMapping
+export type AmountMode = 'single' | 'split'
+
 export interface CsvMapping {
   dateCol: string
-  amountCol: string
   descCol: string
+  /** Absent = 'single' for compatibility with existing profiles. */
+  amountMode?: AmountMode
+  /** Required in single mode. */
+  amountCol?: string
+  /** Required in split mode: money out. */
+  debitCol?: string
+  /** Required in split mode: money in. */
+  creditCol?: string
   dateFormat?: string  // optional — auto-detected from column values when absent
   amountSign: 'normal' | 'inverted'
   notesCol?: string
@@ -58,7 +67,7 @@ export interface UploadState {
   files: UploadFile[]
   signature: string | null
   profileHit: ImportProfile | null
-  lastImport: { imported: number; skipped: number } | null
+  lastImport: { imported: number; skipped: number; unreadable: number; jobIds: string[] } | null
   profileStatus: 'idle' | 'loading' | 'done'
   previewRows: PreviewRow[]
   totalRows: number

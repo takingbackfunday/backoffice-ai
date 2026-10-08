@@ -1124,11 +1124,12 @@ const _data: any[] = [
   },
   {
     "route": "/upload",
-    "title": "Upload transactions",
-    "purpose": "Import bank transactions from a CSV file or PDF statement with AI-assisted column mapping.",
+    "title": "Import transactions",
+    "purpose": "Import bank transactions from CSV, Excel or PDF statements, including separate debit and credit columns, with AI-assisted column mapping.",
     "jobsToBeDone": [
       "Drop a CSV file from any bank to import transactions",
       "Drop a PDF bank statement to extract and import transactions",
+      "Import a CSV or Excel statement with separate money-out and money-in columns",
       "Use AI suggestions to map CSV columns to the right fields",
       "Preview which transactions will be imported and which are duplicates",
       "Trigger automatic categorisation via rules after import"
@@ -1272,7 +1273,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     38
   ],
   "credit": [
-    0
+    0,
+    42
   ],
   "card": [
     0
@@ -3169,7 +3171,8 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
     40
   ],
   "money": [
-    40
+    40,
+    42
   ],
   "unsent": [
     40
@@ -3198,10 +3201,22 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "edited": [
     41
   ],
-  "file": [
+  "excel": [
     42
   ],
-  "statement": [
+  "statements": [
+    42
+  ],
+  "including": [
+    42
+  ],
+  "separate": [
+    42
+  ],
+  "debit": [
+    42
+  ],
+  "columns": [
     42
   ],
   "assisted": [
@@ -3216,10 +3231,13 @@ export const SITE_CAPABILITY_INDEX: Record<string, number[]> = {
   "drop": [
     42
   ],
-  "extract": [
+  "file": [
     42
   ],
-  "columns": [
+  "statement": [
+    42
+  ],
+  "extract": [
     42
   ],
   "right": [

@@ -1,6 +1,6 @@
 import type { CsvMapping } from '@/lib/csv-processor'
 
-export type MappedField = 'dateCol' | 'amountCol' | 'descCol' | 'notesCol'
+export type MappedField = 'dateCol' | 'amountCol' | 'descCol' | 'notesCol' | 'debitCol' | 'creditCol'
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s_\-().]/g, '')
 
@@ -12,8 +12,18 @@ const FIELD_PATTERNS: Record<MappedField, { exact: RegExp[]; strong: RegExp[]; m
   },
   amountCol: {
     exact:    [/^amount$/],
-    strong:   [/^txnamount$/, /^transactionamount$/, /^debitcredit$/, /^credit$/, /^debit$/, /^amt$/],
+    strong:   [/^txnamount$/, /^transactionamount$/, /^debit\/?credit$/, /^credit$/, /^debit$/, /^amt$/],
     moderate: [/amount/, /amt/],
+  },
+  debitCol: {
+    exact:    [/^debit$/, /^debits$/, /^paidout$/, /^moneyout$/, /^withdrawal$/, /^withdrawals$/, /^soll$/],
+    strong:   [/^debitamount$/, /^amountout$/, /^outgoing$/, /^ausgang$/, /^belastung$/],
+    moderate: [/debit/, /withdraw/, /paidout/],
+  },
+  creditCol: {
+    exact:    [/^credit$/, /^credits$/, /^paidin$/, /^moneyin$/, /^deposit$/, /^deposits$/, /^haben$/],
+    strong:   [/^creditamount$/, /^amountin$/, /^incoming$/, /^eingang$/, /^gutschrift$/],
+    moderate: [/credit/, /deposit/, /paidin/],
   },
   descCol: {
     exact:    [/^description$/, /^narrative$/],
@@ -33,6 +43,7 @@ export function scoreCandidates(headers: string[], field: MappedField): { col: s
 
   for (const h of headers) {
     const n = norm(h)
+    if ((field === 'debitCol' || field === 'creditCol') && n.includes('debit') && n.includes('credit')) continue
     let score = 0
     if (exact.some((p) => p.test(n))) score = 1.0
     else if (strong.some((p) => p.test(n))) score = 0.9
@@ -52,7 +63,7 @@ export function guessMapping(headers: string[]): Partial<CsvMapping> {
     /^valuedate/, /^settlementdate/, /date/,
   ])
   const amountCol = find([
-    /^amount$/, /^txnamount/, /^transactionamount/, /^debitcredit$/,
+    /^amount$/, /^txnamount/, /^transactionamount/, /^debit\/?credit$/,
     /^credit$/, /^debit$/, /^amt$/, /amount/,
   ])
   const descCol = find([
@@ -64,6 +75,21 @@ export function guessMapping(headers: string[]): Partial<CsvMapping> {
     /^notes$/, /^note$/, /^memo$/, /^remarks$/, /^comment/, /^reference$/,
     /notes/, /memo/,
   ])
+
+  const debitCol = scoreCandidates(headers, 'debitCol')[0]?.col
+  const creditCol = scoreCandidates(headers, 'creditCol')[0]?.col
+  const hasPlainAmount = headers.some((h) => norm(h) === 'amount')
+  if (debitCol && creditCol && debitCol !== creditCol && !hasPlainAmount) {
+    return {
+      ...(dateCol ? { dateCol } : {}),
+      ...(descCol ? { descCol } : {}),
+      ...(notesCol ? { notesCol } : {}),
+      amountMode: 'split',
+      debitCol,
+      creditCol,
+      amountSign: 'normal',
+    }
+  }
 
   // No dateFormat here — it's auto-detected from the column's values
   // (detectDateFormat in date-format.ts), not guessed from the header name.

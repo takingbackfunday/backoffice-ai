@@ -128,6 +128,8 @@ Real bank exports are messy in three recurring ways, all handled:
 2. **Unquoted delimiters in memos** — an unquoted comma in a Zelle memo splits the description into extra fields and shifts Amount/Balance right. `repairRow()` re-joins them, but only when **exactly one plausible** repair exists; ambiguous rows are flagged, never guessed. Rows with a genuinely *empty* typed column (e.g. a beginning-balance marker) are deliberately not repaired.
 3. **Statement reconciliation** — `findStatementTotals()` reads declared "Total credits/debits" from the preamble and `processCSV` returns `reconciliation`; `/api/upload` surfaces it so the UI can warn when parsed totals don't match the statement's own summary.
 
+Split debit/credit imports use `amountMode: 'split'` with `debitCol` / `creditCol`. `resolveSplitAmount()` parses each side with `parseAmount`, then selects and signs the one non-zero side; it never adds or subtracts amounts, and two populated sides are rejected rather than guessed. Existing profiles without `amountMode` stay in single-column mode, and duplicate hashes use only the final signed amount.
+
 **Never use the native `Date` parser on CSV cell values in auto mode.** V8 scrapes month-name substrings out of prose (`new Date('junk-0')` → Jun 2000, `new Date('Row 0')` → Jan 2000). Auto mode uses `parseDateStructured` only; `parseDateFallback` (which includes native `Date`) is reserved for legacy unrecognised explicit format ids. With a detected format, a stray row in *another known* format is still rescued via the structured fallback (e.g. one ISO datetime among DD.MM.YYYY rows).
 
 Row numbers in parse errors are 1-based indexes within the **data rows** (after the header), not file line numbers. The error list caps at 20 entries and appends an overflow note.
@@ -233,10 +235,10 @@ The "Sum of Amount / Count / Average…" select lives in `src/components/pivot/p
 `PivotTable` uses `useLayoutEffect` to read actual `offsetWidth` from header `<th>` elements and stores them as `stickyOffsets[]` for the `left` CSS property. Do not add `minWidth` to sticky cells — it would break the auto-fit measurement.
 
 ### CSV column mapper — AI confidence goes inside `<option>` text
-The pattern throughout `column-mapper.tsx` is to embed confidence as a ` — X%` suffix directly in the option label (e.g. `Description — 95%`). There is no `ConfidenceBadge` component and no external "AI suggests" links. Follow this pattern for any new selects that receive LLM validation.
+The pattern throughout the upload mapper is to embed confidence and sample data directly in the option label (e.g. `Description — 95% · e.g. Coffee Shop`). There is no `ConfidenceBadge` component and no external "AI suggests" links. Follow this pattern for any new selects that receive LLM validation.
 
 ### Upload flow — two steps, Dialog on completion
-The progress bar has two steps: `upload` and `map & import`. When the import completes (`step === 'done'`), a shadcn `Dialog` modal appears with "Import complete!" copy. The OK button resets the store and navigates to `/transactions`. The onboarding path also POSTs `{ onboardingStep: 'done' }` to `/api/preferences` before navigating.
+The progress bar has two steps: `upload` and `map & import`. When the import completes (`step === 'done'`), a shadcn `Dialog` modal offers "Import another file" (reset and stay on `/upload`) and "Go to transactions". Both actions POST `{ onboardingStep: 'done' }` to `/api/preferences` when onboarding; the former removes the onboarding query parameter.
 
 ### Make-rule snap — merges payee and category across commits
 `pendingRuleSnapRef.current` in `transaction-table.tsx` merges each new `commitEdit` (category or payee) with the previous snap for the same row, using `resolvedValue ?? prevSnap?.value`. This ensures both fields are captured regardless of which order the user edits them.
@@ -252,6 +254,8 @@ Every AI/agent write path (`applyEditorAction` or any future editor dispatch) **
 4. Render a Confirm / Undo banner when `hasPendingChanges` is true (copy the JSX from any of the three existing editors — invoice, estimate, quote).
 
 Canonical implementations: `use-invoice-form.ts` (inline), `estimate-editor.tsx` and `quote-generator.tsx` (use the hook).
+
+Upload column mapping: `use-mapping-validation.ts` auto-applies ≥99% suggestions but marks them pending (highlight plus Undo/Keep banner, `ai-mapping-banner.tsx`); decision logic lives in `src/lib/ai-mapping-changes.ts`.
 
 ### API route pattern — `authedRoute` wrapper
 

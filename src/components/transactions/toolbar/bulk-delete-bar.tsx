@@ -38,7 +38,7 @@ export function BulkDeleteBar({
         href="/upload"
         className="rounded-md px-2.5 py-1.5 text-xs font-medium hover:bg-white hover:shadow-sm transition-all"
       >
-        ↑ Upload CSV
+        ↑ Import
       </a>
       {!bulkDeleting && (
         selectMode ? (

@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { processCSV } from '@/lib/csv-processor'
+import { isMappingComplete, processCSV } from '@/lib/csv-processor'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
 import type { CsvMapping } from '@/lib/csv-processor'
 import { categorizeRows } from '@/lib/rules/categorize-batch'
@@ -11,12 +11,15 @@ import { markSessionDuplicates } from '@/lib/session-dedup'
 
 const MappingSchema = z.object({
   dateCol: z.string(),
-  amountCol: z.string(),
   descCol: z.string(),
+  amountMode: z.enum(['single', 'split']).optional(),
+  amountCol: z.string().optional(),
+  debitCol: z.string().optional(),
+  creditCol: z.string().optional(),
   dateFormat: z.string().optional(),
   amountSign: z.enum(['normal', 'inverted']),
   notesCol: z.string().optional(),
-})
+}).refine(isMappingComplete, { message: 'Mapping is missing required amount column(s)' })
 
 const UploadFileSchema = z.object({
   filename: z.string().min(1),

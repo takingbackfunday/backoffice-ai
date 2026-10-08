@@ -13,7 +13,7 @@ interface UploadStore extends UploadState {
   removeFile: (filename: string) => void
   setProfileHit: (profile: ImportProfile | null) => void
   clearProfileHit: () => void
-  setLastImport: (r: { imported: number; skipped: number } | null) => void
+  setLastImport: (r: UploadState['lastImport']) => void
   setProfileStatus: (s: UploadState['profileStatus']) => void
   setStep: (step: UploadState['step']) => void
   setAccountId: (id: string) => void

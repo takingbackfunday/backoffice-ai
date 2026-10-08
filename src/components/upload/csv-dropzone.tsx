@@ -2,25 +2,27 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { useUploadStore } from '@/stores/upload-store'
+import { useUploadDropzoneStore, type PendingSheetPick } from '@/stores/upload-dropzone-store'
 import { headerSignature } from '@/lib/import-signature'
 import { analyzeCsv } from '@/lib/csv-structure'
-import type { ExcelSheetInfo, Workbook } from '@/lib/excel'
+import type { Workbook } from '@/lib/excel'
 import type { UploadFile } from '@/types'
-
-interface PendingSheetPick {
-  id: string
-  filename: string
-  workbook: Workbook
-  sheets: ExcelSheetInfo[]
-}
 
 export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
   const [dragging, setDragging] = useState(false)
-  const [processing, setProcessing] = useState<'pdf' | 'excel' | 'file' | null>(null)
   const busyRef = useRef(false)
-  const [errors, setErrors] = useState<{ filename: string; reason: string }[]>([])
-  const [pendingPicks, setPendingPicks] = useState<PendingSheetPick[]>([])
-  const [sheetChoice, setSheetChoice] = useState<Record<string, string>>({})
+  const processing = useUploadDropzoneStore((s) => s.processing)
+  const busyNotice = useUploadDropzoneStore((s) => s.busyNotice)
+  const errors = useUploadDropzoneStore((s) => s.errors)
+  const pendingPicks = useUploadDropzoneStore((s) => s.pendingPicks)
+  const sheetChoice = useUploadDropzoneStore((s) => s.sheetChoice)
+  const setProcessing = useUploadDropzoneStore((s) => s.setProcessing)
+  const setBusy = useUploadDropzoneStore((s) => s.setBusy)
+  const setBusyNotice = useUploadDropzoneStore((s) => s.setBusyNotice)
+  const setErrors = useUploadDropzoneStore((s) => s.setErrors)
+  const addPendingPicks = useUploadDropzoneStore((s) => s.addPendingPicks)
+  const removePendingPick = useUploadDropzoneStore((s) => s.removePendingPick)
+  const setSheetChoice = useUploadDropzoneStore((s) => s.setSheetChoice)
   const addFiles = useUploadStore((s) => s.addFiles)
   const setProfileHit = useUploadStore((s) => s.setProfileHit)
   const setProfileStatus = useUploadStore((s) => s.setProfileStatus)
@@ -126,14 +128,16 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
     } finally {
       setProfileStatus('done')
     }
-  }, [addFiles, setProfileHit, setProfileStatus])
+  }, [addFiles, setProfileHit, setProfileStatus, setErrors])
 
   const handleFiles = useCallback(async (fileList: FileList | File[]) => {
     const allFiles = Array.from(fileList)
     if (allFiles.length === 0) return
 
-    if (busyRef.current) return
+    if (busyRef.current || useUploadDropzoneStore.getState().busy) { setBusyNotice(true); return }
     busyRef.current = true
+    setBusy(true)
+    setBusyNotice(false)
     setErrors([])
     const names = allFiles.map((f) => f.name.toLowerCase())
     setProcessing(
@@ -185,49 +189,43 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
       })
 
       if (newPicks.length > 0) {
-        setPendingPicks((prev) => [
-          ...prev.filter((p) => !newPicks.some((n) => n.filename === p.filename)),
-          ...newPicks,
-        ])
-        setSheetChoice((prev) => {
-          const next = { ...prev }
-          for (const pick of newPicks) {
-            next[pick.id] = pick.sheets[0].name
-          }
-          return next
-        })
+        addPendingPicks(newPicks)
       }
 
       await ingest(parsed, parseErrors)
     } finally {
       busyRef.current = false
+      setBusy(false)
       setProcessing(null)
+      setBusyNotice(false)
     }
-  }, [parseCsv, parsePdf, excelSheetToUploadFile, ingest])
+  }, [parseCsv, parsePdf, excelSheetToUploadFile, ingest, setBusy, setBusyNotice, setErrors, setProcessing, addPendingPicks])
 
   const confirmSheetPick = useCallback(async (pick: PendingSheetPick) => {
-    if (busyRef.current) return
+    if (busyRef.current || useUploadDropzoneStore.getState().busy) return
     busyRef.current = true
+    setBusy(true)
     setProcessing('excel')
     const sheetName = sheetChoice[pick.id] ?? pick.sheets[0].name
-    setPendingPicks((prev) => prev.filter((p) => p !== pick))
+    removePendingPick(pick.id)
     try {
       const file = await excelSheetToUploadFile(pick.filename, pick.workbook, sheetName, true)
       await ingest([file], [])
     } catch (err) {
-      setErrors((prev) => [
-        ...prev,
+      setErrors([
+        ...useUploadDropzoneStore.getState().errors,
         { filename: pick.filename, reason: err instanceof Error ? err.message : 'Failed to parse sheet.' },
       ])
     } finally {
       busyRef.current = false
+      setBusy(false)
       setProcessing(null)
     }
-  }, [sheetChoice, excelSheetToUploadFile, ingest])
+  }, [sheetChoice, excelSheetToUploadFile, ingest, removePendingPick, setBusy, setErrors, setProcessing])
 
   const dismissSheetPick = useCallback((pick: PendingSheetPick) => {
-    setPendingPicks((prev) => prev.filter((p) => p !== pick))
-  }, [])
+    removePendingPick(pick.id)
+  }, [removePendingPick])
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -239,7 +237,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
   )
 
   return (
-    <div className="max-w-lg">
+    <div className={compact ? 'w-full max-w-none' : 'max-w-lg'}>
       <label
         htmlFor="csv-file-input"
         className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed ${compact ? 'p-4' : 'p-12'} transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${
@@ -264,7 +262,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
         ) : processing === 'file' ? (
           <p className="font-medium text-sm animate-pulse">Reading file…</p>
         ) : compact ? (
-          <p className="text-sm">Add more files with the same columns — drop or click</p>
+          <p className="text-sm">+ Add files with the same columns</p>
         ) : (
           <>
             <p className="font-medium text-sm">Drop your CSV, Excel or PDF files here</p>
@@ -284,6 +282,12 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
         />
       </label>
 
+      {busyNotice && (
+        <p className="mt-2 text-xs text-amber-700" role="status">
+          Still reading the previous file — try again in a moment.
+        </p>
+      )}
+
       {pendingPicks.length > 0 && (
         <div className="mt-3 space-y-2" data-testid="sheet-pickers">
           {pendingPicks.map((pick) => (
@@ -302,9 +306,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
                 <select
                   className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
                   value={sheetChoice[pick.id] ?? pick.sheets[0].name}
-                  onChange={(e) =>
-                    setSheetChoice((prev) => ({ ...prev, [pick.id]: e.target.value }))
-                  }
+                  onChange={(e) => setSheetChoice(pick.id, e.target.value)}
                   aria-label={`Sheet to import from ${pick.filename}`}
                 >
                   {pick.sheets.map((s) => (

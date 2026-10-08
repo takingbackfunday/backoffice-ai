@@ -346,3 +346,74 @@ describe('processCSV — repeated transactions', () => {
     expect(first).toEqual(second)
   })
 })
+
+describe('processCSV — split debit/credit columns', () => {
+  const splitMapping: CsvMapping = {
+    dateCol: 'Date',
+    descCol: 'Description',
+    amountMode: 'split',
+    debitCol: 'Paid out',
+    creditCol: 'Paid in',
+    dateFormat: 'DD/MM/YYYY',
+    amountSign: 'normal',
+  }
+  const csv = [
+    'Date,Description,Paid out,Paid in,Balance',
+    '01/03/2026,Tesco,45.20,,954.80',
+    '02/03/2026,Salary,,2000.00,2954.80',
+    '03/03/2026,Refund,0.00,12.00,2966.80',
+  ].join('\n')
+
+  it('parses money out as negative and money in as positive', () => {
+    const result = processCSV(csv, splitMapping, 'acct-split')
+    expect(result.rows.map((row) => row.amount)).toEqual([-45.2, 2000, 12])
+    expect(result.skippedCount).toBe(0)
+  })
+
+  it('reports both empty and both non-zero cells instead of guessing', () => {
+    const input = [
+      'Date,Description,Paid out,Paid in,Balance',
+      '01/03/2026,Empty,,,0',
+      '02/03/2026,Ambiguous,10,5,15',
+    ].join('\n')
+    const result = processCSV(input, splitMapping, 'acct-split')
+    expect(result.rows).toHaveLength(0)
+    expect(result.errors.some((e) => e.includes('both "Paid out" and "Paid in" are empty'))).toBe(true)
+    expect(result.errors.some((e) => e.includes('expected only one'))).toBe(true)
+  })
+
+  it('rejects a non-numeric value in either split column', () => {
+    const result = processCSV('Date,Description,Paid out,Paid in,Balance\n01/03/2026,Invalid,abc,,100', splitMapping, 'acct-split')
+    expect(result.rows).toHaveLength(0)
+    expect(result.errors.some((error) => error.includes('"abc" in "Paid out" is not a valid number'))).toBe(true)
+  })
+
+  it('ignores amountSign in split mode', () => {
+    const result = processCSV(csv, { ...splitMapping, amountSign: 'inverted' }, 'acct-split')
+    expect(result.rows.map((row) => row.amount)).toEqual([-45.2, 2000, 12])
+  })
+
+  it('produces the same duplicate hash as a single signed amount column', () => {
+    const split = processCSV(csv, splitMapping, 'acct-split').rows[0]
+    const single = processCSV('Date,Description,Amount\n01/03/2026,Tesco,-45.20', {
+      dateCol: 'Date', amountCol: 'Amount', descCol: 'Description', dateFormat: 'DD/MM/YYYY', amountSign: 'normal',
+    }, 'acct-split').rows[0]
+    expect(split.duplicateHash).toBe(single.duplicateHash)
+  })
+
+  it('reports missing split columns', () => {
+    const result = processCSV(csv, { ...splitMapping, debitCol: 'Nope' }, 'acct-split')
+    expect(result.errors[0]).toMatch(/^Column\(s\) not found/)
+  })
+
+  it('repairs unquoted description delimiters and reconciles split statement totals', () => {
+    const result = processCSV(fixture('split-statement-preamble.csv'), {
+      ...splitMapping,
+      debitCol: 'Debit',
+      creditCol: 'Credit',
+    }, 'acct-split')
+    expect(result.rows.map((row) => row.amount)).toEqual([2000, -300, -155, -100])
+    expect(result.rows[2].description).toContain('clean air handler')
+    expect(result.reconciliation?.matched).toBe(true)
+  })
+})

@@ -1,18 +1,40 @@
 import { buildDuplicateHash } from './dedup'
 import { detectDateFormat, parseDateWithFormat, parseDateFallback, parseDateStructured, isKnownDateFormat } from './date-format'
 import { analyzeCsv, repairRow, findStatementTotals, type RepairContext } from './csv-structure'
-import { parseAmount } from './amount'
+import { parseAmount, resolveSplitAmount } from './amount'
 
 export { parseAmount } from './amount'
 
+export type AmountMode = 'single' | 'split'
+
 export interface CsvMapping {
   dateCol: string
-  amountCol: string
   descCol: string
+  /** Absent = 'single' for compatibility with existing profiles. */
+  amountMode?: AmountMode
+  /** Required in single mode. */
+  amountCol?: string
+  /** Required in split mode: money out. */
+  debitCol?: string
+  /** Required in split mode: money in. */
+  creditCol?: string
   /** Optional — when absent, the format is auto-detected from the column's values (see date-format.ts). */
   dateFormat?: string
   amountSign: 'normal' | 'inverted'
   notesCol?: string
+}
+
+export function isSplitMapping(mapping: Partial<CsvMapping>): boolean {
+  return mapping.amountMode === 'split'
+}
+
+/** True when every column required for the selected amount format is mapped. */
+export function isMappingComplete(mapping: Partial<CsvMapping>): boolean {
+  if (!mapping.dateCol || !mapping.descCol) return false
+  if (isSplitMapping(mapping)) {
+    return !!mapping.debitCol && !!mapping.creditCol && mapping.debitCol !== mapping.creditCol
+  }
+  return !!mapping.amountCol
 }
 
 export interface NormalizedRow {
@@ -98,15 +120,23 @@ export function processCSV(
   // Validate that mapped columns actually exist in the CSV
   // Duplicate header names resolve to the first occurrence.
   const colIndex = (name: string | undefined) => (name ? availableColumns.indexOf(name) : -1)
+  const split = isSplitMapping(mapping)
   const dateIdx = colIndex(mapping.dateCol)
-  const amountIdx = colIndex(mapping.amountCol)
+  const amountIdx = split ? -1 : colIndex(mapping.amountCol)
+  const debitIdx = split ? colIndex(mapping.debitCol) : -1
+  const creditIdx = split ? colIndex(mapping.creditCol) : -1
   const descIdx = colIndex(mapping.descCol)
   const notesIdx = mapping.notesCol ? colIndex(mapping.notesCol) : -1
 
   const missingCols: string[] = []
-  if (dateIdx === -1) missingCols.push(mapping.dateCol)
-  if (amountIdx === -1) missingCols.push(mapping.amountCol)
-  if (descIdx === -1) missingCols.push(mapping.descCol)
+  if (dateIdx === -1) missingCols.push(mapping.dateCol || '(date)')
+  if (split) {
+    if (debitIdx === -1) missingCols.push(mapping.debitCol || '(money out)')
+    if (creditIdx === -1) missingCols.push(mapping.creditCol || '(money in)')
+  } else if (amountIdx === -1) {
+    missingCols.push(mapping.amountCol || '(amount)')
+  }
+  if (descIdx === -1) missingCols.push(mapping.descCol || '(description)')
   if (missingCols.length > 0) {
     return {
       rows: [],
@@ -123,7 +153,8 @@ export function processCSV(
   const repairCtx: RepairContext = {
     headerCount,
     dateIdx,
-    amountIdx,
+    amountIdx: split ? debitIdx : amountIdx,
+    ...(split ? { creditIdx } : {}),
     descIdx,
     notesIdx: notesIdx >= 0 ? notesIdx : undefined,
     delimiter: structure.delimiter,
@@ -147,7 +178,7 @@ export function processCSV(
     if (!rawDate?.trim()) {
       return { ok: false, error: `Row ${rowNum}: date column "${mapping.dateCol}" is empty` }
     }
-    if (!rawAmount?.trim()) {
+    if (!split && !rawAmount?.trim()) {
       return { ok: false, error: `Row ${rowNum}: amount column "${mapping.amountCol}" is empty` }
     }
 
@@ -161,9 +192,26 @@ export function processCSV(
       }
     }
 
-    const amount = parseAmount(rawAmount, mapping.amountSign === 'inverted')
-    if (amount === null) {
-      return { ok: false, error: `Row ${rowNum}: "${rawAmount}" is not a valid number — is the amount column correct?` }
+    let amount: number
+    if (split) {
+      const result = resolveSplitAmount(fields[debitIdx], fields[creditIdx])
+      if (!result.ok) {
+        const debitName = mapping.debitCol!
+        const creditName = mapping.creditCol!
+        const error = result.reason === 'empty'
+          ? `Row ${rowNum}: both "${debitName}" and "${creditName}" are empty`
+          : result.reason === 'both'
+            ? `Row ${rowNum}: both "${debitName}" (${result.debit}) and "${creditName}" (${result.credit}) have values — expected only one`
+            : `Row ${rowNum}: "${result.raw}" in "${result.side === 'debit' ? debitName : creditName}" is not a valid number — is the column correct?`
+        return { ok: false, error }
+      }
+      amount = result.amount
+    } else {
+      const parsedAmount = parseAmount(rawAmount, mapping.amountSign === 'inverted')
+      if (parsedAmount === null) {
+        return { ok: false, error: `Row ${rowNum}: "${rawAmount}" is not a valid number — is the amount column correct?` }
+      }
+      amount = parsedAmount
     }
 
     const rawData: Record<string, string> = {}
@@ -202,7 +250,10 @@ export function processCSV(
     if (!result.ok) {
       // The row may be structurally shifted (unquoted delimiter in a memo,
       // split thousands separator…). Repair only when unambiguous.
-      const repaired = repairRow(fields, repairCtx)
+      const splitAmount = split ? resolveSplitAmount(fields[debitIdx], fields[creditIdx]) : null
+      const hasTwoSplitAmounts = splitAmount !== null && !splitAmount.ok && splitAmount.reason === 'both'
+      const repairIsUnsafe = split && (fields.length <= headerCount || hasTwoSplitAmounts)
+      const repaired = repairIsUnsafe ? null : repairRow(fields, repairCtx)
       if (repaired) result = tryRow(repaired, rowNum)
     }
 
@@ -245,7 +296,7 @@ export function processCSV(
   let reconciliation: Reconciliation | undefined
   const totals = findStatementTotals(structure.preamble)
   if (totals.credits != null || totals.debits != null) {
-    const sign = mapping.amountSign === 'inverted' ? -1 : 1
+    const sign = !split && mapping.amountSign === 'inverted' ? -1 : 1
     const actualCredits = rows.reduce((s, r) => (r.amount * sign > 0 ? s + r.amount * sign : s), 0)
     const actualDebits = rows.reduce((s, r) => (r.amount * sign < 0 ? s + r.amount * sign : s), 0)
     const creditsMatch =

@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { CsvDropzone } from '@/components/upload/csv-dropzone'
 import { ColumnMapper } from '@/components/upload/column-mapper'
 import { useUploadStore } from '@/stores/upload-store'
+import { resetUploadDropzone } from '@/stores/upload-dropzone-store'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,8 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   'rules-agent': 'Categorization',
 }
 
+const NO_JOB_IDS: string[] = []
+
 function formatJobStatus(job: BackgroundJob): string {
   if (job.status === 'DONE') return 'Complete'
   if (job.status === 'FAILED') return 'Failed'
@@ -41,12 +44,15 @@ interface Account {
   institution: { name: string }
 }
 
-const STEPS = ['upload', 'map & import'] as const
+const STEPS = [
+  { key: 'upload', label: 'Upload' },
+  { key: 'map & import', label: 'Map & import' },
+] as const
 
-type DisplayStep = typeof STEPS[number]
+type DisplayStep = typeof STEPS[number]['key']
 
 function toDisplayStep(step: string): DisplayStep {
-  if (step === 'map-columns' || step === 'preview') return 'map & import'
+  if (step === 'map-columns' || step === 'preview' || step === 'done') return 'map & import'
   return step as DisplayStep
 }
 
@@ -55,12 +61,12 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
   const step = useUploadStore((s) => s.step)
   const lastImport = useUploadStore((s) => s.lastImport)
   const reset = useUploadStore((s) => s.reset)
-  const files = useUploadStore((s) => s.files)
-  const removeFile = useUploadStore((s) => s.removeFile)
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
   const [loadingAccounts, setLoadingAccounts] = useState(!initialAccounts)
   const [recentJobs, setRecentJobs] = useState<BackgroundJob[]>([])
-  const pollRef = useRef<NodeJS.Timeout | null>(null)
+  const [jobsLoaded, setJobsLoaded] = useState(false)
+  const [tasksTimedOut, setTasksTimedOut] = useState(false)
+  const jobIds = lastImport?.jobIds ?? NO_JOB_IDS
 
   useEffect(() => {
     if (initialAccounts) return
@@ -70,44 +76,61 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
       .finally(() => setLoadingAccounts(false))
   }, [initialAccounts])
 
-  // Fetch jobs when import completes and poll until all are done
+  // Poll only jobs created by this import, and never longer than two minutes.
   useEffect(() => {
-    if (step !== 'done') return
-
+    if (step !== 'done' || jobIds.length === 0) {
+      setRecentJobs([])
+      setJobsLoaded(false)
+      setTasksTimedOut(false)
+      return
+    }
     let cancelled = false
+    let polls = 0
+    let fetching = false
+    let timer: ReturnType<typeof setInterval> | null = null
 
     const loadJobs = async () => {
+      if (fetching) return
+      fetching = true
       try {
-        const res = await fetch('/api/jobs/recent?limit=5')
+        const res = await fetch(`/api/jobs/recent?ids=${encodeURIComponent(jobIds.join(','))}`)
         const json = await res.json()
-        if (!cancelled) setRecentJobs(json.data ?? [])
+        if (!cancelled) {
+          const jobs: BackgroundJob[] = json.data ?? []
+          setRecentJobs(jobs)
+          setJobsLoaded(true)
+          if (jobs.length === jobIds.length && jobs.every((job) => job.status === 'DONE' || job.status === 'FAILED')) {
+            if (timer) clearInterval(timer)
+            timer = null
+          }
+        }
       } catch {
-        // Silently ignore — job status is non-critical
+        if (!cancelled) setJobsLoaded(true)
+      } finally {
+        fetching = false
       }
     }
 
+    setRecentJobs([])
+    setJobsLoaded(false)
+    setTasksTimedOut(false)
     loadJobs()
-
-    // Poll every 2s until all jobs are terminal (DONE or FAILED)
-    pollRef.current = setInterval(() => {
+    timer = setInterval(() => {
+      polls++
+      if (polls >= 60) {
+        if (timer) clearInterval(timer)
+        timer = null
+        setTasksTimedOut(true)
+        return
+      }
       loadJobs()
     }, 2000)
 
     return () => {
       cancelled = true
-      if (pollRef.current) clearInterval(pollRef.current)
+      if (timer) clearInterval(timer)
     }
-  }, [step])
-
-  // Stop polling when all jobs are terminal
-  useEffect(() => {
-    if (step !== 'done') return
-    const allTerminal = recentJobs.length > 0 && recentJobs.every(j => j.status === 'DONE' || j.status === 'FAILED')
-    if (allTerminal && pollRef.current) {
-      clearInterval(pollRef.current)
-      pollRef.current = null
-    }
-  }, [recentJobs, step])
+  }, [step, jobIds])
 
   async function handleSkipOnboarding() {
     await fetch('/api/preferences', {
@@ -118,7 +141,7 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
     router.push('/transactions')
   }
 
-  async function handleImportDone() {
+  async function finishOnboardingIfNeeded() {
     if (onboarding) {
       await fetch('/api/preferences', {
         method: 'POST',
@@ -126,6 +149,18 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
         body: JSON.stringify({ onboardingStep: 'done' }),
       })
     }
+  }
+
+  async function handleImportAnother() {
+    await finishOnboardingIfNeeded()
+    resetUploadDropzone()
+    reset()
+    if (onboarding) router.replace('/upload')
+  }
+
+  async function handleGoToTransactions() {
+    await finishOnboardingIfNeeded()
+    resetUploadDropzone()
     reset()
     router.push('/transactions')
   }
@@ -136,7 +171,7 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex flex-1 flex-col">
-        <Header title="Import Transactions" />
+        <Header title="Import transactions" />
         <main className="flex-1 p-6 flex flex-col" role="main">
 
           {onboarding && (
@@ -149,48 +184,25 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
 
           {/* Progress indicator */}
           <nav aria-label="Upload progress" className="flex gap-6 mb-8 text-sm">
-            {STEPS.map((s, i) => (
-              <span key={s} aria-current={displayStep === s ? 'step' : undefined} className={`flex items-center gap-1.5 ${displayStep === s ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-xs ${displayStep === s ? 'border-foreground bg-foreground text-background' : ''}`}>
-                  {i + 1}
+            {STEPS.map((item, i) => (
+              <span key={item.key} aria-current={displayStep === item.key ? 'step' : undefined} className={`flex items-center gap-1.5 ${displayStep === item.key ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-xs ${displayStep === item.key ? 'border-foreground bg-foreground text-background' : ''}`}>
+                  {i < STEPS.findIndex((step) => step.key === displayStep) ? '✓' : i + 1}
                 </span>
-                {s}
+                {item.label}
               </span>
             ))}
           </nav>
 
-          {step !== 'done' && (
-            <div className={step === 'upload' ? '' : 'mb-4'}>
-              <CsvDropzone compact={step !== 'upload'} />
-            </div>
-          )}
+          {step === 'upload' && <CsvDropzone />}
 
           {/* Step 2: Select account + Map columns + live preview + import */}
           {(step === 'map-columns' || step === 'preview') && (
-            <>
-              {files.length > 1 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {files.map((f) => (
-                    <span key={f.filename} className="inline-flex items-center gap-1.5 rounded-md border bg-muted/50 px-2.5 py-1 text-xs">
-                      {f.filename}
-                      <button
-                        type="button"
-                        onClick={() => removeFile(f.filename)}
-                        className="text-muted-foreground hover:text-red-600"
-                        aria-label={`Remove ${f.filename}`}
-                      >
-                        <span aria-hidden="true">✕</span>
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <ColumnMapper
-                accounts={accounts}
-                loadingAccounts={loadingAccounts}
-                onAccountCreated={(a) => setAccounts((prev) => [...prev, a])}
-              />
-            </>
+            <ColumnMapper
+              accounts={accounts}
+              loadingAccounts={loadingAccounts}
+              onAccountCreated={(a) => setAccounts((prev) => [...prev, a])}
+            />
           )}
 
         </main>
@@ -203,15 +215,16 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
             <DialogDescription>
               {lastImport
                 ? `Imported ${lastImport.imported} transaction${lastImport.imported === 1 ? '' : 's'}` +
-                  (lastImport.skipped > 0 ? ` · ${lastImport.skipped} skipped as duplicates` : '') + '.'
+                  (lastImport.skipped > 0 ? ` · ${lastImport.skipped} skipped as duplicates` : '') +
+                  (lastImport.unreadable > 0 ? ` · ${lastImport.unreadable} rows couldn't be read` : '') + '.'
                 : 'Your transactions have been imported.'}
             </DialogDescription>
           </DialogHeader>
 
-          {/* Background job status */}
-          {recentJobs.length > 0 && (
+          {jobIds.length > 0 && (
             <div className="mt-4 space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Background tasks</p>
+              {!jobsLoaded && <p className="text-xs text-muted-foreground">Loading task status…</p>}
               {recentJobs.map((job) => (
                 <div key={job.id} className="flex items-center justify-between text-sm">
                   <span>{JOB_TYPE_LABELS[job.type] ?? job.type}</span>
@@ -224,15 +237,15 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
                   </span>
                 </div>
               ))}
+              {tasksTimedOut && (
+                <p className="text-xs text-muted-foreground">Still running in the background — you can close this.</p>
+              )}
             </div>
           )}
 
-          {recentJobs.length === 0 && (
-            <div className="mt-4 text-xs text-muted-foreground">Loading task status...</div>
-          )}
-
           <DialogFooter>
-            <Button onClick={handleImportDone}>OK</Button>
+            <Button variant="outline" onClick={handleImportAnother}>Import another file</Button>
+            <Button onClick={handleGoToTransactions}>Go to transactions</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

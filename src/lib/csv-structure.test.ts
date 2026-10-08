@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { analyzeCsv, sniffDelimiter, repairRow, findStatementTotals, type RepairContext } from '@/lib/csv-structure'
+import { resolveSplitAmount } from '@/lib/amount'
 
 const fixture = (name: string) => readFileSync(join(__dirname, '__fixtures__', name), 'utf8')
 
@@ -128,6 +129,39 @@ describe('repairRow', () => {
     const repaired = repairRow(fields, ctx)
     expect(repaired).toHaveLength(6)
     expect(repaired![2]).toBe('-4.50')
+  })
+
+  it('repairs an unquoted description comma in split debit/credit mode', () => {
+    const splitCtx: RepairContext = {
+      headerCount: 5,
+      dateIdx: 0,
+      descIdx: 1,
+      amountIdx: 2,
+      creditIdx: 3,
+      delimiter: ',',
+      isDate: (v) => /^\d{2}\/\d{2}\/\d{4}$/.test(v.trim()),
+    }
+    const repaired = repairRow(
+      ['03/03/2026', 'Zelle to Bob for drain', ' air handler', '155.00', '', '2545.00'],
+      splitCtx,
+    )
+    expect(repaired).not.toBeNull()
+    expect(repaired?.[1]).toBe('Zelle to Bob for drain, air handler')
+    expect(repaired?.[2]).toBe('155.00')
+    expect(resolveSplitAmount(repaired?.[2], repaired?.[3])).toEqual({ ok: true, amount: -155 })
+  })
+
+  it('does not guess when multiple split-row repairs are plausible', () => {
+    const splitCtx: RepairContext = {
+      headerCount: 5,
+      dateIdx: 0,
+      descIdx: 1,
+      amountIdx: 2,
+      creditIdx: 3,
+      delimiter: ',',
+      isDate: (v) => /^\d{2}\/\d{2}\/\d{4}$/.test(v.trim()),
+    }
+    expect(repairRow(['03/03/2026', 'Memo', '10', '0', '0', '100'], splitCtx)).toBeNull()
   })
 })
 

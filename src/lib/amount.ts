@@ -64,3 +64,31 @@ export function parseAmount(raw: string, inverted: boolean): number | null {
   const signed = negative ? -n : n
   return inverted ? -signed : signed
 }
+
+export type SplitAmountResult =
+  | { ok: true; amount: number }
+  | { ok: false; reason: 'empty' }
+  | { ok: false; reason: 'both'; debit: string; credit: string }
+  | { ok: false; reason: 'invalid'; side: 'debit' | 'credit'; raw: string }
+
+/**
+ * Resolve separate money-out and money-in cells without combining amounts.
+ * The column determines the sign, regardless of the value's own sign.
+ */
+export function resolveSplitAmount(rawDebit: string | undefined, rawCredit: string | undefined): SplitAmountResult {
+  const debit = rawDebit?.trim() ?? ''
+  const credit = rawCredit?.trim() ?? ''
+  if (!debit && !credit) return { ok: false, reason: 'empty' }
+
+  const debitValue = debit ? parseAmount(debit, false) : null
+  if (debit && debitValue === null) return { ok: false, reason: 'invalid', side: 'debit', raw: debit }
+  const creditValue = credit ? parseAmount(credit, false) : null
+  if (credit && creditValue === null) return { ok: false, reason: 'invalid', side: 'credit', raw: credit }
+
+  const hasDebit = debitValue !== null && debitValue !== 0
+  const hasCredit = creditValue !== null && creditValue !== 0
+  if (hasDebit && hasCredit) return { ok: false, reason: 'both', debit, credit }
+  if (hasDebit) return { ok: true, amount: -Math.abs(debitValue) }
+  if (hasCredit) return { ok: true, amount: Math.abs(creditValue) }
+  return { ok: true, amount: 0 }
+}

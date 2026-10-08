@@ -161,3 +161,21 @@ export async function getRecentJobs(userId: string, limit = 10) {
     },
   })
 }
+
+/** Get only the jobs created by one operation; user scoping is mandatory. */
+export async function getJobsByIds(userId: string, ids: string[]) {
+  if (ids.length === 0) return []
+  return prisma.backgroundJob.findMany({
+    where: { userId, id: { in: ids } },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      attempts: true,
+      lastError: true,
+      createdAt: true,
+      completedAt: true,
+    },
+  })
+}

@@ -193,22 +193,25 @@ export async function POST(request: Request) {
       }
     }
 
-    // Enqueue background jobs once per request
+    // Enqueue jobs created by this import so the completion dialog can poll only these.
+    const jobIds: string[] = []
     if (allImportedIds.length > 0) {
-      await Promise.allSettled([
+      const results = await Promise.allSettled([
         enqueueJob('invoice-matching', userId, { userId, importedIds: allImportedIds }),
         enqueueJob('receipt-matching', userId, { userId, importedIds: allImportedIds }),
+        enqueueJob('rules-agent', userId, { userId }),
       ])
-
-      enqueueJob('rules-agent', userId, { userId }).catch((err) => {
-        logger.error('import', 'failed to enqueue rules agent', { message: err instanceof Error ? err.message : String(err) })
-      })
+      for (const result of results) {
+        if (result.status === 'fulfilled') jobIds.push(result.value)
+        else logger.error('import', 'failed to enqueue job', { message: result.reason instanceof Error ? result.reason.message : String(result.reason) })
+      }
     }
 
     return ok({
       imported: totalImported,
       skipped: totalSkipped,
       batchIds,
+      jobIds,
     })
   } catch (err) {
     logger.error('import', 'POST error', { message: err instanceof Error ? err.message : String(err) })
