@@ -240,7 +240,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
     <div className={compact ? 'w-full max-w-none' : 'max-w-lg'}>
       <label
         htmlFor="csv-file-input"
-        className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed ${compact ? 'p-4' : 'p-12'} transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${
+        className={`flex items-center justify-center border-dashed transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${compact ? 'min-h-8 flex-row rounded-md border px-2 py-1' : 'flex-col rounded-xl border-2 p-12'} ${
           processing ? 'cursor-wait opacity-80' : 'cursor-pointer'
         } ${
           dragging ? 'border-foreground bg-muted' : 'border-border hover:border-foreground/50'
@@ -262,7 +262,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
         ) : processing === 'file' ? (
           <p className="font-medium text-sm animate-pulse">Reading file…</p>
         ) : compact ? (
-          <p className="text-sm">+ Add more statements from this bank</p>
+          <p className="text-xs font-medium">+ Add more statements from this bank</p>
         ) : (
           <>
             <p className="font-medium text-sm">Drop your CSV, Excel or PDF files here</p>

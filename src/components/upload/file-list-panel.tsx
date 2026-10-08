@@ -8,7 +8,7 @@ export function FileListPanel({ importing }: { importing: boolean }) {
   const removeFile = useUploadStore((state) => state.removeFile)
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       <div className="space-y-1">
         {files.map((file) => (
           <div key={file.filename} className="flex items-center justify-between gap-2 text-xs">
