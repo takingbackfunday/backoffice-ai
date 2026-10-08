@@ -178,9 +178,9 @@ export function ColumnMapper({
   }
 
   return (
-    <div className="flex gap-6 h-full min-h-0" data-testid="column-mapper-form">
+    <div className="flex gap-6" data-testid="column-mapper-form">
       {/* Left: account selector + mapping controls */}
-      <div className="upload-mapper-rail w-72 max-h-[calc(100vh-10rem)] flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
+      <div className="w-72 flex-shrink-0 flex flex-col gap-4">
         <AccountRail
           accounts={accounts}
           loadingAccounts={loadingAccounts}

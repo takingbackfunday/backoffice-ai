@@ -10,9 +10,9 @@ export function PreviewTable({
   loading: boolean
 }) {
   return (
-    <div className="overflow-auto rounded-lg border flex-1">
+    <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-xs" aria-label="Transaction preview" data-testid="preview-table">
-        <thead className="bg-muted sticky top-0 text-xs uppercase tracking-wide">
+        <thead className="bg-muted text-xs uppercase tracking-wide">
           <tr>
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Date</th>
             <th className="px-3 py-2 text-left font-medium">Description</th>
