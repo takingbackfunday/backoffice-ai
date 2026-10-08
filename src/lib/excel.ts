@@ -9,9 +9,18 @@ export interface ExcelSheetInfo {
   rowCount: number
 }
 
+export type Workbook = XLSX.WorkBook
+
+export function readWorkbook(data: ArrayBuffer | Uint8Array): Workbook {
+  return XLSX.read(data, { type: 'array', cellDates: true, dateNF: 'yyyy-mm-dd' })
+}
+
 /** Parse a workbook and list its non-empty sheets. */
 export function listExcelSheets(data: ArrayBuffer | Uint8Array): ExcelSheetInfo[] {
-  const wb = XLSX.read(data, { type: 'array' })
+  return listWorkbookSheets(readWorkbook(data))
+}
+
+export function listWorkbookSheets(wb: Workbook): ExcelSheetInfo[] {
   return wb.SheetNames
     .map((name) => {
       const ws = wb.Sheets[name]
@@ -25,15 +34,24 @@ export function listExcelSheets(data: ArrayBuffer | Uint8Array): ExcelSheetInfo[
 
 /**
  * Convert a single sheet to CSV text.
- * Uses the cells' formatted display text (dates render as "1/15/26", amounts
- * keep their displayed separators) rather than raw serial numbers, so the
- * existing date/amount detection sees values the way the user sees them.
+ * Exports numbers at full stored precision and dates as yyyy-mm-dd.
  */
 export function excelSheetToCsv(data: ArrayBuffer | Uint8Array, sheetName: string): string {
-  const wb = XLSX.read(data, { type: 'array' })
+  return workbookSheetToCsv(readWorkbook(data), sheetName)
+}
+
+export function workbookSheetToCsv(wb: Workbook, sheetName: string): string {
   const ws = wb.Sheets[sheetName]
   if (!ws) throw new Error(`Sheet "${sheetName}" not found in workbook.`)
-  const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false })
+  for (const address of Object.keys(ws)) {
+    if (address.startsWith('!')) continue
+    const cell = ws[address]
+    if (cell?.t === 'd') {
+      cell.z = 'yyyy-mm-dd'
+      delete cell.w
+    }
+  }
+  const csv = XLSX.utils.sheet_to_csv(ws, { blankrows: false, rawNumbers: true, dateNF: 'yyyy-mm-dd' })
   if (!csv.trim()) throw new Error(`Sheet "${sheetName}" is empty.`)
   return csv
 }

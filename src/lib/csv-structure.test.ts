@@ -18,6 +18,20 @@ describe('sniffDelimiter', () => {
     expect(sniffDelimiter('Date\tDescription\tAmount\n1/2/2026\tA\t1.00')).toBe('\t')
   })
 
+  it('detects pipe', () => {
+    expect(sniffDelimiter('Date|Description|Amount\n1/2/2026|A|1.00')).toBe('|')
+  })
+
+  it('prefers consistent semicolon columns over decimal commas', () => {
+    const text = [
+      'Date;Description;One;Two;Three',
+      '2026-01-01;A;0;12,50;0',
+      '2026-01-02;B;12,50;0;3,25',
+      '2026-01-03;C;0;1,00;5,00',
+    ].join('\n')
+    expect(sniffDelimiter(text)).toBe(';')
+  })
+
   it('is not fooled by delimiter-free preamble lines or semicolons in memo text', () => {
     const text = [
       'Statement for account 12345',

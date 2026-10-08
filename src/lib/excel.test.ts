@@ -50,7 +50,7 @@ describe('excelSheetToCsv', () => {
     expect(csv).toContain('3000')
   })
 
-  it('renders date cells as formatted text, not serial numbers', () => {
+  it('renders date cells as ISO dates, not serial numbers', () => {
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.aoa_to_sheet([
       ['Date', 'Amount'],
@@ -63,7 +63,31 @@ describe('excelSheetToCsv', () => {
     const csv = excelSheetToCsv(buf, 'Sheet1')
     // Excel serial for 2026-01-15 is ~46037 — must not leak through
     expect(csv).not.toMatch(/46\d{3}/)
-    expect(csv).toMatch(/1\/15\/2026|2026-01-15|15\/1\/2026/)
+    expect(csv).toContain('2026-01-15')
+  })
+
+  it('exports the stored numeric value instead of rounded display text', () => {
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet([['Amount'], [1234.56]])
+    ws['A2'].z = '#,##0'
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+    const buf = new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }))
+
+    const csv = excelSheetToCsv(buf, 'Sheet1')
+    expect(csv).toContain('1234.56')
+    expect(csv).not.toContain('1,235')
+  })
+
+  it('exports date cells as yyyy-mm-dd regardless of their display format', () => {
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet([['Date'], [new Date(Date.UTC(2026, 0, 15))]])
+    ws['A2'].v = new Date(Date.UTC(2026, 0, 15))
+    ws['A2'].t = 'd'
+    ws['A2'].z = 'm/d/yy'
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+    const buf = new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }))
+
+    expect(excelSheetToCsv(buf, 'Sheet1')).toContain('2026-01-15')
   })
 
   it('skips fully blank rows', () => {

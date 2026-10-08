@@ -94,10 +94,12 @@ export function processCSV(
   const availableColumns = structure.headers
 
   // Validate that mapped columns actually exist in the CSV
-  const dateIdx = availableColumns.indexOf(mapping.dateCol)
-  const amountIdx = availableColumns.indexOf(mapping.amountCol)
-  const descIdx = availableColumns.indexOf(mapping.descCol)
-  const notesIdx = mapping.notesCol ? availableColumns.indexOf(mapping.notesCol) : -1
+  // Duplicate header names resolve to the first occurrence.
+  const colIndex = (name: string | undefined) => (name ? availableColumns.indexOf(name) : -1)
+  const dateIdx = colIndex(mapping.dateCol)
+  const amountIdx = colIndex(mapping.amountCol)
+  const descIdx = colIndex(mapping.descCol)
+  const notesIdx = mapping.notesCol ? colIndex(mapping.notesCol) : -1
 
   const missingCols: string[] = []
   if (dateIdx === -1) missingCols.push(mapping.dateCol)
@@ -182,7 +184,7 @@ export function processCSV(
 
   for (let i = 0; i < structure.rows.length; i++) {
     const fields = structure.rows[i]
-    const rowNum = i + 1 // 1-based index within the data rows (after the header)
+    const rowNum = (structure.headerIndex >= 0 ? structure.headerIndex + 2 : 1) + i // approximate 1-based position in parsed grid; blank lines are skipped
 
     // Pad short rows (exporter omitted trailing empty columns)
     const padded = fields.length < headerCount
@@ -221,10 +223,11 @@ export function processCSV(
   let reconciliation: Reconciliation | undefined
   const totals = findStatementTotals(structure.preamble)
   if (totals.credits != null || totals.debits != null) {
-    const actualCredits = rows.reduce((s, r) => (r.amount > 0 ? s + r.amount : s), 0)
-    const actualDebits = rows.reduce((s, r) => (r.amount < 0 ? s + r.amount : s), 0)
+    const sign = mapping.amountSign === 'inverted' ? -1 : 1
+    const actualCredits = rows.reduce((s, r) => (r.amount * sign > 0 ? s + r.amount * sign : s), 0)
+    const actualDebits = rows.reduce((s, r) => (r.amount * sign < 0 ? s + r.amount * sign : s), 0)
     const creditsMatch =
-      totals.credits == null ? null : Math.abs(actualCredits - totals.credits) < 0.01
+      totals.credits == null ? null : Math.abs(Math.abs(actualCredits) - Math.abs(totals.credits)) < 0.01
     const debitsMatch =
       totals.debits == null ? null : Math.abs(Math.abs(actualDebits) - Math.abs(totals.debits)) < 0.01
     reconciliation = {

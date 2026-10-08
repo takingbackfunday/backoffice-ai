@@ -69,19 +69,29 @@ export function sniffDelimiter(text: string): string {
   if (lines.length === 0) return ','
 
   let best = ','
-  let bestLines = 0
-  let bestTotal = 0
+  let bestConsistent = 0
+  let bestModal = 0
   for (const d of CANDIDATE_DELIMITERS) {
-    const counts = lines.map((l) => countOutsideQuotes(l, d))
-    const withDelim = counts.filter((c) => c > 0).length
-    const total = counts.reduce((a, b) => a + b, 0)
-    if (withDelim > bestLines || (withDelim === bestLines && total > bestTotal)) {
+    const counts = lines.map((l) => countOutsideQuotes(l, d)).filter((c) => c > 0)
+    if (counts.length === 0) continue
+
+    const frequencies = new Map<number, number>()
+    for (const count of counts) frequencies.set(count, (frequencies.get(count) ?? 0) + 1)
+    let modal = 0
+    let consistent = 0
+    for (const [count, frequency] of frequencies) {
+      if (frequency > consistent || (frequency === consistent && count > modal)) {
+        modal = count
+        consistent = frequency
+      }
+    }
+    if (consistent > bestConsistent || (consistent === bestConsistent && modal > bestModal)) {
       best = d
-      bestLines = withDelim
-      bestTotal = total
+      bestConsistent = consistent
+      bestModal = modal
     }
   }
-  return bestLines > 0 ? best : ','
+  return bestConsistent > 0 ? best : ','
 }
 
 // ─── Header-region detection ────────────────────────────────────────────────

@@ -4,12 +4,13 @@ import { useCallback, useState } from 'react'
 import { useUploadStore } from '@/stores/upload-store'
 import { headerSignature } from '@/lib/import-signature'
 import { analyzeCsv } from '@/lib/csv-structure'
-import type { ExcelSheetInfo } from '@/lib/excel'
+import type { ExcelSheetInfo, Workbook } from '@/lib/excel'
 import type { UploadFile } from '@/types'
 
 interface PendingSheetPick {
+  id: string
   filename: string
-  buffer: ArrayBuffer
+  workbook: Workbook
   sheets: ExcelSheetInfo[]
 }
 
@@ -74,9 +75,9 @@ export function CsvDropzone() {
   // sheet name appended so picking two sheets from one file doesn't collide
   // with the duplicate-filename guard.
   const excelSheetToUploadFile = useCallback(
-    async (filename: string, buffer: ArrayBuffer, sheetName: string, multiSheet: boolean): Promise<UploadFile> => {
-      const { excelSheetToCsv } = await import('@/lib/excel')
-      const csvText = excelSheetToCsv(buffer, sheetName)
+    async (filename: string, workbook: Workbook, sheetName: string, multiSheet: boolean): Promise<UploadFile> => {
+      const { workbookSheetToCsv } = await import('@/lib/excel')
+      const csvText = workbookSheetToCsv(workbook, sheetName)
       const headers = headersFromCsv(csvText)
       if (headers.length === 0) {
         throw new Error(`Sheet "${sheetName}" has no readable header row.`)
@@ -134,14 +135,20 @@ export function CsvDropzone() {
         if (name.endsWith('.pdf')) return parsePdf(file)
         if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
           const buffer = await file.arrayBuffer()
-          const { listExcelSheets } = await import('@/lib/excel')
-          const sheets = listExcelSheets(buffer)
+          const { readWorkbook, listWorkbookSheets } = await import('@/lib/excel')
+          const workbook = readWorkbook(buffer)
+          const sheets = listWorkbookSheets(workbook)
           if (sheets.length === 0) throw new Error('This workbook has no sheets with data.')
           if (sheets.length === 1) {
-            return excelSheetToUploadFile(file.name, buffer, sheets[0].name, false)
+            return excelSheetToUploadFile(file.name, workbook, sheets[0].name, false)
           }
           // Multiple sheets — the user picks below before anything is ingested.
-          newPicks.push({ filename: file.name, buffer, sheets })
+          newPicks.push({
+            id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            filename: file.name,
+            workbook,
+            sheets,
+          })
           throw new PendingPickSentinel()
         }
         throw new Error('Please upload a .csv, .xlsx, .xls or .pdf file.')
@@ -172,7 +179,7 @@ export function CsvDropzone() {
       setSheetChoice((prev) => {
         const next = { ...prev }
         for (const pick of newPicks) {
-          if (!next[pick.filename]) next[pick.filename] = pick.sheets[0].name
+          next[pick.id] = pick.sheets[0].name
         }
         return next
       })
@@ -182,10 +189,10 @@ export function CsvDropzone() {
   }, [parseCsv, parsePdf, excelSheetToUploadFile, ingest])
 
   const confirmSheetPick = useCallback(async (pick: PendingSheetPick) => {
-    const sheetName = sheetChoice[pick.filename] ?? pick.sheets[0].name
+    const sheetName = sheetChoice[pick.id] ?? pick.sheets[0].name
     setPendingPicks((prev) => prev.filter((p) => p !== pick))
     try {
-      const file = await excelSheetToUploadFile(pick.filename, pick.buffer, sheetName, true)
+      const file = await excelSheetToUploadFile(pick.filename, pick.workbook, sheetName, true)
       await ingest([file], [])
     } catch (err) {
       setErrors((prev) => [
@@ -252,7 +259,7 @@ export function CsvDropzone() {
         <div className="mt-3 space-y-2" data-testid="sheet-pickers">
           {pendingPicks.map((pick) => (
             <div
-              key={pick.filename}
+              key={pick.id}
               className="rounded-lg border border-border p-3 space-y-2"
               data-testid={`sheet-picker-${pick.filename}`}
             >
@@ -265,9 +272,9 @@ export function CsvDropzone() {
               <div className="flex items-center gap-2">
                 <select
                   className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                  value={sheetChoice[pick.filename] ?? pick.sheets[0].name}
+                  value={sheetChoice[pick.id] ?? pick.sheets[0].name}
                   onChange={(e) =>
-                    setSheetChoice((prev) => ({ ...prev, [pick.filename]: e.target.value }))
+                    setSheetChoice((prev) => ({ ...prev, [pick.id]: e.target.value }))
                   }
                   aria-label={`Sheet to import from ${pick.filename}`}
                 >

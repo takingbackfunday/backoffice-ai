@@ -222,6 +222,15 @@ describe('processCSV — statement preamble + row repair', () => {
     expect(result.reconciliation!.matched).toBe(true)
   })
 
+  it('reconciles statement totals when the mapped amount sign is inverted', () => {
+    const result = processCSV(
+      fixture('chase-statement-preamble.csv'),
+      { ...chaseMapping, amountSign: 'inverted' },
+      'acct-1',
+    )
+    expect(result.reconciliation?.matched).toBe(true)
+  })
+
   it('handles a German semicolon statement with a preamble', () => {
     const mapping: CsvMapping = {
       dateCol: 'Buchungstag',
@@ -263,6 +272,35 @@ describe('processCSV — prose rows fail loudly once a format is established', (
 })
 
 describe('processCSV — error reporting', () => {
+  it('rejects an empty mapped header instead of binding to a blank column', () => {
+    const result = processCSV('Date,,Amount\n2026-01-01,x,1.00', {
+      ...baseMapping,
+      descCol: '',
+    }, 'acct-1')
+
+    expect(result.errors.some((error) => error.includes('Column(s) not found'))).toBe(true)
+    expect(result.rows).toHaveLength(0)
+  })
+
+  it('reports file positions for errors after a preamble', () => {
+    const csv = [
+      'Statement for account',
+      'Account,123',
+      'Period,2026',
+      'Date,Description,Amount',
+      '2026-01-01,A,1.00',
+      'bad-date,B,2.00',
+    ].join('\n')
+    const result = processCSV(csv, {
+      dateCol: 'Date',
+      amountCol: 'Amount',
+      descCol: 'Description',
+      amountSign: 'normal',
+    }, 'acct-1')
+
+    expect(result.errors.some((error) => error.includes('Row 6:'))).toBe(true)
+  })
+
   it('caps the error list and notes the overflow', () => {
     const autoMapping: CsvMapping = {
       dateCol: 'Date',
