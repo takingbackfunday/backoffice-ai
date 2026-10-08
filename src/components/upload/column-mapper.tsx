@@ -13,6 +13,7 @@ import { PreviewTable, previewNewCount } from './preview-table'
 import { DateAmbiguityPrompt } from './date-ambiguity-prompt'
 import { AmountFields } from './amount-fields'
 import { PreviewSummary } from './preview-summary'
+import { PreviewTotals } from './preview-totals'
 import { ConfirmDialog } from './confirm-dialog'
 import { ReconciliationNotices } from './reconciliation-notices'
 import { AiMappingBanner } from './ai-mapping-banner'
@@ -275,6 +276,8 @@ export function ColumnMapper({
           perFile={perFile}
           parseErrors={parseErrors}
         />
+
+        <PreviewTotals rows={previewRows} loading={previewLoading} />
 
         <PreviewTable rows={previewRows} loading={previewLoading} />
       </div>
