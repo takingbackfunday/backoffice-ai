@@ -14,6 +14,7 @@ export interface StatementRow {
  * date format deterministically.
  */
 export const STATEMENT_CSV_HEADERS = ['Date (YYYY-MM-DD)', 'Description', 'Amount', 'Notes']
+export const STATEMENT_MODEL = 'anthropic/claude-sonnet-4.6'
 
 const SYSTEM_PROMPT = `You are a bank statement parser. You receive OCR markdown of a bank or credit card statement and extract every transaction.
 
@@ -109,8 +110,9 @@ export async function extractStatementRows(ocrMarkdown: string): Promise<Stateme
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: ocrMarkdown },
     ],
-    'anthropic/claude-sonnet-4.6',
-    16384
+    STATEMENT_MODEL,
+    16384,
+    120_000
   )
 
   return parseStatementRows(raw)

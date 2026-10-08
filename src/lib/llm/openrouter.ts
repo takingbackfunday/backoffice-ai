@@ -144,25 +144,40 @@ export async function openrouterStream(
 export async function openrouterChat(
   messages: { role: 'user' | 'assistant' | 'system'; content: string }[],
   model = 'mistralai/devstral-small',
-  maxTokens = 4096
+  maxTokens = 4096,
+  timeoutMs?: number
 ): Promise<string> {
   const t0 = Date.now()
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-    },
-    body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
-  })
+  const controller = timeoutMs ? new AbortController() : null
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
+  let json: { choices: { message: { content: string } }[] }
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      },
+      body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
+      signal: controller?.signal,
+    })
 
-  if (!res.ok) {
-    const text = await res.text()
-    logLlm('chat:error', { model, status: res.status, body: text.slice(0, 300) })
-    throw new Error(`OpenRouter ${res.status}: ${text}`)
+    if (!res.ok) {
+      const text = await res.text()
+      logLlm('chat:error', { model, status: res.status, body: text.slice(0, 300) })
+      throw new Error(`OpenRouter ${res.status}: ${text}`)
+    }
+
+    json = await res.json()
+  } catch (err) {
+    if (controller && err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`OpenRouter timed out after ${Math.round(timeoutMs! / 1000)}s`)
+    }
+    throw err
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 
-  const json = await res.json()
   const content = json.choices[0].message.content as string
   logLlm('chat:res', { model, latencyMs: Date.now() - t0, contentPreview: content.slice(0, 200) })
   return content

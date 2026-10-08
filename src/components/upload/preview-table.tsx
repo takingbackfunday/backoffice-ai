@@ -38,7 +38,7 @@ export function PreviewTable({
                 data-testid={`preview-row-${row.isDuplicate ? 'duplicate' : 'new'}`}
               >
                 <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">
-                  {new Date(row.date).toLocaleDateString()}
+                  {new Date(row.date).toLocaleDateString(undefined, { timeZone: 'UTC' })}
                 </td>
                 <td className="px-3 py-1.5 max-w-[180px]">
                   <span className="block truncate">{row.description}</span>
@@ -80,6 +80,11 @@ export function PreviewTable({
           )}
         </tbody>
       </table>
+      {rows.length > 100 && (
+        <p className="px-3 py-2 text-xs text-muted-foreground" data-testid="preview-truncated">
+          Showing first 100 of {rows.length} rows
+        </p>
+      )}
     </div>
   )
 }

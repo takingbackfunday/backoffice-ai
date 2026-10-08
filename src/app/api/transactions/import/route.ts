@@ -5,19 +5,22 @@ import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-r
 import { enqueueJob } from '@/lib/background-jobs'
 import { headerSignature } from '@/lib/import-signature'
 import { logger } from '@/lib/log'
+import { verifyRowHashes, scrubForeignRefs, ImportHashMismatchError } from '@/lib/import-rows'
 
 const nullableString = z.union([z.string(), z.null()]).transform((v) => v ?? '')
 const optionalNullableString = z.union([z.string(), z.null()]).transform((v) => (v && v.trim()) ? v.trim() : null).optional()
+const MAX_ABS_AMOUNT = 10_000_000_000 // Decimal(12,2) limit
 
 const ImportRowSchema = z.object({
-  date: z.string(),
-  amount: z.number(),
+  date: z.string().datetime({ offset: true }),
+  amount: z.number().finite().refine((n) => Math.abs(n) < MAX_ABS_AMOUNT, { message: 'Amount out of range' }),
   description: nullableString,
   notes: optionalNullableString,
   category: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   payeeId: z.string().nullable().optional(),
   duplicateHash: z.string(),
+  occurrence: z.number().int().min(0).optional(),
   rawData: z.record(nullableString),
 })
 
@@ -61,72 +64,103 @@ export async function POST(request: Request) {
     const account = await prisma.account.findFirst({ where: { id: accountId, userId } })
     if (!account) return notFound('Account not found or does not belong to you')
 
+    // Server is the authority: hashes must match the row data
+    try {
+      for (const f of files) verifyRowHashes(accountId, f.rows)
+    } catch (err) {
+      if (err instanceof ImportHashMismatchError) return badRequest(err.message)
+      throw err
+    }
+
+    // Only allow links to this user's own categories/payees
+    const refCategoryIds = [...new Set(files.flatMap((f) => f.rows.map((r) => r.categoryId).filter((v): v is string => !!v)))]
+    const refPayeeIds = [...new Set(files.flatMap((f) => f.rows.map((r) => r.payeeId).filter((v): v is string => !!v)))]
+    const [ownedCats, ownedPayees] = await Promise.all([
+      refCategoryIds.length ? prisma.category.findMany({ where: { userId, id: { in: refCategoryIds } }, select: { id: true } }) : [],
+      refPayeeIds.length ? prisma.payee.findMany({ where: { userId, id: { in: refPayeeIds } }, select: { id: true } }) : [],
+    ])
+    const owned = { categoryIds: new Set(ownedCats.map((c) => c.id)), payeeIds: new Set(ownedPayees.map((p) => p.id)) }
+    let scrubbedTotal = 0
+    const cleanFiles = files.map((f) => {
+      const { rows, scrubbed } = scrubForeignRefs(f.rows, owned)
+      scrubbedTotal += scrubbed
+      return { ...f, rows }
+    })
+    if (scrubbedTotal > 0) logger.warn('import', 'dropped foreign category/payee refs', { userId, scrubbedTotal })
+
     // Gather all hashes across files to check for existing duplicates
-    const allHashes = files.flatMap((f) => f.rows.map((r) => r.duplicateHash))
+    const allHashes = cleanFiles.flatMap((f) => f.rows.map((r) => r.duplicateHash))
     const existing = await prisma.transaction.findMany({
       where: { duplicateHash: { in: allHashes }, account: { userId } },
       select: { duplicateHash: true },
     })
     const existingHashes = new Set(existing.map((e) => e.duplicateHash))
 
-    let totalImported = 0
-    let totalSkipped = 0
-    const batchIds: string[] = []
-    const allImportedIds: string[] = []
+    const { totalImported, totalSkipped, batchIds, allImportedIds } = await prisma.$transaction(
+      async (tx) => {
+        let totalImported = 0
+        let totalSkipped = 0
+        const batchIds: string[] = []
+        const allImportedIds: string[] = []
 
-    for (const file of files) {
-      const newRows = file.rows.filter((r) => !existingHashes.has(r.duplicateHash))
+        for (const file of cleanFiles) {
+          const newRows = file.rows.filter((r) => !existingHashes.has(r.duplicateHash))
+          if (newRows.length === 0) {
+            totalSkipped += file.rows.length
+            continue
+          }
 
-      if (newRows.length === 0) {
-        totalSkipped += file.rows.length
-        continue
-      }
+          const importBatch = await tx.importBatch.create({
+            data: { accountId, filename: file.filename, rowCount: 0, skippedCount: 0 },
+          })
 
-      const importBatch = await prisma.importBatch.create({
-        data: {
-          accountId,
-          filename: file.filename,
-          rowCount: newRows.length,
-          skippedCount: file.rows.length - newRows.length,
-        },
-      })
+          const { count } = await tx.transaction.createMany({
+            data: newRows.map((row) => ({
+              accountId,
+              importBatchId: importBatch.id,
+              date: new Date(row.date),
+              amount: row.amount,
+              description: row.description,
+              notes: row.notes ?? null,
+              category: row.category ?? null,
+              categoryId: row.categoryId ?? null,
+              payeeId: row.payeeId ?? null,
+              duplicateHash: row.duplicateHash,
+              rawData: row.rawData,
+              tags: [],
+            })),
+            skipDuplicates: true,
+          })
 
-      await prisma.transaction.createMany({
-        data: newRows.map((row) => ({
-          accountId,
-          importBatchId: importBatch.id,
-          date: new Date(row.date),
-          amount: row.amount,
-          description: row.description,
-          notes: row.notes ?? null,
-          category: row.category ?? null,
-          categoryId: row.categoryId ?? null,
-          payeeId: row.payeeId ?? null,
-          duplicateHash: row.duplicateHash,
-          rawData: row.rawData,
-          tags: [],
-        })),
-        skipDuplicates: true,
-      })
+          if (count === 0) {
+            await tx.importBatch.delete({ where: { id: importBatch.id } })
+            totalSkipped += file.rows.length
+            continue
+          }
 
-      // Collect imported IDs for background jobs
-      const importedTxs = await prisma.transaction.findMany({
-        where: { importBatchId: importBatch.id },
-        select: { id: true },
-      })
-      allImportedIds.push(...importedTxs.map((t) => t.id))
+          await tx.importBatch.update({
+            where: { id: importBatch.id },
+            data: { rowCount: count, skippedCount: file.rows.length - count },
+          })
 
-      totalImported += newRows.length
-      totalSkipped += file.rows.length - newRows.length
-      batchIds.push(importBatch.id)
-    }
+          const importedTxs = await tx.transaction.findMany({
+            where: { importBatchId: importBatch.id },
+            select: { id: true },
+          })
+          allImportedIds.push(...importedTxs.map((t) => t.id))
+          totalImported += count
+          totalSkipped += file.rows.length - count
+          batchIds.push(importBatch.id)
+        }
 
-    if (totalImported > 0) {
-      await prisma.account.update({
-        where: { id: accountId },
-        data: { lastImportAt: new Date() },
-      })
-    }
+        if (totalImported > 0) {
+          await tx.account.update({ where: { id: accountId }, data: { lastImportAt: new Date() } })
+        }
+
+        return { totalImported, totalSkipped, batchIds, allImportedIds }
+      },
+      { maxWait: 10_000, timeout: 60_000 }
+    )
 
     // Best-effort profile upsert — never fail the import
     if (profile) {
@@ -176,7 +210,8 @@ export async function POST(request: Request) {
       skipped: totalSkipped,
       batchIds,
     })
-  } catch {
+  } catch (err) {
+    logger.error('import', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError('Failed to import transactions')
   }
 }

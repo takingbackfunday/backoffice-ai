@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useUploadStore } from '@/stores/upload-store'
 import { headerSignature } from '@/lib/import-signature'
 import { analyzeCsv } from '@/lib/csv-structure'
@@ -14,14 +14,16 @@ interface PendingSheetPick {
   sheets: ExcelSheetInfo[]
 }
 
-export function CsvDropzone() {
+export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
   const [dragging, setDragging] = useState(false)
-  const [processing, setProcessing] = useState(false)
+  const [processing, setProcessing] = useState<'pdf' | 'excel' | 'file' | null>(null)
+  const busyRef = useRef(false)
   const [errors, setErrors] = useState<{ filename: string; reason: string }[]>([])
   const [pendingPicks, setPendingPicks] = useState<PendingSheetPick[]>([])
   const [sheetChoice, setSheetChoice] = useState<Record<string, string>>({})
   const addFiles = useUploadStore((s) => s.addFiles)
   const setProfileHit = useUploadStore((s) => s.setProfileHit)
+  const setProfileStatus = useUploadStore((s) => s.setProfileStatus)
 
   const headersFromCsv = useCallback((csvText: string): string[] => {
     // Structure-aware header extraction: skips statement preambles and
@@ -53,6 +55,7 @@ export function CsvDropzone() {
   }, [headersFromCsv])
 
   const parsePdf = useCallback(async (file: File): Promise<UploadFile> => {
+    if (file.size > 10 * 1024 * 1024) throw new Error('PDF too large (max 10 MB).')
     const dataUri = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = (e) => resolve(e.target?.result as string)
@@ -99,96 +102,113 @@ export function CsvDropzone() {
     }
 
     const wasFirstUpload = useUploadStore.getState().files.length === 0
+    if (wasFirstUpload) setProfileStatus('loading')
     const result = addFiles(parsed)
 
     const allErrors = [...parseErrors, ...result.rejected]
     if (allErrors.length > 0) setErrors(allErrors)
 
-    // Profile lookup on first upload of the session
-    if (result.accepted.length > 0 && wasFirstUpload) {
-      const sig = headerSignature(result.accepted[0].headers)
-      try {
-        const res = await fetch(`/api/import-profiles?signature=${sig}`)
-        if (res.ok) {
-          const json = await res.json()
-          if (json.data) setProfileHit(json.data)
-        }
-      } catch {
-        // Non-critical — continue without profile
-      }
+    if (!wasFirstUpload) return
+    if (result.accepted.length === 0) {
+      setProfileStatus('idle')
+      return
     }
-  }, [addFiles, setProfileHit])
+    // Profile lookup on first upload of the session
+    const sig = headerSignature(result.accepted[0].headers)
+    try {
+      const res = await fetch(`/api/import-profiles?signature=${sig}`)
+      if (res.ok) {
+        const json = await res.json()
+        if (json.data) setProfileHit(json.data)
+      }
+    } catch {
+      // Non-critical — continue without profile
+    } finally {
+      setProfileStatus('done')
+    }
+  }, [addFiles, setProfileHit, setProfileStatus])
 
   const handleFiles = useCallback(async (fileList: FileList | File[]) => {
     const allFiles = Array.from(fileList)
     if (allFiles.length === 0) return
 
+    if (busyRef.current) return
+    busyRef.current = true
     setErrors([])
-    const hasPdf = allFiles.some((f) => f.name.toLowerCase().endsWith('.pdf'))
-    setProcessing(hasPdf)
-
-    const newPicks: PendingSheetPick[] = []
-    const results = await Promise.allSettled(
-      allFiles.map(async (file): Promise<UploadFile> => {
-        const name = file.name.toLowerCase()
-        if (name.endsWith('.csv')) return parseCsv(file)
-        if (name.endsWith('.pdf')) return parsePdf(file)
-        if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-          const buffer = await file.arrayBuffer()
-          const { readWorkbook, listWorkbookSheets } = await import('@/lib/excel')
-          const workbook = readWorkbook(buffer)
-          const sheets = listWorkbookSheets(workbook)
-          if (sheets.length === 0) throw new Error('This workbook has no sheets with data.')
-          if (sheets.length === 1) {
-            return excelSheetToUploadFile(file.name, workbook, sheets[0].name, false)
-          }
-          // Multiple sheets — the user picks below before anything is ingested.
-          newPicks.push({
-            id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            filename: file.name,
-            workbook,
-            sheets,
-          })
-          throw new PendingPickSentinel()
-        }
-        throw new Error('Please upload a .csv, .xlsx, .xls or .pdf file.')
-      })
+    const names = allFiles.map((f) => f.name.toLowerCase())
+    setProcessing(
+      names.some((n) => n.endsWith('.pdf')) ? 'pdf'
+      : names.some((n) => n.endsWith('.xlsx') || n.endsWith('.xls')) ? 'excel'
+      : 'file'
     )
+    try {
+      const newPicks: PendingSheetPick[] = []
+      const results = await Promise.allSettled(
+        allFiles.map(async (file): Promise<UploadFile> => {
+          const name = file.name.toLowerCase()
+          if (name.endsWith('.csv')) return parseCsv(file)
+          if (name.endsWith('.pdf')) return parsePdf(file)
+          if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+            const buffer = await file.arrayBuffer()
+            const { readWorkbook, listWorkbookSheets } = await import('@/lib/excel')
+            const workbook = readWorkbook(buffer)
+            const sheets = listWorkbookSheets(workbook)
+            if (sheets.length === 0) throw new Error('This workbook has no sheets with data.')
+            if (sheets.length === 1) {
+              return excelSheetToUploadFile(file.name, workbook, sheets[0].name, false)
+            }
+            // Multiple sheets — the user picks below before anything is ingested.
+            newPicks.push({
+              id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              filename: file.name,
+              workbook,
+              sheets,
+            })
+            throw new PendingPickSentinel()
+          }
+          throw new Error('Please upload a .csv, .xlsx, .xls or .pdf file.')
+        })
+      )
 
-    setProcessing(false)
+      const parsed: UploadFile[] = []
+      const parseErrors: { filename: string; reason: string }[] = []
 
-    const parsed: UploadFile[] = []
-    const parseErrors: { filename: string; reason: string }[] = []
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          parsed.push(r.value)
+        } else if (!(r.reason instanceof PendingPickSentinel)) {
+          parseErrors.push({
+            filename: allFiles[i].name,
+            reason: r.reason instanceof Error ? r.reason.message : 'Failed to parse file.',
+          })
+        }
+      })
 
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') {
-        parsed.push(r.value)
-      } else if (!(r.reason instanceof PendingPickSentinel)) {
-        parseErrors.push({
-          filename: allFiles[i].name,
-          reason: r.reason instanceof Error ? r.reason.message : 'Failed to parse file.',
+      if (newPicks.length > 0) {
+        setPendingPicks((prev) => [
+          ...prev.filter((p) => !newPicks.some((n) => n.filename === p.filename)),
+          ...newPicks,
+        ])
+        setSheetChoice((prev) => {
+          const next = { ...prev }
+          for (const pick of newPicks) {
+            next[pick.id] = pick.sheets[0].name
+          }
+          return next
         })
       }
-    })
 
-    if (newPicks.length > 0) {
-      setPendingPicks((prev) => [
-        ...prev.filter((p) => !newPicks.some((n) => n.filename === p.filename)),
-        ...newPicks,
-      ])
-      setSheetChoice((prev) => {
-        const next = { ...prev }
-        for (const pick of newPicks) {
-          next[pick.id] = pick.sheets[0].name
-        }
-        return next
-      })
+      await ingest(parsed, parseErrors)
+    } finally {
+      busyRef.current = false
+      setProcessing(null)
     }
-
-    await ingest(parsed, parseErrors)
   }, [parseCsv, parsePdf, excelSheetToUploadFile, ingest])
 
   const confirmSheetPick = useCallback(async (pick: PendingSheetPick) => {
+    if (busyRef.current) return
+    busyRef.current = true
+    setProcessing('excel')
     const sheetName = sheetChoice[pick.id] ?? pick.sheets[0].name
     setPendingPicks((prev) => prev.filter((p) => p !== pick))
     try {
@@ -199,6 +219,9 @@ export function CsvDropzone() {
         ...prev,
         { filename: pick.filename, reason: err instanceof Error ? err.message : 'Failed to parse sheet.' },
       ])
+    } finally {
+      busyRef.current = false
+      setProcessing(null)
     }
   }, [sheetChoice, excelSheetToUploadFile, ingest])
 
@@ -219,7 +242,7 @@ export function CsvDropzone() {
     <div className="max-w-lg">
       <label
         htmlFor="csv-file-input"
-        className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors ${
+        className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed ${compact ? 'p-4' : 'p-12'} transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${
           processing ? 'cursor-wait opacity-80' : 'cursor-pointer'
         } ${
           dragging ? 'border-foreground bg-muted' : 'border-border hover:border-foreground/50'
@@ -230,12 +253,18 @@ export function CsvDropzone() {
         data-testid="csv-dropzone"
         aria-label="Drop CSV, Excel or PDF files here or click to select"
       >
-        <span className="text-4xl mb-4" aria-hidden="true">{processing ? '⏳' : '📂'}</span>
-        {processing ? (
+        {!compact && <span className="text-4xl mb-4" aria-hidden="true">{processing ? '⏳' : '📂'}</span>}
+        {processing === 'pdf' ? (
           <>
             <p className="font-medium text-sm animate-pulse">Extracting transactions from PDF…</p>
             <p className="text-xs text-muted-foreground mt-1">This can take up to a minute</p>
           </>
+        ) : processing === 'excel' ? (
+          <p className="font-medium text-sm animate-pulse">Reading workbook…</p>
+        ) : processing === 'file' ? (
+          <p className="font-medium text-sm animate-pulse">Reading file…</p>
+        ) : compact ? (
+          <p className="text-sm">Add more files with the same columns — drop or click</p>
         ) : (
           <>
             <p className="font-medium text-sm">Drop your CSV, Excel or PDF files here</p>
@@ -248,7 +277,7 @@ export function CsvDropzone() {
           accept=".csv,.xlsx,.xls,.pdf"
           multiple
           className="sr-only"
-          disabled={processing}
+          disabled={processing !== null}
           onChange={(e) => { if (e.target.files) handleFiles(e.target.files) }}
           data-testid="csv-file-input"
           aria-label="Select CSV, Excel or PDF files"

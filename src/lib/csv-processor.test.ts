@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { processCSV, parseAmount, type CsvMapping } from '@/lib/csv-processor'
+import { buildDuplicateHash } from '@/lib/dedup'
 
 const fixture = (name: string) => readFileSync(join(__dirname, '__fixtures__', name), 'utf8')
 
@@ -313,5 +314,35 @@ describe('processCSV — error reporting', () => {
     const result = processCSV(csv, autoMapping, 'acct-1')
     expect(result.skippedCount).toBe(25)
     expect(result.errors.some((e) => e.includes('and 5 more row(s) failed to parse'))).toBe(true)
+  })
+})
+
+describe('processCSV — repeated transactions', () => {
+  const csv = 'Date,Description,Amount\n2026-01-05,Metro fare,-2.75\n2026-01-05,Metro fare,-2.75\n2026-01-06,Metro fare,-2.75'
+  const mapping: CsvMapping = {
+    dateCol: 'Date',
+    amountCol: 'Amount',
+    descCol: 'Description',
+    amountSign: 'normal',
+  }
+
+  it('assigns distinct hashes to genuine repeats while preserving the first hash', () => {
+    const accountId = 'acct-repeats'
+    const { rows } = processCSV(csv, mapping, accountId)
+    expect(rows).toHaveLength(3)
+    expect(rows.map((row) => row.occurrence)).toEqual([0, 1, 0])
+    expect(new Set(rows.map((row) => row.duplicateHash)).size).toBe(3)
+    expect(rows[0].duplicateHash).toBe(buildDuplicateHash({
+      accountId,
+      date: rows[0].date,
+      amount: -2.75,
+      description: 'Metro fare',
+    }))
+  })
+
+  it('is deterministic when processing the same CSV more than once', () => {
+    const first = processCSV(csv, mapping, 'acct-repeats').rows.map((row) => row.duplicateHash)
+    const second = processCSV(csv, mapping, 'acct-repeats').rows.map((row) => row.duplicateHash)
+    expect(first).toEqual(second)
   })
 })

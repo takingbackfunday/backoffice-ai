@@ -25,6 +25,7 @@ export interface PreviewRow {
   description: string
   notes?: string | null
   duplicateHash: string
+  occurrence?: number
   isDuplicate: boolean
   rawData: Record<string, string>
   filename?: string
@@ -57,6 +58,8 @@ export interface UploadState {
   files: UploadFile[]
   signature: string | null
   profileHit: ImportProfile | null
+  lastImport: { imported: number; skipped: number } | null
+  profileStatus: 'idle' | 'loading' | 'done'
   previewRows: PreviewRow[]
   totalRows: number
   duplicateCount: number

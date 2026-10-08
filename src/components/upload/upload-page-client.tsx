@@ -53,6 +53,7 @@ function toDisplayStep(step: string): DisplayStep {
 export function UploadPageClient({ initialAccounts, onboarding }: { initialAccounts?: Account[]; onboarding?: boolean }) {
   const router = useRouter()
   const step = useUploadStore((s) => s.step)
+  const lastImport = useUploadStore((s) => s.lastImport)
   const reset = useUploadStore((s) => s.reset)
   const files = useUploadStore((s) => s.files)
   const removeFile = useUploadStore((s) => s.removeFile)
@@ -149,7 +150,7 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
           {/* Progress indicator */}
           <nav aria-label="Upload progress" className="flex gap-6 mb-8 text-sm">
             {STEPS.map((s, i) => (
-              <span key={s} className={`flex items-center gap-1.5 ${displayStep === s ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+              <span key={s} aria-current={displayStep === s ? 'step' : undefined} className={`flex items-center gap-1.5 ${displayStep === s ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
                 <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-xs ${displayStep === s ? 'border-foreground bg-foreground text-background' : ''}`}>
                   {i + 1}
                 </span>
@@ -158,8 +159,11 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
             ))}
           </nav>
 
-          {/* Step 1: Upload CSV */}
-          {step === 'upload' && <CsvDropzone />}
+          {step !== 'done' && (
+            <div className={step === 'upload' ? '' : 'mb-4'}>
+              <CsvDropzone compact={step !== 'upload'} />
+            </div>
+          )}
 
           {/* Step 2: Select account + Map columns + live preview + import */}
           {(step === 'map-columns' || step === 'preview') && (
@@ -175,7 +179,7 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
                         className="text-muted-foreground hover:text-red-600"
                         aria-label={`Remove ${f.filename}`}
                       >
-                        ✕
+                        <span aria-hidden="true">✕</span>
                       </button>
                     </span>
                   ))}
@@ -195,8 +199,13 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
       <Dialog open={step === 'done'}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import complete!</DialogTitle>
-            <DialogDescription>Your transactions have been imported successfully.</DialogDescription>
+            <DialogTitle>{lastImport && lastImport.imported === 0 ? 'Nothing new to import' : 'Import complete!'}</DialogTitle>
+            <DialogDescription>
+              {lastImport
+                ? `Imported ${lastImport.imported} transaction${lastImport.imported === 1 ? '' : 's'}` +
+                  (lastImport.skipped > 0 ? ` · ${lastImport.skipped} skipped as duplicates` : '') + '.'
+                : 'Your transactions have been imported.'}
+            </DialogDescription>
           </DialogHeader>
 
           {/* Background job status */}

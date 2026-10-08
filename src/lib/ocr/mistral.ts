@@ -1,4 +1,5 @@
 const MISTRAL_OCR_URL = 'https://api.mistral.ai/v1/ocr'
+const OCR_TIMEOUT_MS = 90_000
 
 interface MistralOcrPage {
   index: number
@@ -74,35 +75,45 @@ export async function mistralOcrPdf(base64Pdf: string): Promise<{
   if (!apiKey) throw new Error('MISTRAL_API_KEY is not set')
 
   const t0 = Date.now()
-  const res = await fetch(MISTRAL_OCR_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'mistral-ocr-latest',
-      document: {
-        type: 'document_url',
-        document_url: base64Pdf,
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), OCR_TIMEOUT_MS)
+  try {
+    const res = await fetch(MISTRAL_OCR_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
       },
-    }),
-  })
+      body: JSON.stringify({
+        model: 'mistral-ocr-latest',
+        document: {
+          type: 'document_url',
+          document_url: base64Pdf,
+        },
+      }),
+      signal: controller.signal,
+    })
 
-  if (!res.ok) {
-    const text = await res.text()
-    console.error('[mistral-ocr-pdf:error]', { status: res.status, body: text.slice(0, 300) })
-    throw new Error(`Mistral OCR ${res.status}: ${text.slice(0, 200)}`)
+    if (!res.ok) {
+      const text = await res.text()
+      console.error('[mistral-ocr-pdf:error]', { status: res.status, body: text.slice(0, 300) })
+      throw new Error(`Mistral OCR ${res.status}: ${text.slice(0, 200)}`)
+    }
+
+    const json = (await res.json()) as MistralOcrResponse
+    const markdown = json.pages.map((p) => p.markdown).join('\n\n')
+
+    console.log('[mistral-ocr-pdf:res]', {
+      latencyMs: Date.now() - t0,
+      pagesProcessed: json.usage_info.pages_processed,
+      markdownLength: markdown.length,
+    })
+
+    return { markdown, pagesProcessed: json.usage_info.pages_processed }
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw new Error('Mistral OCR timed out after 90s')
+    throw err
+  } finally {
+    clearTimeout(timer)
   }
-
-  const json = (await res.json()) as MistralOcrResponse
-  const markdown = json.pages.map((p) => p.markdown).join('\n\n')
-
-  console.log('[mistral-ocr-pdf:res]', {
-    latencyMs: Date.now() - t0,
-    pagesProcessed: json.usage_info.pages_processed,
-    markdownLength: markdown.length,
-  })
-
-  return { markdown, pagesProcessed: json.usage_info.pages_processed }
 }

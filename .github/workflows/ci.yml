@@ -51,6 +51,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Test ingestion in non-UTC timezones
+        run: pnpm test:tz
+
       # Applies the Prisma schema to a throwaway Postgres and EXPLAINs every raw
       # `$queryRaw`/`$executeRaw` in src/ against it. Catches column/table/type
       # mismatches that bypass tsc + the build (e.g. `@map`-renamed columns,

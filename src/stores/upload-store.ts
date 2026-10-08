@@ -13,6 +13,8 @@ interface UploadStore extends UploadState {
   removeFile: (filename: string) => void
   setProfileHit: (profile: ImportProfile | null) => void
   clearProfileHit: () => void
+  setLastImport: (r: { imported: number; skipped: number } | null) => void
+  setProfileStatus: (s: UploadState['profileStatus']) => void
   setStep: (step: UploadState['step']) => void
   setAccountId: (id: string) => void
   setPreviewRows: (rows: PreviewRow[], totalRows: number, duplicateCount: number, perFile?: FilePreviewMeta[]) => void
@@ -25,6 +27,8 @@ const initialState: UploadState = {
   files: [],
   signature: null,
   profileHit: null,
+  lastImport: null,
+  profileStatus: 'idle',
   previewRows: [],
   totalRows: 0,
   duplicateCount: 0,
@@ -74,6 +78,10 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
   },
 
   clearProfileHit: () => set({ profileHit: null }),
+
+  setLastImport: (lastImport) => set({ lastImport }),
+
+  setProfileStatus: (profileStatus) => set({ profileStatus }),
 
   setStep: (step) => set({ step }),
 

@@ -7,6 +7,7 @@ import type { CsvMapping } from '@/lib/csv-processor'
 import { categorizeRows } from '@/lib/rules/categorize-batch'
 import { loadUserRules } from '@/lib/rules/user-rules'
 import { logger } from '@/lib/log'
+import { markSessionDuplicates } from '@/lib/session-dedup'
 
 const MappingSchema = z.object({
   dateCol: z.string(),
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       select: { duplicateHash: true },
     })
     const existingHashes = new Set(existing.map((e) => e.duplicateHash))
+    const sessionDuplicate = markSessionDuplicates(allRows.map((r) => r.duplicateHash))
 
     // Run categorization rules
     const userRules = await loadUserRules(userId)
@@ -94,12 +96,12 @@ export async function POST(request: Request) {
       allCategories.map((c) => [c.name.toLowerCase(), c.id])
     )
 
-    const preview = categorized.map((row) => {
+    const preview = categorized.map((row, i) => {
       const resolvedCategoryId =
         row.suggestedCategoryId ??
         (row.suggestedCategory ? (categoryNameMap.get(row.suggestedCategory.toLowerCase()) ?? null) : null)
       const resolvedPayeeId = row.suggestedPayeeId ?? null
-      const originalRow = allRows.find((r) => r.duplicateHash === row.duplicateHash)
+      const originalRow = allRows[i] // categorizeRows preserves order
 
       return {
         date: row.date,
@@ -107,7 +109,8 @@ export async function POST(request: Request) {
         description: row.description,
         notes: originalRow?.notes ?? null,
         duplicateHash: row.duplicateHash,
-        isDuplicate: existingHashes.has(row.duplicateHash),
+        occurrence: originalRow.occurrence,
+        isDuplicate: existingHashes.has(row.duplicateHash) || sessionDuplicate[i],
         rawData: originalRow?.rawData ?? {},
         filename: originalRow?.filename,
         suggestedCategory: row.suggestedCategory,

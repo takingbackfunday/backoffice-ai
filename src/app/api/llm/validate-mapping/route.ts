@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { openrouterChat } from '@/lib/llm/openrouter'
-import { ok, unauthorized, serverError } from '@/lib/api-response'
+import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { logger } from '@/lib/log'
 
 const BodySchema = z.object({
@@ -17,6 +17,21 @@ const BodySchema = z.object({
   }),
 })
 
+const ColResultSchema = z.object({
+  col: z.string().nullable(),
+  confidence: z.number(),
+  reason: z.string().optional().default(''),
+})
+const ValidationResultSchema = z.object({
+  dateCol: ColResultSchema,
+  amountCol: ColResultSchema,
+  descCol: ColResultSchema,
+  notesCol: ColResultSchema,
+  amountSign: z
+    .object({ value: z.enum(['normal', 'inverted']), confidence: z.number(), reason: z.string().optional().default('') })
+    .optional(),
+})
+
 export async function POST(request: Request) {
   try {
     const { userId } = await auth()
@@ -25,7 +40,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const parsed = BodySchema.safeParse(body)
     if (!parsed.success) {
-      return serverError('Invalid request body')
+      return badRequest('Invalid request body')
     }
 
     const { headers, sampleRows, mapping } = parsed.data
@@ -62,13 +77,18 @@ Rules:
 - For column fields: if correct echo the same column with confidence 80-100; if wrong suggest a better one with lower confidence; if absent set col to null.
 - For amountSign: "normal" means expenses are negative (e.g. -45.00), "inverted" means expenses are positive (e.g. 45.00 for a debit). Look at the sample amounts — if typical purchases/debits appear as positive numbers, use "inverted".`
 
-    const raw = await openrouterChat([{ role: 'user', content: prompt }], 'mistralai/mistral-small-2603')
+    const raw = await openrouterChat([{ role: 'user', content: prompt }], 'mistralai/mistral-small-2603', 4096, 30_000)
 
     // Strip markdown fences if present
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
     const result = JSON.parse(cleaned)
 
-    return ok(result)
+    const validated = ValidationResultSchema.safeParse(result)
+    if (!validated.success) {
+      logger.error('llm-validate-mapping', 'invalid LLM output shape', { issues: validated.error.issues.length })
+      return serverError('AI validation returned an unexpected format')
+    }
+    return ok(validated.data)
   } catch (err) {
     logger.error('llm-validate-mapping', 'POST error', { message: err instanceof Error ? err.message : String(err) })
     return serverError()

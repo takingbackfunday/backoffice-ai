@@ -6,33 +6,22 @@ import { analyzeCsv } from '@/lib/csv-structure'
 import type { CsvMapping } from '@/lib/csv-processor'
 import type { PreviewRow, FilePreviewMeta } from '@/types'
 import { guessMapping, scoreCandidates, type MappedField } from '@/lib/guess-mapping'
-import { detectDateFormat, renderDateExample } from '@/lib/date-format'
-import { ColSelect, type MappingValidation } from './col-select'
+import { detectDateFormat } from '@/lib/date-format'
+import { ColSelect } from './col-select'
 import { AccountRail } from './account-rail'
 import type { Account } from './new-account-form'
 import { PreviewTable, previewNewCount } from './preview-table'
-
-interface ReconciliationMeta {
-  filename: string
-  expectedCredits: number | null
-  expectedDebits: number | null
-  actualCredits: number
-  actualDebits: number
-  creditsMatch: boolean | null
-  debitsMatch: boolean | null
-  matched: boolean
-}
+import { DateAmbiguityPrompt } from './date-ambiguity-prompt'
+import { ReconciliationNotices, type ReconciliationMeta } from './reconciliation-notices'
+import { useMappingValidation } from './hooks/use-mapping-validation'
+import { ProfileHitBanner } from './profile-hit-banner'
 
 export function ColumnMapper({
   accounts: initialAccounts = [],
   loadingAccounts = false,
   onAccountCreated,
-}: {
-  accounts?: Account[]
-  loadingAccounts?: boolean
-  onAccountCreated?: (account: Account) => void
-}) {
-  const { files, accountId, profileHit, setStep, setAccountId, reset, removeFile, clearProfileHit } = useUploadStore()
+}: { accounts?: Account[]; loadingAccounts?: boolean; onAccountCreated?: (account: Account) => void }) {
+  const { files, accountId, profileHit, profileStatus, setStep, setAccountId, reset, removeFile, clearProfileHit, setLastImport } = useUploadStore()
   const csvHeaders = files[0]?.headers ?? []
   const source = files[0]?.source ?? 'csv'
   const displayFilename = files.length === 1 ? files[0].filename : `${files.length} files`
@@ -41,8 +30,6 @@ export function ColumnMapper({
   useEffect(() => { setAccounts(initialAccounts) }, [initialAccounts])
 
   const [mapping, setMapping] = useState<Partial<CsvMapping>>(() => guessMapping([]))
-  const [validation, setValidation] = useState<MappingValidation | null>(null)
-  const [validating, setValidating] = useState(false)
   const [candidates, setCandidates] = useState<Record<MappedField, { col: string; score: number }[]>>({
     dateCol: [], amountCol: [], descCol: [], notesCol: [],
   })
@@ -63,13 +50,27 @@ export function ColumnMapper({
 
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
+  const [signSuggestionDismissed, setSignSuggestionDismissed] = useState(false)
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchedRef = useRef<Set<string>>(new Set())
 
   const isValid = !!(mapping.dateCol && mapping.amountCol && mapping.descCol)
   const newRows = previewRows.filter((r) => !r.isDuplicate)
-  const set = (field: keyof CsvMapping) => (v: string | undefined) =>
+  const set = (field: keyof CsvMapping) => (v: string | undefined) => {
+    touchedRef.current.add(field)
     setMapping((m) => ({ ...m, [field]: v }))
+  }
+  const { validation, validating } = useMappingValidation({
+    csvHeaders,
+    files,
+    source,
+    profileHit,
+    profileStatus,
+    mapping,
+    setMapping,
+    touchedRef,
+  })
 
   // ── Initialize mapping: profile hit → pre-fill; else deterministic guess ──
   useEffect(() => {
@@ -124,48 +125,7 @@ export function ColumnMapper({
       })
       setDateUnrecognised(samples.length > 0)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapping.dateCol, files, profileHit])
-
-  // ── LLM validation: only for non-profile CSV sessions ──
-  useEffect(() => {
-    if (!csvHeaders.length || !files.length || profileHit) return
-    if (source === 'pdf') return
-    const firstFile = files[0]
-    if (!firstFile?.csvText) return
-    const structure = analyzeCsv(firstFile.csvText)
-    const first20 = structure.rows.slice(0, 20).map((fields) => {
-      const obj: Record<string, string> = {}
-      structure.headers.forEach((h, i) => {
-        if (h && !(h in obj)) obj[h] = fields[i] ?? ''
-      })
-      return obj
-    })
-    setValidating(true)
-    fetch('/api/llm/validate-mapping', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ headers: csvHeaders, sampleRows: first20, mapping }),
-    })
-      .then((r) => r.json())
-      .then((j) => {
-        if (!j.error) {
-          setValidation(j.data)
-          setMapping((m) => {
-            const next = { ...m }
-            for (const field of ['dateCol', 'amountCol', 'descCol', 'notesCol'] as const) {
-              const v = j.data?.[field]
-              if (v?.confidence >= 99 && v.col) next[field] = v.col
-            }
-            if (j.data?.amountSign?.confidence >= 99 && j.data.amountSign.value) next.amountSign = j.data.amountSign.value
-            return next
-          })
-        }
-      })
-      .catch(() => {})
-      .finally(() => setValidating(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [csvHeaders.join(','), files[0]?.csvText, profileHit])
 
   // ── Auto-preview: debounced, sends all files ──
   useEffect(() => {
@@ -233,6 +193,7 @@ export function ColumnMapper({
             categoryId: r.suggestedCategoryId ?? null,
             payeeId: r.payeeId ?? null,
             duplicateHash: r.duplicateHash,
+            occurrence: r.occurrence ?? 0,
             rawData: r.rawData,
           })),
         }))
@@ -252,6 +213,7 @@ export function ColumnMapper({
         setImportError(json.error ?? 'Import failed. Please try again.')
         return
       }
+      setLastImport({ imported: json.data?.imported ?? 0, skipped: json.data?.skipped ?? 0 })
       setStep('done')
     } catch {
       setImportError('Network error. Please check your connection and try again.')
@@ -261,21 +223,15 @@ export function ColumnMapper({
   }
 
   const newCount = previewNewCount(previewRows)
+  const suggestedSign = validation?.amountSign
+  const showSignSuggestion =
+    !signSuggestionDismissed &&
+    !!suggestedSign &&
+    suggestedSign.confidence >= 90 &&
+    (suggestedSign.value === 'normal' || suggestedSign.value === 'inverted') &&
+    suggestedSign.value !== (mapping.amountSign ?? 'normal')
 
   return (
-    <>
-    <style>{`
-      @keyframes account-throb {
-        0%, 100% { box-shadow: 0 0 0 0 rgb(99 102 241 / 0); border-color: hsl(var(--border)); }
-        50%       { box-shadow: 0 0 0 4px rgb(99 102 241 / 0.25); border-color: rgb(99 102 241); }
-      }
-      @keyframes col-throb {
-        0%, 100% { box-shadow: 0 0 0 0 transparent; border-color: hsl(var(--border)); }
-        50%       { box-shadow: 0 0 0 2px rgb(245 158 11 / 0.35); border-color: rgb(245 158 11 / 0.55); }
-      }
-      .account-throb { animation: account-throb 1.4s ease-in-out infinite; }
-      .col-throb     { animation: col-throb 2s ease-in-out infinite; }
-    `}</style>
     <div className="flex gap-6 h-full min-h-0" data-testid="column-mapper-form">
       {/* Left: account selector + mapping controls */}
       <div className="w-72 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
@@ -287,22 +243,7 @@ export function ColumnMapper({
           onAccountCreated={(a) => { setAccounts((prev) => [...prev, a]); onAccountCreated?.(a) }}
         />
 
-        {/* Profile hit banner */}
-        {profileHit && (
-          <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 space-y-1">
-            <p className="text-xs font-medium text-blue-800">
-              Saved mapping (used {profileHit.useCount}×, last{' '}
-              {new Date(profileHit.lastUsedAt).toLocaleDateString()})
-            </p>
-            <button
-              type="button"
-              onClick={clearProfileHit}
-              className="text-xs text-blue-600 hover:underline"
-            >
-              Re-detect columns
-            </button>
-          </div>
-        )}
+        {profileHit && <ProfileHitBanner profileHit={profileHit} onRedetect={clearProfileHit} />}
 
         <div className="border-t pt-4">
           <p className="text-xs font-semibold text-foreground">Map columns</p>
@@ -320,8 +261,9 @@ export function ColumnMapper({
                     type="button"
                     onClick={() => removeFile(f.filename)}
                     className="text-muted-foreground hover:text-red-600 ml-2"
+                    aria-label={`Remove ${f.filename}`}
                   >
-                    ✕
+                    <span aria-hidden="true">✕</span>
                   </button>
                 )}
               </div>
@@ -336,32 +278,10 @@ export function ColumnMapper({
 
         {/* Date format is auto-detected — only surfaces when genuinely ambiguous (MM/DD vs DD/MM) */}
         {dateAmbiguity && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 space-y-1.5" data-testid="date-ambiguity-prompt">
-            <p className="text-xs text-amber-900">
-              Dates like <strong>{dateAmbiguity.exampleRaw}</strong> can be read two ways. We&apos;re using{' '}
-              <strong>{renderDateExample(dateAmbiguity.exampleRaw, dateAmbiguity.chosen)}</strong> — tap to change:
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {[dateAmbiguity.chosen, ...dateAmbiguity.alternatives].map((fmt) => (
-                <button
-                  key={fmt}
-                  type="button"
-                  onClick={() => {
-                    setMapping((m) => ({ ...m, dateFormat: fmt }))
-                    setDateAmbiguity((a) => (a ? { ...a, chosen: fmt } : a))
-                  }}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                    fmt === dateAmbiguity.chosen
-                      ? 'border-amber-600 bg-amber-600 text-white'
-                      : 'border-amber-300 bg-white text-amber-900 hover:border-amber-500'
-                  }`}
-                  data-testid={`date-format-choice-${fmt}`}
-                >
-                  {renderDateExample(dateAmbiguity.exampleRaw, fmt)}
-                </button>
-              ))}
-            </div>
-          </div>
+          <DateAmbiguityPrompt ambiguity={dateAmbiguity} onChoose={(fmt) => {
+            setMapping((m) => ({ ...m, dateFormat: fmt }))
+            setDateAmbiguity((a) => (a ? { ...a, chosen: fmt } : a))
+          }} />
         )}
         {dateUnrecognised && mapping.dateCol && (
           <p className="text-xs text-amber-700" data-testid="date-unrecognised-hint">
@@ -374,7 +294,10 @@ export function ColumnMapper({
         <div>
           <label htmlFor="select-amountSign" className="block text-xs font-medium mb-1">Amount sign *</label>
           <select id="select-amountSign" value={mapping.amountSign ?? 'normal'}
-            onChange={(e) => setMapping((m) => ({ ...m, amountSign: e.target.value as 'normal' | 'inverted' }))}
+            onChange={(e) => {
+              touchedRef.current.add('amountSign')
+              setMapping((m) => ({ ...m, amountSign: e.target.value as 'normal' | 'inverted' }))
+            }}
             className="w-full rounded-md border px-3 py-1.5 text-sm" data-testid="select-amountSign">
             {(['normal', 'inverted'] as const).map((v) => {
               const label = v === 'normal' ? 'Expenses are negative' : 'Expenses are positive'
@@ -383,6 +306,22 @@ export function ColumnMapper({
             })}
           </select>
         </div>
+        {showSignSuggestion && suggestedSign && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 space-y-1.5" data-testid="sign-suggestion">
+            <p className="text-xs text-amber-900">
+              AI thinks {suggestedSign.value === 'inverted' ? 'expenses are positive' : 'expenses are negative'} in this file ({suggestedSign.confidence}%).
+            </p>
+            <div className="flex gap-2">
+              <button type="button" className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white"
+                onClick={() => { touchedRef.current.add('amountSign'); setMapping((m) => ({ ...m, amountSign: suggestedSign.value as 'normal' | 'inverted' })) }}>
+                Switch
+              </button>
+              <button type="button" className="text-xs text-amber-900 hover:underline" onClick={() => setSignSuggestionDismissed(true)}>
+                Keep current
+              </button>
+            </div>
+          </div>
+        )}
 
         <ColSelect id="select-descCol" label="Description column *" value={mapping.descCol} headers={csvHeaders}
           onChange={set('descCol')} validation={validation?.descCol} candidates={candidates.descCol} required />
@@ -393,9 +332,9 @@ export function ColumnMapper({
         <div className="pt-2 space-y-2">
           <button onClick={handleImport}
             disabled={importing || newCount === 0 || previewLoading || !accountId}
-            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-            data-testid="confirm-import-btn"
-            aria-label={`Import ${newCount} new transactions`}>
+             className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+             data-testid="confirm-import-btn"
+             aria-label={importing ? 'Importing…' : `Import ${newCount} new transactions`}>
             {importing ? 'Importing…' : `Import ${newCount} transaction${newCount !== 1 ? 's' : ''}`}
           </button>
           <button onClick={reset}
@@ -410,7 +349,7 @@ export function ColumnMapper({
       {/* Right: live preview */}
       <div className="flex-1 min-w-0 flex flex-col gap-3">
         <div className="space-y-2">
-          <div className="flex items-center gap-4 text-xs min-h-5 flex-wrap">
+          <div className="flex items-center gap-4 text-xs min-h-5 flex-wrap" aria-live="polite">
             {previewLoading && <span className="text-muted-foreground">Updating preview…</span>}
             {!previewLoading && isValid && accountId && (
               <>
@@ -426,23 +365,7 @@ export function ColumnMapper({
               </span>
             )}
             {previewError && <span className="text-red-600">{previewError}</span>}
-            {!previewLoading && reconciliations.map((r) =>
-              r.matched ? (
-                <span key={r.filename} className="text-green-600" data-testid="reconciliation-ok">
-                  ✓ Totals match the statement summary
-                </span>
-              ) : (
-                <span key={r.filename} className="text-amber-600" data-testid="reconciliation-mismatch">
-                  ⚠ Parsed totals differ from the statement summary
-                  {r.expectedCredits != null && r.creditsMatch === false && (
-                    <> (credits: expected {r.expectedCredits.toLocaleString()}, got {r.actualCredits.toLocaleString()})</>
-                  )}
-                  {r.expectedDebits != null && r.debitsMatch === false && (
-                    <> (debits: expected {Math.abs(r.expectedDebits).toLocaleString()}, got {Math.abs(r.actualDebits).toLocaleString()})</>
-                  )}
-                </span>
-              )
-            )}
+            {!previewLoading && <ReconciliationNotices items={reconciliations} />}
           </div>
 
           {/* Per-file row count strip */}
@@ -473,6 +396,5 @@ export function ColumnMapper({
         <PreviewTable rows={previewRows} loading={previewLoading} />
       </div>
     </div>
-    </>
   )
 }

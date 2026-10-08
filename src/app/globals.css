@@ -139,3 +139,18 @@
   border-radius: 0.5rem;
   background-color: color-mix(in oklch, var(--primary) 8%, transparent);
 }
+
+@keyframes account-throb {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(99 102 241 / 0); border-color: hsl(var(--border)); }
+  50%       { box-shadow: 0 0 0 4px rgb(99 102 241 / 0.25); border-color: rgb(99 102 241); }
+}
+@keyframes col-throb {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; border-color: hsl(var(--border)); }
+  50%       { box-shadow: 0 0 0 2px rgb(245 158 11 / 0.35); border-color: rgb(245 158 11 / 0.55); }
+}
+.account-throb { animation: account-throb 1.4s ease-in-out infinite; }
+.col-throb     { animation: col-throb 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .account-throb, .col-throb, .ai-changed { animation: none; }
+}

@@ -73,4 +73,16 @@ describe('buildDuplicateHash', () => {
     // Pin the hash so any future change to the algorithm is caught
     expect(hash).toBe('ba9c59f4edb08e1194d93a506854ddc20d17c540f43d4eb392a0cc968d785e7e')
   })
+
+  it('occurrence 0 and omitted give identical hashes', () => {
+    expect(buildDuplicateHash({ ...params, occurrence: 0 })).toBe(buildDuplicateHash(params))
+  })
+
+  it('occurrence 1 differs from occurrence 0', () => {
+    expect(buildDuplicateHash({ ...params, occurrence: 1 })).not.toBe(buildDuplicateHash(params))
+  })
+
+  it('pinned legacy hash is unchanged', () => {
+    expect(buildDuplicateHash(params)).toBe('2e0e1f7f8a14b312dbb36a48dd2b0866b4bee7fb5429a2a9e8c29700e609d890')
+  })
 })

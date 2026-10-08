@@ -22,6 +22,8 @@ export interface NormalizedRow {
   notes?: string
   rawData: Record<string, string>
   duplicateHash: string
+  /** 0-based index among identical rows (same account/date/amount/description) within this file. */
+  occurrence: number
 }
 
 /** Cross-check of parsed sums against totals declared in a statement preamble. */
@@ -178,9 +180,14 @@ export function processCSV(
         notes: notesIdx >= 0 ? fields[notesIdx]?.trim() || undefined : undefined,
         rawData,
         duplicateHash: buildDuplicateHash({ accountId, date, amount, description }),
+        occurrence: 0,
       },
     }
   }
+
+  // Genuine repeats (two identical fares on one day) must not collapse into one
+  // transaction. The base hash (occurrence 0) is the grouping key.
+  const occurrenceCounts = new Map<string, number>()
 
   for (let i = 0; i < structure.rows.length; i++) {
     const fields = structure.rows[i]
@@ -199,7 +206,22 @@ export function processCSV(
       if (repaired) result = tryRow(repaired, rowNum)
     }
 
-    if (result.ok) rows.push(result.row)
+    if (result.ok) {
+      const baseHash = result.row.duplicateHash
+      const occurrence = occurrenceCounts.get(baseHash) ?? 0
+      occurrenceCounts.set(baseHash, occurrence + 1)
+      if (occurrence > 0) {
+        result.row.occurrence = occurrence
+        result.row.duplicateHash = buildDuplicateHash({
+          accountId,
+          date: result.row.date,
+          amount: result.row.amount,
+          description: result.row.description,
+          occurrence,
+        })
+      }
+      rows.push(result.row)
+    }
     else {
       skippedCount++
       allErrors.push(result.error)
