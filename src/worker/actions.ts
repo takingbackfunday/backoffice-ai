@@ -1,5 +1,5 @@
 import type { Page } from 'playwright-core'
-import { formatBankDate } from '@/lib/bank-import/date-range'
+import { formatBankDate, inferBankDateFormat } from '@/lib/bank-import/date-range'
 import { isElementDenied } from '@/lib/bank-import/guardrails'
 import type { BankConfig } from '@/lib/bank-import/banks'
 import type { AgentAction } from './navigator'
@@ -44,6 +44,26 @@ export async function executeAction(args: {
   if (!locator) return { ok: false, message: 'The page changed before the action could run.', errorCode: 'locator_missing' }
 
   try {
+    if (action.action === 'click' && element.tag === 'input' && element.type === 'radio') {
+      if (!await locator.isChecked()) {
+        // Styled radios often intercept clicks on the input; use its native associated label.
+        const handle = await locator.evaluateHandle((input) => (input as HTMLInputElement).labels?.[0] ?? null)
+        try {
+          const label = handle.asElement()
+          if (label && await label.isVisible()) {
+            const labelText = await label.innerText()
+            if (isElementDenied({ text: labelText, ariaLabel: await label.getAttribute('aria-label') ?? undefined }, 'navigate').denied) {
+              return { ok: false, blocked: true, message: 'A restricted bank action was blocked.', errorCode: 'guardrail_violation' }
+            }
+            await label.click({ timeout: 10_000 })
+          } else {
+            await locator.check({ timeout: 10_000 })
+          }
+        } finally { await handle.dispose() }
+      }
+      if (!await locator.isChecked()) return { ok: false, message: 'The bank did not select that export option.', errorCode: 'option_mismatch' }
+      return { ok: true, message: 'Confirmed the selected export option.' }
+    }
     if (action.action === 'select_option') {
       if (element.tag !== 'select' || !action.option) return { ok: false, message: 'That option is no longer available.', errorCode: 'option_mismatch' }
       try { await locator.selectOption({ label: action.option }, { timeout: 10_000 }) } catch {
@@ -63,7 +83,8 @@ export async function executeAction(args: {
         return { ok: false, message: 'The selected field is not the end date.', errorCode: 'date_field_mismatch' }
       }
       const iso = action.dateField === 'from' ? from : to
-      const value = formatBankDate(iso, element.type === 'date' ? 'ISO' : bank.dateFormat)
+      const inputFormat = inferBankDateFormat(`${element.placeholder ?? ''} ${element.text} ${element.ariaLabel ?? ''}`)
+      const value = formatBankDate(iso, element.type === 'date' ? 'ISO' : inputFormat ?? bank.dateFormat)
       let readback: string
       try {
         await locator.fill(value, { timeout: 10_000 })

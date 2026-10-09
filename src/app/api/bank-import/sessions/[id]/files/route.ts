@@ -7,6 +7,7 @@ import { safeFilename } from '@/lib/bank-import/safe-filename'
 import { requireBankImportSession } from '@/lib/bank-import/authz'
 import { prisma } from '@/lib/prisma'
 import { bankImportEnabledForUser, withBankImportFlag } from '@/lib/bank-import/flags'
+import type { UploadFile } from '@/types'
 
 const ParamsSchema = z.object({ id: z.string().min(1) })
 
@@ -23,17 +24,29 @@ export const GET = withBankImportFlag(authedRoute<{ id: string }>({
     })
     const bankName = getBank(session.bankKey)?.displayName ?? session.bankKey
     const files = []
-    const unsupported: { artifactId: string; filename: string; reason: string }[] = []
-    for (const artifact of artifacts) {
+    const unsupported: { artifactId: string; filename: string; reason: string; original: Extract<NonNullable<UploadFile['original']>, { kind: 'bank' }> }[] = []
+    for (const [index, artifact] of artifacts.entries()) {
       if (!artifact.content) continue
       const result = artifactToUploadFile({ filename: artifact.filename, mimeType: artifact.mimeType, bytes: artifact.content }, {
         bankName,
         dateFrom: session.dateFrom,
         dateTo: session.dateTo,
       })
-      if (result.file) files.push(result.file)
-      else unsupported.push({ artifactId: artifact.id, filename: safeFilename(artifact.filename), reason: result.unsupportedReason ?? 'Unsupported bank export.' })
+      const original = {
+        kind: 'bank' as const,
+        sessionId: session.id,
+        artifactId: artifact.id,
+        filename: safeFilename(artifact.filename),
+        mimeType: artifact.mimeType,
+      }
+      if (result.file) {
+        result.file.original = original
+        if (artifacts.length > 1) result.file.filename = result.file.filename.replace(/\.csv$/, ` - ${index + 1}.csv`)
+        files.push(result.file)
+      } else unsupported.push({ artifactId: artifact.id, filename: original.filename, reason: result.unsupportedReason ?? 'Unsupported bank export.', original })
     }
-    return ok({ accountId: session.accountId, bankName, dateFrom: session.dateFrom, dateTo: session.dateTo, files, unsupported })
+    const response = ok({ accountId: session.accountId, bankName, dateFrom: session.dateFrom, dateTo: session.dateTo, files, unsupported })
+    response.headers.set('Cache-Control', 'private, no-store')
+    return response
   },
 }))

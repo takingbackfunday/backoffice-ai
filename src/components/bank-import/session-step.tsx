@@ -15,6 +15,7 @@ export function SessionStep({ id, onClose, onRetry }: { id: string; onClose: () 
   const { snapshot, events, error, liveUrl, queuedForMs, send } = useBankImportSession(id)
   const [commandError, setCommandError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [takeoverPending, setTakeoverPending] = useState(false)
   const navigatedRef = useRef(false)
   const status = snapshot?.status ?? 'STARTING'
   const copy = statusCopy({
@@ -27,6 +28,12 @@ export function SessionStep({ id, onClose, onRetry }: { id: string; onClose: () 
   const interactive = status === 'AWAITING_LOGIN' || status === 'NEEDS_USER'
 
   useEffect(() => {
+    if (status === 'NEEDS_USER' || ['CAPTURED', 'COMPLETE', 'FAILED', 'EXPIRED', 'CANCELLED'].includes(status)) {
+      setTakeoverPending(false)
+    }
+  }, [status])
+
+  useEffect(() => {
     if (status !== 'CAPTURED' || navigatedRef.current) return
     navigatedRef.current = true
     router.push(`/upload?bankImport=${encodeURIComponent(id)}`)
@@ -35,8 +42,10 @@ export function SessionStep({ id, onClose, onRetry }: { id: string; onClose: () 
 
   async function command(type: BankImportCommandType) {
     setSending(true)
+    if (type === 'TAKEOVER') setTakeoverPending(true)
     setCommandError(null)
     try { await send(type) } catch (cause) {
+      if (type === 'TAKEOVER') setTakeoverPending(false)
       setCommandError(cause instanceof Error ? cause.message : 'Could not send that instruction.')
     } finally { setSending(false) }
   }
@@ -68,7 +77,7 @@ export function SessionStep({ id, onClose, onRetry }: { id: string; onClose: () 
 
       <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
         {status === 'AWAITING_LOGIN' && <Button disabled={sending} onClick={() => command('LOGIN_DONE')}>I’ve signed in</Button>}
-        {status === 'NAVIGATING' && <Button disabled={sending} onClick={() => command('TAKEOVER')}>Take over</Button>}
+        {status === 'NAVIGATING' && <Button disabled={sending || takeoverPending} onClick={() => command('TAKEOVER')}>{takeoverPending ? 'Pausing assistant…' : 'Take over'}</Button>}
         {status === 'NEEDS_USER' && (
           <>
             <Button disabled={sending} onClick={() => command('RESUME_AGENT')}>Let the assistant continue</Button>

@@ -17,9 +17,9 @@ import { classifyRoute, type NavigationMode, type RouteClass, type TraceElementT
 import { TERMINAL_STATUSES, type BankImportStatusValue } from '@/lib/bank-import/status'
 import { decideNextAction, resolvePlaybookStep, type AgentAction, type NavigatorInput } from './navigator'
 import { detectAuthState, type AuthState } from './auth-detect'
-import { snapshotPage, type PageSnapshot } from './page-elements'
+import { isCsvSelected, snapshotPage, type PageSnapshot } from './page-elements'
 import { executeAction } from './actions'
-import { SessionCancelled, SessionContext, SessionFailed, SessionTimedOut, sleep } from './session-context'
+import { pollTakeover, SessionCancelled, SessionContext, SessionFailed, SessionTimedOut, sleep } from './session-context'
 import { MAX_FILE_BYTES, openBrowser, type ProvidedBrowser } from './providers'
 
 const LOGIN_TIMEOUT_MS = 5 * 60_000
@@ -137,6 +137,7 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
     let blocked = 0
     let parseFails = 0
     let stepsTaken = 0
+    let consecutiveActionFailures = 0
     let csvCaptured = false
 
     const storedPlaybook = await prisma.bankImportPlaybook.findUnique({ where: { userId_bankKey: { userId: session.userId, bankKey: session.bankKey } } })
@@ -278,6 +279,11 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         stepsTaken = 0
         continue
       }
+      if (consecutiveActionFailures >= 3) {
+        await needsUser('stuck', 'The bank control did not respond after three attempts. Please check the export options.', ctx, page, bank, collectDownloads, () => csvCaptured)
+        consecutiveActionFailures = 0
+        continue
+      }
 
       const snapshot = await snapshotPage(page)
       const routeBefore = classifyRoute(bank.key, page.url())
@@ -300,6 +306,10 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         }
         const result = await runLlm(snapshot)
         action = result.action!
+      }
+      if (await pollTakeover(ctx)) {
+        await needsUser('takeover', 'You can take over the bank browser.', ctx, page, bank, collectDownloads, () => csvCaptured)
+        continue
       }
       stepsTaken++
 
@@ -334,7 +344,8 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         snapshotFailureCount: snapshot.snapshotFailureCount,
       })
       const result = await executeAction({ page, snap: snapshot, action, bank, from: session.dateFrom, to: session.dateTo })
-      history.push(`${action.action}: ${result.message}`)
+      consecutiveActionFailures = result.ok ? 0 : consecutiveActionFailures + 1
+      history.push(`${action.action} (${action.intent}${action.elementId === undefined ? '' : `, element ${action.elementId}`}): ${result.message}`)
       if (result.blocked) {
         blocked++
         await ctx.trace('guardrail.block', 'event', { navigationMode, stepIndex: stepsTaken, actionKind: action.action, outcome: 'blocked', errorCode: 'guardrail_violation' })
@@ -363,10 +374,17 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
 
       if (result.expectDownload) {
         const waitStart = Date.now()
+        let tookOver = false
         while (!csvCaptured && Date.now() - waitStart < DOWNLOAD_WAIT_MS) {
+          if (await pollTakeover(ctx)) {
+            await needsUser('takeover', 'You can take over the bank browser.', ctx, page, bank, collectDownloads, () => csvCaptured)
+            tookOver = true
+            break
+          }
           await collectDownloads()
           if (!csvCaptured) await sleep(POLL_MS)
         }
+        if (tookOver) continue
       }
 
       const routeAfter = classifyRoute(bank.key, page.url())
@@ -543,6 +561,8 @@ async function needsUser(
     while (Date.now() - startedAt < NEEDS_USER_TIMEOUT_MS) {
       ctx.checkDeadline()
       await ctx.pollCommands()
+      // Repeated Take over clicks while already paused are acknowledged, not queued for a second pause.
+      ctx.take('TAKEOVER')
       await collectDownloads()
       if (isCsvCaptured()) return
       if (ctx.take('RESUME_AGENT')) break
@@ -580,7 +600,7 @@ async function verifyPostcondition(
     return route === 'export' || snapshot.elements.some((element) => /csv|download|export|date range|datum|von|bis/i.test(`${element.text} ${element.ariaLabel ?? ''}`))
   }
   if (expected === 'csv_selected') {
-    return snapshot.elements.some((element) => element.tag === 'select' && /csv|spreadsheet|excel/i.test(element.value ?? ''))
+    return isCsvSelected(snapshot)
   }
   if (expected === 'from_date_set' || expected === 'to_date_set') {
     if (action.action !== 'fill_date' || !action.dateField || !verifiedValue) return false

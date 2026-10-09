@@ -26,4 +26,18 @@ describe('buildUserMessage', () => {
     expect(message).toContain(`${'x'.repeat(1500)}\n"""`)
     expect(message).not.toContain(`${'x'.repeat(1501)}\n"""`)
   })
+
+  it('shows actual radio selection so the navigator can proceed to download', () => {
+    const message = buildUserMessage({
+      bank: getBank('n26')!, accountName: 'Main', from: '2026-09-01', to: '2026-10-01',
+      snapshot: { ...snapshot, elements: [
+        { id: 1, frameIndex: 0, tag: 'input', type: 'radio', text: 'CSV', checked: true, disabled: false },
+        { id: 2, frameIndex: 0, tag: 'input', type: 'radio', text: 'PDF', checked: false, disabled: false },
+        { id: 3, frameIndex: 0, tag: 'button', text: 'Download', disabled: false },
+      ] }, history: [], notes: [],
+    })
+    expect(message).toContain('[1] input(radio) "CSV" (checked)')
+    expect(message).toContain('[2] input(radio) "PDF" (not checked)')
+    expect(message).toContain('[3] button "Download"')
+  })
 })

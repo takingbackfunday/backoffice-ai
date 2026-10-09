@@ -16,9 +16,18 @@ export const POST = withBankImportFlag(authedRoute<{ id: string }, z.infer<typeo
   handler: async ({ userId, params, body }) => {
     if (!bankImportEnabledForUser(userId)) return notFound()
     const session = await requireBankImportSession(userId, params.id)
-    if (body.type === 'CANCEL' && session.status === 'QUEUED') {
-      await transition(session.id, 'QUEUED', 'CANCELLED', {}, 'Cancelled')
-      return ok({ accepted: true })
+    if (body.type === 'CANCEL') {
+      if (TERMINAL_STATUSES.has(session.status)) return ok({ accepted: true })
+      if (session.status === 'QUEUED' || session.status === 'CAPTURED') {
+        try {
+          await transition(session.id, session.status, 'CANCELLED', {}, 'Cancelled')
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'Session changed state concurrently') throw error
+          const current = await requireBankImportSession(userId, params.id)
+          if (!TERMINAL_STATUSES.has(current.status)) return conflict('This import session changed state and can no longer accept this command')
+        }
+        return ok({ accepted: true })
+      }
     }
     if (TERMINAL_STATUSES.has(session.status) || session.status === 'CAPTURED') return conflict('This import session can no longer accept commands')
     await prisma.bankImportCommand.create({ data: { sessionId: session.id, type: body.type as BankImportCommandType } })

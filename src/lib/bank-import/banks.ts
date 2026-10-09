@@ -1,6 +1,6 @@
 export type BankKey = 'chase' | 'n26' | 'fakebank'
 export type BrowserRegion = 'us' | 'eu'
-export type BankDateFormat = 'MM/DD/YYYY' | 'DD.MM.YYYY'
+export type BankDateFormat = 'MM/DD/YYYY' | 'DD.MM.YYYY' | 'DD/MM/YYYY'
 
 export interface BankConfig {
   key: BankKey
@@ -49,7 +49,7 @@ const N26: BankConfig = {
   allowInsecureLocalhost: false,
   region: 'eu',
   proxyCountryCode: 'de',
-  dateFormat: 'DD.MM.YYYY',
+  dateFormat: 'DD/MM/YYYY',
   maxRangeDays: null,
   loginUrlPatterns: [/app\.n26\.com\/login/i],
   authenticatedUrlPatterns: [/app\.n26\.com\/(feed|account|home|dashboard)/i],

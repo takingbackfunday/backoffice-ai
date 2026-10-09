@@ -14,6 +14,9 @@ import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useBankImportHandoff } from '@/components/upload/hooks/use-bank-import-handoff'
+import { discardBankImportSession } from '@/lib/bank-import/discard'
+import { OriginalFileDialog } from './original-file-dialog'
+import type { UploadFile } from '@/types'
 
 interface BackgroundJob {
   id: string
@@ -74,6 +77,7 @@ export function UploadPageClient({ initialAccounts, onboarding, bankImportId, ba
   const [recentJobs, setRecentJobs] = useState<BackgroundJob[]>([])
   const [jobsLoaded, setJobsLoaded] = useState(false)
   const [tasksTimedOut, setTasksTimedOut] = useState(false)
+  const [viewingOriginal, setViewingOriginal] = useState<NonNullable<UploadFile['original']> | null>(null)
   const bankImportHandoff = useBankImportHandoff(bankImportEnabled ? bankImportId ?? null : null)
   const jobIds = lastImport?.jobIds ?? NO_JOB_IDS
 
@@ -164,7 +168,7 @@ export function UploadPageClient({ initialAccounts, onboarding, bankImportId, ba
     await finishOnboardingIfNeeded()
     resetUploadDropzone()
     reset()
-    if (onboarding) router.replace('/upload')
+    if (onboarding || bankImportId) router.replace('/upload')
   }
 
   async function handleGoToTransactions() {
@@ -172,6 +176,16 @@ export function UploadPageClient({ initialAccounts, onboarding, bankImportId, ba
     resetUploadDropzone()
     reset()
     router.push('/transactions')
+  }
+
+  async function handleStartOver() {
+    const bankSessions = new Set(useUploadStore.getState().files.flatMap((file) =>
+      file.original?.kind === 'bank' ? [file.original.sessionId] : []))
+    for (const sessionId of bankSessions) await discardBankImportSession(sessionId)
+    bankImportHandoff.reset()
+    resetUploadDropzone()
+    reset()
+    if (bankImportId) router.replace('/upload')
   }
 
   const displayStep = toDisplayStep(step)
@@ -199,19 +213,20 @@ export function UploadPageClient({ initialAccounts, onboarding, bankImportId, ba
           {bankImportHandoff.state === 'error' && (
             <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-3 text-sm" role="alert">
               <p>{bankImportHandoff.error}</p>
-              {bankImportId && bankImportHandoff.unsupported.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {bankImportHandoff.unsupported.map((artifact) => (
-                    <li key={artifact.artifactId}>
-                      {artifact.reason}{' '}
-                      <a className="underline" href={`/api/bank-import/sessions/${encodeURIComponent(bankImportId)}/artifacts/${encodeURIComponent(artifact.artifactId)}`}>
-                        Download {artifact.filename}
-                      </a>
-                      {' '}then use Upload file.
-                    </li>
-                  ))}
-                </ul>
-              )}
+            </div>
+          )}
+          {bankImportId && bankImportHandoff.unsupported.length > 0 && (
+            <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm">
+              <p>These bank files need manual upload to extract transactions:</p>
+              <ul className="mt-2 space-y-2">
+                {bankImportHandoff.unsupported.map((artifact) => (
+                  <li key={artifact.artifactId}>
+                    <p className="break-all">{artifact.filename}: {artifact.reason}</p>
+                    <button type="button" className="mr-3 underline" onClick={() => setViewingOriginal(artifact.original)}>View original file</button>
+                    <a className="underline" href={`/api/bank-import/sessions/${encodeURIComponent(bankImportId)}/artifacts/${encodeURIComponent(artifact.artifactId)}`}>Download original</a>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
@@ -229,7 +244,7 @@ export function UploadPageClient({ initialAccounts, onboarding, bankImportId, ba
 
           {step === 'upload' && (
             <>
-              {bankImportEnabled && <ActiveSessionBanner />}
+              {bankImportEnabled && !bankImportId && <ActiveSessionBanner />}
               {bankImportEnabled && (
                 <div className="mb-4 flex items-center gap-3 text-sm text-muted-foreground">
                   <span>Or</span>
@@ -246,12 +261,14 @@ export function UploadPageClient({ initialAccounts, onboarding, bankImportId, ba
               accounts={accounts}
               loadingAccounts={loadingAccounts}
               onAccountCreated={(a) => setAccounts((prev) => [...prev, a])}
+              onStartOver={handleStartOver}
             />
           )}
 
         </main>
       </div>
 
+      {viewingOriginal && <OriginalFileDialog original={viewingOriginal} onClose={() => setViewingOriginal(null)} />}
       <Dialog open={step === 'done'}>
         <DialogContent>
           <DialogHeader>

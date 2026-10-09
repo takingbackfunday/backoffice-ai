@@ -26,6 +26,46 @@ describe('addFiles', () => {
     expect(result.rejected).toHaveLength(0)
   })
 
+  it('retains the original local File and sheet metadata when accepted', () => {
+    const file = new File(['workbook'], 'jan.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const original: UploadFile['original'] = { kind: 'local', file, sheetName: 'Transactions' }
+    const uploadFile: UploadFile = { ...makeFile('jan.xlsx', CHASE), source: 'excel', original }
+
+    const result = addFiles([], null, [uploadFile])
+
+    expect(result.accepted).toHaveLength(1)
+    expect(result.accepted[0]).toBe(uploadFile)
+    expect(result.accepted[0].original).toBe(original)
+    expect(result.accepted[0].original).toEqual({ kind: 'local', file, sheetName: 'Transactions' })
+    expect(result.accepted[0].csvText).toBe('a,b,c')
+  })
+
+  it('retains original bank artifact metadata separately from the upload filename', () => {
+    const original: UploadFile['original'] = {
+      kind: 'bank',
+      sessionId: 'session-1',
+      artifactId: 'artifact-1',
+      filename: 'transactions.csv',
+      mimeType: 'text/csv',
+    }
+    const uploadFile: UploadFile = { ...makeFile('Chase 2026-01-01 to 2026-01-31.csv', CHASE), original }
+
+    const result = addFiles([], null, [uploadFile])
+
+    expect(result.accepted).toHaveLength(1)
+    expect(result.accepted[0]).toBe(uploadFile)
+    expect(result.accepted[0].original).toBe(original)
+    expect(result.accepted[0].original).toEqual({
+      kind: 'bank',
+      sessionId: 'session-1',
+      artifactId: 'artifact-1',
+      filename: 'transactions.csv',
+      mimeType: 'text/csv',
+    })
+    expect(result.accepted[0].filename).toBe('Chase 2026-01-01 to 2026-01-31.csv')
+    expect(result.accepted[0].csvText).toBe('a,b,c')
+  })
+
   it('rejects files with different signatures', () => {
     const result = addFiles([], null, [
       makeFile('jan.csv', CHASE),

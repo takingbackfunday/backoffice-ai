@@ -18,7 +18,6 @@ import { ConfirmDialog } from './confirm-dialog'
 import { ReconciliationNotices } from './reconciliation-notices'
 import { AiMappingBanner } from './ai-mapping-banner'
 import { FileListPanel } from './file-list-panel'
-import { resetUploadDropzone } from '@/stores/upload-dropzone-store'
 import { useImportPreview } from './hooks/use-import-preview'
 import { useImportSubmit } from './hooks/use-import-submit'
 import { useMappingValidation } from './hooks/use-mapping-validation'
@@ -28,8 +27,9 @@ export function ColumnMapper({
   accounts: initialAccounts = [],
   loadingAccounts = false,
   onAccountCreated,
-}: { accounts?: Account[]; loadingAccounts?: boolean; onAccountCreated?: (account: Account) => void }) {
-  const { files, accountId, profileHit, profileStatus, setAccountId, reset, clearProfileHit } = useUploadStore()
+  onStartOver,
+}: { accounts?: Account[]; loadingAccounts?: boolean; onAccountCreated?: (account: Account) => void; onStartOver: () => void | Promise<void> }) {
+  const { files, accountId, profileHit, profileStatus, setAccountId, clearProfileHit } = useUploadStore()
   const csvHeaders = files[0]?.headers ?? []
   const source = files[0]?.source ?? 'csv'
   const displayFilename = files.length === 1 ? files[0].filename : `${files.length} files`
@@ -59,6 +59,8 @@ export function ColumnMapper({
   const [dateAmbiguity, setDateAmbiguity] = useState<{ chosen: string; alternatives: string[]; exampleRaw: string } | null>(null)
   const [dateUnrecognised, setDateUnrecognised] = useState(false)
   const [startOverOpen, setStartOverOpen] = useState(false)
+  const [discarding, setDiscarding] = useState(false)
+  const [discardError, setDiscardError] = useState<string | null>(null)
   const [partialImportOpen, setPartialImportOpen] = useState(false)
 
   const touchedRef = useRef<Set<string>>(new Set())
@@ -173,15 +175,30 @@ export function ColumnMapper({
   const hasMismatch = reconciliations.some((item) => !item.matched)
 
   const requestImport = () => {
+    if (discarding || startOverOpen) return
     keepAiChanges()
     if (skippedCount > 0 || hasMismatch) setPartialImportOpen(true)
     else void handleImport()
   }
 
+  const discard = async () => {
+    if (discarding || importing) return
+    setDiscarding(true)
+    setDiscardError(null)
+    try {
+      await onStartOver()
+      setStartOverOpen(false)
+    } catch {
+      setDiscardError('Could not discard this import. Your preview has been kept. Please try again.')
+    } finally {
+      setDiscarding(false)
+    }
+  }
+
   return (
-    <div className="flex gap-6" data-testid="column-mapper-form">
+    <div className="flex flex-col gap-6 lg:flex-row" data-testid="column-mapper-form">
       {/* Left: account selector + mapping controls */}
-      <div className="w-72 flex-shrink-0 flex flex-col gap-4">
+      <div className="w-full flex-shrink-0 flex flex-col gap-4 lg:w-72">
         <AccountRail
           accounts={accounts}
           loadingAccounts={loadingAccounts}
@@ -202,7 +219,7 @@ export function ColumnMapper({
           <AiMappingBanner changes={aiChanges} onUndo={undoAiChanges} onKeep={keepAiChanges} />
         )}
 
-        <FileListPanel importing={importing} />
+        <FileListPanel importing={importing || discarding} onRemoveLastFile={() => setStartOverOpen(true)} />
 
         {validating && <p className="text-xs text-muted-foreground">Checking with AI…</p>}
 
@@ -246,14 +263,15 @@ export function ColumnMapper({
         {/* Import button */}
         <div className="sticky bottom-0 -mx-1 mt-auto bg-background px-1 pt-3 pb-1 border-t space-y-2">
           <button onClick={requestImport}
-            disabled={importing || newCount === 0 || previewLoading || !accountId}
+            disabled={importing || discarding || startOverOpen || newCount === 0 || previewLoading || !accountId}
              className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
              data-testid="confirm-import-btn"
              aria-label={importing ? 'Importing…' : `Import ${newCount} new transactions`}>
             {importing ? 'Importing…' : `Import ${newCount} transaction${newCount !== 1 ? 's' : ''}`}
           </button>
           <button onClick={() => setStartOverOpen(true)}
-            className="w-full rounded-md px-4 py-2 text-xs text-muted-foreground hover:underline"
+            disabled={importing || discarding}
+            className="w-full rounded-md px-4 py-2 text-xs text-muted-foreground hover:underline disabled:opacity-50"
             data-testid="cancel-import-btn">
             Start over
           </button>
@@ -284,13 +302,16 @@ export function ColumnMapper({
       <ConfirmDialog
         open={startOverOpen}
         title="Discard this import?"
-        body="Your files and column choices will be cleared."
-        confirmLabel="Discard"
+        body="Your files and column choices will be cleared. Any bank download in this review will be discarded. No transactions will be imported or deleted."
+        confirmLabel={discarding ? 'Discarding...' : 'Discard'}
         cancelLabel="Keep editing"
         destructive
-        onCancel={() => setStartOverOpen(false)}
-        onConfirm={() => { resetUploadDropzone(); reset() }}
-      />
+        pending={discarding}
+        onCancel={() => { setStartOverOpen(false); setDiscardError(null) }}
+        onConfirm={() => { void discard() }}
+      >
+        {discardError && <p className="text-sm text-destructive" role="alert">{discardError}</p>}
+      </ConfirmDialog>
       <ConfirmDialog
         open={partialImportOpen}
         title="Some rows won't be imported"

@@ -11,6 +11,7 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   destructive = false,
+  pending = false,
   onConfirm,
   onCancel,
   children,
@@ -21,12 +22,13 @@ export function ConfirmDialog({
   confirmLabel: string
   cancelLabel: string
   destructive?: boolean
+  pending?: boolean
   onConfirm: () => void
   onCancel: () => void
   children?: ReactNode
 }) {
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel() }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen && !pending) onCancel() }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -34,8 +36,8 @@ export function ConfirmDialog({
         </DialogHeader>
         {children}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>{cancelLabel}</Button>
-          <Button type="button" variant={destructive ? 'destructive' : 'default'} onClick={onConfirm}>{confirmLabel}</Button>
+          <Button type="button" variant="outline" disabled={pending} onClick={onCancel}>{cancelLabel}</Button>
+          <Button type="button" variant={destructive ? 'destructive' : 'default'} disabled={pending} onClick={onConfirm}>{confirmLabel}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -4,6 +4,7 @@ import type { ExcelSheetInfo, Workbook } from '@/lib/excel'
 export interface PendingSheetPick {
   id: string
   filename: string
+  originalFile: File
   workbook: Workbook
   sheets: ExcelSheetInfo[]
 }
@@ -15,6 +16,7 @@ interface DropzoneState {
   processing: 'pdf' | 'excel' | 'file' | null
   busy: boolean
   busyNotice: boolean
+  resetVersion: number
   setErrors: (errors: { filename: string; reason: string }[]) => void
   addPendingPicks: (picks: PendingSheetPick[]) => void
   removePendingPick: (id: string) => void
@@ -32,6 +34,7 @@ const initialState = {
   processing: null,
   busy: false,
   busyNotice: false,
+  resetVersion: 0,
 }
 
 export const useUploadDropzoneStore = create<DropzoneState>((set) => ({
@@ -51,7 +54,7 @@ export const useUploadDropzoneStore = create<DropzoneState>((set) => ({
   setProcessing: (processing) => set({ processing }),
   setBusy: (busy) => set({ busy }),
   setBusyNotice: (busyNotice) => set({ busyNotice }),
-  reset: () => set(initialState),
+  reset: () => set((state) => ({ ...initialState, resetVersion: state.resetVersion + 1 })),
 }))
 
 export const resetUploadDropzone = () => useUploadDropzoneStore.getState().reset()

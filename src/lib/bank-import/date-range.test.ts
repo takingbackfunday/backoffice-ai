@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeDefaultRange, formatBankDate, isIsoDate, validateRange } from './date-range'
+import { computeDefaultRange, formatBankDate, inferBankDateFormat, isIsoDate, validateRange } from './date-range'
 
 const today = '2026-10-08'
 
@@ -54,6 +54,14 @@ describe('date helpers', () => {
   it('formats dates for each bank locale', () => {
     expect(formatBankDate('2026-09-03', 'MM/DD/YYYY')).toBe('09/03/2026')
     expect(formatBankDate('2026-09-03', 'DD.MM.YYYY')).toBe('03.09.2026')
+    expect(formatBankDate('2026-09-03', 'DD/MM/YYYY')).toBe('03/09/2026')
     expect(formatBankDate('2026-09-03', 'ISO')).toBe('2026-09-03')
+  })
+
+  it('uses only explicit supported date-format hints from bank controls', () => {
+    expect(inferBankDateFormat('DD/MM/YYYY')).toBe('DD/MM/YYYY')
+    expect(inferBankDateFormat('Date (MM/DD/YYYY)')).toBe('MM/DD/YYYY')
+    expect(inferBankDateFormat('TT.MM.JJJJ')).toBe('DD.MM.YYYY')
+    expect(inferBankDateFormat('Enter a date')).toBeNull()
   })
 })

@@ -46,7 +46,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
           reject(new Error('Could not read CSV headers. Make sure the file has a header row.'))
           return
         }
-        resolve({ filename: file.name, headers, csvText, source: 'csv' })
+        resolve({ filename: file.name, headers, csvText, source: 'csv', original: { kind: 'local', file } })
       }
       reader.onerror = () => reject(new Error('Could not read the CSV file.'))
       reader.readAsText(file)
@@ -70,14 +70,14 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
     if (!res.ok || json.error) {
       throw new Error(json.error ?? 'Could not extract transactions from this PDF.')
     }
-    return { filename: file.name, headers: json.data.headers, csvText: json.data.csvText, source: 'pdf' }
+    return { filename: file.name, headers: json.data.headers, csvText: json.data.csvText, source: 'pdf', original: { kind: 'local', file } }
   }, [])
 
   // Excel → UploadFile for a chosen sheet. Multi-sheet workbooks get the
   // sheet name appended so picking two sheets from one file doesn't collide
   // with the duplicate-filename guard.
   const excelSheetToUploadFile = useCallback(
-    async (filename: string, workbook: Workbook, sheetName: string, multiSheet: boolean): Promise<UploadFile> => {
+    async (file: File, workbook: Workbook, sheetName: string, multiSheet: boolean): Promise<UploadFile> => {
       const { workbookSheetToCsv } = await import('@/lib/excel')
       const csvText = workbookSheetToCsv(workbook, sheetName)
       const headers = headersFromCsv(csvText)
@@ -85,10 +85,11 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
         throw new Error(`Sheet "${sheetName}" has no readable header row.`)
       }
       return {
-        filename: multiSheet ? `${filename} — ${sheetName}` : filename,
+        filename: multiSheet ? `${file.name} — ${sheetName}` : file.name,
         headers,
         csvText,
         source: 'excel',
+        original: { kind: 'local', file, sheetName },
       }
     },
     [headersFromCsv]
@@ -99,6 +100,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
     if (allFiles.length === 0) return
 
     if (busyRef.current || useUploadDropzoneStore.getState().busy) { setBusyNotice(true); return }
+    const resetVersion = useUploadDropzoneStore.getState().resetVersion
     busyRef.current = true
     setBusy(true)
     setBusyNotice(false)
@@ -123,12 +125,13 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
             const sheets = listWorkbookSheets(workbook)
             if (sheets.length === 0) throw new Error('This workbook has no sheets with data.')
             if (sheets.length === 1) {
-              return excelSheetToUploadFile(file.name, workbook, sheets[0].name, false)
+              return excelSheetToUploadFile(file, workbook, sheets[0].name, false)
             }
             // Multiple sheets — the user picks below before anything is ingested.
             newPicks.push({
               id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
               filename: file.name,
+              originalFile: file,
               workbook,
               sheets,
             })
@@ -140,6 +143,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
 
       const parsed: UploadFile[] = []
       const parseErrors: { filename: string; reason: string }[] = []
+      if (useUploadDropzoneStore.getState().resetVersion !== resetVersion) return
 
       results.forEach((r, i) => {
         if (r.status === 'fulfilled') {
@@ -159,31 +163,38 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
       await ingest(parsed, parseErrors)
     } finally {
       busyRef.current = false
-      setBusy(false)
-      setProcessing(null)
-      setBusyNotice(false)
+      if (useUploadDropzoneStore.getState().resetVersion === resetVersion) {
+        setBusy(false)
+        setProcessing(null)
+        setBusyNotice(false)
+      }
     }
   }, [parseCsv, parsePdf, excelSheetToUploadFile, ingest, setBusy, setBusyNotice, setErrors, setProcessing, addPendingPicks])
 
   const confirmSheetPick = useCallback(async (pick: PendingSheetPick) => {
     if (busyRef.current || useUploadDropzoneStore.getState().busy) return
+    const resetVersion = useUploadDropzoneStore.getState().resetVersion
     busyRef.current = true
     setBusy(true)
     setProcessing('excel')
     const sheetName = sheetChoice[pick.id] ?? pick.sheets[0].name
     removePendingPick(pick.id)
     try {
-      const file = await excelSheetToUploadFile(pick.filename, pick.workbook, sheetName, true)
+      const file = await excelSheetToUploadFile(pick.originalFile, pick.workbook, sheetName, true)
+      if (useUploadDropzoneStore.getState().resetVersion !== resetVersion) return
       await ingest([file], [])
     } catch (err) {
+      if (useUploadDropzoneStore.getState().resetVersion !== resetVersion) return
       setErrors([
         ...useUploadDropzoneStore.getState().errors,
         { filename: pick.filename, reason: err instanceof Error ? err.message : 'Failed to parse sheet.' },
       ])
     } finally {
       busyRef.current = false
-      setBusy(false)
-      setProcessing(null)
+      if (useUploadDropzoneStore.getState().resetVersion === resetVersion) {
+        setBusy(false)
+        setProcessing(null)
+      }
     }
   }, [sheetChoice, excelSheetToUploadFile, ingest, removePendingPick, setBusy, setErrors, setProcessing])
 

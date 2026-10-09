@@ -14,6 +14,7 @@ export interface PageElement {
   name?: string
   value?: string
   options?: string[]
+  checked?: boolean
   disabled: boolean
 }
 
@@ -28,6 +29,14 @@ export interface PageSnapshot {
 }
 
 export const MAX_ELEMENTS = 250
+
+export function isCsvSelected(snapshot: Pick<PageSnapshot, 'elements'>): boolean {
+  return snapshot.elements.some((element) =>
+    element.tag === 'select' ? /\bcsv\b/i.test(element.value ?? '') :
+      element.tag === 'input' && element.type === 'radio' && element.checked === true &&
+      /\bcsv\b/i.test(`${element.text} ${element.ariaLabel ?? ''}`),
+  )
+}
 
 export async function snapshotPage(page: Page, onFrameError?: (error: unknown) => void): Promise<PageSnapshot> {
   const elements: PageElement[] = []
@@ -82,6 +91,7 @@ export async function snapshotPage(page: Page, onFrameError?: (error: unknown) =
             name: el.getAttribute('name')?.slice(0, 80) ?? undefined,
             value,
             options,
+            checked: tag === 'input' && ['radio', 'checkbox'].includes(type ?? '') ? (el as HTMLInputElement).checked : undefined,
             disabled: (el as HTMLButtonElement).disabled === true || el.getAttribute('aria-disabled') === 'true',
           })
         }

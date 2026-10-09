@@ -318,6 +318,7 @@ New users: sign-up → Clerk redirects to `/dashboard` → `/dashboard` redirect
 `UserPreference.data.onboardingStep` tracks progress for the personal/bank flow. The Studio and Portfolio onboarding banners only remove the `?onboarding=1` query param on skip. The Bank Accounts and Upload banners post `onboardingStep: 'done'` when skipped; the `/accounts/new` form posts `onboardingStep: 'upload'` after account creation; `/upload` posts `onboardingStep: 'done'` after import completion.
 
 ### Bank import worker
+- Before continuing bank-import work, consult local-only `docs/bank-import/SESSION_HANDOFF.md` and `docs/bank-import/SDD-dynamic-bank-connections.md` when available. These private documents are intentionally untracked; ask for sanitized context if missing. The dynamic design is not implemented yet.
 - `src/worker/**` and `src/lib/bank-import/**` execute in plain Node via `tsx`; never import Next.js, Clerk, React or client components there.
 - Human sign-in/2FA is required every session. A user/bank semantic export playbook is persisted only after a successful agent-led CSV capture; it contains no credentials or page text.
 - Closing the Browser Use CDP connection does not stop the cloud browser. Always call `stopBrowser`; never log or return live-view/download URLs except the owner-scoped live-view API.

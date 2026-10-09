@@ -73,5 +73,14 @@ export function formatBankDate(iso: string, format: BankDateFormat | 'ISO'): str
   const [y, m, d] = iso.split('-')
   if (format === 'MM/DD/YYYY') return `${m}/${d}/${y}`
   if (format === 'DD.MM.YYYY') return `${d}.${m}.${y}`
+  if (format === 'DD/MM/YYYY') return `${d}/${m}/${y}`
   return iso
+}
+
+export function inferBankDateFormat(hint: string): BankDateFormat | null {
+  const normalized = hint.toUpperCase().replace(/\s+/g, '')
+  if (normalized.includes('DD/MM/YYYY') || normalized.includes('DD/MM/JJJJ')) return 'DD/MM/YYYY'
+  if (normalized.includes('MM/DD/YYYY') || normalized.includes('MM/DD/JJJJ')) return 'MM/DD/YYYY'
+  if (normalized.includes('DD.MM.YYYY') || normalized.includes('DD.MM.JJJJ') || normalized.includes('TT.MM.JJJJ')) return 'DD.MM.YYYY'
+  return null
 }

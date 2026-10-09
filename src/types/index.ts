@@ -52,6 +52,9 @@ export interface UploadFile {
   headers: string[]
   csvText: string
   source: 'csv' | 'pdf' | 'excel'
+  original?:
+    | { kind: 'local'; file: File; sheetName?: string }
+    | { kind: 'bank'; sessionId: string; artifactId: string; filename: string; mimeType: string }
 }
 
 // Per-file preview metadata returned by the preview API

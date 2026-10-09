@@ -53,19 +53,26 @@ export class SessionContext {
   async pollCommands(): Promise<void> {
     const commands = await takeCommands(this.sessionId)
     if (commands.includes('CANCEL')) throw new SessionCancelled('Cancelled by user')
-    this.pending.push(...commands)
+    for (const command of commands) {
+      if (!this.pending.includes(command)) this.pending.push(command)
+    }
   }
 
   take(type: BankImportCommandType): boolean {
     const index = this.pending.indexOf(type)
     if (index === -1) return false
-    this.pending.splice(index, 1)
+    this.pending = this.pending.filter((command) => command !== type)
     return true
   }
 
   checkDeadline(): void {
     if (Date.now() > this.deadline) throw new SessionTimedOut('Session timed out')
   }
+}
+
+export async function pollTakeover(ctx: SessionContext): Promise<boolean> {
+  await ctx.pollCommands()
+  return ctx.take('TAKEOVER')
 }
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))

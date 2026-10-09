@@ -7,6 +7,12 @@ describe('bank-import status transitions', () => {
     expect(canTransition('CAPTURED', 'NAVIGATING')).toBe(false)
   })
 
+  it('allows a captured import to be completed, discarded, or expired only', () => {
+    expect(BANK_IMPORT_STATUSES.filter((next) => canTransition('CAPTURED', next))).toEqual([
+      'COMPLETE', 'CANCELLED', 'EXPIRED',
+    ])
+  })
+
   it('defines every terminal status as final', () => {
     for (const status of TERMINAL_STATUSES) {
       expect(BANK_IMPORT_STATUSES.includes(status)).toBe(true)

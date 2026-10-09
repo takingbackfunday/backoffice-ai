@@ -560,7 +560,7 @@ const ALLOWED: Record<BankImportStatusValue, BankImportStatusValue[]> = {
   AWAITING_LOGIN: ['NAVIGATING', 'FAILED', 'CANCELLED', 'EXPIRED'],
   NAVIGATING: ['NEEDS_USER', 'CAPTURED', 'FAILED', 'CANCELLED', 'EXPIRED'],
   NEEDS_USER: ['NAVIGATING', 'CAPTURED', 'FAILED', 'CANCELLED', 'EXPIRED'],
-  CAPTURED: ['COMPLETE', 'EXPIRED'],
+  CAPTURED: ['COMPLETE', 'CANCELLED', 'EXPIRED'],
   COMPLETE: [], FAILED: [], CANCELLED: [], EXPIRED: [],
 }
 
@@ -1385,11 +1385,11 @@ General rules for every route in this task:
 | 7.1 | `GET /api/bank-import/accounts` | Returns the user's accounts where `resolveBankKey(institution.name)` is not null: `[{ id, name, type, currency, institutionName, bankKey, bankName, askAccountHint, bankAccountHint, lastTxnDate }]`. `lastTxnDate` comes from `getLastTxnDatesForUser`. |
 | 7.2 | `GET /api/bank-import/default-range?accountId=&today=` | Validates `today` with `isIsoDate`. It must also be within ±1 day of the server's UTC date, otherwise `badRequest`. Checks account ownership and the bank. Returns `{ ...computeDefaultRange({ lastTxnDate, today, maxRangeDays: bank.maxRangeDays }), lastTxnDate, maxRangeDays }`. |
 | 7.3 | `POST /api/bank-import/sessions` | Body (zod): `{ accountId: string, dateFrom: string, dateTo: string, today: string, rememberBrowser: boolean, accountHint?: string (max 40, trimmed, empty → undefined) }`. Steps below the table. |
-| 7.4 | `GET /api/bank-import/sessions/active` | The most recent session with an `ACTIVE_STATUSES` status, or else a `CAPTURED` one created in the last 24 h. Returns `toSnapshot(...)` or `null`. |
+| 7.4 | `GET /api/bank-import/sessions/active` | The most recent session with an `ACTIVE_STATUSES` status. Otherwise inspect the newest session with `capturedAt` set and created in the last 24 h; return it only if still `CAPTURED`. A completed/discarded/expired newer capture suppresses older review reminders without modifying older sessions. Returns `toSnapshot(...)` or `null` with `Cache-Control: private, no-store`. |
 | 7.5 | `GET /api/bank-import/sessions/[id]` | `toSnapshot(await requireBankImportSession(userId, id))`. |
 | 7.6 | `GET /api/bank-import/sessions/[id]/events` | SSE (§7.9). Not `authedRoute`, because it streams. |
 | 7.7 | `GET /api/bank-import/sessions/[id]/live-view` | If the status is not in `BROWSER_LIVE_STATUSES` or `liveUrlEnc` is null, return `conflict('Live view not available')`. Otherwise return `ok({ url: open(liveUrlEnc) })` with the header `Cache-Control: no-store`. Never log the URL. |
-| 7.8 | `POST /api/bank-import/sessions/[id]/commands` | Body: `{ type: 'LOGIN_DONE' \| 'TAKEOVER' \| 'RESUME_AGENT' \| 'CANCEL' }`. If the type is `CANCEL` and the status is `QUEUED`, transition it to `CANCELLED`, append the event `Cancelled`, and return. If the status is terminal or `CAPTURED`, return `conflict`. Otherwise create a `BankImportCommand` and append `session.command` containing only the command enum. Return `ok({ accepted: true })`. |
+| 7.8 | `POST /api/bank-import/sessions/[id]/commands` | Body: `{ type: 'LOGIN_DONE' \| 'TAKEOVER' \| 'RESUME_AGENT' \| 'CANCEL' }`. Owner-authorized `CANCEL` transitions `QUEUED` or `CAPTURED` directly to `CANCELLED`, appends `Cancelled`, and returns without a worker command. `CANCEL` on an already-terminal session is an accepted no-op, preserving completed import counts. A concurrent transition re-reads ownership: an already-terminal result is accepted; a nonterminal result returns `conflict`. Other commands on terminal or `CAPTURED` sessions return `conflict`. Otherwise create a `BankImportCommand` and append `session.command` containing only the command enum. Return `ok({ accepted: true })`. |
 | 7.10 | `GET /api/bank-import/sessions/[id]/files` | Steps below the table. |
 | 7.11 | `GET /api/bank-import/sessions/[id]/artifacts/[artifactId]` | Checks ownership, and that the artifact belongs to the session and is not purged. Returns the raw bytes with `Content-Type: mimeType` and `Content-Disposition: attachment; filename="<sanitised>"`. |
 | 7.12 | `POST /api/bank-import/sessions/[id]/complete` | Body: `{ imported: int ≥ 0, skipped: int ≥ 0 }`. Allowed only from `CAPTURED`: `transition(id,'CAPTURED','COMPLETE',{ importedCount, skippedCount }, `Imported ${imported} transactions`)`. Idempotent: if the session is already `COMPLETE`, return ok. |
@@ -1497,7 +1497,7 @@ Use the existing `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `Dial
 | `hooks/use-default-range.ts` | Fetches `/api/bank-import/default-range` and returns `{ data, loading, error }`. |
 | `hooks/use-bank-import-session.ts` | Described below. |
 | `bank-import-button.tsx` | Props: `{ label?: string, initialAccountId?: string, variant? }`. Renders a `Button` that opens `BankImportDialog`. |
-| `active-session-banner.tsx` | On mount, fetches `/api/bank-import/sessions/active`. If the session is active: "{bankName} import in progress" with an **Open** button (opens the dialog with `resumeSessionId`). If it is `CAPTURED`: "Your {bankName} download is ready to review" with a **Review** link to `/upload?bankImport=id`. Renders nothing when the result is null. |
+| `active-session-banner.tsx` | On mount, fetches `/api/bank-import/sessions/active` without caching. If the session is active: "{bankName} import in progress" with an **Open** button (opens the dialog with `resumeSessionId`). If it is `CAPTURED`: "Your {bankName} download is ready to review" with a native **Review** link to `/upload?bankImport=id` and a confirmed **Discard download** action. Discard waits for accepted `CANCEL`, shows pending/error feedback, and hides the banner only on success. Renders nothing when the result is null. |
 
 **`hooks/use-bank-import-session.ts`**
 - Opens `new EventSource(`/api/bank-import/sessions/${id}/events`)`.
@@ -1537,8 +1537,10 @@ export function localToday(d = new Date()): string {
 
 ## Task 10: Entry points
 
+Preview **Start over** / **Discard**, including removal of the last file, cancels sessions identified by the actual bank-file originals before resetting local upload state. A stale bank query parameter must not cause a manual-only upload to cancel an unrelated terminal session. On cancellation failure retain the preview and offer retry; block discard while importing and conflicting actions while discarding. After success synchronously abort/reset the bank handoff before clearing files and replacing the URL so a delayed response cannot revive the discarded preview. This does not import/delete transactions or change artifact retention.
+
 1. **`/upload`:** in `upload-page-client.tsx`, when `bankImportEnabled` is true and `step === 'upload'`:
-   - render `<ActiveSessionBanner />`;
+   - render `<ActiveSessionBanner />` when no bank handoff query is being reviewed;
    - render a row above the dropzone: "Or" + `<BankImportButton label="Fetch from bank" />`.
    - The button only renders if `/api/bank-import/accounts` returns at least one account. Do this check inside `BankImportButton` with a lightweight fetch, and render nothing on an empty list.
 2. **`/bank-accounts`:**

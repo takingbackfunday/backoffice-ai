@@ -26,6 +26,7 @@ export const GET = withBankImportFlag(authedRoute<{ id: string; artifactId: stri
         'Content-Type': artifact.mimeType,
         'Content-Disposition': `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
         'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
       },
     })
   },
