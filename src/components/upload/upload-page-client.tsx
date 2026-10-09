@@ -6,11 +6,14 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { CsvDropzone } from '@/components/upload/csv-dropzone'
 import { ColumnMapper } from '@/components/upload/column-mapper'
+import { ActiveSessionBanner } from '@/components/bank-import/active-session-banner'
+import { BankImportButton } from '@/components/bank-import/bank-import-button'
 import { useUploadStore } from '@/stores/upload-store'
 import { resetUploadDropzone } from '@/stores/upload-dropzone-store'
 import { OnboardingBanner } from '@/components/onboarding/onboarding-banner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useBankImportHandoff } from '@/components/upload/hooks/use-bank-import-handoff'
 
 interface BackgroundJob {
   id: string
@@ -56,7 +59,12 @@ function toDisplayStep(step: string): DisplayStep {
   return step as DisplayStep
 }
 
-export function UploadPageClient({ initialAccounts, onboarding }: { initialAccounts?: Account[]; onboarding?: boolean }) {
+export function UploadPageClient({ initialAccounts, onboarding, bankImportId, bankImportEnabled }: {
+  initialAccounts?: Account[]
+  onboarding?: boolean
+  bankImportId?: string
+  bankImportEnabled?: boolean
+}) {
   const router = useRouter()
   const step = useUploadStore((s) => s.step)
   const lastImport = useUploadStore((s) => s.lastImport)
@@ -66,6 +74,7 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
   const [recentJobs, setRecentJobs] = useState<BackgroundJob[]>([])
   const [jobsLoaded, setJobsLoaded] = useState(false)
   const [tasksTimedOut, setTasksTimedOut] = useState(false)
+  const bankImportHandoff = useBankImportHandoff(bankImportEnabled ? bankImportId ?? null : null)
   const jobIds = lastImport?.jobIds ?? NO_JOB_IDS
 
   useEffect(() => {
@@ -182,6 +191,30 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
             />
           )}
 
+          {bankImportHandoff.state === 'loading' && (
+            <p className="mb-4 rounded-md border border-border bg-muted px-3 py-2 text-sm" role="status">
+              Loading your {bankImportHandoff.bankName ?? 'bank'} download…
+            </p>
+          )}
+          {bankImportHandoff.state === 'error' && (
+            <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-3 text-sm" role="alert">
+              <p>{bankImportHandoff.error}</p>
+              {bankImportId && bankImportHandoff.unsupported.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {bankImportHandoff.unsupported.map((artifact) => (
+                    <li key={artifact.artifactId}>
+                      {artifact.reason}{' '}
+                      <a className="underline" href={`/api/bank-import/sessions/${encodeURIComponent(bankImportId)}/artifacts/${encodeURIComponent(artifact.artifactId)}`}>
+                        Download {artifact.filename}
+                      </a>
+                      {' '}then use Upload file.
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {/* Progress indicator */}
           <nav aria-label="Upload progress" className="flex gap-6 mb-8 text-sm">
             {STEPS.map((item, i) => (
@@ -194,7 +227,18 @@ export function UploadPageClient({ initialAccounts, onboarding }: { initialAccou
             ))}
           </nav>
 
-          {step === 'upload' && <CsvDropzone />}
+          {step === 'upload' && (
+            <>
+              {bankImportEnabled && <ActiveSessionBanner />}
+              {bankImportEnabled && (
+                <div className="mb-4 flex items-center gap-3 text-sm text-muted-foreground">
+                  <span>Or</span>
+                  <BankImportButton label="Fetch from bank" />
+                </div>
+              )}
+              <CsvDropzone />
+            </>
+          )}
 
           {/* Step 2: Select account + Map columns + live preview + import */}
           {(step === 'map-columns' || step === 'preview') && (

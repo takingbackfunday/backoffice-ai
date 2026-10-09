@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
+import { bankImportEnabledForUser } from '@/lib/bank-import/flags'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { BankAccountsClient } from '@/components/bank-accounts/bank-accounts-client'
@@ -10,22 +11,16 @@ export const metadata = { title: 'Bank Accounts — Backoffice AI' }
 export default async function BankAccountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; onboarding?: string }>
+  searchParams: Promise<{ onboarding?: string }>
 }) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const { tab, onboarding } = await searchParams
-  const initialTab = tab === 'manual-sync' ? 'manual-sync' : 'accounts'
+  const { onboarding } = await searchParams
 
   const accounts = await prisma.account.findMany({
     where: { userId },
-    include: {
-      institution: true,
-      bankPlaybook: {
-        select: { id: true, status: true, lastVerifiedAt: true, twoFaType: true },
-      },
-    },
+    include: { institution: true },
     orderBy: { createdAt: 'desc' },
   })
 
@@ -37,12 +32,6 @@ export default async function BankAccountsPage({
     lastImportAt: a.lastImportAt?.toISOString() ?? null,
     createdAt: a.createdAt.toISOString(),
     institution: { name: a.institution.name },
-    bankPlaybook: a.bankPlaybook ? {
-      id: a.bankPlaybook.id,
-      status: a.bankPlaybook.status,
-      lastVerifiedAt: a.bankPlaybook.lastVerifiedAt?.toISOString() ?? null,
-      twoFaType: a.bankPlaybook.twoFaType,
-    } : null,
   }))
 
   return (
@@ -53,8 +42,8 @@ export default async function BankAccountsPage({
         <main className="flex-1 p-6 max-w-4xl" role="main">
           <BankAccountsClient
             accounts={serialized}
-            initialTab={initialTab}
             onboarding={onboarding === '1'}
+            bankImportEnabled={bankImportEnabledForUser(userId)}
           />
         </main>
       </div>

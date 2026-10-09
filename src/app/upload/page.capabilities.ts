@@ -3,9 +3,10 @@ import type { PageCapability } from '@/lib/agent/site-capabilities-types'
 export const capability: PageCapability = {
   route: '/upload',
   title: 'Import transactions',
-  purpose: 'Import bank transactions from CSV, Excel or PDF statements, including separate debit and credit columns, with AI-assisted column mapping.',
+  purpose: 'Import bank transactions from files or fetch a Chase/N26 CSV through the attended bank-browser assistant, then review and map it before import.',
   jobsToBeDone: [
     'Drop a CSV file from any bank to import transactions',
+    'Fetch a CSV from a supported bank after signing in and confirming the date range',
     'Drop a PDF bank statement to extract and import transactions',
     'Import a CSV or Excel statement with separate money-out and money-in columns',
     'Use AI suggestions to map CSV columns to the right fields',

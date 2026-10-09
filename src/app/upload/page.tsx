@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
+import { bankImportEnabledForUser } from '@/lib/bank-import/flags'
 import { UploadPageClient } from '@/components/upload/upload-page-client'
 
 export const metadata = { title: 'Import transactions — Backoffice AI' }
@@ -8,12 +9,12 @@ export const metadata = { title: 'Import transactions — Backoffice AI' }
 export default async function UploadPage({
   searchParams,
 }: {
-  searchParams: Promise<{ onboarding?: string }>
+  searchParams: Promise<{ onboarding?: string; bankImport?: string }>
 }) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const { onboarding } = await searchParams
+  const { onboarding, bankImport } = await searchParams
 
   const accounts = await prisma.account.findMany({
     where: { userId },
@@ -30,6 +31,8 @@ export default async function UploadPage({
         institution: { name: a.institution.name },
       }))}
       onboarding={onboarding === '1'}
+      bankImportId={bankImport}
+      bankImportEnabled={bankImportEnabledForUser(userId)}
     />
   )
 }

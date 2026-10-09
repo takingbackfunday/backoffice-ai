@@ -83,7 +83,7 @@ export async function openrouterStream(
     } catch (fetchErr) {
       clearTimeout(timeoutId)
       const isTimeout = fetchErr instanceof Error && fetchErr.name === 'AbortError'
-      lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : `OpenRouter fetch failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`)
+      lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : 'OpenRouter fetch failed')
       if (attempt < MAX_RETRIES) continue
       throw lastError
     }
@@ -126,7 +126,7 @@ export async function openrouterStream(
       clearTimeout(timeoutId)
       reader.cancel().catch(() => {})
       const isTimeout = streamErr instanceof Error && streamErr.name === 'AbortError'
-      lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : `OpenRouter stream interrupted: ${streamErr instanceof Error ? streamErr.message : String(streamErr)}`)
+      lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : 'OpenRouter stream interrupted')
       if (attempt < MAX_RETRIES) continue
       throw lastError
     }
@@ -234,7 +234,7 @@ export async function openrouterWithTools(
     } catch (fetchErr) {
       clearTimeout(timeoutId)
       const isTimeout = fetchErr instanceof Error && fetchErr.name === 'AbortError'
-      logLlm('tools:fetch-error', { model, attempt, isTimeout, message: fetchErr instanceof Error ? fetchErr.message : String(fetchErr) })
+      logLlm('tools:fetch-error', { model, attempt, isTimeout, errorType: fetchErr instanceof Error ? fetchErr.name : 'UnknownError' })
       lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : `OpenRouter fetch failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`)
       if (attempt < MAX_RETRIES) continue
       throw lastError
@@ -243,13 +243,13 @@ export async function openrouterWithTools(
     if (!res.ok) {
       clearTimeout(timeoutId)
       const text = await res.text()
-      logLlm('tools:error', { model, attempt, status: res.status, body: text.slice(0, 300) })
+      logLlm('tools:error', { model, attempt, status: res.status })
       // Surface context-length errors clearly
       const isContextLength = res.status === 400 && /context.length|too.long|max.token|prompt.length/i.test(text)
       if (isContextLength) {
         throw new Error('The transaction data is too large to analyse in one pass. Try running after categorising some transactions manually to reduce the uncategorised backlog.')
       }
-      lastError = new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`)
+      lastError = new Error(`OpenRouter request failed with status ${res.status}`)
       if (TRANSIENT_STATUSES.has(res.status) && attempt < MAX_RETRIES) continue
       throw lastError
     }
@@ -319,7 +319,7 @@ export async function openrouterWithTools(
       clearTimeout(timeoutId)
       reader.cancel().catch(() => {})
       const isTimeout = streamErr instanceof Error && streamErr.name === 'AbortError'
-      logLlm('tools:stream-error', { model, attempt, isTimeout, message: streamErr instanceof Error ? streamErr.message : String(streamErr) })
+      logLlm('tools:stream-error', { model, attempt, isTimeout, errorType: streamErr instanceof Error ? streamErr.name : 'UnknownError' })
       lastError = new Error(isTimeout ? `OpenRouter stream timed out after ${STREAM_TIMEOUT_MS / 1000}s` : `OpenRouter stream interrupted: ${streamErr instanceof Error ? streamErr.message : String(streamErr)}`)
       if (attempt < MAX_RETRIES) continue
       throw lastError

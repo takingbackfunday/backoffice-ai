@@ -12,5 +12,5 @@ export const capability: PageCapability = {
   deepLinks: {},
   reads: ['Account', 'Transaction'],
   writes: ['Account'],
-  relatedRoutes: ['/transactions', '/bank-sync'],
+  relatedRoutes: ['/transactions', '/bank-accounts'],
 }

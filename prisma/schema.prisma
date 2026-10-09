@@ -36,6 +36,8 @@ model Account {
   bankPlaybook        BankPlaybook?
   encryptedCredential EncryptedCredential?
   syncJobs            SyncJob[]
+  bankAccountHint     String?
+  bankImportSessions  BankImportSession[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -218,6 +220,7 @@ enum RuleSuggestionStatus {
   IGNORED
 }
 
+// DEPRECATED: legacy manual sync, no longer written. Safe to drop later.
 model BankPlaybook {
   id                  String    @id @default(cuid())
   accountId           String    @unique
@@ -233,6 +236,7 @@ model BankPlaybook {
   updatedAt           DateTime  @updatedAt
 }
 
+// DEPRECATED: legacy manual sync, no longer written. Safe to drop later.
 model EncryptedCredential {
   id         String   @id @default(cuid())
   accountId  String   @unique
@@ -244,6 +248,7 @@ model EncryptedCredential {
   updatedAt  DateTime @updatedAt
 }
 
+// DEPRECATED: legacy manual sync, no longer written. Safe to drop later.
 model SyncJob {
   id               String          @id @default(cuid())
   accountId        String
@@ -1249,4 +1254,118 @@ model BackgroundJob {
 
   @@index([status, createdAt])
   @@index([userId, createdAt])
+}
+
+// ── Agent bank import (docs/bank-import/SDD-agent-bank-import.md) ──────────
+
+enum BankImportStatus {
+  QUEUED
+  STARTING
+  AWAITING_LOGIN
+  NAVIGATING
+  NEEDS_USER
+  CAPTURED
+  COMPLETE
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+model BankImportSession {
+  id              String               @id @default(cuid())
+  userId          String
+  accountId       String
+  account         Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bankKey         String
+  dateFrom        String               // YYYY-MM-DD (calendar date, no timezone)
+  dateTo          String               // YYYY-MM-DD
+  status          BankImportStatus     @default(QUEUED)
+  needsUserReason String?              // login | mfa | takeover | stuck
+  errorCode       String?
+  errorMessage    String?
+  workerId        String?
+  heartbeatAt     DateTime?
+  browserRegion   String?              // us | eu
+  browserId       String?
+  liveUrlEnc      String?              // secret-box sealed; null when browser not live
+  rememberBrowser Boolean              @default(true)
+  importedCount   Int?
+  skippedCount    Int?
+  startedAt       DateTime?
+  capturedAt      DateTime?
+  finishedAt      DateTime?
+  expiresAt       DateTime
+  events          BankImportEvent[]
+  commands        BankImportCommand[]
+  artifacts       BankImportArtifact[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model BankImportEvent {
+  id        Int               @id @default(autoincrement())
+  sessionId String
+  session   BankImportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type      String            // status | action | warning | artifact | error
+  message   String
+  data      Json              @default("{}")
+  createdAt DateTime          @default(now())
+
+  @@index([sessionId, id])
+}
+
+model BankImportCommand {
+  id         String            @id @default(cuid())
+  sessionId  String
+  session    BankImportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type       String            // LOGIN_DONE | TAKEOVER | RESUME_AGENT | CANCEL
+  consumedAt DateTime?
+  createdAt  DateTime          @default(now())
+
+  @@index([sessionId, consumedAt])
+}
+
+model BankImportArtifact {
+  id        String            @id @default(cuid())
+  sessionId String
+  session   BankImportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  filename  String
+  mimeType  String
+  sizeBytes Int
+  sha256    String
+  content   Bytes?
+  purgedAt  DateTime?
+  createdAt DateTime          @default(now())
+
+  @@unique([sessionId, sha256])
+}
+
+model BankBrowserProfile {
+  id         String    @id @default(cuid())
+  userId     String
+  bankKey    String
+  region     String
+  profileId  String
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([userId, bankKey, region])
+}
+
+model BankImportPlaybook {
+  id                  String   @id @default(cuid())
+  userId              String
+  bankKey             String
+  version             Int      @default(1)
+  steps               Json     // validated semantic intents only; no selectors, page text, or credentials
+  successCount        Int      @default(0)
+  consecutiveFailures Int      @default(0)
+  lastSuccessAt       DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, bankKey])
 }

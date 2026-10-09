@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { useUploadStore } from '@/stores/upload-store'
 import { useUploadDropzoneStore, type PendingSheetPick } from '@/stores/upload-dropzone-store'
-import { headerSignature } from '@/lib/import-signature'
 import { analyzeCsv } from '@/lib/csv-structure'
 import type { Workbook } from '@/lib/excel'
 import type { UploadFile } from '@/types'
+import { useIngestFiles } from './hooks/use-ingest-files'
 
 export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
   const [dragging, setDragging] = useState(false)
@@ -23,9 +22,7 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
   const addPendingPicks = useUploadDropzoneStore((s) => s.addPendingPicks)
   const removePendingPick = useUploadDropzoneStore((s) => s.removePendingPick)
   const setSheetChoice = useUploadDropzoneStore((s) => s.setSheetChoice)
-  const addFiles = useUploadStore((s) => s.addFiles)
-  const setProfileHit = useUploadStore((s) => s.setProfileHit)
-  const setProfileStatus = useUploadStore((s) => s.setProfileStatus)
+  const ingest = useIngestFiles()
 
   const headersFromCsv = useCallback((csvText: string): string[] => {
     // Structure-aware header extraction: skips statement preambles and
@@ -96,39 +93,6 @@ export function CsvDropzone({ compact = false }: { compact?: boolean } = {}) {
     },
     [headersFromCsv]
   )
-
-  const ingest = useCallback(async (parsed: UploadFile[], parseErrors: { filename: string; reason: string }[]) => {
-    if (parsed.length === 0) {
-      setErrors(parseErrors)
-      return
-    }
-
-    const wasFirstUpload = useUploadStore.getState().files.length === 0
-    if (wasFirstUpload) setProfileStatus('loading')
-    const result = addFiles(parsed)
-
-    const allErrors = [...parseErrors, ...result.rejected]
-    if (allErrors.length > 0) setErrors(allErrors)
-
-    if (!wasFirstUpload) return
-    if (result.accepted.length === 0) {
-      setProfileStatus('idle')
-      return
-    }
-    // Profile lookup on first upload of the session
-    const sig = headerSignature(result.accepted[0].headers)
-    try {
-      const res = await fetch(`/api/import-profiles?signature=${sig}`)
-      if (res.ok) {
-        const json = await res.json()
-        if (json.data) setProfileHit(json.data)
-      }
-    } catch {
-      // Non-critical — continue without profile
-    } finally {
-      setProfileStatus('done')
-    }
-  }, [addFiles, setProfileHit, setProfileStatus, setErrors])
 
   const handleFiles = useCallback(async (fileList: FileList | File[]) => {
     const allFiles = Array.from(fileList)

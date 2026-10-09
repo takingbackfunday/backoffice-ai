@@ -43,7 +43,6 @@ Keep this updated when feature areas are added or moved.
 | `/projects/[slug]/listings` | `src/app/projects/[slug]/listings/page.tsx` | `src/components/projects/listings-client.tsx` |
 | `/accounts` | `src/app/accounts/page.tsx` | `src/components/accounts/accounts-client.tsx` |
 | `/bank-accounts` | `src/app/bank-accounts/page.tsx` | `src/components/bank-accounts/bank-accounts-client.tsx` |
-| `/bank-sync` | `src/app/bank-sync/page.tsx` | `src/components/bank-sync/bank-sync-page-client.tsx` |
 | `/payees` | `src/app/payees/page.tsx` | `src/components/payees/payee-manager.tsx` |
 | `/settings` | `src/app/settings/page.tsx` | `src/components/settings/` (multiple) |
 | `/portal` | `src/app/portal/page.tsx` | `src/components/portal/` |
@@ -334,19 +333,24 @@ All SSE routes emit over `text/event-stream`. The `agent/omni` route emits all e
 
 Routes: `POST /api/agent/omni` (all events), `GET /api/agent/rules` (status/token/answer/done/error only)
 
-### Bank sync
+### Bank import (agent)
 
-Auto-sync/open-banking providers have been removed. Users import transactions by CSV or PDF statement upload, or the manual browser-agent sync.
+Fetch from bank is an attended Chase/N26 browser workflow. The user signs in and completes 2FA every session; the worker replays the user's saved semantic export flow when available, then hands the captured file to the existing upload review/import pipeline.
 
 | Task | File |
 |---|---|
-| Bank accounts page + manual sync tab | `src/app/bank-accounts/page.tsx` → `src/components/bank-accounts/bank-accounts-client.tsx` |
-| Standalone manual sync page | `src/app/bank-sync/page.tsx` → `src/components/bank-sync/bank-sync-page-client.tsx` |
-| Browser agent worker (Browserless) | `src/lib/bank-agent/worker.ts` |
-| Browser agent routes (SSE) | `src/app/api/bank-agent/` (connect, sync, status, disconnect) |
-| Credential encryption | `src/lib/bank-agent/crypto.ts` → AES-256-GCM |
-| Manual sync storage | `BankPlaybook`, `EncryptedCredential`, `SyncJob` |
-| CSV upload alternative | `/upload` → `POST /api/transactions/import` |
+| Entry points and resume banner | `/upload`, `/bank-accounts` → `src/components/bank-import/` |
+| Account/range/session wizard and trace download | `src/components/bank-import/` |
+| Upload pipeline handoff | `src/components/upload/hooks/use-bank-import-handoff.ts`, `src/components/upload/hooks/use-ingest-files.ts` |
+| Bank-import API routes | `src/app/api/bank-import/` |
+| Durable session/trace/artifact data | `src/lib/bank-import/sessions.ts`, `authz.ts`; `BankImportSession`, `BankImportEvent`, `BankImportCommand`, `BankImportArtifact` |
+| Browser profiles and saved export flow | `BankBrowserProfile`, `BankImportPlaybook` (semantic, scoped per user and bank) |
+| Browser provider and safe navigation | `src/lib/bank-import/browser-use-client.ts`, `src/worker/` |
+| Fake bank and local E2E | `scripts/fake-bank/server.ts`, `scripts/bank-import-e2e.ts` |
+| Worker deployment configuration | `Dockerfile.worker`, `fly.worker.toml` |
+| Existing review/import pipeline | `/upload` → `POST /api/upload` → `POST /api/transactions/import` |
+
+Legacy `BankPlaybook`, `EncryptedCredential` and `SyncJob` Prisma models remain deprecated for now; the old Manual Sync code no longer uses them.
 
 ### Background jobs (DB-backed queue)
 
@@ -526,7 +530,6 @@ All routes use helpers from `src/lib/api-response.ts`:
 | Widget types | `src/types/widgets.ts` |
 | Preferences | `src/types/preferences.ts` |
 | Application form data | `src/types/application-data.ts` |
-| Bank agent types | `src/types/bank-agent.ts` |
 
 ### Client state (Zustand stores)
 
@@ -677,7 +680,9 @@ All user data isolated by Clerk `userId`. Key Prisma models:
 | `InvoicePaymentSuggestion` | `HIGH\|MEDIUM` confidence; HIGH auto-applied at import |
 | `UserPreference` | One row/user; `data` JSON — read via `parsePreferences()` from `src/types/preferences.ts` |
 | `FxRate` | Monthly EUR-base rates; `(month,base,quote)` unique; carry-forward if missing |
-| `BankPlaybook` / `EncryptedCredential` / `SyncJob` | Browser-agent bank sync state |
+| `BankImportSession` / `BankImportEvent` / `BankImportCommand` / `BankImportArtifact` | Attended bank import state, user timeline, sanitized QA traces, commands, and captured files |
+| `BankBrowserProfile` / `BankImportPlaybook` | Trusted-device browser profile and per-user/per-bank semantic export route |
+| `BankPlaybook` / `EncryptedCredential` / `SyncJob` | Deprecated legacy Manual Sync tables; retained but no longer read or written by application code |
 | `Listing` | `requiredDocs Json @default("[]")` — doc-type keys applicants must upload |
 | `ApplicantDocument` | `status` `requested\|uploaded`; `uploadToken` HMAC-signed, single-use, 7-day TTL |
 | `Receipt` | `status` `PROCESSING\|COMPLETED\|FAILED`; `ocrMarkdown` + `extractedData` JSON; `originalHash` SHA-256 (original discarded) |

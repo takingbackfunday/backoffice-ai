@@ -14,6 +14,6 @@ export const capability: PageCapability = {
   writes: ['Account', 'Institution'],
   relatedRoutes: [
     '/accounts',
-    '/bank-sync',
+    '/bank-accounts',
   ],
 }

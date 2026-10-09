@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:tz": "TZ=America/Los_Angeles vitest run src/lib/excel.test.ts src/lib/csv-processor.test.ts src/lib/csv-structure.test.ts src/lib/date-format.test.ts src/lib/dedup.test.ts && TZ=Pacific/Auckland vitest run src/lib/excel.test.ts src/lib/csv-processor.test.ts src/lib/csv-structure.test.ts src/lib/date-format.test.ts src/lib/dedup.test.ts",
-    "validate:sql": "node scripts/validate-sql.mjs"
+    "validate:sql": "node scripts/validate-sql.mjs",
+    "worker:dev": "tsx --env-file=.env.local src/worker/bank-import-worker.ts",
+    "fakebank": "tsx scripts/fake-bank/server.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

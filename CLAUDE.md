@@ -85,7 +85,13 @@ Required in `.env.local`:
 - `ENCRYPTION_SECRET` — AES-256 key derivation + HMAC secret for doc upload tokens
 - `UPLOADTHING_TOKEN` — file storage
 - `MISTRAL_API_KEY` — receipt OCR (`mistral-ocr-latest`)
-- `BROWSERLESS_TOKEN` — cloud browser sessions for manual bank sync
+- `BROWSER_USE_API_KEY_US`, `BROWSER_USE_API_KEY_EU` — Browser Use Cloud API keys for the attended bank-import worker; needed on the web app for profile deletion and on the worker
+- `BANK_IMPORT_ENABLED=1` — enables Fetch from bank APIs and UI
+- `BANK_IMPORT_ENABLED_USER_IDS` — optional comma-separated Clerk ID allow-list for gradual production rollout; unset/empty allows all users
+- `WORKER_WAKE_URL` — e.g. `https://backoffice-ai-worker.fly.dev/wake`; unset in local development
+- `BANK_WORKER_CONCURRENCY` (default 3), `BANK_WORKER_IDLE_EXIT_MS` (default 600000; 0 disables idle exit), `BANK_WORKER_LOCAL_BROWSER=1` (local Chrome), `BANK_WORKER_HEADLESS=1`
+- `BANK_IMPORT_RECORD_USER_IDS` — comma-separated Clerk IDs for calibration-only video recording; do not enable broadly
+- `BANK_IMPORT_FAKEBANK=1`, `BANK_IMPORT_FAKEBANK_URL` — local fake-bank E2E only
 - `RESEND_API_KEY` — transactional email; optional, skipped gracefully if absent
 - `RESEND_FROM` — sender address (defaults to `Backoffice <noreply@backoffice.cv>`)
 - `NEXT_PUBLIC_APP_URL` — public base URL for email links (defaults to `https://backoffice.cv`)
@@ -310,3 +316,11 @@ New users: sign-up → Clerk redirects to `/dashboard` → `/dashboard` redirect
 - **Personal** → `/bank-accounts?onboarding=1` → `/accounts/new?onboarding=1` → `/upload?onboarding=1`
 
 `UserPreference.data.onboardingStep` tracks progress for the personal/bank flow. The Studio and Portfolio onboarding banners only remove the `?onboarding=1` query param on skip. The Bank Accounts and Upload banners post `onboardingStep: 'done'` when skipped; the `/accounts/new` form posts `onboardingStep: 'upload'` after account creation; `/upload` posts `onboardingStep: 'done'` after import completion.
+
+### Bank import worker
+- `src/worker/**` and `src/lib/bank-import/**` execute in plain Node via `tsx`; never import Next.js, Clerk, React or client components there.
+- Human sign-in/2FA is required every session. A user/bank semantic export playbook is persisted only after a successful agent-led CSV capture; it contains no credentials or page text.
+- Closing the Browser Use CDP connection does not stop the cloud browser. Always call `stopBrowser`; never log or return live-view/download URLs except the owner-scoped live-view API.
+- Bank-import traces use `BankImportEvent.type = 'trace'`, are sanitized, owner-downloadable as JSON and retained for 30 days. Never log bank-page text/labels, credentials, OTPs, transaction data, filenames or full URLs.
+- Bank-import dates are calendar strings (`YYYY-MM-DD`). `Transaction.date` is `timestamp without time zone` at midnight UTC; do not use `AT TIME ZONE` in bank-import date queries.
+- The worker app is deployed separately with `fly deploy -c fly.worker.toml`; do not deploy it without explicit approval.
