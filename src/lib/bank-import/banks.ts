@@ -36,7 +36,7 @@ const CHASE: BankConfig = {
     'From the Accounts overview, open the account the user chose (match the hint / last 4 digits if given).',
     'On the account activity page, find the download icon or link (often labelled "Download account activity").',
     'In the download dialog: choose the spreadsheet/CSV file type, choose "Choose a date range" (or similar),',
-    'fill the From and To dates with fill_date, then click the Download button.',
+    'select the From and To dates by clicking the date pickers, then click the Download button.',
     'Never use Pay, Transfer, Zelle or Wire features.',
   ].join(' '),
 }
@@ -52,13 +52,15 @@ const N26: BankConfig = {
   dateFormat: 'DD/MM/YYYY',
   maxRangeDays: null,
   loginUrlPatterns: [/app\.n26\.com\/login/i],
-  authenticatedUrlPatterns: [/app\.n26\.com\/(feed|account|home|dashboard)/i],
+  authenticatedUrlPatterns: [
+    /app\.n26\.com\/(feed|account|home|dashboard|downloads?|export|transactions?|statements?|kontoausz(?:u|ue|ü)ge)/i,
+  ],
   askAccountHint: false,
   navigationHints: [
     'Open the main account. Look for a CSV export of transactions: it may be called "Download CSV",',
     '"Export", "Downloads" or be inside an account or overflow (⋯) menu, or under Statements/Documents.',
     'Prefer CSV transaction exports, NOT monthly PDF statements.',
-    'Set the start and end dates with fill_date (or the date picker), then click download/export.',
+    'Set the start and end dates by clicking the date pickers, then click download/export. Do not type into a calendar-backed field.',
     'The UI may be in German: "Herunterladen", "Exportieren", "Umsätze", "Kontoauszüge", "Von", "Bis".',
   ].join(' '),
 }

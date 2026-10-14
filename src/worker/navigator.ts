@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { openrouterWithTools, type ToolDefinition, type Usage } from '@/lib/llm/openrouter'
 import type { BankConfig } from '@/lib/bank-import/banks'
-import type { PlaybookStep } from '@/lib/bank-import/playbook'
+import { PLAYBOOK_INTENTS, PLAYBOOK_TARGET_HINTS, type PlaybookStep } from '@/lib/bank-import/playbook'
 import type { PageSnapshot } from './page-elements'
 
 const MODEL = 'anthropic/claude-sonnet-4.6'
@@ -17,11 +17,12 @@ export const NEXT_ACTION_TOOL: ToolDefinition = {
         action: { type: 'string', enum: ['click', 'select_option', 'fill_date', 'scroll', 'wait', 'download', 'need_user'] },
         elementId: { type: 'integer', description: 'Required for click, select_option, fill_date, download' },
         option: { type: 'string', description: 'select_option only: the exact visible option label' },
-        dateField: { type: 'string', enum: ['from', 'to'], description: 'fill_date only' },
+        dateField: { type: 'string', enum: ['from', 'to'], description: 'Required for fill_date and every calendar click/select_option: which session date is being selected' },
+        dateInputId: { type: 'integer', description: 'Calendar completion only: ID of the associated visible date input to verify after the final day/Apply click. Omit while opening or navigating the calendar.' },
         reason: { type: 'string', description: 'One short sentence, shown to the user' },
         intent: {
           type: 'string',
-          enum: ['open_selected_account', 'open_transaction_activity', 'open_export_options', 'select_csv', 'set_date_from', 'set_date_to', 'download_csv', 'other'],
+          enum: [...PLAYBOOK_INTENTS, 'other'],
           description: 'Semantic purpose of this action; never include page-derived values',
         },
       },
@@ -35,6 +36,7 @@ export type AgentAction = {
   elementId?: number
   option?: string
   dateField?: 'from' | 'to'
+  dateInputId?: number
   reason: string
   intent: PlaybookStep['intent'] | 'other'
 }
@@ -44,8 +46,9 @@ const ActionSchema = z.object({
   elementId: z.number().int().nonnegative().optional(),
   option: z.string().max(100).optional(),
   dateField: z.enum(['from', 'to']).optional(),
+  dateInputId: z.number().int().nonnegative().optional(),
   reason: z.string().min(1).max(200),
-  intent: z.enum(['open_selected_account', 'open_transaction_activity', 'open_export_options', 'select_csv', 'set_date_from', 'set_date_to', 'download_csv', 'other']),
+  intent: z.enum([...PLAYBOOK_INTENTS, 'other']),
 }).superRefine((action, ctx) => {
   if (['click', 'select_option', 'fill_date', 'download'].includes(action.action) && action.elementId === undefined) {
     ctx.addIssue({ code: 'custom', message: 'elementId is required for this action' })
@@ -56,11 +59,18 @@ const ActionSchema = z.object({
   if (action.action === 'select_option' && !action.option) {
     ctx.addIssue({ code: 'custom', message: 'option is required for select_option' })
   }
-  if (action.intent === 'set_date_from' && (action.action !== 'fill_date' || action.dateField !== 'from')) {
-    ctx.addIssue({ code: 'custom', message: 'set_date_from must fill the from date' })
+  const dateAction = ['fill_date', 'click', 'select_option'].includes(action.action)
+  if (action.intent === 'set_date_from' && (!dateAction || action.dateField !== 'from')) {
+    ctx.addIssue({ code: 'custom', message: 'set_date_from must select the from date' })
   }
-  if (action.intent === 'set_date_to' && (action.action !== 'fill_date' || action.dateField !== 'to')) {
-    ctx.addIssue({ code: 'custom', message: 'set_date_to must fill the to date' })
+  if (action.intent === 'set_date_to' && (!dateAction || action.dateField !== 'to')) {
+    ctx.addIssue({ code: 'custom', message: 'set_date_to must select the to date' })
+  }
+  if (action.dateField && (!dateAction || action.intent !== `set_date_${action.dateField}`)) {
+    ctx.addIssue({ code: 'custom', message: 'dateField requires the matching date selection intent' })
+  }
+  if (action.dateInputId !== undefined && (!action.dateField || action.action !== 'click' || action.dateInputId === action.elementId)) {
+    ctx.addIssue({ code: 'custom', message: 'dateInputId is only valid for calendar completion' })
   }
   if (action.intent === 'download_csv' && action.action !== 'download') {
     ctx.addIssue({ code: 'custom', message: 'download_csv must use the download action' })
@@ -82,7 +92,11 @@ const SYSTEM_PROMPT = `You operate a web browser on the user's own bank website.
 Your only goal: download the user's transaction history for one account and one date range as a CSV file.
 You are strictly READ-ONLY:
 - Never start payments, transfers, Zelle, wires, or bill pay. Never change settings. Never sign out.
-- You cannot type text. Dates are typed for you when you use fill_date (from/to).
+- You cannot type arbitrary text. Prefer selecting dates by clicking the bank's date picker, not by typing into date fields.
+- Open the date field/calendar icon with click, then use click for month/year navigation and the requested day (or select_option for calendar month/year dropdowns). Inspect the new page after every action. Use the matching set_date_from/set_date_to intent and dateField on EVERY calendar subaction.
+- Omit dateInputId while opening/navigating a calendar. On the final day click, or Apply/Done if the calendar requires confirmation, include dateInputId for the associated visible date input. The executor verifies its settled value against the session date; opening a picker is NOT a completed date selection, even if the input already displays the requested date.
+- Use full accessible day labels and the visible month/year to distinguish duplicate day numbers. Never guess or click disabled days. If the picker cannot be operated or its result cannot be verified, use need_user; do not switch to typing after a failed calendar selection.
+- Use fill_date (from/to) only when no usable calendar is available, such as a plain editable input or a native browser picker whose days are not listed. Dates for this fallback are supplied by the executor.
 - For each action, return its fixed semantic intent. Use other for incidental actions; never put labels, account details, dates, or other page-derived values in the intent.
 - Prefer CSV / spreadsheet exports. Do not download PDF statements unless no CSV option exists.
 - Radio and checkbox controls include their checked state. If CSV is already checked, do not select it again.
@@ -107,14 +121,16 @@ export function buildUserMessage(input: NavigatorInput): string {
     const label = element.text || element.ariaLabel || element.placeholder || ''
     return `[${element.id}] ${element.role ?? element.tag}${element.type ? `(${element.type})` : ''} "${label}"` +
       (element.href ? ` href=${element.href}` : '') +
+      (element.ariaLabel && element.ariaLabel !== label ? ` aria-label="${element.ariaLabel}"` : '') +
       (element.value ? ` value="${element.value}"` : '') +
       (element.options ? ` options=[${element.options.join(' | ')}]` : '') +
       (element.checked === undefined ? '' : element.checked ? ' (checked)' : ' (not checked)') +
+      (element.readOnly ? ' (read-only; use calendar)' : '') +
       (element.disabled ? ' (disabled)' : '')
   }).join('\n')
   return `Bank: ${bank.displayName}
 Account: ${accountName}${accountHint ? ` (identify it by: ${accountHint})` : ''}
-Date range to download: ${from} to ${to} (the bank's date format is ${bank.dateFormat}; fill_date handles it)
+Date range to download: ${from} to ${to} (prefer calendar clicks; the bank's fallback input format is ${bank.dateFormat})
 Bank-specific hints: ${bank.navigationHints}
 
 Current URL: ${currentUrl}
@@ -134,7 +150,7 @@ ${notes.map((note) => `NOTE: ${note}`).join('\n')}`
 async function decide(input: NavigatorInput, savedStep?: PlaybookStep): Promise<{ action: AgentAction | null; usage?: Usage; durationMs: number }> {
   const startedAt = Date.now()
   const prompt = savedStep
-    ? `${SYSTEM_PROMPT}\n\nReplay exactly this saved route intent: ${savedStep.intent}. Match one unique safe action from the current page. If it cannot be matched confidently, return action need_user with intent other.`
+    ? `${SYSTEM_PROMPT}\n\nReplay exactly this saved route intent: ${savedStep.intent}.${savedStep.target ? ` Remembered navigation cue: ${PLAYBOOK_TARGET_HINTS[savedStep.target]}` : ''} Match one unique safe action from the current page. Use this intent for each safe subaction needed to reach it. If it cannot be matched confidently, return action need_user with intent other.`
     : SYSTEM_PROMPT
   const message = buildUserMessage(input)
   const response = await openrouterWithTools([

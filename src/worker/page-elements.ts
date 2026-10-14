@@ -1,9 +1,12 @@
 import type { Frame, Locator, Page } from 'playwright-core'
 import { redactDigits } from '@/lib/bank-import/redact'
+import { inferBankDateFormat, parseBankDate } from '@/lib/bank-import/date-range'
+import type { BankConfig } from '@/lib/bank-import/banks'
 
 export interface PageElement {
   id: number
   frameIndex: number
+  frameId?: number
   tag: string
   role?: string
   type?: string
@@ -13,8 +16,10 @@ export interface PageElement {
   href?: string
   name?: string
   value?: string
+  domId?: string
   options?: string[]
   checked?: boolean
+  readOnly?: boolean
   disabled: boolean
 }
 
@@ -29,13 +34,31 @@ export interface PageSnapshot {
 }
 
 export const MAX_ELEMENTS = 250
+const frameIds = new WeakMap<Frame, number>()
+let nextFrameId = 0
+
+export interface DateInputIdentity { domId: string; frameId: number }
 
 export function isCsvSelected(snapshot: Pick<PageSnapshot, 'elements'>): boolean {
   return snapshot.elements.some((element) =>
     element.tag === 'select' ? /\bcsv\b/i.test(element.value ?? '') :
-      element.tag === 'input' && element.type === 'radio' && element.checked === true &&
+      ((element.tag === 'input' && element.type === 'radio') || element.role === 'radio' || element.role === 'option') && element.checked === true &&
       /\bcsv\b/i.test(`${element.text} ${element.ariaLabel ?? ''}`),
   )
+}
+
+export function matchesDateRange(snapshot: Pick<PageSnapshot, 'elements'>, bank: BankConfig, from: string, to: string, inputIds: Partial<Record<'from' | 'to', DateInputIdentity>> = {}): boolean {
+  const dates: Record<'from' | 'to', string[]> = { from: [], to: [] }
+  for (const element of snapshot.elements) {
+    if (element.tag !== 'input' || !['date', 'text'].includes(element.type ?? '') || element.value === undefined) continue
+    const hint = `${element.text} ${element.ariaLabel ?? ''} ${element.name ?? ''} ${element.placeholder ?? ''}`
+    const start = inputIds.from ? element.domId === inputIds.from.domId && element.frameId === inputIds.from.frameId : /\b(from|start|since|von)\b/i.test(hint)
+    const end = inputIds.to ? element.domId === inputIds.to.domId && element.frameId === inputIds.to.frameId : /\b(to|through|end|until|bis)\b/i.test(hint)
+    if (start === end) continue
+    const format = element.type === 'date' ? 'ISO' as const : inferBankDateFormat(hint) ?? bank.dateFormat
+    dates[start ? 'from' : 'to'].push(parseBankDate(element.value, format) ?? '')
+  }
+  return dates.from.length === 1 && dates.to.length === 1 && dates.from[0] === from && dates.to[0] === to
 }
 
 export async function snapshotPage(page: Page, onFrameError?: (error: unknown) => void): Promise<PageSnapshot> {
@@ -46,18 +69,21 @@ export async function snapshotPage(page: Page, onFrameError?: (error: unknown) =
     if (frame.isDetached() || frame.url() === 'about:blank') continue
     try {
       const collected = await frame.evaluate(({ startId, max }) => {
-        const selector = 'a[href],button,input,select,textarea,[role=button],[role=link],[role=tab],[role=menuitem],[role=option],[role=combobox],[role=checkbox],[role=radio],summary,[onclick]'
+        const selector = 'a[href],button,input,select,textarea,[role=button],[role=link],[role=tab],[role=menuitem],[role=option],[role=combobox],[role=checkbox],[role=radio],[role=gridcell],summary,[onclick]'
         const found: Element[] = []
-        const seen = new Set<Element>()
-        const roots: (Document | ShadowRoot | Element)[] = [document]
-        while (roots.length > 0) {
-          const root = roots.pop()!
-          root.querySelectorAll(selector).forEach((element) => {
-            if (!seen.has(element)) { seen.add(element); found.push(element) }
-            if (element.shadowRoot) roots.push(element.shadowRoot)
-          })
+        const roots: (Document | ShadowRoot)[] = [document]
+        let scanned = 0
+        // Shadow hosts need not be interactive themselves.
+        for (let i = 0; i < roots.length && scanned < 5000; i++) {
+          const walker = document.createTreeWalker(roots[i], NodeFilter.SHOW_ELEMENT)
+          let element: Element | null
+          while (scanned < 5000 && (element = walker.nextNode() as Element | null)) {
+            scanned++
+            if (element.shadowRoot && roots.length < 32) roots.push(element.shadowRoot)
+            if (element.matches(selector)) found.push(element)
+          }
         }
-        const result: Omit<PageElement, 'id' | 'frameIndex'>[] = []
+        const result: Omit<PageElement, 'id' | 'frameIndex' | 'frameId'>[] = []
         for (const element of found) {
           if (result.length >= max) break
           const el = element as HTMLElement
@@ -72,8 +98,17 @@ export async function snapshotPage(page: Page, onFrameError?: (error: unknown) =
           const associatedLabel = tag === 'input'
             ? (el as HTMLInputElement).labels?.[0]?.innerText ?? el.closest('label')?.innerText ?? ''
             : ''
-          const text = ((el.innerText ?? '').trim() || associatedLabel.trim()).replace(/\s+/g, ' ').slice(0, 100)
-          const value = tag === 'input' && ['date', 'text', 'search'].includes(type ?? '')
+          const placeholder = el.getAttribute('placeholder') ?? undefined
+          const labelledBy = (el.getAttribute('aria-labelledby') ?? '').split(/\s+/)
+            .map((id) => (el.getRootNode() as Document | ShadowRoot).getElementById(id)?.textContent ?? '').join(' ')
+          const ariaLabel = el.getAttribute('aria-label') ?? (labelledBy.trim() || undefined)
+          const text = ((el.innerText ?? '').trim() || associatedLabel.trim() || labelledBy.trim()).replace(/\s+/g, ' ').slice(0, 100)
+          const dateHints = `${associatedLabel} ${ariaLabel ?? ''} ${labelledBy} ${placeholder ?? ''}`
+          const dateLabelled = /\b(date|datum)\b|\b(?:dd|tt|mm|yyyy|jjjj)\s*[./-]\s*(?:dd|tt|mm|yyyy|jjjj)\s*[./-]\s*(?:dd|tt|mm|yyyy|jjjj)\b/i.test(dateHints)
+          const sensitive = /username|user name|login|email|e-mail|password|otp|one[ -]time|verification|security code|benutzer|passwort/i.test(
+            `${dateHints} ${el.getAttribute('name') ?? ''} ${el.getAttribute('id') ?? ''} ${el.getAttribute('autocomplete') ?? ''}`,
+          )
+          const value = tag === 'input' && !sensitive && (type === 'date' || (['text', 'search'].includes(type ?? '') && dateLabelled))
             ? (el as HTMLInputElement).value.slice(0, 12)
             : tag === 'select' ? (el as HTMLSelectElement).selectedOptions[0]?.text.slice(0, 80)
             : undefined
@@ -85,20 +120,26 @@ export async function snapshotPage(page: Page, onFrameError?: (error: unknown) =
             role: el.getAttribute('role') ?? undefined,
             type,
             text,
-            ariaLabel: el.getAttribute('aria-label') ?? undefined,
-            placeholder: el.getAttribute('placeholder') ?? undefined,
+            ariaLabel,
+            placeholder,
             href: el.getAttribute('href')?.slice(0, 200),
             name: el.getAttribute('name')?.slice(0, 80) ?? undefined,
             value,
+            domId: tag === 'input' && value !== undefined && el.id.length <= 200 ? el.id || undefined : undefined,
             options,
-            checked: tag === 'input' && ['radio', 'checkbox'].includes(type ?? '') ? (el as HTMLInputElement).checked : undefined,
+            checked: tag === 'input' && ['radio', 'checkbox'].includes(type ?? '') ? (el as HTMLInputElement).checked
+              : el.hasAttribute('aria-checked') ? el.getAttribute('aria-checked') === 'true'
+              : el.hasAttribute('aria-selected') ? el.getAttribute('aria-selected') === 'true' : undefined,
+            readOnly: tag === 'input' ? (el as HTMLInputElement).readOnly : undefined,
             disabled: (el as HTMLButtonElement).disabled === true || el.getAttribute('aria-disabled') === 'true',
           })
         }
         return result
       }, { startId: elements.length, max: MAX_ELEMENTS - elements.length })
       const startId = elements.length
-      collected.forEach((element, index) => elements.push({ ...element, id: startId + index, frameIndex }))
+      let frameId = frameIds.get(frame)
+      if (frameId === undefined) { frameId = nextFrameId++; frameIds.set(frame, frameId) }
+      collected.forEach((element, index) => elements.push({ ...element, id: startId + index, frameIndex, frameId }))
     } catch (error) {
       snapshotFailureCount++
       onFrameError?.(error)
@@ -125,6 +166,11 @@ export async function snapshotPage(page: Page, onFrameError?: (error: unknown) =
     locate(id) {
       const element = elements.find((candidate) => candidate.id === id)
       const frame = element && framesByIndex.get(element.frameIndex)
+      if (frame && element.domId && elements.filter(candidate => candidate.frameIndex === element.frameIndex && candidate.domId === element.domId).length === 1) {
+        // Calendar selection can replace inputs and discard our temporary data-bi-idx attribute.
+        // Keep this locator strict: duplicate live IDs must fail rather than reading another input.
+        return frame.locator(`input[id=${JSON.stringify(element.domId)}]:visible`)
+      }
       return frame ? frame.locator(`[data-bi-idx="${id}"]`).first() : null
     },
   }

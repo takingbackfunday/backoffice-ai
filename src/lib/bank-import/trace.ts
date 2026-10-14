@@ -1,4 +1,4 @@
-import type { PlaybookIntent } from './playbook'
+import { PLAYBOOK_INTENTS, type PlaybookIntent } from './playbook'
 import type { BankImportStatusValue } from './status'
 
 export const TRACE_NAMES = [
@@ -68,7 +68,7 @@ const ERROR_CODES = new Set([
   'unsupported_bank', 'worker_unavailable', 'worker_lost', 'provider_credits', 'provider_busy', 'internal', 'browser_stop',
   'session_cancelled', 'session_timeout', 'browser_start', 'browser_connect', 'download_failed', 'navigation_stuck',
   'guardrail_violation', 'artifact_too_large', 'invalid_playbook', 'postcondition_failed', 'element_missing', 'locator_missing',
-  'option_mismatch', 'not_date_field', 'date_field_mismatch', 'date_fill_failed', 'date_not_accepted', 'bank_action_failed',
+  'option_mismatch', 'not_date_field', 'date_field_mismatch', 'date_fill_failed', 'date_not_accepted', 'date_reverted_after_blur', 'bank_action_failed',
 ])
 
 function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
@@ -88,9 +88,7 @@ export function sanitizeTraceFields(input: unknown): TraceFields {
   if (isOneOf(source.commandType, COMMAND_TYPES)) output.commandType = source.commandType
   if (safeCount(source.stepIndex, 1000)) output.stepIndex = source.stepIndex
   if (isOneOf(source.navigationMode, NAVIGATION_MODES)) output.navigationMode = source.navigationMode
-  if (source.intent === 'other' || (typeof source.intent === 'string' && isOneOf(source.intent, [
-    'open_selected_account', 'open_transaction_activity', 'open_export_options', 'select_csv', 'set_date_from', 'set_date_to', 'download_csv',
-  ]))) output.intent = source.intent as TraceFields['intent']
+  if (source.intent === 'other' || isOneOf(source.intent, PLAYBOOK_INTENTS)) output.intent = source.intent as TraceFields['intent']
   if (isOneOf(source.actionKind, ACTION_KINDS)) output.actionKind = source.actionKind
   if (safeCount(source.elementIndex, 249)) output.elementIndex = source.elementIndex
   if (isOneOf(source.targetTag, ELEMENT_TAGS)) output.targetTag = source.targetTag

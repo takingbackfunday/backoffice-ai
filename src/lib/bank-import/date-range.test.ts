@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeDefaultRange, formatBankDate, inferBankDateFormat, isIsoDate, validateRange } from './date-range'
+import { computeDefaultRange, formatBankDate, inferBankDateFormat, isIsoDate, parseBankDate, validateRange } from './date-range'
 
 const today = '2026-10-08'
 
@@ -58,10 +58,30 @@ describe('date helpers', () => {
     expect(formatBankDate('2026-09-03', 'ISO')).toBe('2026-09-03')
   })
 
+  it('parses bank date field values back to ISO, tolerating single-digit reformatting', () => {
+    expect(parseBankDate('01/09/2026', 'DD/MM/YYYY')).toBe('2026-09-01')
+    expect(parseBankDate('1/9/2026', 'DD/MM/YYYY')).toBe('2026-09-01')
+    expect(parseBankDate('09/01/2026', 'MM/DD/YYYY')).toBe('2026-09-01')
+    expect(parseBankDate('01.09.2026', 'DD.MM.YYYY')).toBe('2026-09-01')
+    expect(parseBankDate('2026-09-01', 'ISO')).toBe('2026-09-01')
+    expect(parseBankDate('01/09/2026', 'DD.MM.YYYY')).toBeNull()
+    expect(parseBankDate('31/02/2026', 'DD/MM/YYYY')).toBeNull()
+    expect(parseBankDate('', 'DD/MM/YYYY')).toBeNull()
+    expect(parseBankDate('2026-9-01', 'ISO')).toBeNull()
+  })
+
   it('uses only explicit supported date-format hints from bank controls', () => {
     expect(inferBankDateFormat('DD/MM/YYYY')).toBe('DD/MM/YYYY')
     expect(inferBankDateFormat('Date (MM/DD/YYYY)')).toBe('MM/DD/YYYY')
     expect(inferBankDateFormat('TT.MM.JJJJ')).toBe('DD.MM.YYYY')
     expect(inferBankDateFormat('Enter a date')).toBeNull()
+  })
+
+  it.each(['DD/MM/YYYY', 'MM/DD/YYYY', 'DD.MM.YYYY', 'ISO'] as const)('accepts unambiguous ISO readbacks despite a %s display hint', format => {
+    expect(parseBankDate('2026-09-01', format)).toBe('2026-09-01')
+    expect(parseBankDate(' 2024-02-29 ', format)).toBe('2024-02-29')
+    for (const value of ['2026-02-30', '2026-9-01', '2026-09-01T00:00:00Z', 'date: 2026-09-01']) {
+      expect(parseBankDate(value, format)).toBeNull()
+    }
   })
 })

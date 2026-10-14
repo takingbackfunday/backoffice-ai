@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useEffectEvent } from 'react'
 import type { TransactionWithRelations } from '@/types'
 import type { Payee } from '@/components/rules/rule-editor'
 import type { Workspace } from '@/generated/prisma/client'
@@ -51,6 +51,17 @@ export function useInlineEdit(opts: {
   // Exit guard registered by the editing row (see use-payee-create-prompt):
   // returns true when the exit must be blocked (e.g. unmatched payee draft).
   const payeeExitGuardRef = useRef<((rowId: string) => boolean) | null>(null)
+  const dateDraftRef = useRef<{ rowId: string; value: string } | null>(null)
+
+  // A filtered-out row unmounts without blur or an explicit row exit.
+  useEffect(() => {
+    if (editingRowId && !localRows.some((row) => row.id === editingRowId)) {
+      dateDraftRef.current = null
+      editingRowIdRef.current = null
+      setEditingRowId(null)
+      setEditingRowInitialField(null)
+    }
+  }, [editingRowId, localRows])
 
   // Fire suggestion request (deferred, background)
   const fireSuggestions = useCallback(() => {
@@ -88,11 +99,16 @@ export function useInlineEdit(opts: {
 
   function exitRowEdit(id: string, opts?: { force?: boolean }) {
     if (!opts?.force && payeeExitGuardRef.current?.(id)) return
+    // Done and capture-phase click-away can unmount the input before blur fires.
+    const dateDraft = dateDraftRef.current
+    if (dateDraft?.rowId === id) void commitEdit(id, 'date', dateDraft.value)
+    dateDraftRef.current = null
     setEditingRowId(null)
     setEditingRowInitialField(null)
     editingRowIdRef.current = null
     promoteIfLeft(id)
   }
+  const handleRowExit = useEffectEvent(exitRowEdit)
 
   // Handle outside-click via capture (row-scoped data-row-id comparison)
   useEffect(() => {
@@ -103,12 +119,11 @@ export function useInlineEdit(opts: {
       if (target?.closest('[data-portal-dropdown]')) return
       const clickedRowId = target?.closest('[data-row-id]')?.getAttribute('data-row-id')
       if (clickedRowId !== rowId) {
-        exitRowEdit(rowId)
+        handleRowExit(rowId)
       }
     }
     document.addEventListener('mousedown', handler, true)
     return () => document.removeEventListener('mousedown', handler, true)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingRowId])
 
   function startEdit(id: string, field: EditableField) {
@@ -116,16 +131,23 @@ export function useInlineEdit(opts: {
     // Don't abandon the current row while its payee draft is unmatched.
     const current = editingRowIdRef.current
     if (current && current !== id && payeeExitGuardRef.current?.(current)) return
+    const dateDraft = dateDraftRef.current
+    if (current && current !== id && dateDraft?.rowId === current) void commitEdit(current, 'date', dateDraft.value)
+    if (current !== id) dateDraftRef.current = null
     setMakeRuleSnap(null)
     setShowMakeRuleEditor(false)
     pendingRuleSnapRef.current = null
     setEditingRowId(id)
     setEditingRowInitialField(field)
+    editingRowIdRef.current = id
   }
 
   async function commitEdit(id: string, field: EditableField, rawValue: string | null, freshPayee?: Payee) {
     const row = localRows.find((r) => r.id === id)
-    if (!row) return
+    if (!row) {
+      if (dateDraftRef.current?.rowId === id) dateDraftRef.current = null
+      return
+    }
 
     // Build patch value
     let patchValue: string | number | null = rawValue
@@ -135,9 +157,11 @@ export function useInlineEdit(opts: {
       patchValue = n
     }
     if (field === 'date') {
+      if (dateDraftRef.current?.rowId === id) dateDraftRef.current = null
       if (!rawValue) return
       const d = new Date(rawValue)
-      if (isNaN(d.getTime())) return
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(rawValue) || isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== rawValue) return
+      if (d.getTime() === new Date(row.date).getTime()) return
       patchValue = d.toISOString()
     }
 
@@ -201,7 +225,7 @@ export function useInlineEdit(opts: {
           return { ...r, payeeId: rawValue, payee }
         }
         if (field === 'date') {
-          return { ...r, date: new Date(rawValue!) }
+          return { ...r, date: new Date(patchValue as string) }
         }
         return { ...r, [field]: patchValue }
       })
@@ -227,6 +251,7 @@ export function useInlineEdit(opts: {
       if (!res.ok) throw new Error('patch failed')
     } catch {
       // Revert on error
+      if (field === 'date' && dateDraftRef.current?.rowId === id) dateDraftRef.current = null
       if (row) {
         setLocalRows((rows) => rows.map((r) => (r.id === id ? row : r)))
       }
@@ -244,6 +269,6 @@ export function useInlineEdit(opts: {
     showMakeRuleEditor, setShowMakeRuleEditor,
     lastEditedRowId, setLastEditedRowId,
     startEdit, exitRowEdit, commitEdit,
-    payeeExitGuardRef,
+    payeeExitGuardRef, dateDraftRef,
   }
 }

@@ -17,10 +17,12 @@ import { classifyRoute, type NavigationMode, type RouteClass, type TraceElementT
 import { TERMINAL_STATUSES, type BankImportStatusValue } from '@/lib/bank-import/status'
 import { decideNextAction, resolvePlaybookStep, type AgentAction, type NavigatorInput } from './navigator'
 import { detectAuthState, type AuthState } from './auth-detect'
-import { isCsvSelected, snapshotPage, type PageSnapshot } from './page-elements'
+import { isCsvSelected, matchesDateRange, snapshotPage, type DateInputIdentity, type PageSnapshot } from './page-elements'
 import { executeAction } from './actions'
 import { pollTakeover, SessionCancelled, SessionContext, SessionFailed, SessionTimedOut, sleep } from './session-context'
 import { MAX_FILE_BYTES, openBrowser, type ProvidedBrowser } from './providers'
+import { createTakeoverObserver, type TakeoverObserver } from './takeover-observer'
+import { appendExportStep, appendTakeoverSteps, completeExportFlow, trainableCsv } from './export-learning'
 
 const LOGIN_TIMEOUT_MS = 5 * 60_000
 const NEEDS_USER_TIMEOUT_MS = 5 * 60_000
@@ -38,6 +40,7 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
   let ctx: SessionContext | null = null
   let browser: ProvidedBrowser | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  let takeoverObserver: TakeoverObserver | null = null
   const startedAt = Date.now()
 
   try {
@@ -120,15 +123,16 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
     await ctx.setStatus('NAVIGATING', 'Finding your transactions…', { needsUserReason: null })
 
     const candidate: PlaybookStep[] = []
-    const addCandidateStep = (candidateStep: PlaybookStep) => {
-      if (candidate[candidate.length - 1]?.intent !== candidateStep.intent) candidate.push(candidateStep)
-    }
+    const addCandidateStep = (candidateStep: PlaybookStep) => appendExportStep(candidate, candidateStep)
     let savedSteps: PlaybookStep[] = []
     let playbookIndex = 0
     let replayActive = false
     let replayFailedThisSession = false
     let playbookChanged = false
     let manualDownload = false
+    let learningValid = true
+    let trainableCapture = false
+    let replayAttempts = 0
     let navigationMode: NavigationMode = 'learn'
     const accountHint = session.account.bankAccountHint ?? undefined
     const history: string[] = []
@@ -138,7 +142,17 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
     let parseFails = 0
     let stepsTaken = 0
     let consecutiveActionFailures = 0
+    const pendingDateSelections = new Set<'from' | 'to'>()
+    const dateInputIds: Partial<Record<'from' | 'to', DateInputIdentity>> = {}
+    let usedCalendar = false
     let csvCaptured = false
+
+    try {
+      takeoverObserver = await createTakeoverObserver({ context: browser.context, bank, from: session.dateFrom, to: session.dateTo, accountName: session.account.name, accountHint })
+    } catch {
+      // Observation is optional; manual capture must remain available if CDP instrumentation fails.
+      await ctx.emit('warning', 'Takeover learning is unavailable for this browser. You can still download manually.')
+    }
 
     const storedPlaybook = await prisma.bankImportPlaybook.findUnique({ where: { userId_bankKey: { userId: session.userId, bankKey: session.bankKey } } })
     const parsedPlaybook = storedPlaybook ? parsePlaybook(storedPlaybook.version, storedPlaybook.steps) : null
@@ -181,7 +195,9 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         })
         if (isCsvLike(mimeType, file.bytes)) {
           csvCaptured = true
+          trainableCapture ||= !saved.duplicate && trainableCsv(file.bytes, session.dateFrom, session.dateTo)
         } else {
+          if (ctx!.status === 'NEEDS_USER') learningValid = false
           notes.push(`A ${fileKind.toUpperCase()} file was downloaded; we still need a CSV.`)
         }
       }
@@ -259,6 +275,41 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
       await ctx!.emit('warning', 'The saved export route changed. The assistant is finding the new route.')
     }
 
+    const pauseForUser = async (reason: 'mfa' | 'takeover' | 'stuck', message: string) => {
+      const observe = reason !== 'mfa'
+      if (observe) {
+        manualDownload = true
+        replayActive = false
+        playbookChanged = true
+        replayAttempts = 0
+        await takeoverObserver?.start(page).catch(() => { learningValid = false })
+      } else {
+        // Authentication interruptions are not demonstrations and cannot train a mixed route.
+        learningValid = false
+      }
+      try {
+        await needsUser(reason, message, ctx!, () => page, bank, collectDownloads, () => csvCaptured)
+      } finally {
+        if (observe) {
+          const learned = await takeoverObserver?.stop().catch(() => null)
+          if (!learned?.valid) learningValid = false
+          else {
+            appendTakeoverSteps(candidate, learned.steps)
+            for (const step of learned.steps) {
+              if (step.intent === 'set_date_from') pendingDateSelections.delete('from')
+              if (step.intent === 'set_date_to') pendingDateSelections.delete('to')
+            }
+            if (csvCaptured && (!learned.downloadObserved || learned.steps.at(-1)?.intent !== 'download_csv')) learningValid = false
+          }
+          // Manual calendar interaction can be valid without being trainable by the observer.
+          if (usedCalendar && matchesDateRange(await snapshotPage(page), bank, session.dateFrom, session.dateTo, dateInputIds)) pendingDateSelections.clear()
+        }
+      }
+      consecutiveActionFailures = 0
+      parseFails = 0
+      if (observe) history.push('The user completed manual navigation. Use the current page, not the previous replay cursor.')
+    }
+
     while (!csvCaptured) {
       ctx.checkDeadline()
       await ctx.pollCommands()
@@ -266,21 +317,25 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
       if (csvCaptured) break
 
       if (ctx.take('TAKEOVER')) {
-        await needsUser('takeover', 'You can take over the bank browser.', ctx, page, bank, collectDownloads, () => csvCaptured)
+        await pauseForUser('takeover', 'You can take over the bank browser. Supported export steps can be remembered after a successful download.')
         continue
       }
       const auth = await detectAuthState(page, bank)
       if (auth === 'login' || auth === 'mfa') {
-        await needsUser('mfa', `${bank.displayName} wants you to sign in or confirm again.`, ctx, page, bank, collectDownloads, () => csvCaptured)
+        await pauseForUser('mfa', `${bank.displayName} wants you to sign in or confirm again.`)
+        continue
+      }
+      if (auth !== 'authenticated') {
+        await pauseForUser('stuck', 'Please confirm the bank is signed in before continuing.')
         continue
       }
       if (stepsTaken >= MAX_AGENT_STEPS) {
-        await needsUser('stuck', 'The assistant ran out of navigation steps.', ctx, page, bank, collectDownloads, () => csvCaptured)
+        await pauseForUser('stuck', 'The assistant ran out of navigation steps.')
         stepsTaken = 0
         continue
       }
       if (consecutiveActionFailures >= 3) {
-        await needsUser('stuck', 'The bank control did not respond after three attempts. Please check the export options.', ctx, page, bank, collectDownloads, () => csvCaptured)
+        await pauseForUser('stuck', 'The bank control did not respond after three attempts. Please check the export options.')
         consecutiveActionFailures = 0
         continue
       }
@@ -308,7 +363,11 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         action = result.action!
       }
       if (await pollTakeover(ctx)) {
-        await needsUser('takeover', 'You can take over the bank browser.', ctx, page, bank, collectDownloads, () => csvCaptured)
+        await pauseForUser('takeover', 'You can take over the bank browser. Supported export steps can be remembered after a successful download.')
+        continue
+      }
+      if (await detectAuthState(page, bank) !== 'authenticated') {
+        await pauseForUser('mfa', 'Please complete the bank sign-in or verification before continuing.')
         continue
       }
       stepsTaken++
@@ -316,19 +375,24 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
       if (action.action === 'wait' && action.reason === 'Thinking…') {
         parseFails++
         if (parseFails >= 3) {
-          await needsUser('stuck', 'The assistant could not read the bank page. Please download the CSV yourself.', ctx, page, bank, collectDownloads, () => csvCaptured)
+          await pauseForUser('stuck', 'The assistant could not read the bank page. Please download the CSV yourself.')
           continue
         }
       } else {
         parseFails = 0
       }
       if (action.action === 'need_user') {
-        await needsUser('stuck', action.reason, ctx, page, bank, collectDownloads, () => csvCaptured)
+        await pauseForUser('stuck', action.reason)
+        continue
+      }
+      const targetElement = snapshot.elements.find((element) => element.id === action.elementId)
+      if (usedCalendar && !action.dateField && ['click', 'select_option', 'download'].includes(action.action) &&
+        (pendingDateSelections.size || !matchesDateRange(snapshot, bank, session.dateFrom, session.dateTo, dateInputIds))) {
+        await pauseForUser('stuck', 'The calendar selection is unfinished. Please choose the requested dates manually before downloading.')
         continue
       }
 
       const navStart = Date.now()
-      const targetElement = snapshot.elements.find((element) => element.id === action.elementId)
       await ctx.trace('navigation.step', 'start', {
         navigationMode,
         stepIndex: stepsTaken,
@@ -344,6 +408,13 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         snapshotFailureCount: snapshot.snapshotFailureCount,
       })
       const result = await executeAction({ page, snap: snapshot, action, bank, from: session.dateFrom, to: session.dateTo })
+      if (action.dateField && result.ok && result.verifiedValue) {
+        const dateInput = snapshot.elements.find(element => element.id === (action.action === 'fill_date' ? action.elementId : action.dateInputId))
+        if (dateInput?.domId && dateInput.frameId !== undefined) dateInputIds[action.dateField] = { domId: dateInput.domId, frameId: dateInput.frameId }
+      }
+      const calendarPending = !!action.dateField && ['click', 'select_option'].includes(action.action) && action.dateInputId === undefined
+      if (action.dateField && action.action !== 'fill_date') usedCalendar = true
+      if (action.dateField) pendingDateSelections.add(action.dateField)
       consecutiveActionFailures = result.ok ? 0 : consecutiveActionFailures + 1
       history.push(`${action.action} (${action.intent}${action.elementId === undefined ? '' : `, element ${action.elementId}`}): ${result.message}`)
       if (result.blocked) {
@@ -351,7 +422,8 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         await ctx.trace('guardrail.block', 'event', { navigationMode, stepIndex: stepsTaken, actionKind: action.action, outcome: 'blocked', errorCode: 'guardrail_violation' })
         await ctx.emit('warning', 'A restricted bank action was blocked.')
         if (blocked >= 4) {
-          await needsUser('stuck', 'The assistant encountered repeated safety blocks.', ctx, page, bank, collectDownloads, () => csvCaptured)
+          learningValid = false
+          await pauseForUser('stuck', 'The assistant encountered repeated safety blocks.')
           continue
         }
       } else if (result.ok) {
@@ -360,6 +432,7 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
 
       if (!isHostAllowed(page.url(), bank.allowedHostSuffixes, bank.allowInsecureLocalhost) || isPathDenied(page.url())) {
         violations++
+        learningValid = false
         await ctx.trace('guardrail.url_violation', 'event', { navigationMode, stepIndex: stepsTaken, outcome: 'blocked', errorCode: 'guardrail_violation' })
         await ctx.emit('warning', 'A navigation outside the bank was blocked.')
         await page.goBack({ timeout: 10_000 }).catch(() => {})
@@ -367,7 +440,7 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
           await page.goto(bank.loginUrl, { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(() => {})
         }
         if (violations >= 2) {
-          await needsUser('stuck', 'The assistant left the allowed bank area more than once.', ctx, page, bank, collectDownloads, () => csvCaptured)
+          await pauseForUser('stuck', 'The assistant left the allowed bank area more than once.')
           continue
         }
       }
@@ -377,7 +450,7 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         let tookOver = false
         while (!csvCaptured && Date.now() - waitStart < DOWNLOAD_WAIT_MS) {
           if (await pollTakeover(ctx)) {
-            await needsUser('takeover', 'You can take over the bank browser.', ctx, page, bank, collectDownloads, () => csvCaptured)
+            await pauseForUser('takeover', 'You can take over the bank browser. Supported export steps can be remembered after a successful download.')
             tookOver = true
             break
           }
@@ -399,7 +472,7 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         actionKind: action.action,
         routeBefore,
         routeAfter,
-        outcome: result.blocked ? 'blocked' : result.ok && postconditionOk ? 'ok' : 'error',
+        outcome: result.blocked ? 'blocked' : result.ok && (postconditionOk || calendarPending) ? 'ok' : 'error',
         errorCode: result.errorCode,
         durationMs: Date.now() - navStart,
       })
@@ -408,45 +481,61 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
         if (result.ok && postconditionOk && expected === activeSavedStep.expected) {
           addCandidateStep(activeSavedStep)
           playbookIndex++
+          replayAttempts = 0
           if (playbookIndex >= savedSteps.length && !csvCaptured) await failReplay()
-        } else if (replayActive) {
+        } else if (replayActive && (!result.ok || !calendarPending && ++replayAttempts >= 3)) {
           await failReplay()
         }
       } else if (result.ok && expected && postconditionOk && action.intent !== 'other') {
         addCandidateStep({ intent: action.intent, expected })
       }
+      if (action.dateField && (!result.ok || !calendarPending && !postconditionOk)) {
+        await pauseForUser('stuck', 'The bank date could not be verified. Please choose the requested dates manually before downloading.')
+        continue
+      }
+      if (action.dateField && postconditionOk) pendingDateSelections.delete(action.dateField)
       if (csvCaptured) break
     }
 
-    if (csvCaptured && !manualDownload) {
-      const completeCandidate = candidate.length > 0 && candidate[candidate.length - 1].intent === 'download_csv'
+    if (csvCaptured && learningValid && trainableCapture) {
+      const completeCandidate = completeExportFlow(candidate)
       if (playbookChanged && completeCandidate) {
-        await prisma.bankImportPlaybook.upsert({
-          where: { userId_bankKey: { userId: session.userId, bankKey: session.bankKey } },
-          create: {
-            userId: session.userId,
-            bankKey: session.bankKey,
-            version: 1,
-            steps: candidate as unknown as object[],
-            successCount: 1,
-            consecutiveFailures: 0,
-            lastSuccessAt: new Date(),
-          },
-          update: {
-            version: 1,
-            steps: candidate as unknown as object[],
-            successCount: { increment: 1 },
-            consecutiveFailures: 0,
-            lastSuccessAt: new Date(),
-          },
-        })
-      } else if (storedPlaybook && !playbookChanged) {
+        try {
+          await prisma.bankImportPlaybook.upsert({
+            where: { userId_bankKey: { userId: session.userId, bankKey: session.bankKey } },
+            create: {
+              userId: session.userId,
+              bankKey: session.bankKey,
+              version: 1,
+              steps: candidate as unknown as object[],
+              successCount: 1,
+              consecutiveFailures: 0,
+              lastSuccessAt: new Date(),
+            },
+            update: {
+              version: 1,
+              steps: candidate as unknown as object[],
+              successCount: { increment: 1 },
+              consecutiveFailures: 0,
+              lastSuccessAt: new Date(),
+            },
+          })
+          await ctx.emit('action', manualDownload ? 'Your takeover export flow was remembered for your next visit.' : 'Your export flow was remembered for your next visit.')
+        } catch {
+          await ctx.emit('warning', 'The download is ready, but the export flow could not be remembered.')
+        }
+      } else if (storedPlaybook && !playbookChanged && completeCandidate) {
         await prisma.bankImportPlaybook.update({
           where: { id: storedPlaybook.id },
           data: { successCount: { increment: 1 }, consecutiveFailures: 0, lastSuccessAt: new Date() },
-        })
+        }).catch(() => {})
       }
     }
+
+    if (manualDownload && (!learningValid || !trainableCapture || !completeExportFlow(candidate))) {
+      await ctx.emit('warning', 'The download is ready, but this takeover flow could not be learned safely. You may need to help again next time.')
+    }
+    await takeoverObserver?.dispose().catch(() => {})
 
     await Promise.race([signOut(page, bank, ctx), sleep(LOGOUT_BUDGET_MS)])
     await ctx.setStatus('CAPTURED', 'Download complete. Ready to review.', {
@@ -474,6 +563,7 @@ export async function runSession(sessionId: string, workerId: string): Promise<v
     }
   } finally {
     if (heartbeatTimer) clearInterval(heartbeatTimer)
+    await takeoverObserver?.dispose().catch(() => {})
     if (browser) {
       try { await browser.close() } catch {
         await ctx?.trace('browser.stop', 'event', { providerOperation: 'stop_browser', outcome: 'error', errorCode: 'browser_stop' })
@@ -527,7 +617,7 @@ async function waitForLogin(ctx: SessionContext, page: import('playwright-core')
   while (true) {
     ctx.checkDeadline()
     await ctx.pollCommands()
-    if (ctx.take('LOGIN_DONE')) return
+    const confirmed = ctx.take('LOGIN_DONE')
     if (Date.now() - startedAt > LOGIN_TIMEOUT_MS) throw new SessionTimedOut('Sign-in timed out.')
     const state = await detectAuthState(page, bank)
     if (state !== lastState) {
@@ -538,7 +628,7 @@ async function waitForLogin(ctx: SessionContext, page: import('playwright-core')
       await ctx.setStatus('AWAITING_LOGIN', `Confirm the sign-in in your ${bank.displayName} app or browser.`, { needsUserReason: 'mfa' })
     }
     authenticatedPolls = state === 'authenticated' ? authenticatedPolls + 1 : 0
-    if (authenticatedPolls >= 2) return
+    if (state === 'authenticated' && (confirmed || authenticatedPolls >= 2)) return
     await sleep(POLL_MS)
   }
 }
@@ -547,7 +637,7 @@ async function needsUser(
   reason: 'mfa' | 'takeover' | 'stuck',
   message: string,
   ctx: SessionContext,
-  page: import('playwright-core').Page,
+  getPage: () => import('playwright-core').Page,
   bank: BankConfig,
   collectDownloads: () => Promise<void>,
   isCsvCaptured: () => boolean,
@@ -565,10 +655,11 @@ async function needsUser(
       ctx.take('TAKEOVER')
       await collectDownloads()
       if (isCsvCaptured()) return
-      if (ctx.take('RESUME_AGENT')) break
-      const state = reason === 'mfa' ? await detectAuthState(page, bank) : 'unknown'
+      const resume = ctx.take('RESUME_AGENT')
+      const state = await detectAuthState(getPage(), bank)
+      if (resume && state === 'authenticated') break
       authenticatedPolls = state === 'authenticated' ? authenticatedPolls + 1 : 0
-      if (authenticatedPolls >= 2) break
+      if (reason === 'mfa' && authenticatedPolls >= 2) break
       await sleep(POLL_MS)
     }
     if (Date.now() - startedAt >= NEEDS_USER_TIMEOUT_MS) {
@@ -594,6 +685,9 @@ async function verifyPostcondition(
   csvCaptured: boolean,
 ): Promise<boolean> {
   const route: RouteClass = classifyRoute(bank.key, snapshot.url)
+  if (expected === 'navigation_menu_visible') {
+    return snapshot.elements.some(element => element.role === 'menuitem' || /^(more|account services|download account activity|statements (?:and|&) documents)$/i.test(element.text.trim()))
+  }
   if (expected === 'account_selected') return route === 'account' || route === 'activity'
   if (expected === 'activity_visible') return route === 'activity'
   if (expected === 'export_options_visible') {
@@ -602,8 +696,11 @@ async function verifyPostcondition(
   if (expected === 'csv_selected') {
     return isCsvSelected(snapshot)
   }
+  if (expected === 'date_range_controls_visible') {
+    return snapshot.elements.filter(element => element.tag === 'input' && (element.type === 'date' || /date|datum|dd\/mm|mm\/dd/i.test(`${element.text} ${element.ariaLabel ?? ''} ${element.placeholder ?? ''}`))).length >= 2
+  }
   if (expected === 'from_date_set' || expected === 'to_date_set') {
-    if (action.action !== 'fill_date' || !action.dateField || !verifiedValue) return false
+    if (!['fill_date', 'click', 'select_option'].includes(action.action) || !action.dateField || !verifiedValue) return false
     return action.dateField === (expected === 'from_date_set' ? 'from' : 'to')
   }
   return csvCaptured

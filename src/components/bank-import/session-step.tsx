@@ -69,6 +69,9 @@ export function SessionStep({ id, onClose, onRetry }: { id: string; onClose: () 
       </header>
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
       {commandError && <p className="text-sm text-destructive" role="alert">{commandError}</p>}
+      {status === 'NEEDS_USER' && snapshot?.needsUserReason !== 'mfa' && (
+        <p className="text-xs text-muted-foreground">Supported export navigation can be remembered after a successful CSV download. Sign-in, verification codes, and account details are never saved in the export flow.</p>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(250px,1fr)]">
         <LiveViewFrame url={liveUrl} interactive={interactive} />

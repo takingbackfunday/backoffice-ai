@@ -329,6 +329,7 @@ export function TransactionTable({ initialRows, initialTotal, initialWorkspaces,
                   setLastEditedRowId={edit.setLastEditedRowId}
                   handleApplyComplete={handleApplyComplete}
                   payeeExitGuardRef={edit.payeeExitGuardRef}
+                  dateDraftRef={edit.dateDraftRef}
                 />
               ))
             )}

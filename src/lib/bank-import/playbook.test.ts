@@ -26,4 +26,12 @@ describe('parsePlaybook', () => {
   it('maps intents to fixed postconditions', () => {
     expect(expectedPostcondition('download_csv')).toBe('csv_downloaded')
   })
+
+  it('accepts only fixed navigation cues with matching intents, while retaining existing stored flows', () => {
+    const route = [{ intent: 'open_navigation_menu', expected: 'navigation_menu_visible', target: 'more' }, ...steps]
+    expect(parsePlaybook(1, route)).toEqual(route)
+    expect(parsePlaybook(1, [{ ...route[0], target: 'private-account-4321' }])).toBeNull()
+    expect(parsePlaybook(1, [{ ...steps[0], target: 'more' }])).toBeNull()
+    expect(parsePlaybook(1, [{ ...route[0], url: 'https://bank.invalid/account' }])).toBeNull()
+  })
 })

@@ -35,14 +35,14 @@ export function renderEditableCell(
     setPayees: React.Dispatch<React.SetStateAction<Payee[]>>
     payeeDraftRef: React.RefObject<PayeeDraftHandle | null>
     payeeAnchorRef: React.RefObject<HTMLTableCellElement | null>
+    dateDraftRef: React.RefObject<{ rowId: string; value: string } | null>
   }
 ) {
-  const { editingRowId, editingRowInitialField, savingIds, errorIds, projects, categoryGroups, payees, startEdit, exitRowEdit, commitEdit, setPayees, payeeDraftRef, payeeAnchorRef } = opts
+  const { editingRowId, editingRowInitialField, savingIds, errorIds, projects, categoryGroups, payees, startEdit, exitRowEdit, commitEdit, setPayees, payeeDraftRef, payeeAnchorRef, dateDraftRef } = opts
   const isEditing = editingRowId === row.id
   const isInitialField = editingRowInitialField === field
   const isSaving = savingIds.has(row.id)
   const hasError = errorIds.has(row.id)
-
   let displayValue: string
   if (field === 'projectId') {
     displayValue = row.workspace?.name ?? '—'
@@ -54,7 +54,7 @@ export function renderEditableCell(
     const n = toDisplay(row.amount)
     displayValue = (n >= 0 ? '+' : '') + n.toFixed(2)
   } else if (field === 'date') {
-    displayValue = new Date(row.date).toLocaleDateString()
+    displayValue = new Date(row.date).toLocaleDateString(undefined, { timeZone: 'UTC' })
   } else {
     displayValue = (row[field as keyof TransactionWithRelations] as string | null) ?? '—'
   }
@@ -82,7 +82,6 @@ export function renderEditableCell(
         </td>
       )
     }
-
     if (field === 'categoryId') {
       return (
         <td key={field} className="px-3 py-0.5 min-w-[160px]">
@@ -99,7 +98,6 @@ export function renderEditableCell(
         </td>
       )
     }
-
     if (field === 'payeeId') {
       return (
         <td key={field} ref={payeeAnchorRef} className="px-3 py-0.5 min-w-[140px]">
@@ -115,7 +113,6 @@ export function renderEditableCell(
         </td>
       )
     }
-
     if (field === 'date') {
       const isoDate = new Date(row.date).toISOString().slice(0, 10)
       return (
@@ -124,18 +121,17 @@ export function renderEditableCell(
             value={isoDate}
             type="date"
             autoFocus={isInitialField}
+            onDraftChange={(v) => { dateDraftRef.current = v === isoDate ? null : { rowId: row.id, value: v } }}
             onCommit={(v) => commitEdit(row.id, 'date', v)}
-            onCancel={() => exitRowEdit(row.id)}
+            onCancel={() => { dateDraftRef.current = null; exitRowEdit(row.id) }}
           />
         </td>
       )
     }
-
     const rawVal =
       field === 'amount'
         ? String(toDisplay(row.amount))
         : (row[field as keyof TransactionWithRelations] as string | null) ?? ''
-
     return (
       <td key={field} className="px-3 py-0.5 min-w-[100px]">
         <TextCell
@@ -148,7 +144,6 @@ export function renderEditableCell(
       </td>
     )
   }
-
   if (field === 'description') {
     return (
       <DescriptionCell
@@ -159,7 +154,6 @@ export function renderEditableCell(
       />
     )
   }
-
   return (
     <td
       key={field}
@@ -224,6 +218,7 @@ export function TransactionRow({
   setLastEditedRowId,
   handleApplyComplete,
   payeeExitGuardRef,
+  dateDraftRef,
 }: {
   row: TransactionWithRelations
   editingRowId: string | null
@@ -250,6 +245,7 @@ export function TransactionRow({
   setLastEditedRowId: React.Dispatch<React.SetStateAction<string | null>>
   handleApplyComplete: () => void
   payeeExitGuardRef: React.RefObject<((rowId: string) => boolean) | null>
+  dateDraftRef: React.RefObject<{ rowId: string; value: string } | null>
 }) {
   const isDeleting = deletingIds.has(row.id)
   const isSelected = selectedIds.has(row.id)
@@ -262,8 +258,7 @@ export function TransactionRow({
     commitEdit,
     exitRowEdit,
   })
-  const cellOpts = { editingRowId, editingRowInitialField, savingIds, errorIds, projects, categoryGroups, payees, startEdit, exitRowEdit, commitEdit, setPayees, payeeDraftRef: payeePrompt.payeeDraftRef, payeeAnchorRef: payeePrompt.payeeAnchorRef }
-
+  const cellOpts = { editingRowId, editingRowInitialField, savingIds, errorIds, projects, categoryGroups, payees, startEdit, exitRowEdit, commitEdit, setPayees, payeeDraftRef: payeePrompt.payeeDraftRef, payeeAnchorRef: payeePrompt.payeeAnchorRef, dateDraftRef }
   return (
     <>
       <tr
@@ -284,7 +279,9 @@ export function TransactionRow({
         <td className="px-3 py-0.5 w-8" onClick={(e) => e.stopPropagation()}>
           {isRowEditing ? (
             <button
-              onMouseDown={(e) => { e.preventDefault(); exitRowEdit(row.id) }}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => exitRowEdit(row.id)}
               className="text-xs px-2 py-0.5 rounded bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors"
             >
               Done
@@ -334,7 +331,9 @@ export function TransactionRow({
         {isRowEditing ? (
           <td className="px-2 py-0.5 whitespace-nowrap">
             <button
-              onMouseDown={(e) => { e.preventDefault(); exitRowEdit(row.id) }}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => exitRowEdit(row.id)}
               className="text-xs px-2 py-0.5 rounded bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors"
             >
               Done

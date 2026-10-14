@@ -36,6 +36,11 @@ describe('sanitizeTraceFields', () => {
     expect(sanitizeTraceFields({ workerId: 'my worker with secret' })).toEqual({})
     expect(sanitizeTraceFields({ providerStatus: 700 })).toEqual({})
   })
+
+  it('keeps the new fixed menu/range intents without storing their raw targets', () => {
+    expect(sanitizeTraceFields({ intent: 'open_navigation_menu', target: 'private menu label' })).toEqual({ intent: 'open_navigation_menu' })
+    expect(sanitizeTraceFields({ intent: 'choose_date_range', value: '2026-10-11' })).toEqual({ intent: 'choose_date_range' })
+  })
 })
 
 describe('classifyRoute', () => {

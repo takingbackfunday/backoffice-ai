@@ -77,6 +77,21 @@ export function formatBankDate(iso: string, format: BankDateFormat | 'ISO'): str
   return iso
 }
 
+/** Parse a visible bank date field value back to ISO; tolerant of single-digit day/month reformatting. */
+export function parseBankDate(value: string, format: BankDateFormat | 'ISO'): string | null {
+  const trimmed = value.trim()
+  // Custom text calendars can store ISO values despite a localized display/placeholder.
+  if (isIsoDate(trimmed)) return trimmed
+  if (format === 'ISO') return null
+  const re = format === 'DD.MM.YYYY' ? /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/ : /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
+  const m = re.exec(trimmed)
+  if (!m) return null
+  const day = format === 'MM/DD/YYYY' ? m[2] : m[1]
+  const month = format === 'MM/DD/YYYY' ? m[1] : m[2]
+  const iso = `${m[3]}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  return isIsoDate(iso) ? iso : null
+}
+
 export function inferBankDateFormat(hint: string): BankDateFormat | null {
   const normalized = hint.toUpperCase().replace(/\s+/g, '')
   if (normalized.includes('DD/MM/YYYY') || normalized.includes('DD/MM/JJJJ')) return 'DD/MM/YYYY'
