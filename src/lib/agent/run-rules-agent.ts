@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
 import {
   RULES_TOOLS,
   dispatchRulesTool,
@@ -88,8 +88,7 @@ const PRELOADED_TOOLS = new Set([
 ])
 
 const MAX_TOOL_ROUNDS = 16
-const STRATEGY_MODEL = 'anthropic/claude-sonnet-4.6'
-const EXECUTION_MODEL = 'anthropic/claude-haiku-4.5'
+const MODEL = DEEPSEEK_MODEL
 
 // ── Core agent function ───────────────────────────────────────────────────────
 
@@ -231,12 +230,10 @@ Instructions:
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     if (options.signal?.aborted) break
 
-    const lastMsg = messages.at(-1)
-    const isStrategyRound = round === 0 || (lastMsg?.role === 'user' && round > 0)
-    const model = isStrategyRound ? STRATEGY_MODEL : EXECUTION_MODEL
+    const model = MODEL
 
     console.log(`[rules-agent:${runId}] round:start`, JSON.stringify({ round: round + 1, model, messages: messages.length, emitCount, lastRole: messages.at(-1)?.role }))
-    send({ type: 'status', message: round === 0 ? 'Sonnet planning…' : `Haiku emitting (round ${round + 1})…` })
+    send({ type: 'status', message: round === 0 ? 'Planning rule suggestions…' : `Writing suggestions (round ${round + 1})…` })
 
     const response = await openrouterWithTools(messages, RULES_TOOLS, model)
     if (response.usage) {
@@ -359,8 +356,8 @@ Instructions:
         role: 'user',
         content: `Some suggestions were rejected. Please resolve each one using the exact category names from the AVAILABLE CATEGORIES list, correct conditions, and call finish_analysis when done.\n\nRejected:\n${rejectedSummary}`,
       })
-      console.log(`[rules-agent:${runId}] escalating to Sonnet for cleanup`, JSON.stringify({ consecutiveRejections, emitCount }))
-      send({ type: 'status', message: 'Sonnet resolving rejections…' })
+      console.log(`[rules-agent:${runId}] asking DeepSeek to resolve rejected suggestions`, JSON.stringify({ consecutiveRejections, emitCount }))
+      send({ type: 'status', message: 'Resolving rejected suggestions…' })
     }
   }
 
@@ -370,7 +367,7 @@ Instructions:
   recordAgentUsage({
     userId,
     endpoint: 'rules',
-    model: `${STRATEGY_MODEL}+${EXECUTION_MODEL}`,
+    model: MODEL,
     inputTokens: totalInput,
     outputTokens: totalOutput,
     toolRounds: emitCount,

@@ -1,5 +1,7 @@
 // ── Logging ───────────────────────────────────────────────────────────────────
 
+export const DEEPSEEK_MODEL = 'deepseek/deepseek-v4.1-flash-1017'
+
 function estimateTokens(text: string) {
   return Math.ceil(text.length / 4)
 }
@@ -38,6 +40,10 @@ export interface ToolCall {
 export interface Usage {
   inputTokens: number
   outputTokens: number
+}
+
+export interface OpenRouterRequestOptions {
+  responseFormat?: { type: 'json_object' }
 }
 
 export interface ChatResponse {
@@ -143,7 +149,7 @@ export async function openrouterStream(
 
 export async function openrouterChat(
   messages: { role: 'user' | 'assistant' | 'system'; content: string }[],
-  model = 'mistralai/devstral-small',
+  model = DEEPSEEK_MODEL,
   maxTokens = 4096,
   timeoutMs?: number
 ): Promise<string> {
@@ -188,7 +194,7 @@ export async function openrouterChat(
 const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504])
 const MAX_RETRIES = 2
 // Per-attempt timeout: abort if the stream produces no [DONE] within this window.
-// Sonnet round-0 with a large context can take 40-50s; 90s gives comfortable headroom
+// Reasoning/tool rounds with a large context can take 40-50s; 90s gives comfortable headroom
 // while ensuring a hung connection fails and retries rather than blocking until the
 // outer hard-timeout fires.
 const STREAM_TIMEOUT_MS = 90_000
@@ -196,7 +202,8 @@ const STREAM_TIMEOUT_MS = 90_000
 export async function openrouterWithTools(
   messages: ChatMessage[],
   tools: ToolDefinition[],
-  model = 'mistralai/mistral-small-2603'
+  model = DEEPSEEK_MODEL,
+  options: OpenRouterRequestOptions = {},
 ): Promise<ChatResponse> {
   const t0 = Date.now()
 
@@ -228,6 +235,7 @@ export async function openrouterWithTools(
           max_tokens: 8192,
           stream: true,
           stream_options: { include_usage: true },
+          ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
         }),
         signal: controller.signal,
       })

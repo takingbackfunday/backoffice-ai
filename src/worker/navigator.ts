@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { openrouterWithTools, type ToolDefinition, type Usage } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterWithTools, type ToolDefinition, type Usage } from '@/lib/llm/openrouter'
 import type { BankConfig } from '@/lib/bank-import/banks'
 import { PLAYBOOK_INTENTS, PLAYBOOK_TARGET_HINTS, type PlaybookStep } from '@/lib/bank-import/playbook'
 import type { PageSnapshot } from './page-elements'
 
-const MODEL = 'anthropic/claude-sonnet-4.6'
+const MODEL = DEEPSEEK_MODEL
 
 export const NEXT_ACTION_TOOL: ToolDefinition = {
   type: 'function',

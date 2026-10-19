@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { parsePreferences } from '@/types/preferences'
 import { logger } from '@/lib/log'
-import { openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterWithTools, type ChatMessage } from '@/lib/llm/openrouter'
 import {
   RULES_TOOLS,
   dispatchRulesTool,
@@ -145,7 +145,7 @@ Analyse the patterns and emit rule suggestions. Do NOT suggest rules for merchan
 
     for (let round = 0; round < MAX_ROUNDS && !finished; round++) {
       logger.info('suggest-from-edits', 'round', { round: round + 1, maxRounds: MAX_ROUNDS })
-      const response = await openrouterWithTools(messages, RULES_TOOLS, 'anthropic/claude-sonnet-4.6')
+      const response = await openrouterWithTools(messages, RULES_TOOLS, DEEPSEEK_MODEL)
 
       const toolNames = response.tool_calls?.map((tc) => tc.function.name) ?? []
       logger.info('suggest-from-edits', 'round tools', { round: round + 1, tools: toolNames.length ? toolNames : [] })

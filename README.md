@@ -77,7 +77,7 @@ Financial management tool for freelancers, consultants, and small property manag
 - **Auth**: Clerk
 - **Database**: PostgreSQL (Neon) via Prisma 7 + `@prisma/adapter-neon` + `@neondatabase/serverless` (WebSocket transport, full transaction support, no `pg`)
 - **Styling**: Tailwind CSS 4 + shadcn/ui (base-nova)
-- **AI**: OpenRouter (`anthropic/claude-sonnet-4.6` for reasoning, Gemini Flash Lite for classification)
+- **AI**: OpenRouter (`deepseek/deepseek-v4.1-flash-1017` for non-OCR AI; OCR keeps its dedicated providers)
 - **PDF**: react-pdf/renderer
 - **Bank sync**: CSV upload plus manual browser-agent sync via playwright-core + Browserless.io
 
@@ -87,6 +87,8 @@ Financial management tool for freelancers, consultants, and small property manag
 pnpm install
 pnpm dev
 ```
+
+Run the synthetic live-model evaluation with `pnpm eval:deepseek`. It uses the OpenRouter key from `.env.local`, sends only synthetic fixtures, and does not write to the database or open a bank browser.
 
 Requires a `.env.local` with Clerk, Neon, OpenRouter, and encryption secret. See CLAUDE.md for the full variable list.
 

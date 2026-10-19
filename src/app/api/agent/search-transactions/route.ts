@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterChat } from '@/lib/llm/openrouter'
 import { ok, unauthorized, serverError, badRequest } from '@/lib/api-response'
 import { checkDailyBudget, recordAgentUsage } from '@/lib/agent/usage'
 import { logger } from '@/lib/log'
@@ -114,7 +114,7 @@ Respond with ONLY a JSON object, no markdown, no explanation outside the JSON:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: query },
       ],
-      'google/gemini-2.0-flash-lite-001'
+      DEEPSEEK_MODEL
     )
 
     // Record usage (fire-and-forget)
@@ -123,7 +123,7 @@ Respond with ONLY a JSON object, no markdown, no explanation outside the JSON:
     recordAgentUsage({
       userId,
       endpoint: 'search',
-      model: 'google/gemini-2.0-flash-lite-001',
+      model: DEEPSEEK_MODEL,
       inputTokens: inputEst,
       outputTokens: outputEst,
       toolRounds: 0,

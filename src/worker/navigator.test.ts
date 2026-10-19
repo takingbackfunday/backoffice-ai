@@ -4,7 +4,10 @@ import { buildUserMessage, decideNextAction, resolvePlaybookStep, type AgentActi
 import type { PageSnapshot } from './page-elements'
 
 const llm = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/llm/openrouter', () => ({ openrouterWithTools: llm }))
+vi.mock('@/lib/llm/openrouter', () => ({
+  DEEPSEEK_MODEL: 'deepseek/deepseek-v4.1-flash-1017',
+  openrouterWithTools: llm,
+}))
 
 const snapshot: PageSnapshot = {
   url: 'https://secure.chase.com/accounts/activity?secret=hidden#/activity',

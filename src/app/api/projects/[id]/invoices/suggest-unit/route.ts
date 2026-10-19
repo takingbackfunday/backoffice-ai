@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterChat } from '@/lib/llm/openrouter'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 
 const Schema = z.object({
@@ -30,7 +30,7 @@ Respond with raw JSON only, no markdown.`,
         role: 'user',
         content: description,
       },
-    ], 'mistralai/mistral-small-2603')
+    ], DEEPSEEK_MODEL)
 
     let unit: string | null = null
     let confidence: 'high' | 'low' = 'low'

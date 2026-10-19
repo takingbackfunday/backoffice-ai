@@ -105,8 +105,8 @@ Every page listed above has a sibling `page.capabilities.ts` file in the same di
 
 **AI rules agent — architecture notes:**
 - **Single source of truth:** `src/lib/agent/run-rules-agent.ts` exports `runRulesAgent()` (core loop) and `RULES_AGENT_SYSTEM_PROMPT`. The SSE route, background runner, and diagnostic script all call this function — never duplicate the prompt or loop logic elsewhere.
-- **Pre-load mode:** all data sections (categories, payees, rules, uncategorised groups, etc.) are fetched in parallel and injected into the user message before the first LLM call. The LLM goes straight to `record_plan` (Sonnet, round 0) → `emit_rule_suggestion` (Haiku, round 1+). No lazy tool-fetch round.
-- **Model strategy:** Sonnet 4.6 for round 0 (planning), Haiku 4.5 for all emission rounds. Sonnet re-enters on escalation (2+ consecutive rejections after emission).
+- **Pre-load mode:** all data sections (categories, payees, rules, uncategorised groups, etc.) are fetched in parallel and injected into the user message before the first LLM call. The LLM goes straight to `record_plan` (round 0) → `emit_rule_suggestion` (round 1+). No lazy tool-fetch round.
+- **Model:** DeepSeek V4.1 Flash 1017 handles planning, emission, and rejection cleanup.
 - **Key behavioural rules enforced by the prompt:**
   - `description contains` is always the primary condition — never `payeeName equals` as the sole condition (it only matches already-tagged transactions, not fresh imports).
   - For sources 2 (no-payee) and 3 (ruleless patterns), `categoryName` must be copied verbatim from the data — never guessed.
@@ -311,7 +311,7 @@ Single agent at `POST /api/agent/omni` replaces the old multi-agent stack. No do
 
 | Function | Location | Use |
 |---|---|---|
-| `openrouterChat()` | `src/lib/llm/openrouter.ts` | Simple text completion, default `mistralai/devstral-small` |
+| `openrouterChat()` | `src/lib/llm/openrouter.ts` | Simple text completion, default `deepseek/deepseek-v4.1-flash-1017` |
 | `openrouterWithTools()` | `src/lib/llm/openrouter.ts` | Tool-calling loop, streams to avoid timeout, retries 2× (2s/4s backoff), 90s abort; returns `usage: { inputTokens, outputTokens }` via `stream_options: { include_usage: true }` |
 | `openrouterStream()` | `src/lib/llm/openrouter.ts` | Streaming without tools, calls `onToken(chunk)`, returns full text |
 | `Usage` type | `src/lib/llm/openrouter.ts` | `{ inputTokens: number, outputTokens: number }` — used by tool loop for cost tracking |

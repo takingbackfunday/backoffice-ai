@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterChat } from '@/lib/llm/openrouter'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { logger } from '@/lib/log'
 
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userMsg },
       ],
-      'mistralai/mistral-small-2603'
+      DEEPSEEK_MODEL
     )
 
     let jsonStr = raw.trim()

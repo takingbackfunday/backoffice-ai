@@ -1,4 +1,4 @@
-import { openrouterWithTools, type ChatMessage, type ToolDefinition } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterWithTools, type ChatMessage, type ToolDefinition } from '@/lib/llm/openrouter'
 import { tavilySearch, formatSearchResultsForLlm, TavilyError } from '@/lib/llm/tavily'
 import { StarterTemplateSchema, type StarterTemplate } from '@/lib/quote-template-schemas'
 import { logger } from '@/lib/log'
@@ -144,7 +144,7 @@ const WEB_SEARCH_TOOL: ToolDefinition = {
 
 // ── Pipeline ────────────────────────────────────────────────────────
 
-const MODEL = 'anthropic/claude-sonnet-4.6'
+const MODEL = DEEPSEEK_MODEL
 const MAX_TOOL_ROUNDS = 5
 
 export async function* runAudaciousQuotePipeline(opts: {
@@ -303,52 +303,57 @@ export async function* runAudaciousQuotePipeline(opts: {
     return
   }
 
-  // Extract JSON
-  let jsonStr = raw.trim()
-  const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenceMatch) jsonStr = fenceMatch[1].trim()
-  const objMatch = jsonStr.match(/\{[\s\S]*\}/)
-  if (objMatch) jsonStr = objMatch[0]
+  let { jsonStr, parsed } = parseQuoteJson(raw)
+  let clarification = tryParseClarification(raw)
+  let result = parsed === undefined ? undefined : StarterTemplateSchema.safeParse(extractTemplate(parsed))
 
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(jsonStr)
-  } catch {
-    // Try repair heuristics (same as existing route)
-    const repaired = tryRepairJson(jsonStr)
-    if (repaired) {
-      try { parsed = JSON.parse(repaired) } catch { /* fall through */ }
-    }
-    if (parsed === undefined) {
-      logger.error('audacious-quote', 'JSON parse failed', { raw: raw.slice(0, 500) })
-      yield {
-        type: 'error',
-        step: 'parsing',
-        message: 'The AI returned malformed JSON. This can happen with very complex descriptions. Try simplifying or shortening your description.',
-        detail: jsonStr.slice(0, 500),
-      }
-      return
+  if (!clarification && !result?.success) {
+    try {
+      const repair = await openrouterWithTools([
+        ...messages,
+        { role: 'assistant', content: raw },
+        {
+          role: 'user',
+          content: 'The quote above is incomplete or invalid. Return the same quote as one complete JSON object matching the requested template schema. Every section needs at least one item; every item needs a description and positive quantity. Preserve the intended quote and pricing. Return JSON only.',
+        },
+      ], [], MODEL, { responseFormat: { type: 'json_object' } })
+      raw = repair.content ?? ''
+      ;({ jsonStr, parsed } = parseQuoteJson(raw))
+      clarification = tryParseClarification(raw)
+      result = parsed === undefined ? undefined : StarterTemplateSchema.safeParse(extractTemplate(parsed))
+    } catch (error) {
+      logger.warn('audacious-quote', 'structured output repair failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      })
     }
   }
 
-  // Check again for clarification in the parsed output (belt-and-braces)
-  const clarification = tryParseClarification(raw)
   if (clarification) {
     yield { type: 'clarification_needed', questions: clarification }
     return
   }
 
-  // Manual extraction — the output wraps template with extra fields
-  const parsedObj = parsed as Record<string, unknown>
-  const templateData = parsedObj.template ?? parsedObj
+  if (parsed === undefined) {
+    logger.error('audacious-quote', 'JSON parse failed', { raw: raw.slice(0, 500) })
+    yield {
+      type: 'error',
+      step: 'parsing',
+      message: 'The AI returned malformed JSON. This can happen with very complex descriptions. Try simplifying or shortening your description.',
+      detail: jsonStr.slice(0, 500),
+    }
+    return
+  }
+
+  const parsedObj = objectValue(parsed)
   const assumptions = Array.isArray(parsedObj.assumptions) ? parsedObj.assumptions as string[] : []
   const pricingRationale = typeof parsedObj.pricing_rationale === 'string' ? parsedObj.pricing_rationale : ''
 
-  const result = StarterTemplateSchema.safeParse(templateData)
-  if (!result.success) {
-    const issues = result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
+  if (!result || !result.success) {
+    const issues = result && !result.success
+      ? result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
+      : 'unknown schema error'
     logger.error('audacious-quote', 'Schema validation failed', {
-      errors: result.error.issues.map(i => i.message),
+      errors: issues.split('; '),
     })
     yield {
       type: 'error',
@@ -370,6 +375,33 @@ export async function* runAudaciousQuotePipeline(opts: {
   }
 
   yield { type: 'done' }
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function extractTemplate(value: unknown): unknown {
+  const parsed = objectValue(value)
+  return parsed.template ?? value
+}
+
+function parseQuoteJson(raw: string): { jsonStr: string; parsed?: unknown } {
+  let jsonStr = raw.trim()
+  const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fenceMatch) jsonStr = fenceMatch[1].trim()
+  const objMatch = jsonStr.match(/\{[\s\S]*\}/)
+  if (objMatch) jsonStr = objMatch[0]
+
+  try {
+    return { jsonStr, parsed: JSON.parse(jsonStr) }
+  } catch {
+    const repaired = tryRepairJson(jsonStr)
+    if (repaired) {
+      try { return { jsonStr, parsed: JSON.parse(repaired) } } catch { /* fall through */ }
+    }
+    return { jsonStr }
+  }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────

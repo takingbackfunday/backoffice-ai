@@ -16,7 +16,7 @@
  *   - Accepted suggestions are written directly as CategorizationRule rows.
  */
 
-import { openrouterWithTools, type ChatMessage } from '../src/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterWithTools, type ChatMessage } from '../src/lib/llm/openrouter'
 import {
   RULES_TOOLS,
   dispatchRulesTool,
@@ -186,9 +186,6 @@ Instructions:
   ]
 
   // ── LLM tool loop ────────────────────────────────────────────────────────────
-  const STRATEGY_MODEL = 'anthropic/claude-sonnet-4.6'
-  const EXECUTION_MODEL = 'anthropic/claude-haiku-4.5'
-
   let finished = false
   let everEmitted = false
   let emitCount = 0
@@ -201,9 +198,7 @@ Instructions:
   const MAX_TOTAL_REJECTIONS = 12
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const lastMsg = messages.at(-1)
-    const isStrategyRound = round === 0 || (lastMsg?.role === 'user' && round > 0)
-    const model = isStrategyRound ? STRATEGY_MODEL : EXECUTION_MODEL
+    const model = DEEPSEEK_MODEL
 
     console.log(`\n[round ${round + 1}] model: ${model.split('/')[1]}`)
     const response = await openrouterWithTools(messages, RULES_TOOLS, model)

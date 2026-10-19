@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterChat } from '@/lib/llm/openrouter'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
 import { logger } from '@/lib/log'
 
@@ -22,13 +22,20 @@ const ColResultSchema = z.object({
   confidence: z.number(),
   reason: z.string().optional().default(''),
 })
-const ValidationResultSchema = z.object({
+export const ValidationResultSchema = z.object({
   dateCol: ColResultSchema,
   amountCol: ColResultSchema,
   descCol: ColResultSchema,
   notesCol: ColResultSchema,
   amountSign: z
-    .object({ value: z.enum(['normal', 'inverted']), confidence: z.number(), reason: z.string().optional().default('') })
+    .object({
+      value: z.preprocess(
+        value => typeof value === 'string' && value.trim().toLowerCase() === 'invert' ? 'inverted' : value,
+        z.enum(['normal', 'inverted']),
+      ),
+      confidence: z.number(),
+      reason: z.string().optional().default(''),
+    })
     .optional(),
 })
 
@@ -77,7 +84,7 @@ Rules:
 - For column fields: if correct echo the same column with confidence 80-100; if wrong suggest a better one with lower confidence; if absent set col to null.
 - For amountSign: "normal" means expenses are negative (e.g. -45.00), "inverted" means expenses are positive (e.g. 45.00 for a debit). Look at the sample amounts — if typical purchases/debits appear as positive numbers, use "inverted".`
 
-    const raw = await openrouterChat([{ role: 'user', content: prompt }], 'mistralai/mistral-small-2603', 4096, 30_000)
+    const raw = await openrouterChat([{ role: 'user', content: prompt }], DEEPSEEK_MODEL, 4096, 30_000)
 
     // Strip markdown fences if present
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()

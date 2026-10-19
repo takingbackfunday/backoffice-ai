@@ -1,5 +1,6 @@
 import { PLAYBOOK_INTENTS, type PlaybookIntent } from './playbook'
 import type { BankImportStatusValue } from './status'
+import { DEEPSEEK_MODEL } from '@/lib/llm/openrouter'
 
 export const TRACE_NAMES = [
   'session.created', 'session.claimed', 'session.state', 'worker.wake', 'browser.profile', 'browser.create', 'browser.connect',
@@ -39,7 +40,7 @@ export interface TraceFields {
   frameCount?: number
   snapshotFailureCount?: number
   retryCount?: number
-  model?: 'anthropic/claude-sonnet-4.6'
+  model?: 'anthropic/claude-sonnet-4.6' | typeof DEEPSEEK_MODEL
   inputTokens?: number
   outputTokens?: number
   toolRounds?: number
@@ -101,7 +102,7 @@ export function sanitizeTraceFields(input: unknown): TraceFields {
   if (safeCount(source.frameCount, 20)) output.frameCount = source.frameCount
   if (safeCount(source.snapshotFailureCount, 20)) output.snapshotFailureCount = source.snapshotFailureCount
   if (safeCount(source.retryCount, 1000)) output.retryCount = source.retryCount
-  if (source.model === 'anthropic/claude-sonnet-4.6') output.model = source.model
+  if (source.model === 'anthropic/claude-sonnet-4.6' || source.model === DEEPSEEK_MODEL) output.model = source.model
   if (safeCount(source.inputTokens, 10_000_000)) output.inputTokens = source.inputTokens
   if (safeCount(source.outputTokens, 10_000_000)) output.outputTokens = source.outputTokens
   if (safeCount(source.toolRounds, 1000)) output.toolRounds = source.toolRounds

@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response'
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterChat } from '@/lib/llm/openrouter'
 import { logger } from '@/lib/log'
 
 const RequestSchema = z.object({
@@ -65,11 +65,11 @@ Return JSON ONLY:
 
 Notes guidance: cover payment method preference, late fee policy if appropriate (e.g. 1.5%/month after due date), and a brief thank-you line. Professional but warm. Max 4 sentences. Return null if existing notes are already thorough.
 
-Questions: ask only if something seems genuinely unclear or missing (e.g. no due date set, zero-amount line items, currency mismatch).`
+Questions: ask only if something seems genuinely unclear or missing among the fields shown in the invoice summary (e.g. no due date set, zero-amount line items, currency mismatch). Do not ask about omitted fields managed elsewhere, such as invoice numbers, addresses, or company details.`
 
     const raw = await openrouterChat(
       [{ role: 'user', content: systemPrompt }],
-      'anthropic/claude-sonnet-4.6'
+      DEEPSEEK_MODEL
     )
     logger.info('ai-finalize', 'raw LLM response', { preview: raw.slice(0, 300) })
 

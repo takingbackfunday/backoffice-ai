@@ -1070,7 +1070,7 @@ Write `auth-detect` so that the decision logic is a pure exported function, `dec
 
 ### 5.5 `src/worker/navigator.ts`: one LLM decision per step
 
-Use `openrouterWithTools` from `@/lib/llm/openrouter` with model `anthropic/claude-sonnet-4.6` and a single tool:
+Use `openrouterWithTools` from `@/lib/llm/openrouter` with `DEEPSEEK_MODEL` (`deepseek/deepseek-v4.1-flash-1017`) and a single tool:
 
 ```ts
 export const NEXT_ACTION_TOOL: ToolDefinition = {

@@ -6,6 +6,7 @@ import { StarterTemplateSchema } from '@/lib/quote-template-schemas'
 import { parsePreferences } from '@/types/preferences'
 import { logger } from '@/lib/log'
 import { checkDailyBudget, recordAgentUsage } from '@/lib/agent/usage'
+import { DEEPSEEK_MODEL } from '@/lib/llm/openrouter'
 
 const ExistingTemplateSchema = z.object({
   id: z.string(),
@@ -167,7 +168,7 @@ export async function POST(request: Request) {
         recordAgentUsage({
           userId,
           endpoint: 'quote-generate-audacious',
-          model: 'anthropic/claude-sonnet-4.6',
+          model: DEEPSEEK_MODEL,
           inputTokens: 0, // pipeline doesn't track per-call usage granularly yet
           outputTokens: 0,
           toolRounds: 0,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEEPSEEK_MODEL } from '@/lib/llm/openrouter'
 import { classifyRoute, sanitizeTraceFields, sanitizeTraceRecord } from './trace'
 
 describe('sanitizeTraceFields', () => {
@@ -35,6 +36,11 @@ describe('sanitizeTraceFields', () => {
     expect(sanitizeTraceFields({ errorCode: 'password=secret' })).toEqual({})
     expect(sanitizeTraceFields({ workerId: 'my worker with secret' })).toEqual({})
     expect(sanitizeTraceFields({ providerStatus: 700 })).toEqual({})
+  })
+
+  it('allows the active model while retaining historical model traces', () => {
+    expect(sanitizeTraceFields({ model: DEEPSEEK_MODEL })).toEqual({ model: DEEPSEEK_MODEL })
+    expect(sanitizeTraceFields({ model: 'anthropic/claude-sonnet-4.6' })).toEqual({ model: 'anthropic/claude-sonnet-4.6' })
   })
 
   it('keeps the new fixed menu/range intents without storing their raw targets', () => {

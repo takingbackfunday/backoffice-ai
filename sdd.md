@@ -476,7 +476,7 @@ Change the signature to add a 4th optional parameter `timeoutMs?: number`. Imple
 ### 6.2 `src/app/api/llm/validate-mapping/route.ts`
 1. Import `badRequest` from `@/lib/api-response`.
 2. Invalid request body: `return badRequest('Invalid request body')` (instead of `serverError`).
-3. Pass `30_000` as the timeout: `openrouterChat([...], 'mistralai/mistral-small-2603', 4096, 30_000)`.
+3. Pass `30_000` as the timeout: `openrouterChat([...], DEEPSEEK_MODEL, 4096, 30_000)`.
 4. Validate the LLM output. Add above `POST`:
    ```ts
    const ColResultSchema = z.object({

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { created, badRequest } from '@/lib/api-response'
 import { authedRoute } from '@/lib/api-handler'
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterChat } from '@/lib/llm/openrouter'
 import { StarterTemplateSchema } from '@/lib/quote-template-schemas'
 import { parsePreferences } from '@/types/preferences'
 import { logger } from '@/lib/log'
@@ -47,7 +47,7 @@ export const POST = authedRoute<void, z.infer<typeof BodySchema>>({
 
 Now generate the JSON template for this specific project. Remember — valid JSON only, no markdown, no prose.` },
         ],
-        'mistralai/mistral-small-2603',
+        DEEPSEEK_MODEL,
         12000,
       )
     } catch (err) {

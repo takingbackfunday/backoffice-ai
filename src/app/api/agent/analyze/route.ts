@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterChat } from '@/lib/llm/openrouter'
 import { unauthorized } from '@/lib/api-response'
 import { toDisplay } from '@/lib/money'
 import { checkDailyBudget, recordAgentUsage } from '@/lib/agent/usage'
@@ -152,7 +152,7 @@ Write 3–5 tight bullet observations + a 1-line action recommendation. No fluff
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt },
             ],
-            'anthropic/claude-sonnet-4.6'
+            DEEPSEEK_MODEL
           )
         } finally {
           clearInterval(keepAlive)
@@ -164,7 +164,7 @@ Write 3–5 tight bullet observations + a 1-line action recommendation. No fluff
         recordAgentUsage({
           userId,
           endpoint: 'analyze',
-          model: 'anthropic/claude-sonnet-4.6',
+          model: DEEPSEEK_MODEL,
           inputTokens: inputEst,
           outputTokens: outputEst,
           toolRounds: 0,

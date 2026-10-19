@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import type { Page } from 'playwright-core'
 import { recordAgentUsage } from '@/lib/agent/usage'
+import { DEEPSEEK_MODEL } from '@/lib/llm/openrouter'
 import { logger } from '@/lib/log'
 import { BrowserUseError, createProfile } from '@/lib/bank-import/browser-use-client'
 import { getBank, type BankConfig } from '@/lib/bank-import/banks'
@@ -30,7 +31,7 @@ const MAX_AGENT_STEPS = 25
 const POLL_MS = 2000
 const DOWNLOAD_WAIT_MS = 30_000
 const LOGOUT_BUDGET_MS = 20_000
-const MODEL = 'anthropic/claude-sonnet-4.6'
+const MODEL = DEEPSEEK_MODEL
 
 export const __testHooks: { onAwaitingLogin?: (page: Page) => Promise<void> } = {}
 

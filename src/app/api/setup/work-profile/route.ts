@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { ok, created, badRequest } from '@/lib/api-response'
 import { authedRoute } from '@/lib/api-handler'
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { DEEPSEEK_MODEL, openrouterChat } from '@/lib/llm/openrouter'
 import { TemplateItemSchema, TemplateSectionSchema, StarterTemplateSchema } from '@/lib/quote-template-schemas'
 import { parsePreferences } from '@/types/preferences'
 import { logger } from '@/lib/log'
@@ -59,7 +59,7 @@ export const POST = authedRoute<void, z.infer<typeof DescriptionSchema>>({
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: body.description },
         ],
-        'mistralai/mistral-small-2603',
+        DEEPSEEK_MODEL,
         8192,
       )
     } catch (err) {
@@ -207,7 +207,7 @@ export const PATCH = authedRoute<void, z.infer<typeof RefinementSchema>>({
             content: `My updated work description: ${body.description}\n\nI already have templates named: ${Array.from(existingNames).join(', ') || '(none yet)'}\nAnd service items: ${Array.from(existingDescs).join(', ') || '(none yet)'}\n\nGenerate NEW templates and service items that cover ADDITIONAL services I might offer — don't duplicate what I already have.`,
           },
         ],
-        'mistralai/mistral-small-2603',
+        DEEPSEEK_MODEL,
         8192,
       )
     } catch (err) {

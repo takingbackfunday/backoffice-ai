@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { runToolLoop } from './tool-loop'
+import { DEEPSEEK_MODEL } from '@/lib/llm/openrouter'
 import { formatHistory } from './format-history'
 import { getOmniTools, dispatchOmniTool } from './omni-tools'
 import { recordAgentUsage, checkDailyBudget } from './usage'
@@ -9,7 +10,7 @@ import type { ConversationTurn } from './types'
 import type { SerializablePageContext, EditorAction } from './page-context'
 import type { LinkPayload } from './omni-tools'
 
-const AGENT_MODEL = 'anthropic/claude-sonnet-4.6'
+const AGENT_MODEL = DEEPSEEK_MODEL
 const MAX_ROUNDS = 8
 
 export interface OmniContext {
