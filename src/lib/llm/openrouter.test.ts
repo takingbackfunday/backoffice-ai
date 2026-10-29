@@ -10,6 +10,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
 })
@@ -39,5 +40,27 @@ describe('OpenRouter default model', () => {
       stream: true,
       response_format: { type: 'json_object' },
     })
+  })
+})
+
+describe('openrouterChat transient retries', () => {
+  it('retries a rate-limited (429) response', async () => {
+    vi.useFakeTimers()
+    fetchMock
+      .mockResolvedValueOnce(new Response('rate limited', { status: 429 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), { status: 200 }))
+
+    const promise = openrouterChat([{ role: 'user', content: 'hello' }])
+    await vi.runAllTimersAsync()
+
+    await expect(promise).resolves.toBe('ok')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry a non-transient error', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('bad request', { status: 400 }))
+
+    await expect(openrouterChat([{ role: 'user', content: 'hello' }])).rejects.toThrow('OpenRouter 400')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

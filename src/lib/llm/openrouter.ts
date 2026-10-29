@@ -154,39 +154,53 @@ export async function openrouterChat(
   timeoutMs?: number
 ): Promise<string> {
   const t0 = Date.now()
-  const controller = timeoutMs ? new AbortController() : null
-  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
-  let json: { choices: { message: { content: string } }[] }
-  try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      },
-      body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
-      signal: controller?.signal,
-    })
+  let lastError: Error | null = null
 
-    if (!res.ok) {
-      const text = await res.text()
-      logLlm('chat:error', { model, status: res.status, body: text.slice(0, 300) })
-      throw new Error(`OpenRouter ${res.status}: ${text}`)
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      // Exponential back-off: 2s, 4s
+      const delayMs = 2000 * Math.pow(2, attempt - 1)
+      logLlm('chat:retry', { model, attempt, delayMs })
+      await new Promise((r) => setTimeout(r, delayMs))
     }
 
-    json = await res.json()
-  } catch (err) {
-    if (controller && err instanceof Error && err.name === 'AbortError') {
-      throw new Error(`OpenRouter timed out after ${Math.round(timeoutMs! / 1000)}s`)
+    const controller = timeoutMs ? new AbortController() : null
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        },
+        body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
+        signal: controller?.signal,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        logLlm('chat:error', { model, attempt, status: res.status, body: text.slice(0, 300) })
+        lastError = new Error(`OpenRouter ${res.status}: ${text}`)
+        if (TRANSIENT_STATUSES.has(res.status) && attempt < MAX_RETRIES) continue
+        throw lastError
+      }
+
+      const json = (await res.json()) as { choices: { message: { content: string } }[] }
+      const content = json.choices[0].message.content as string
+      logLlm('chat:res', { model, latencyMs: Date.now() - t0, contentPreview: content.slice(0, 200) })
+      return content
+    } catch (err) {
+      if (controller && err instanceof Error && err.name === 'AbortError') {
+        throw new Error(`OpenRouter timed out after ${Math.round(timeoutMs! / 1000)}s`)
+      }
+      throw err
+    } finally {
+      if (timer) clearTimeout(timer)
     }
-    throw err
-  } finally {
-    if (timer) clearTimeout(timer)
   }
 
-  const content = json.choices[0].message.content as string
-  logLlm('chat:res', { model, latencyMs: Date.now() - t0, contentPreview: content.slice(0, 200) })
-  return content
+  // All retries exhausted (only reachable if we continued on every attempt)
+  throw lastError ?? new Error('OpenRouter request failed after retries')
 }
 
 // ── Tool-use completion (streaming to avoid serverless timeouts) ──────────────

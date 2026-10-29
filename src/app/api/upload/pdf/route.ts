@@ -3,13 +3,15 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import Papa from 'papaparse'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
-import { mistralOcrPdf } from '@/lib/ocr/mistral'
+import { MistralOcrError, mistralOcrPdf } from '@/lib/ocr/mistral'
 import { extractStatementRows, STATEMENT_CSV_HEADERS, STATEMENT_MODEL } from '@/lib/ocr/extract-statement'
 import { logger } from '@/lib/log'
 import { checkDailyBudget, recordAgentUsage } from '@/lib/agent/usage'
 import { decodePdfDataUri } from '@/lib/ocr/pdf-data-uri'
 
 const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
+
+export const maxDuration = 120
 
 const PdfUploadSchema = z.object({
   /** Full data URI: "data:application/pdf;base64,JVBERi0..." */
@@ -86,6 +88,18 @@ export async function POST(request: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error('pdf-upload', 'POST error', { message })
+
+    if (err instanceof MistralOcrError && err.status === 429) {
+      const retryAfter = err.retryAfterSeconds ?? 3
+      return NextResponse.json(
+        {
+          data: null,
+          error: 'PDF OCR is temporarily rate-limited by Mistral. Please try again shortly.',
+        },
+        { status: 503, headers: { 'Retry-After': String(retryAfter) } },
+      )
+    }
+
     return serverError(`Failed to extract transactions from PDF: ${message}`)
   }
 }
