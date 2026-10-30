@@ -203,6 +203,245 @@ export async function openrouterChat(
   throw lastError ?? new Error('OpenRouter request failed after retries')
 }
 
+// ── Image completion (vision models) ──────────────────────────────────────────
+
+export interface ImageChatOptions {
+  model?: string
+  maxTokens?: number
+  timeoutMs?: number
+  responseFormat?: { type: 'json_object' }
+}
+
+export interface ImageChatResult {
+  content: string
+  usage?: Usage
+}
+
+/**
+ * Send an image (data URI or public URL) to an OpenRouter vision model.
+ */
+export async function openrouterImageChat(
+  systemPrompt: string,
+  imageUrl: string,
+  options: ImageChatOptions = {},
+): Promise<ImageChatResult> {
+  const {
+    model = DEEPSEEK_MODEL,
+    maxTokens = 4096,
+    timeoutMs = 90_000,
+    responseFormat,
+  } = options
+  const t0 = Date.now()
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delayMs = 2000 * Math.pow(2, attempt - 1)
+      logLlm('image:retry', { model, attempt, delayMs })
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Extract the receipt data from this image.' },
+                { type: 'image_url', image_url: { url: imageUrl } },
+              ],
+            },
+          ],
+          max_tokens: maxTokens,
+          ...(responseFormat ? { response_format: responseFormat } : {}),
+        }),
+        signal: controller.signal,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        logLlm('image:error', { model, attempt, status: res.status, body: text.slice(0, 300) })
+        lastError = new Error(`OpenRouter ${res.status}: ${text.slice(0, 300)}`)
+        if (TRANSIENT_STATUSES.has(res.status) && attempt < MAX_RETRIES) continue
+        throw lastError
+      }
+
+      const json = (await res.json()) as {
+        choices: { message: { content: string | null } }[]
+        usage?: { prompt_tokens?: number; completion_tokens?: number }
+      }
+      const content = json.choices[0]?.message?.content
+      if (!content) {
+        lastError = new Error('OpenRouter returned an empty image extraction response')
+        if (attempt < MAX_RETRIES) continue
+        throw lastError
+      }
+
+      const usage = json.usage
+        ? {
+            inputTokens: json.usage.prompt_tokens ?? 0,
+            outputTokens: json.usage.completion_tokens ?? 0,
+          }
+        : undefined
+
+      logLlm('image:res', {
+        model,
+        latencyMs: Date.now() - t0,
+        contentLength: content.length,
+        usage,
+      })
+      return { content, usage }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        lastError = new Error(`OpenRouter image request timed out after ${Math.round(timeoutMs / 1000)}s`)
+        if (attempt < MAX_RETRIES) continue
+        throw lastError
+      }
+      throw err
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  throw lastError ?? new Error('OpenRouter image request failed after retries')
+}
+
+// ── PDF completion (OCR via OpenRouter's file parser) ─────────────────────────
+
+export type PdfParserEngine = 'mistral-ocr' | 'cloudflare-ai' | 'native'
+
+export interface PdfChatOptions {
+  model?: string
+  maxTokens?: number
+  timeoutMs?: number
+  /** PDF parsing engine. Defaults to Mistral OCR, which handles scanned statements. */
+  engine?: PdfParserEngine
+}
+
+export interface PdfChatResult {
+  content: string
+  usage?: Usage
+}
+
+/**
+ * Send a base64 PDF to OpenRouter and run a chat completion over its parsed
+ * content. OpenRouter's `mistral-ocr` parser uses OpenRouter's own Mistral
+ * credentials, so this does not depend on the caller's `MISTRAL_API_KEY`.
+ *
+ * @param systemPrompt - Instructions for the downstream model.
+ * @param pdfDataUri - Full data URI: "data:application/pdf;base64,JVBERi0..."
+ */
+export async function openrouterPdfChat(
+  systemPrompt: string,
+  pdfDataUri: string,
+  options: PdfChatOptions = {},
+): Promise<PdfChatResult> {
+  const {
+    model = DEEPSEEK_MODEL,
+    maxTokens = 8192,
+    timeoutMs = 120_000,
+    engine = 'mistral-ocr',
+  } = options
+  const t0 = Date.now()
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delayMs = 2000 * Math.pow(2, attempt - 1)
+      logLlm('pdf:retry', { model, attempt, delayMs })
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Extract every transaction from the attached bank statement.' },
+                {
+                  type: 'file',
+                  file: { filename: 'statement.pdf', file_data: pdfDataUri },
+                },
+              ],
+            },
+          ],
+          max_tokens: maxTokens,
+          response_format: { type: 'json_object' },
+          plugins: [{ id: 'file-parser', pdf: { engine } }],
+        }),
+        signal: controller.signal,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        logLlm('pdf:error', { model, attempt, status: res.status, body: text.slice(0, 300) })
+        lastError = new Error(`OpenRouter ${res.status}: ${text.slice(0, 300)}`)
+        if (TRANSIENT_STATUSES.has(res.status) && attempt < MAX_RETRIES) continue
+        throw lastError
+      }
+
+      const json = (await res.json()) as {
+        choices: { message: { content: string | null } }[]
+        usage?: { prompt_tokens?: number; completion_tokens?: number }
+      }
+      const content = json.choices[0]?.message?.content
+      if (!content) {
+        lastError = new Error('OpenRouter returned an empty PDF extraction response')
+        if (attempt < MAX_RETRIES) continue
+        throw lastError
+      }
+
+      const usage = json.usage
+        ? {
+            inputTokens: json.usage.prompt_tokens ?? 0,
+            outputTokens: json.usage.completion_tokens ?? 0,
+          }
+        : undefined
+
+      logLlm('pdf:res', {
+        model,
+        engine,
+        latencyMs: Date.now() - t0,
+        contentLength: content.length,
+        usage,
+      })
+      return { content, usage }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        lastError = new Error(`OpenRouter PDF request timed out after ${Math.round(timeoutMs / 1000)}s`)
+        if (attempt < MAX_RETRIES) continue
+        throw lastError
+      }
+      throw err
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  throw lastError ?? new Error('OpenRouter PDF request failed after retries')
+}
+
 // ── Tool-use completion (streaming to avoid serverless timeouts) ──────────────
 
 const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504])

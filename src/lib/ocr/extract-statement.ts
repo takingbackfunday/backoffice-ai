@@ -1,4 +1,4 @@
-import { openrouterChat } from '@/lib/llm/openrouter'
+import { openrouterChat, openrouterPdfChat, type Usage } from '@/lib/llm/openrouter'
 import { parseAmount } from '@/lib/csv-processor'
 
 export interface StatementRow {
@@ -116,4 +116,30 @@ export async function extractStatementRows(ocrMarkdown: string): Promise<Stateme
   )
 
   return parseStatementRows(raw)
+}
+
+const PDF_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
+
+The user message contains a PDF bank statement. OpenRouter parses the PDF before it reaches you; extract every transaction from that document.`
+
+export interface PdfStatementExtraction {
+  rows: StatementRow[]
+  usage?: Usage
+}
+
+/**
+ * Extract statement rows directly from a PDF via OpenRouter's file parser.
+ *
+ * The `mistral-ocr` engine is used because it handles scanned statements and
+ * runs on OpenRouter's Mistral credentials, so it does not depend on the
+ * application's own `MISTRAL_API_KEY` quota.
+ */
+export async function extractStatementRowsFromPdf(pdfDataUri: string): Promise<PdfStatementExtraction> {
+  const { content, usage } = await openrouterPdfChat(PDF_SYSTEM_PROMPT, pdfDataUri, {
+    model: STATEMENT_MODEL,
+    maxTokens: 16384,
+    engine: 'mistral-ocr',
+  })
+
+  return { rows: parseStatementRows(content), usage }
 }

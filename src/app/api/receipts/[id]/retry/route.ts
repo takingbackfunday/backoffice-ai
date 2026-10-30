@@ -2,8 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { Prisma } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
 import { ok, unauthorized, notFound, badRequest, serverError } from '@/lib/api-response'
-import { mistralOcr } from '@/lib/ocr/mistral'
-import { extractReceiptData } from '@/lib/ocr/extract-receipt'
+import { extractReceiptData, extractReceiptDataFromImage } from '@/lib/ocr/extract-receipt'
 import { classifyReceiptPipelineError, receiptFailureResponseMessage, type ReceiptPipelineStage } from '@/lib/ocr/receipt-failure'
 import { logger } from '@/lib/log'
 
@@ -26,23 +25,25 @@ export async function POST(_request: Request, { params }: RouteParams) {
       return badRequest('No image available for retry — please re-upload')
 
     await prisma.receipt.update({ where: { id }, data: { status: 'PROCESSING' } })
-    let stage: ReceiptPipelineStage = 'ocr'
-    let ocrMarkdown = receipt.ocrMarkdown ?? ''
+    const stage: ReceiptPipelineStage = 'extract'
+    const ocrMarkdown = receipt.ocrMarkdown ?? ''
     let extractedData: Record<string, unknown> = {}
 
     try {
-      // Stage 1: OCR (skip if already stored)
-      if (!ocrMarkdown) {
-        const ocr = await mistralOcr(receipt.thumbnailUrl)
-        ocrMarkdown = ocr.markdown
-      }
+      // Skip extraction only when a previous attempt stored real receipt data.
+      // Failed attempts persist a `{ failure }` marker, which is not usable.
+      const stored = receipt.extractedData as Record<string, unknown> | null
+      const hasStoredData = Boolean(stored && typeof stored === 'object' && !('failure' in stored))
 
-      // Stage 2: Extraction (skip if already stored and valid)
-      stage = 'extract'
-      if (receipt.extractedData && Object.keys(receipt.extractedData as object).length > 0) {
-        extractedData = receipt.extractedData as Record<string, unknown>
-      } else {
+      if (hasStoredData) {
+        extractedData = stored as Record<string, unknown>
+      } else if (ocrMarkdown) {
+        // Legacy retries: reuse OCR text captured before the image-first flow.
         const extracted = await extractReceiptData(ocrMarkdown)
+        extractedData = extracted as unknown as Record<string, unknown>
+      } else {
+        // Current flow: OCR and extraction happen together in the vision model.
+        const extracted = await extractReceiptDataFromImage(receipt.thumbnailUrl)
         extractedData = extracted as unknown as Record<string, unknown>
       }
 

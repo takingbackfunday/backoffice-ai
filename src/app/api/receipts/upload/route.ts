@@ -4,8 +4,7 @@ import { createHash } from 'crypto'
 import { Prisma } from '@/generated/prisma/client'
 import { prisma } from '@/lib/prisma'
 import { ok, badRequest, unauthorized, conflict, serverError } from '@/lib/api-response'
-import { mistralOcr } from '@/lib/ocr/mistral'
-import { extractReceiptData } from '@/lib/ocr/extract-receipt'
+import { extractReceiptDataFromImage } from '@/lib/ocr/extract-receipt'
 import { compressReceiptImage } from '@/lib/ocr/compress-image'
 import { classifyReceiptPipelineError, receiptFailureResponseMessage, type ReceiptPipelineStage } from '@/lib/ocr/receipt-failure'
 import { UTApi } from 'uploadthing/server'
@@ -101,18 +100,12 @@ export async function POST(request: Request) {
     })
 
     // ── Run pipeline ──────────────────────────────────────────────────────
-    let ocrMarkdown = ''
     let extractedData = {}
     let thumbnailUrl: string | null = null
-    let stage: ReceiptPipelineStage = 'ocr'
+    let stage: ReceiptPipelineStage = 'thumbnail'
 
     try {
-      // Step 1: Mistral OCR
-      const ocr = await mistralOcr(image) // pass the full data URI
-      ocrMarkdown = ocr.markdown
-
-      // Step 2: Save a thumbnail before AI extraction so provider failures can be retried.
-      stage = 'thumbnail'
+      // Step 1: Save a thumbnail before AI extraction so provider failures can be retried.
       const compressed = await compressReceiptImage(imageBuffer)
       const blob = new Blob([compressed.buffer.buffer as ArrayBuffer], { type: compressed.mimeType })
       const file = new File([blob], `receipt-${receipt.id}.webp`, { type: compressed.mimeType })
@@ -124,12 +117,12 @@ export async function POST(request: Request) {
         thumbnailUrl = uploadResult.data.ufsUrl
       }
 
-      // Step 3: LLM extraction
+      // Step 2: Vision extraction (OCR + structured fields in one call)
       stage = 'extract'
-      const extracted = await extractReceiptData(ocrMarkdown)
+      const extracted = await extractReceiptDataFromImage(image)
       extractedData = extracted
 
-      // Step 4: Content-based duplicate check (different photo of same receipt)
+      // Step 3: Content-based duplicate check (different photo of same receipt)
       if (!force) {
         const vendor = (extractedData as Record<string, unknown>).vendor
         const date = (extractedData as Record<string, unknown>).date
@@ -161,12 +154,12 @@ export async function POST(request: Request) {
         }
       }
 
-      // Step 5: Update receipt with all extracted data — lands in NEEDS_REVIEW for human confirmation
+      // Step 4: Update receipt with all extracted data — lands in NEEDS_REVIEW for human confirmation
       const updated = await prisma.receipt.update({
         where: { id: receipt.id },
         data: {
           status: 'NEEDS_REVIEW',
-          ocrMarkdown,
+          ocrMarkdown: null,
           extractedData,
           thumbnailUrl,
         },
@@ -182,7 +175,7 @@ export async function POST(request: Request) {
         where: { id: receipt.id },
         data: {
           status: 'FAILED',
-          ocrMarkdown: ocrMarkdown || null,
+          ocrMarkdown: null,
           extractedData: Object.keys(extractedData).length > 0
             ? extractedData as Prisma.InputJsonValue
             : JSON.parse(JSON.stringify({ failure })) as Prisma.InputJsonValue,

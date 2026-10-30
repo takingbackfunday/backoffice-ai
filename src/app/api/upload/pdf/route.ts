@@ -3,8 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import Papa from 'papaparse'
 import { ok, badRequest, unauthorized, serverError } from '@/lib/api-response'
-import { MistralOcrError, mistralOcrPdf } from '@/lib/ocr/mistral'
-import { extractStatementRows, STATEMENT_CSV_HEADERS, STATEMENT_MODEL } from '@/lib/ocr/extract-statement'
+import { extractStatementRowsFromPdf, STATEMENT_CSV_HEADERS, STATEMENT_MODEL } from '@/lib/ocr/extract-statement'
 import { logger } from '@/lib/log'
 import { checkDailyBudget, recordAgentUsage } from '@/lib/agent/usage'
 import { decodePdfDataUri } from '@/lib/ocr/pdf-data-uri'
@@ -54,10 +53,10 @@ export async function POST(request: Request) {
       )
     }
 
-    // ── OCR → LLM extraction → CSV ────────────────────────────────────────
+    // ── PDF OCR + LLM extraction → CSV ────────────────────────────────────
     const t0 = Date.now()
-    const ocr = await mistralOcrPdf(decoded.dataUri)
-    const rows = await extractStatementRows(ocr.markdown)
+    const extraction = await extractStatementRowsFromPdf(decoded.dataUri)
+    const rows = extraction.rows
 
     if (rows.length === 0) {
       return badRequest(
@@ -70,35 +69,23 @@ export async function POST(request: Request) {
       data: rows.map((r) => [r.date, r.description, r.amount, r.notes ?? '']),
     })
 
-    // Estimated (chars/4) — openrouterChat does not return usage.
     await recordAgentUsage({
       userId,
       endpoint: 'upload-pdf',
       model: STATEMENT_MODEL,
-      inputTokens: Math.ceil(ocr.markdown.length / 4),
-      outputTokens: Math.ceil(csvText.length / 4),
+      inputTokens: extraction.usage?.inputTokens ?? 0,
+      outputTokens: extraction.usage?.outputTokens ?? Math.ceil(csvText.length / 4),
       toolRounds: 0,
       durationMs: Date.now() - t0,
     })
 
     return ok(
       { headers: STATEMENT_CSV_HEADERS, csvText },
-      { rowCount: rows.length, pagesProcessed: ocr.pagesProcessed }
+      { rowCount: rows.length }
     )
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error('pdf-upload', 'POST error', { message })
-
-    if (err instanceof MistralOcrError && err.status === 429) {
-      const retryAfter = err.retryAfterSeconds ?? 3
-      return NextResponse.json(
-        {
-          data: null,
-          error: 'PDF OCR is temporarily rate-limited by Mistral. Please try again shortly.',
-        },
-        { status: 503, headers: { 'Retry-After': String(retryAfter) } },
-      )
-    }
 
     return serverError(`Failed to extract transactions from PDF: ${message}`)
   }

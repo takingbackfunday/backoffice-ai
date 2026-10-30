@@ -35,7 +35,7 @@ Financial management tool for freelancers, consultants, and small property manag
 
 ### Receipts
 - Mobile-first receipt capture: take a photo or pick from gallery; client-side Canvas compression before upload
-- Mistral OCR extracts text from receipt images; Claude structures it into JSON (vendor, total, tax, items, category)
+- Claude via OpenRouter reads each receipt image and returns structured JSON (vendor, total, tax, items, category) in one vision call
 - Compressed WebP thumbnail stored in UploadThing; original discarded after processing
 - Lightbox viewer, retry failed receipts, link receipts to transactions
 - `/receipts` page with grid view and expand/collapse card details

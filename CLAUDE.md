@@ -81,10 +81,10 @@ Required in `.env.local`:
 - `DIRECT_URL` — Neon PostgreSQL **non-pooled** string (no `-pooler`); Prisma CLI only
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` — Clerk auth
 - `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL`
-- `OPENROUTER_API_KEY` — for AI features
+- `OPENROUTER_API_KEY` — for AI features, including PDF statement OCR/extraction
 - `ENCRYPTION_SECRET` — AES-256 key derivation + HMAC secret for doc upload tokens
 - `UPLOADTHING_TOKEN` — file storage
-- `MISTRAL_API_KEY` — receipt OCR (`mistral-ocr-latest`)
+- `MISTRAL_API_KEY` — **legacy/unused**: PDF statements and receipt images now run through OpenRouter (`file-parser`/vision). The remaining `src/lib/ocr/mistral.ts` module has no production callers and can be removed once the Fly secret is retired.
 - `BROWSER_USE_API_KEY_US`, `BROWSER_USE_API_KEY_EU` — Browser Use Cloud API keys for the attended bank-import worker; needed on the web app for profile deletion and on the worker
 - `BANK_IMPORT_ENABLED=1` — enables Fetch from bank APIs and UI
 - `BANK_IMPORT_ENABLED_USER_IDS` — optional comma-separated Clerk ID allow-list for gradual production rollout; unset/empty allows all users
@@ -141,7 +141,7 @@ Split debit/credit imports use `amountMode: 'split'` with `debitCol` / `creditCo
 Row numbers in parse errors are 1-based indexes within the **data rows** (after the header), not file line numbers. The error list caps at 20 entries and appends an overflow note.
 
 ### PDF statement extraction — parse errors ≠ empty results
-`parseStatementRows` throws `StatementParseError` on malformed/truncated LLM JSON; a valid response with no usable transactions returns `[]` (route answers 400 "No transactions found"). The `/api/upload/pdf` catch-all appends the underlying cause (Mistral/OpenRouter status codes) to the client-visible error — don't collapse these back into a generic "extraction failed" message.
+`parseStatementRows` throws `StatementParseError` on malformed/truncated LLM JSON; a valid response with no usable transactions returns `[]` (route answers 400 "No transactions found"). `/api/upload/pdf` sends the PDF to OpenRouter with the `file-parser` plugin using the `mistral-ocr` engine, then extracts rows with the statement model; OpenRouter's own Mistral credentials do the OCR, so this path does not depend on `MISTRAL_API_KEY`. Receipt uploads use `openrouterImageChat` to read the image and return structured receipt JSON in one vision call; failed receipts retry from the stored thumbnail, and legacy retries can still reuse stored `ocrMarkdown`. The PDF route's catch-all appends the underlying cause (OpenRouter status codes) to the client-visible error — don't collapse these back into a generic "extraction failed" message.
 
 ### Job model — no `isActive` field
 Use `{ status: 'ACTIVE' }`, not `{ isActive: true }`.
